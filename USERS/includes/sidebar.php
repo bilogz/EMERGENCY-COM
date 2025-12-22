@@ -2,6 +2,9 @@
 // User-facing sidebar, modeled after the admin sidebar
 $assetSidebar = '../ADMIN/sidebar/';
 $current = basename($_SERVER['PHP_SELF']);
+
+// Include guest monitoring notice
+include __DIR__ . '/guest-monitoring-notice.php';
 ?>
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">

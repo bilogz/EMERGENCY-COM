@@ -7,12 +7,14 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
 $host = '127.0.0.1';
+$port = 3000; // Update this if your MySQL is running on a different port
 $db   = 'emergency_comm_db';
 $user = 'root';
 $pass = '';
 $charset = 'utf8mb4';
 
-$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
+// Include port in DSN (useful if XAMPP/MySQL uses a non-standard port)
+$dsn = "mysql:host=$host;port=$port;dbname=$db;charset=$charset";
 $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,

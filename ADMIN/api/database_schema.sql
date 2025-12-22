@@ -158,3 +158,23 @@ INSERT INTO warning_settings (sync_interval, auto_publish, notification_channels
 (15, 0, 'sms,email')
 ON DUPLICATE KEY UPDATE id=id;
 
+-- ============================================
+-- USERS TABLE (if not exists from user schema)
+-- ============================================
+-- Main table for storing user/citizen information
+-- Note: This is a basic version. For full schema, see USERS/database_schema.sql
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL COMMENT 'Full name of the user',
+    email VARCHAR(255) DEFAULT NULL COMMENT 'Email address (optional)',
+    phone VARCHAR(20) DEFAULT NULL COMMENT 'Mobile phone number',
+    password VARCHAR(255) DEFAULT NULL COMMENT 'Hashed password',
+    status VARCHAR(20) DEFAULT 'active' COMMENT 'active, inactive, suspended',
+    user_type VARCHAR(20) DEFAULT 'citizen' COMMENT 'citizen, admin, guest',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_email (email),
+    INDEX idx_phone (phone),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

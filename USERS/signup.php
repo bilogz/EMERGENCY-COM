@@ -32,14 +32,16 @@ $assetBase = '../ADMIN/header/';
                 <section class="page-content">
                     <h2>Create an Account</h2>
                     <p>Sign up to receive alerts, manage your preferences, and access emergency tools.</p>
-                    <form class="auth-form">
+                    
+                    <!-- Step 1: Basic Info + Email Verification -->
+                    <form class="auth-form" id="signupForm" style="display: block;">
                         <div class="form-group">
                             <label for="full_name">Full Name</label>
                             <input type="text" id="full_name" name="full_name" placeholder="Juan Dela Cruz" required>
                         </div>
                         <div class="form-group">
-                            <label for="email">Email</label>
-                            <input type="email" id="email" name="email" placeholder="you@example.com" required>
+                            <label for="email">Email Address</label>
+                            <input type="email" id="email" name="email" placeholder="juan@example.com" required>
                         </div>
                         <div class="form-group">
                             <label for="phone">Mobile Number</label>
@@ -59,16 +61,71 @@ $assetBase = '../ADMIN/header/';
                             <label for="address">Complete Address</label>
                             <textarea id="address" name="address" rows="3" placeholder="Complete address in Quezon City" required></textarea>
                         </div>
-                        <div class="form-group">
-                            <label for="password">Password</label>
-                            <input type="password" id="password" name="password" placeholder="Create a password" required>
+                        
+                        <div class="error-message" id="errorMessage" style="display: none;">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span id="errorText"></span>
                         </div>
-                        <button type="submit" class="btn btn-primary">Sign Up</button>
+                        
+                        <button type="submit" class="btn btn-primary" id="signupButton">
+                            <i class="fas fa-paper-plane"></i>
+                            <span class="btn-text">Send Verification Code</span>
+                            <span class="btn-spinner" style="display: none;">
+                                <i class="fas fa-spinner fa-spin"></i>
+                            </span>
+                        </button>
                         <p class="auth-switch">
                             Already have an account?
                             <a href="login.php">Login</a>
                         </p>
                     </form>
+                    
+                    <!-- OTP Verification Modal -->
+                    <div id="otpModal" class="modal" aria-hidden="true" style="display:none;">
+                        <div class="modal-backdrop"></div>
+                        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="otpModalTitle">
+                            <button class="modal-close" id="otpModalClose" aria-label="Close">&times;</button>
+                            <h3 id="otpModalTitle">Verify Your Email</h3>
+                            <p class="modal-sub">We've sent a 6-digit verification code to <strong id="otpEmailDisplay"></strong></p>
+
+                            <div id="otpSentBanner" style="display:none; margin-bottom:0.75rem; padding:0.75rem; border-radius:6px; background: rgba(40,167,69,0.12); border:1px solid rgba(40,167,69,0.2); color: #28a745;">Verification code sent successfully.</div>
+                            <div id="otpWarnBanner" style="display:none; margin-bottom:0.75rem; padding:0.75rem; border-radius:6px; background: rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.2); color: #856404;">Verification code generated but email delivery failed. Use the debug code below for testing.</div>
+                            <div id="otpDebugCode" style="display:none; margin-bottom:1rem; padding:1rem; background: #fffacd; border:2px solid #ffd700; border-radius:6px; font-weight:700; text-align:center; font-size:1.2rem; color: #d4941e;"></div>
+
+                            <form id="otpModalForm" class="auth-form">
+                                <div class="form-group">
+                                    <label for="otp">
+                                        <i class="fas fa-key"></i> Verification Code
+                                    </label>
+                                    <input type="text" id="otp" name="otp" placeholder="Enter 6-digit code" maxlength="6" pattern="[0-9]{6}" required autocomplete="one-time-code">
+                                    <small class="form-hint">Enter the 6-digit code sent to your email</small>
+                                </div>
+
+                                <div class="error-message" id="otpModalErrorMessage" style="display: none;">
+                                    <i class="fas fa-exclamation-circle"></i>
+                                    <span id="otpModalErrorText"></span>
+                                </div>
+
+                                <div class="modal-actions">
+                                    <button type="submit" class="btn btn-primary" id="modalVerifyButton">
+                                        <i class="fas fa-check-circle"></i>
+                                        <span class="btn-text">Verify & Complete Signup</span>
+                                        <span class="btn-spinner" style="display: none;">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                        </span>
+                                    </button>
+
+                                    <button type="button" class="btn-link" id="modalResendButton">
+                                        <i class="fas fa-redo"></i> Resend Code
+                                    </button>
+
+                                    <button type="button" class="btn-link" id="modalBackButton">
+                                        <i class="fas fa-arrow-left"></i> Back
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 </section>
             </div>
         </div>
@@ -79,7 +136,283 @@ $assetBase = '../ADMIN/header/';
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
-</body>
-</html>
 
+    <script>
+        // Form Elements
+        const signupForm = document.getElementById('signupForm');
+        const signupButton = document.getElementById('signupButton');
+        const errorMessage = document.getElementById('errorMessage');
+        const errorText = document.getElementById('errorText');
+        
+        function showError(message) {
+            errorText.textContent = message;
+            errorMessage.style.display = 'flex';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+            }, 5000);
+        }
+        
+        function hideError() {
+            errorMessage.style.display = 'none';
+        }
+        
+        function setLoading(isLoading) {
+            if (isLoading) {
+                signupButton.disabled = true;
+                signupButton.querySelector('.btn-text').style.display = 'none';
+                signupButton.querySelector('.btn-spinner').style.display = 'inline-block';
+            } else {
+                signupButton.disabled = false;
+                signupButton.querySelector('.btn-text').style.display = 'inline';
+                signupButton.querySelector('.btn-spinner').style.display = 'none';
+            }
+        }
+        
+        // Store form data for later use
+        let pendingSignupData = null;
+        
+        // Step 1: Send OTP for phone verification
+        signupForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            hideError();
+            
+            const fullName = document.getElementById('full_name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            const barangay = document.getElementById('barangay').value.trim();
+            const houseNumber = document.getElementById('house_number').value.trim();
+            const address = document.getElementById('address').value.trim();
+            
+            // Validation
+            if (!fullName || !email || !phone || !barangay || !houseNumber || !address) {
+                showError('Please fill out all required fields.');
+                return;
+            }
+            
+            setLoading(true);
+            
+            try {
+                const payload = { email: email, name: fullName, phone: phone };
 
+                const response = await fetch('api/send-signup-email-otp.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Store signup data for later use when verifying OTP
+                    pendingSignupData = {
+                        name: fullName,
+                        email: email,
+                        phone: phone,
+                        barangay: barangay,
+                        house_number: houseNumber,
+                        address: address
+                    };
+                    
+                    // Open OTP modal
+                    document.getElementById('otpEmailDisplay').textContent = email;
+                    openOtpModal();
+                    startResendCooldown(60);
+                    
+                    // Show appropriate banner
+                    document.getElementById('otpSentBanner').style.display = 'none';
+                    document.getElementById('otpWarnBanner').style.display = 'none';
+                    document.getElementById('otpDebugCode').style.display = 'none';
+
+                    if (data.otp_sent === true) {
+                        document.getElementById('otpSentBanner').textContent = 'Verification code sent successfully to ' + email + '.';
+                        document.getElementById('otpSentBanner').style.display = 'block';
+                    } else {
+                        document.getElementById('otpWarnBanner').style.display = 'block';
+                        if (data.debug_otp) {
+                            const debugBox = document.getElementById('otpDebugCode');
+                            debugBox.innerHTML = '<strong>DEBUG OTP CODE:</strong><br>' + data.debug_otp;
+                            debugBox.style.display = 'block';
+                            console.log('DEBUG OTP:', data.debug_otp);
+                        }
+                    }
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Code Sent!',
+                        text: 'A verification code has been sent to your email. Please check your inbox.',
+                        showConfirmButton: false,
+                        timer: 2000
+                    });
+                } else {
+                    showError(data.message || 'Failed to send verification code. Please try again.');
+                }
+                setLoading(false);
+            } catch (error) {
+                console.error('Send OTP error:', error);
+                showError('A connection error occurred. Please check your internet connection and try again.');
+                setLoading(false);
+            }
+        });
+        
+        // OTP Modal logic
+        const otpModal = document.getElementById('otpModal');
+        const otpModalForm = document.getElementById('otpModalForm');
+        const modalVerifyButton = document.getElementById('modalVerifyButton');
+        const otpModalErrorMessage = document.getElementById('otpModalErrorMessage');
+        const otpModalErrorText = document.getElementById('otpModalErrorText');
+        const modalResendButton = document.getElementById('modalResendButton');
+        const modalBackButton = document.getElementById('modalBackButton');
+        const otpModalClose = document.getElementById('otpModalClose');
+
+        function openOtpModal() {
+            otpModal.style.display = 'flex';
+            otpModal.setAttribute('aria-hidden', 'false');
+            document.getElementById('otp').value = '';
+            document.getElementById('otp').focus();
+        }
+
+        function closeOtpModal() {
+            otpModal.style.display = 'none';
+            otpModal.setAttribute('aria-hidden', 'true');
+            otpModalErrorMessage.style.display = 'none';
+        }
+
+        // Close modal buttons
+        if (otpModalClose) otpModalClose.addEventListener('click', closeOtpModal);
+        if (modalBackButton) modalBackButton.addEventListener('click', closeOtpModal);
+
+        // Resend cooldown timer
+        let resendCountdownTimer = null;
+        function startResendCooldown(seconds) {
+            if (resendCountdownTimer) clearInterval(resendCountdownTimer);
+            let remaining = seconds;
+            modalResendButton.disabled = true;
+            modalResendButton.textContent = `Resend Code (${remaining}s)`;
+
+            resendCountdownTimer = setInterval(() => {
+                remaining--;
+                if (remaining <= 0) {
+                    clearInterval(resendCountdownTimer);
+                    modalResendButton.disabled = false;
+                    modalResendButton.innerHTML = '<i class="fas fa-redo"></i> Resend Code';
+                } else {
+                    modalResendButton.textContent = `Resend Code (${remaining}s)`;
+                }
+            }, 1000);
+        }
+
+        // Resend OTP
+        if (modalResendButton) {
+            modalResendButton.addEventListener('click', async function() {
+                if (modalResendButton.disabled) return;
+                
+                const email = document.getElementById('otpEmailDisplay').textContent;
+                const fullName = document.getElementById('full_name').value.trim();
+                const phone = document.getElementById('phone').value.trim();
+                
+                try {
+                    const response = await fetch('api/send-signup-email-otp.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: email, name: fullName, phone: phone })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire({ icon: 'success', title: 'Code Resent', text: 'A new verification code has been sent to your email.', timer: 1500, showConfirmButton: false });
+                        startResendCooldown(60);
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'Failed to resend code.' });
+                    }
+                } catch (error) {
+                    console.error('Resend OTP error:', error);
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'A connection error occurred.' });
+                }
+            });
+        }
+
+        // Step 2: Verify OTP and complete signup
+        otpModalForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!pendingSignupData) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Session expired. Please start over.' });
+                closeOtpModal();
+                return;
+            }
+            
+            const otp = document.getElementById('otp').value.trim();
+            
+            if (!otp || otp.length !== 6) {
+                otpModalErrorText.textContent = 'Please enter a valid 6-digit code.';
+                otpModalErrorMessage.style.display = 'flex';
+                return;
+            }
+            
+            setOtpLoading(true);
+            
+            try {
+                // First verify the OTP
+                const verifyResponse = await fetch('api/verify-signup-email-otp.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ otp: otp })
+                });
+                
+                const verifyData = await verifyResponse.json();
+                
+                if (!verifyData.success) {
+                    otpModalErrorText.textContent = verifyData.message || 'Invalid verification code.';
+                    otpModalErrorMessage.style.display = 'flex';
+                    setOtpLoading(false);
+                    return;
+                }
+                
+                // OTP verified, now register the user with stored data
+                const registerResponse = await fetch('api/register-after-otp.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(pendingSignupData)
+                });
+                
+                const registerData = await registerResponse.json();
+                
+                if (registerData.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Account Created!',
+                        text: 'Your account has been created successfully. You will now be redirected to login.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => {
+                        window.location.href = 'login.php';
+                    });
+                } else {
+                    otpModalErrorText.textContent = registerData.message || 'Failed to create account.';
+                    otpModalErrorMessage.style.display = 'flex';
+                }
+                
+                setOtpLoading(false);
+            } catch (error) {
+                console.error('OTP verify/register error:', error);
+                otpModalErrorText.textContent = 'A connection error occurred. Please try again.';
+                otpModalErrorMessage.style.display = 'flex';
+                setOtpLoading(false);
+            }
+        });
+        
+        function setOtpLoading(isLoading) {
+            const btn = document.getElementById('modalVerifyButton');
+            if (isLoading) {
+                btn.disabled = true;
+                btn.querySelector('.btn-text').style.display = 'none';
+                btn.querySelector('.btn-spinner').style.display = 'inline-block';
+            } else {
+                btn.disabled = false;
+                btn.querySelector('.btn-text').style.display = 'inline';
+                btn.querySelector('.btn-spinner').style.display = 'none';
+            }
+        }
+    </script>

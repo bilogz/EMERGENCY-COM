@@ -31,7 +31,7 @@ $assetBase = '../ADMIN/header/';
             <div class="sub-container content-main">
                 <section class="page-content">
                     <h2>User Login</h2>
-                    <p>Log in using your registered contact number. Verify you are not a bot using CAPTCHA.</p>
+                    <p>Log in using your registered contact number. Quick verification required.</p>
                     
                     <!-- Login Form with CAPTCHA -->
                     <form class="auth-form" id="loginForm" style="display: block;">
@@ -60,23 +60,11 @@ $assetBase = '../ADMIN/header/';
                                 <i class="fas fa-spinner fa-spin"></i>
                             </span>
                         </button>
+                        <p class="auth-switch">
+                            Don't have an account?
+                            <a href="signup.php">Sign up</a>
+                        </p>
                     </form>
-
-                    <style>
-                        /* Basic modal styles */
-                        .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 1000; }
-                        .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
-                        .modal-content { position: relative; background: var(--card-bg); padding: 1.5rem; border-radius: 8px; width: 100%; max-width: 420px; z-index: 1001; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
-                        .modal-close { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; }
-                        .modal-sub { margin-bottom: 1rem; color: var(--text-muted); }
-                        .modal-actions { display: flex; gap: 0.5rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
-                        @media (max-width:480px) { .modal-content { margin: 0 1rem; } }
-                    </style>
-                        
-                    <p class="auth-switch">
-                        Don't have an account?
-                        <a href="signup.php">Sign up</a>
-                    </p>
                 </section>
             </div>
         </div>
@@ -87,141 +75,7 @@ $assetBase = '../ADMIN/header/';
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
-    <style>
-        .form-group label {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .form-group label i {
-            color: var(--primary-color-1, #4c8a89);
-            font-size: 1rem;
-        }
-        
-        .error-message {
-            background-color: rgba(220, 53, 69, 0.1);
-            border: 1px solid rgba(220, 53, 69, 0.3);
-            color: #dc3545;
-            padding: 0.75rem 1rem;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-        
-        .error-message i {
-            font-size: 1rem;
-        }
-        
-        .divider {
-            display: flex;
-            align-items: center;
-            text-align: center;
-            margin: 1.5rem 0;
-            color: var(--text-muted);
-            font-size: 0.85rem;
-        }
-        
-        .divider::before,
-        .divider::after {
-            content: '';
-            flex: 1;
-            border-bottom: 1px solid var(--card-border);
-        }
-        
-        .divider span {
-            padding: 0 1rem;
-        }
-        
-        .btn-secondary {
-            background-color: var(--card-bg);
-            border: 2px solid var(--card-border);
-            color: var(--text-color-1);
-        }
-        
-        .btn-secondary:hover {
-            background-color: rgba(0, 0, 0, 0.05);
-            border-color: var(--primary-color-1, #4c8a89);
-        }
-        
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .btn-spinner {
-            display: inline-block;
-        }
-        
-        [data-theme="dark"] .btn-secondary:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-        }
-        
-        .otp-info {
-            background-color: rgba(76, 138, 137, 0.1);
-            border: 1px solid rgba(76, 138, 137, 0.3);
-            color: var(--text-color-1);
-            padding: 0.75rem 1rem;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            margin-bottom: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-        
-        .otp-info i {
-            color: var(--primary-color-1, #4c8a89);
-            font-size: 1rem;
-        }
-        
-        .form-hint {
-            display: block;
-            margin-top: 0.5rem;
-            font-size: 0.85rem;
-            color: var(--text-muted);
-        }
-        
-        .resend-otp {
-            text-align: center;
-            margin: 1.5rem 0;
-        }
-        
-        .resend-otp p {
-            margin: 0 0 0.5rem 0;
-            font-size: 0.9rem;
-            color: var(--text-muted);
-        }
-        
-        .btn-link {
-            background: none;
-            border: none;
-            color: var(--primary-color-1, #4c8a89);
-            cursor: pointer;
-            font-size: 0.9rem;
-            padding: 0.5rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            transition: color 0.3s ease;
-        }
-        
-        .btn-link:hover {
-            color: #4ca8a6;
-            text-decoration: underline;
-        }
-        
-        #otp {
-            text-align: center;
-            font-size: 1.5rem;
-            letter-spacing: 0.5rem;
-            font-weight: 600;
-            font-family: 'Courier New', monospace;
-        }
-    </style>
+
     <script>
         // Form Elements
         const loginForm = document.getElementById('loginForm');
@@ -296,7 +150,7 @@ $assetBase = '../ADMIN/header/';
                         showConfirmButton: false,
                         timer: 1500
                     }).then(() => {
-                        window.location.href = 'index.php';
+                        window.location.href = 'home.php';
                     });
                 } else {
                     showError(data.message || 'Login failed. Please check your phone number.');
@@ -312,5 +166,3 @@ $assetBase = '../ADMIN/header/';
     </script>
 </body>
 </html>
-
-
