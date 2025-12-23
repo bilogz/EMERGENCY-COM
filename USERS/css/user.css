@@ -9,6 +9,16 @@
 
 .main-content {
     background: linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0));
+    width: 100%;
+    min-height: 100vh;
+}
+
+/* Ensure main content doesn't get hidden behind sidebar on mobile */
+@media (max-width: 1024px) {
+    .main-content {
+        margin-left: 0 !important;
+        padding-left: 0;
+    }
 }
 
 .home-hero {
@@ -39,6 +49,185 @@
     margin-top: 0.4rem;
     max-width: 52rem;
     text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+}
+
+.home-download-app {
+    text-align: center;
+    padding: 2rem 0 1rem;
+}
+
+.home-download-app h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+    color: var(--text-color, #171717);
+}
+
+.home-download-app p {
+    font-size: 1rem;
+    color: var(--text-muted, #6b7280);
+    margin: 0 0 1.5rem 0;
+}
+
+.app-download-buttons {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.app-download-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 2rem;
+    background: var(--card-bg, #ffffff);
+    border: 2px solid var(--card-border, #e5e7eb);
+    border-radius: 12px;
+    text-decoration: none;
+    color: var(--text-color, #171717);
+    transition: all 0.3s ease;
+    box-shadow: var(--card-shadow, 0 4px 12px rgba(0, 0, 0, 0.08));
+    min-width: 200px;
+    position: relative;
+}
+
+.app-download-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+    border-color: var(--primary-color, #4c8a89);
+    background: var(--primary-color, #4c8a89);
+    color: white;
+}
+
+.app-download-btn:hover .app-btn-small,
+.app-download-btn:hover .app-btn-large {
+    color: white;
+}
+
+.app-download-btn:hover i {
+    color: white;
+}
+
+/* Coming Soon button styles */
+.coming-soon-btn {
+    cursor: default;
+    opacity: 0.9;
+    pointer-events: none;
+}
+
+.coming-soon-btn:hover {
+    transform: none;
+    box-shadow: var(--card-shadow, 0 4px 12px rgba(0, 0, 0, 0.08));
+    border-color: var(--card-border, #e5e7eb);
+    background: var(--card-bg, #ffffff);
+    color: var(--text-color, #171717);
+}
+
+.coming-soon-btn:hover .app-btn-small,
+.coming-soon-btn:hover .app-btn-large {
+    color: var(--text-color, #171717);
+}
+
+.coming-soon-btn:hover i {
+    color: var(--primary-color, #4c8a89);
+}
+
+.coming-soon-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: linear-gradient(135deg, var(--primary-color, #4c8a89), #3a6f6e);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.25rem 0.6rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(76, 138, 137, 0.4);
+    }
+}
+
+.app-download-btn i {
+    font-size: 2.5rem;
+    color: var(--primary-color, #4c8a89);
+    transition: color 0.3s ease;
+}
+
+.app-btn-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.3;
+}
+
+.app-btn-small {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-muted, #6b7280);
+    transition: color 0.3s ease;
+}
+
+.app-btn-large {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-color, #171717);
+    transition: color 0.3s ease;
+}
+
+/* Dark mode support for app download buttons */
+[data-theme="dark"] .app-download-btn {
+    background: var(--card-bg, #1c1c1f);
+    border-color: var(--card-border, #2a2d34);
+    color: var(--text-color, #f2f4f7);
+}
+
+[data-theme="dark"] .app-download-btn:hover {
+    border-color: var(--primary-color, #4c8a89);
+    background: var(--primary-color, #4c8a89);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    color: white;
+}
+
+[data-theme="dark"] .app-download-btn:hover .app-btn-small,
+[data-theme="dark"] .app-download-btn:hover .app-btn-large {
+    color: white;
+}
+
+[data-theme="dark"] .app-download-btn:hover i {
+    color: white;
+}
+
+[data-theme="dark"] .app-btn-small {
+    color: var(--text-muted, #cdd3dd);
+}
+
+[data-theme="dark"] .coming-soon-btn {
+    opacity: 0.85;
+}
+
+[data-theme="dark"] .coming-soon-btn:hover {
+    background: var(--card-bg, #1c1c1f);
+    border-color: var(--card-border, #2a2d34);
+    color: var(--text-color, #f2f4f7);
+}
+
+[data-theme="dark"] .coming-soon-btn:hover .app-btn-small,
+[data-theme="dark"] .coming-soon-btn:hover .app-btn-large {
+    color: var(--text-color, #f2f4f7);
 }
 
 .home-emergency-cta {
@@ -72,31 +261,188 @@
 .language-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.55);
+    background: rgba(0,0,0,0.65);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1600;
+    backdrop-filter: blur(4px);
 }
 
 .language-modal {
-    width: 420px;
+    width: 480px;
     max-width: 90%;
-    background: var(--card-bg);
-    border-radius: 18px;
-    padding: 1.5rem 1.75rem;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
-    border: 1px solid var(--card-border);
+    background: var(--card-bg, #ffffff);
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+    border: 1px solid var(--card-border, #e5e7eb);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    box-sizing: border-box;
+}
+
+.language-modal > * {
+    margin-left: 0;
+    margin-right: 0;
 }
 
 .language-modal h2 {
-    margin-top: 0;
-    margin-bottom: 0.5rem;
+    margin: 0 0 0.5rem 0;
+    font-size: 1.5rem;
+    text-align: center;
+    width: 100%;
 }
 
 .language-modal p {
-    margin-top: 0;
-    margin-bottom: 1rem;
+    margin: 0 0 1.75rem 0;
+    text-align: center;
+    color: var(--text-muted, #6b7280);
+    width: 100%;
+}
+
+.language-buttons-row {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin: 0 0 1.5rem 0;
+    width: 100%;
+    align-items: stretch;
+    padding: 0;
+}
+
+.language-buttons-row button {
+    width: 100%;
+    padding: 1.25rem 1.5rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid var(--border-color, #e5e7eb);
+    background: var(--card-bg, #ffffff);
+    color: var(--text-color, #171717);
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0;
+    box-sizing: border-box;
+    font-family: inherit;
+    text-decoration: none;
+    gap: 0 !important;
+}
+
+.language-buttons-row button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.language-buttons-row button:hover::before {
+    left: 100%;
+}
+
+.language-buttons-row button:hover {
+    background: var(--primary-color, #4c8a89);
+    color: white;
+    border-color: var(--primary-color, #4c8a89);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.language-buttons-row button:active {
+    transform: translateY(-1px) scale(1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode support */
+[data-theme="dark"] .language-buttons-row button {
+    background: var(--card-bg, #1c1c1f);
+    color: var(--text-color, #f2f4f7);
+    border-color: var(--card-border, #2a2d34);
+}
+
+[data-theme="dark"] .language-buttons-row button:hover {
+    background: var(--primary-color, #4c8a89);
+    color: white;
+    border-color: var(--primary-color, #4c8a89);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .language-buttons-row button::before {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+}
+
+.language-search {
+    position: relative;
+    margin-top: 1rem;
+    width: 100%;
+}
+
+.language-search input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--card-border, #e5e7eb);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    transition: border-color 0.2s ease;
+}
+
+.language-search input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+#languageSuggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--card-bg, #ffffff);
+    border: 2px solid var(--card-border, #e5e7eb);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: none;
+}
+
+#languageSuggestions.show {
+    display: block;
+}
+
+#languageSuggestions li {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid var(--card-border, #f3f4f6);
+}
+
+#languageSuggestions li:last-child {
+    border-bottom: none;
+}
+
+#languageSuggestions li:hover {
+    background-color: var(--surface-2, #f9fafb);
+}
+
+#languageSuggestions li:active {
+    background-color: var(--surface-3, #f3f4f6);
 }
 
 .language-buttons {
@@ -505,5 +851,349 @@
 
 [data-theme="dark"] .theme-toggle-btn {
     color: #e8ecf5;
+}
+
+/* ===================================
+   RESPONSIVE DESIGN - Mobile and Tablet
+   =================================== */
+
+/* Tablet and below (768px and below) */
+@media (max-width: 768px) {
+    /* Hero section adjustments */
+    .home-hero {
+        min-height: 220px;
+        padding: 1.5rem 0;
+    }
+
+    .home-hero h1 {
+        font-size: 1.5rem;
+        line-height: 1.3;
+    }
+
+    .home-hero .hero-subtitle {
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+    }
+
+    /* Main container padding */
+    .main-container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .sub-container {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+
+    /* Page content spacing */
+    .page-content {
+        margin: 1.5rem 0;
+    }
+
+    .page-content h2 {
+        font-size: 1.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    /* Cards grid - 2 columns on tablet, 1 on mobile */
+    .cards-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+
+    .card {
+        padding: 1rem;
+    }
+
+    .card h3,
+    .card h4 {
+        font-size: 1.1rem;
+    }
+
+    .card p {
+        font-size: 0.9rem;
+    }
+
+    /* Emergency call button */
+    .home-emergency-cta {
+        padding: 1.25rem 0 0.75rem;
+    }
+
+    .emergency-call-btn {
+        width: 100%;
+        justify-content: center;
+        padding: 1rem 1.5rem;
+        font-size: 1rem;
+    }
+
+    /* Emergency guide list */
+    .emergency-guide-list {
+        padding-left: 1rem;
+        font-size: 0.95rem;
+    }
+
+    .emergency-guide-list li {
+        margin-bottom: 0.75rem;
+        line-height: 1.5;
+    }
+
+    /* Language modal */
+    .language-modal {
+        width: 90%;
+        max-width: 420px;
+        padding: 1.5rem 1.5rem 1.25rem;
+    }
+
+    .language-modal h2 {
+        font-size: 1.3rem;
+    }
+
+    .language-modal p {
+        font-size: 0.9rem;
+    }
+
+    .language-buttons-row {
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .language-buttons-row button {
+        padding: 0.875rem 1.25rem;
+        font-size: 0.95rem;
+    }
+
+    /* Sidebar toggle button */
+    .sidebar-toggle-btn {
+        top: 12px;
+        left: 12px;
+        padding: 0.5rem 0.7rem;
+    }
+}
+
+/* Mobile devices (480px and below) */
+@media (max-width: 480px) {
+    /* Hero section */
+    .home-hero {
+        min-height: 180px;
+        padding: 1rem 0;
+    }
+
+    .home-hero h1 {
+        font-size: 1.25rem;
+        line-height: 1.2;
+    }
+
+    .home-hero .hero-subtitle {
+        font-size: 0.85rem;
+        margin-top: 0.4rem;
+        line-height: 1.4;
+    }
+
+    /* Main container padding */
+    .main-container {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+
+    .sub-container {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+
+    /* Page content */
+    .page-content {
+        margin: 1.25rem 0;
+    }
+
+    .page-content h2 {
+        font-size: 1.3rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .page-content p {
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    /* Cards grid - single column on small mobile */
+    .cards-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .card {
+        padding: 0.875rem;
+    }
+
+    .card h3,
+    .card h4 {
+        font-size: 1rem;
+    }
+
+    .card p {
+        font-size: 0.875rem;
+    }
+
+    /* Download app section */
+    .home-download-app {
+        padding: 1.25rem 0 0.5rem;
+    }
+
+    .home-download-app h3 {
+        font-size: 1.2rem;
+    }
+
+    .home-download-app p {
+        font-size: 0.9rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .app-download-buttons {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .app-download-btn {
+        width: 100%;
+        max-width: 280px;
+        min-width: auto;
+        justify-content: center;
+        padding: 0.875rem 1.25rem;
+    }
+
+    .app-download-btn i {
+        font-size: 1.75rem;
+    }
+
+    .app-btn-large {
+        font-size: 1rem;
+    }
+
+    .app-btn-small {
+        font-size: 0.7rem;
+    }
+
+    /* Emergency call button */
+    .home-emergency-cta {
+        padding: 1rem 0 0.5rem;
+    }
+
+    .emergency-call-btn {
+        padding: 0.875rem 1.25rem;
+        font-size: 0.95rem;
+    }
+
+    /* Emergency guide list */
+    .emergency-guide-list {
+        padding-left: 0.875rem;
+        font-size: 0.9rem;
+    }
+
+    .emergency-guide-list li {
+        margin-bottom: 0.625rem;
+        line-height: 1.5;
+    }
+
+    .emergency-guide-list strong {
+        font-size: 0.925rem;
+    }
+
+    /* Language modal */
+    .language-modal {
+        width: 95%;
+        padding: 1.25rem 1.25rem 1rem;
+        border-radius: 16px;
+    }
+
+    .language-modal h2 {
+        font-size: 1.2rem;
+        margin-bottom: 0.4rem;
+    }
+
+    .language-modal p {
+        font-size: 0.85rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .language-buttons-row {
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .language-buttons-row button {
+        padding: 1rem 1.25rem;
+        font-size: 1rem;
+    }
+
+    .language-search input {
+        padding: 0.625rem 0.875rem;
+        font-size: 0.9rem;
+    }
+
+    /* Sidebar toggle button */
+    .sidebar-toggle-btn {
+        top: 10px;
+        left: 10px;
+        padding: 0.45rem 0.6rem;
+        font-size: 0.9rem;
+    }
+
+    .sidebar-toggle-btn i {
+        font-size: 0.95rem;
+    }
+
+    /* Theme toggle */
+    .theme-toggle {
+        right: 10px;
+        bottom: 10px;
+        padding: 0.4rem 0.5rem;
+    }
+
+    .theme-toggle-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+}
+
+/* Very small mobile devices (360px and below) */
+@media (max-width: 360px) {
+    .home-hero h1 {
+        font-size: 1.1rem;
+    }
+
+    .home-hero .hero-subtitle {
+        font-size: 0.8rem;
+    }
+
+    .page-content h2 {
+        font-size: 1.2rem;
+    }
+
+    .language-modal {
+        width: 98%;
+        padding: 1rem;
+    }
+
+    .language-modal h2 {
+        font-size: 1.1rem;
+    }
+}
+
+/* Landscape orientation on mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+    .home-hero {
+        min-height: 160px;
+    }
+
+    .home-hero h1 {
+        font-size: 1.3rem;
+    }
+
+    .language-modal {
+        max-height: 90vh;
+        overflow-y: auto;
+    }
 }
 

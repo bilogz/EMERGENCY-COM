@@ -1,5 +1,5 @@
 <?php
-// Themed public landing page for EMERGENCY-COM using the system's shared styles
+// Dedicated Home page for the user portal
 $assetBase = 'ADMIN/header/';
 ?>
 <!DOCTYPE html>
@@ -7,169 +7,269 @@ $assetBase = 'ADMIN/header/';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EMERGENCY-COM | Community Emergency Communication System</title>
-
+    <title>User Home</title>
     <link rel="icon" type="image/x-icon" href="<?= $assetBase ?>images/favicon.ico">
-    <!-- Shared theme styles -->
     <link rel="stylesheet" href="<?= $assetBase ?>css/global.css">
     <link rel="stylesheet" href="<?= $assetBase ?>css/buttons.css">
     <link rel="stylesheet" href="<?= $assetBase ?>css/hero.css">
-    <!-- Reuse admin/user theme tokens and cards -->
     <link rel="stylesheet" href="ADMIN/sidebar/css/global.css">
+    <link rel="stylesheet" href="ADMIN/sidebar/css/sidebar.css">
+    <link rel="stylesheet" href="ADMIN/sidebar/css/content.css">
+    <link rel="stylesheet" href="ADMIN/sidebar/css/buttons.css">
     <link rel="stylesheet" href="USERS/css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="USERS/js/translations.js"></script>
 </head>
 <body>
-    <!-- Top navigation themed like the system header -->
-    <header class="header">
-        <div class="header-container">
-            <a href="index.php" class="logo">
-                <img src="<?= $assetBase ?>images/logo.svg" alt="EMERGENCY-COM logo" class="logo-img">
-                <span>EMERGENCY-COM</span>
-            </a>
+    <?php 
+    // Set base paths for sidebar when included from root
+    $basePath = '';
+    $isRootContext = true;  // Flag to indicate we're in root context
+    $assetSidebar = 'ADMIN/sidebar/';
+    include 'USERS/includes/sidebar.php'; 
+    ?>
 
-            <nav class="nav-center">
-                <ul class="nav-menu">
-                    <li><a href="#top" class="nav-link active">Overview</a></li>
-                    <li><a href="#features" class="nav-link">Key Features</a></li>
-                    <li><a href="#how-it-works" class="nav-link">How it works</a></li>
-                    <li><a href="#support" class="nav-link">Support</a></li>
-                </ul>
-            </nav>
+    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()">
+        <i class="fas fa-bars"></i>
+    </button>
 
-            <div class="nav-actions">
-                <a href="USERS/login.php" class="btn btn-secondary">User Login</a>
-                <a href="ADMIN/admin-login.php" class="btn btn-primary">Admin Login</a>
-                <button class="mobile-menu-toggle" aria-label="Toggle mobile menu">
-                    <i class="fas fa-bars"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- Mobile Navigation -->
-        <div class="mobile-nav">
-            <div class="mobile-nav-header">
-                <a href="index.php" class="mobile-nav-logo">
-                    <img src="<?= $assetBase ?>images/logo.svg" alt="EMERGENCY-COM logo" class="logo-img">
-                    <span>EMERGENCY-COM</span>
-                </a>
-                <button class="mobile-nav-close" aria-label="Close mobile menu">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <ul class="mobile-nav-menu">
-                <li><a href="#top" class="mobile-nav-link active">Overview</a></li>
-                <li><a href="#features" class="mobile-nav-link">Key Features</a></li>
-                <li><a href="#how-it-works" class="mobile-nav-link">How it works</a></li>
-                <li><a href="#support" class="mobile-nav-link">Support</a></li>
-                <li class="mobile-nav-divider"></li>
-                <li><a href="USERS/login.php" class="mobile-nav-link">User Login</a></li>
-                <li><a href="ADMIN/admin-login.php" class="mobile-nav-link">Admin Login</a></li>
-            </ul>
-        </div>
-
-        <!-- Mobile Navigation Overlay -->
-        <div class="mobile-nav-overlay"></div>
-    </header>
-
-    <main class="main-content" id="top">
-        <!-- Hero section reusing system hero styles -->
-        <div class="hero-section">
+    <main class="main-content">
+        <div class="hero-section home-hero" id="features">
             <div class="main-container">
                 <div class="sub-container">
-                    <h1>Emergency Communication System</h1>
-                    <p>
-                        Stay informed with real-time alerts, multilingual support, and two-way communication
-                        across web, SMS, email, and PA systems.
+                    <h1 data-translate="home.title"><strong>QUEZON CITY EMERGENCY COMMUNICATION PORTAL</strong></h1>
+                    <p class="hero-subtitle">
+                        Quezon City Hall, Kalayaan Avenue, Diliman, Quezon City
                     </p>
-                    <div class="hero-buttons">
-                        <a href="USERS/login.php" class="btn btn-primary">Login as User</a>
-                        <a href="#features" class="btn btn-secondary">Explore Features</a>
+                    <p class="hero-subtitle">
+                        <strong data-translate="home.mission">Mission:</strong>
+                        <span data-translate="home.mission.text">To operationalize an effective, efficient, and inclusive DRRM system dedicated to Resilience-building in Quezon City communities.</span>
+                    </p>
+                    <p class="hero-subtitle">
+                        <strong data-translate="home.vision">Vision:</strong>
+                        <span data-translate="home.vision.text">A global mode of excellence in Disaster Risk Reduction and Management for its cohesive DRRM system fostering a Sustainable, Future-ready, and Resilient Quezon City.</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-container">
+            <div class="sub-container home-download-app">
+                <h3 data-translate="home.download.title">Download Our Mobile App</h3>
+                <p data-translate="home.download.desc">Get instant emergency alerts and notifications on your mobile device</p>
+                <div class="app-download-buttons">
+                    <div class="app-download-btn coming-soon-btn" id="apkDownloadBtn" aria-label="Coming Soon">
+                        <i class="fas fa-mobile-alt"></i>
+                        <div class="app-btn-text">
+                            <span class="app-btn-large" data-translate="home.download.comingsoon">Coming Soon</span>
+                            <span class="app-btn-small" data-translate="home.download.comingsoon.desc">Mobile app launching soon</span>
+                        </div>
+                        <span class="coming-soon-badge" data-translate="home.download.badge">SOON</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- System overview cards styled like user portal -->
+        <div class="main-container">
+            <div class="sub-container home-emergency-cta">
+                <a href="USERS/emergency-call.php" class="btn btn-primary emergency-call-btn">
+                    <i class="fas fa-phone"></i>
+                    <span data-translate="home.emergency.call">Call for Emergency</span>
+                </a>
+            </div>
+        </div>
+
         <div class="main-container">
             <div class="sub-container">
-                <section id="features" class="page-content">
-                    <h2>What EMERGENCY-COM provides</h2>
-                    <p>
-                        This system centralizes emergency alerts and communication so citizens and responders
-                        can act quickly and confidently.
+                <section class="page-content">
+                    <h2 data-translate="home.about.title">About Us</h2>
+                    <p data-translate="home.about.text">
+                        The Quezon City Emergency Communication Portal connects residents, responders, and the local government
+                        through reliable, multi-channel emergency alerts and communication tools.
+                        Our goal is to help you receive critical information quickly and safely during disasters, incidents,
+                        and city-wide emergencies.
                     </p>
+                </section>
+
+                <section class="page-content">
+                    <h2 data-translate="home.services.title">Services</h2>
                     <div class="cards-grid">
                         <div class="card">
-                            <h3>Real-Time Alerts</h3>
-                            <p>Receive critical notifications from integrated sources like PAGASA and PHIVOLCS.</p>
+                            <h3 data-translate="home.services.mass">Mass Notifications</h3>
+                            <p data-translate="home.services.mass.desc">City-wide alerts sent via SMS, email, and online channels for urgent incidents and advisories.</p>
                         </div>
                         <div class="card">
-                            <h3>Two-Way Communication</h3>
-                            <p>Citizens can acknowledge alerts, request help, and share on-ground updates.</p>
+                            <h3 data-translate="home.services.twoWay">Two-Way Communication</h3>
+                            <p data-translate="home.services.twoWay.desc">Residents can report incidents, request assistance, and send updates back to responders.</p>
                         </div>
                         <div class="card">
-                            <h3>Multichannel Delivery</h3>
-                            <p>Alerts can be delivered via web, SMS, email, and public address systems.</p>
+                            <h3 data-translate="home.services.automated">Automated Hazard Feeds</h3>
+                            <p data-translate="home.services.automated.desc">Integrated updates from agencies such as PAGASA and PHIVOLCS for weather and seismic events.</p>
                         </div>
                         <div class="card">
-                            <h3>Subscriptions & Preferences</h3>
-                            <p>Users can subscribe to categories and choose preferred languages.</p>
+                            <h3 data-translate="home.services.multilingual">Multilingual Alerts</h3>
+                            <p data-translate="home.services.multilingual.desc">Important messages can be delivered in multiple languages to reach more communities.</p>
                         </div>
                     </div>
                 </section>
 
-                <section id="how-it-works" class="page-content">
-                    <h2>How it works for guests and users</h2>
-                    <p>
-                        As a guest you can learn about the platform. To receive alerts and manage your
-                        preferences you need a user account.
-                    </p>
-                    <div class="cards-grid">
-                        <div class="card">
-                            <h4>Guests</h4>
-                            <p>View public information about the system and available emergency channels.</p>
-                        </div>
-                        <div class="card">
-                            <h4>Registered Users</h4>
-                            <p>Access personalized dashboards, current alerts, and your subscription settings.</p>
-                            <a href="USERS/login.php" class="btn btn-primary">Go to User Login</a>
-                        </div>
-                        <div class="card">
-                            <h4>Administrators</h4>
-                            <p>Configure alerts, manage subscribers, and review system activity.</p>
-                            <a href="ADMIN/admin-login.php" class="btn btn-secondary">Admin Login</a>
-                        </div>
-                    </div>
-                </section>
-
-                <section id="support" class="page-content">
-                    <h2>Support & emergency guidance</h2>
-                    <p>
-                        This platform is designed to complement, not replace, your local emergency hotlines.
-                        In life-threatening situations, always call your local emergency number first.
-                    </p>
-                    <div class="cards-grid">
-                        <div class="card">
-                            <h4>Emergency Numbers</h4>
-                            <p>Contact your local emergency dispatch or LGU hotlines immediately for urgent help.</p>
-                        </div>
-                        <div class="card">
-                            <h4>User Support</h4>
-                            <p>Once logged in, you can access detailed guides and support materials.</p>
-                            <a href="USERS/support.php" class="btn btn-secondary">View Support Page</a>
-                        </div>
-                    </div>
+                <section class="page-content">
+                    <h2 data-translate="home.guide.title">Guide: How to Call for Emergency</h2>
+                    <ol class="emergency-guide-list">
+                        <li><strong data-translate="home.guide.1">Stay calm and move to a safe place.</strong> Ensure you are away from immediate danger before calling.</li>
+                        <li><strong data-translate="home.guide.2">Use the "Call for Emergency" button.</strong> Click the button above or dial the hotlines on the Emergency Call page.</li>
+                        <li><strong data-translate="home.guide.3">Prepare key details.</strong> Be ready to state your exact location, type of emergency, number of people involved, and visible hazards.</li>
+                        <li><strong data-translate="home.guide.4">Follow instructions.</strong> Listen carefully to the dispatcher and follow their guidance while waiting for responders.</li>
+                        <li><strong data-translate="home.guide.5">Keep lines open.</strong> Stay on the call or keep your phone available in case responders need more information.</li>
+                    </ol>
                 </section>
             </div>
         </div>
     </main>
 
-    <?php include 'USERS/includes/footer-snippet.php'; ?>
+    <?php 
+    // Ensure variables are available for footer
+    if (!isset($assetBase)) {
+        $assetBase = 'ADMIN/header/';
+    }
+    if (!isset($basePath)) {
+        $basePath = '';
+    }
+    if (!isset($isRootContext)) {
+        $isRootContext = true;  // We're in root context
+    }
+    include 'USERS/includes/footer-snippet.php'; 
+    ?>
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
+    <script>
+        // Enhanced language preference modal with improved design
+        document.addEventListener('DOMContentLoaded', function () {
+            const existingPreference = localStorage.getItem('preferredLanguage');
+            const languageMap = {
+                'English': 'en',
+                'Filipino': 'fil',
+                'Cebuano': 'ceb',
+                'Ilocano': 'ilo',
+                'Kapampangan': 'pam',
+                'Bicolano': 'bcl',
+                'Waray': 'war'
+            };
+            const languages = Object.keys(languageMap);
+
+            // Show modal on first visit or if no preference is saved
+            const hasShownModal = sessionStorage.getItem('languageModalShown');
+            
+            if (!hasShownModal || !existingPreference) {
+                showLanguageModal();
+                if (!hasShownModal) {
+                    sessionStorage.setItem('languageModalShown', 'true');
+                }
+            } else if (existingPreference) {
+                // Apply existing preference
+                if (typeof window.setLanguage === 'function') {
+                    window.setLanguage(existingPreference);
+                } else {
+                    document.documentElement.setAttribute('data-lang', existingPreference);
+                }
+            }
+
+            function showLanguageModal() {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'language-modal-backdrop';
+                wrapper.innerHTML = `
+                    <div class="language-modal">
+                        <h2 data-translate="lang.select">Select Language</h2>
+                        <p data-translate="lang.choose">Please choose your preferred language for alerts and content.</p>
+                        <div class="language-buttons-row">
+                            <button data-lang="en" data-translate="lang.english">English</button>
+                            <button data-lang="fil" data-translate="lang.filipino">Filipino</button>
+                        </div>
+                        <div class="language-search">
+                            <input type="text" id="languageSearchInput" data-translate-placeholder="lang.search.placeholder" placeholder="Search language...">
+                            <ul id="languageSuggestions"></ul>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(wrapper);
+
+                const suggestionsList = wrapper.querySelector('#languageSuggestions');
+                const searchInput = wrapper.querySelector('#languageSearchInput');
+
+                function setLanguage(code, label) {
+                    if (typeof window.setLanguage === 'function') {
+                        window.setLanguage(code);
+                    } else {
+                        localStorage.setItem('preferredLanguage', code);
+                        document.documentElement.setAttribute('data-lang', code);
+                        if (typeof window.applyTranslations === 'function') {
+                            window.applyTranslations();
+                        }
+                    }
+                    wrapper.remove();
+                }
+
+                // Apply translations to modal if available
+                if (typeof window.applyTranslations === 'function') {
+                    setTimeout(() => window.applyTranslations(), 100);
+                }
+
+                wrapper.querySelectorAll('.language-buttons-row button').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const code = btn.getAttribute('data-lang');
+                        const label = btn.textContent.trim();
+                        setLanguage(code, label);
+                    });
+                });
+
+                wrapper.addEventListener('click', (e) => {
+                    if (e.target === wrapper) {
+                        // Don't close on backdrop click - require language selection
+                    }
+                });
+
+                if (searchInput && suggestionsList) {
+                    searchInput.addEventListener('input', () => {
+                        const q = searchInput.value.trim().toLowerCase();
+                        suggestionsList.innerHTML = '';
+                        
+                        if (!q) {
+                            suggestionsList.classList.remove('show');
+                            return;
+                        }
+
+                        const matches = languages.filter(lang =>
+                            lang.toLowerCase().includes(q)
+                        );
+                        
+                        if (matches.length > 0) {
+                            suggestionsList.classList.add('show');
+                            matches.forEach(lang => {
+                                const li = document.createElement('li');
+                                li.textContent = lang;
+                                li.addEventListener('click', () => {
+                                    const code = languageMap[lang] || 'en';
+                                    setLanguage(code, lang);
+                                });
+                                suggestionsList.appendChild(li);
+                            });
+                        } else {
+                            suggestionsList.classList.remove('show');
+                        }
+                    });
+
+                    // Hide suggestions when clicking outside
+                    document.addEventListener('click', function(e) {
+                        if (!wrapper.contains(e.target)) {
+                            suggestionsList.classList.remove('show');
+                        }
+                    });
+                }
+            }
+        });
+    </script>
 </body>
 </html>

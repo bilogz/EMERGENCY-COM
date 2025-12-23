@@ -1,5 +1,18 @@
 <?php
 // Shared footer snippet for user pages (extracted from index/dashboard)
+// Use provided $basePath if set (from root), otherwise default to empty (from USERS)
+if (!isset($basePath)) {
+    $basePath = '';
+}
+// Detect if we're in root context (explicitly set flag from root index.php)
+if (!isset($isRootContext)) {
+    $isRootContext = false;
+}
+$linkPrefix = $isRootContext ? 'USERS/' : '';
+// Use provided $assetBase if set, otherwise default
+if (!isset($assetBase)) {
+    $assetBase = '../ADMIN/header/';
+}
 ?>
 <footer class="footer">
     <div class="main-container">
@@ -7,7 +20,7 @@
             <div class="footer-container">
                 <div class="footer-main">
                     <div class="footer-brand">
-                        <a href="index.php" class="footer-logo">
+                        <a href="<?= $basePath ?>index.php" class="footer-logo">
                             <img src="<?= $assetBase ?>images/logo.svg" alt="" class="logo-img">
                         </a>
                         <p class="footer-description">
@@ -24,11 +37,11 @@
                     <div class="footer-column">
                         <h4>Navigation</h4>
                         <ul class="footer-links">
-                            <li><a href="home.php" class="footer-link">Home</a></li>
-                            <li><a href="alerts.php" class="footer-link">Alerts</a></li>
-                            <li><a href="profile.php" class="footer-link">Profile</a></li>
-                            <li><a href="support.php" class="footer-link">Support</a></li>
-                            <li><a href="emergency-call.php" class="footer-link">Emergency Call</a></li>
+                            <li><a href="<?= $isRootContext ? 'index.php' : '../index.php' ?>" class="footer-link">Home</a></li>
+                            <li><a href="<?= $basePath ?><?= $linkPrefix ?>alerts.php" class="footer-link">Alerts</a></li>
+                            <li><a href="<?= $basePath ?><?= $linkPrefix ?>profile.php" class="footer-link">Profile</a></li>
+                            <li><a href="<?= $basePath ?><?= $linkPrefix ?>support.php" class="footer-link">Support</a></li>
+                            <li><a href="<?= $basePath ?><?= $linkPrefix ?>emergency-call.php" class="footer-link">Emergency Call</a></li>
                         </ul>
                     </div>
 

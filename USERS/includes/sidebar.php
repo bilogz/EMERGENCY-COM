@@ -1,6 +1,18 @@
 <?php
 // User-facing sidebar, modeled after the admin sidebar
-$assetSidebar = '../ADMIN/sidebar/';
+// Use provided $assetSidebar if set (from root), otherwise default to relative path (from USERS)
+if (!isset($assetSidebar)) {
+    $assetSidebar = '../ADMIN/sidebar/';
+}
+// Use provided $basePath if set (from root), otherwise default to empty (from USERS)
+if (!isset($basePath)) {
+    $basePath = '';
+}
+// Detect if we're in root context (explicitly set flag from root index.php)
+if (!isset($isRootContext)) {
+    $isRootContext = false;
+}
+$linkPrefix = $isRootContext ? 'USERS/' : '';
 $current = basename($_SERVER['PHP_SELF']);
 
 // Include guest monitoring notice
@@ -10,7 +22,9 @@ include __DIR__ . '/guest-monitoring-notice.php';
     <div class="sidebar-header">
         <div class="sidebar-brand">
             <div class="brand-logo">
-                <img src="<?= $assetSidebar ?>images/logo.svg" alt="Logo" class="logo-img">
+                <a href="<?= $isRootContext ? 'index.php' : '../index.php' ?>" class="logo-link">
+                    <img src="<?= $assetSidebar ?>images/logo.svg" alt="Logo" class="logo-img">
+                </a>
             </div>
         </div>
     </div>
@@ -21,25 +35,25 @@ include __DIR__ . '/guest-monitoring-notice.php';
                 <h3 class="sidebar-section-title">User</h3>
                 <ul class="sidebar-menu">
                     <li class="sidebar-menu-item">
-                        <a href="home.php" class="sidebar-link <?= $current === 'home.php' ? 'active' : '' ?>">
+                        <a href="<?= $isRootContext ? 'index.php' : '../index.php' ?>" class="sidebar-link <?= ($current === 'index.php' || $current === 'home.php') ? 'active' : '' ?>">
                             <i class="fas fa-home"></i>
                             <span>Home</span>
                         </a>
                     </li>
                     <li class="sidebar-menu-item">
-                        <a href="alerts.php" class="sidebar-link <?= $current === 'alerts.php' ? 'active' : '' ?>">
+                        <a href="<?= $basePath ?><?= $linkPrefix ?>alerts.php" class="sidebar-link <?= $current === 'alerts.php' ? 'active' : '' ?>">
                             <i class="fas fa-bell"></i>
                             <span>Alerts</span>
                         </a>
                     </li>
                     <li class="sidebar-menu-item">
-                        <a href="profile.php" class="sidebar-link <?= $current === 'profile.php' ? 'active' : '' ?>">
+                        <a href="<?= $basePath ?><?= $linkPrefix ?>profile.php" class="sidebar-link <?= $current === 'profile.php' ? 'active' : '' ?>">
                             <i class="fas fa-user-cog"></i>
                             <span>Profile</span>
                         </a>
                     </li>
                     <li class="sidebar-menu-item">
-                        <a href="support.php" class="sidebar-link <?= $current === 'support.php' ? 'active' : '' ?>">
+                        <a href="<?= $basePath ?><?= $linkPrefix ?>support.php" class="sidebar-link <?= $current === 'support.php' ? 'active' : '' ?>">
                             <i class="fas fa-life-ring"></i>
                             <span>Support</span>
                         </a>
@@ -51,7 +65,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
                 <h3 class="sidebar-section-title">Emergency</h3>
                 <ul class="sidebar-menu">
                     <li class="sidebar-menu-item">
-                        <a href="emergency-call.php" class="sidebar-link <?= $current === 'emergency-call.php' ? 'active' : '' ?>">
+                        <a href="<?= $basePath ?><?= $linkPrefix ?>emergency-call.php" class="sidebar-link <?= $current === 'emergency-call.php' ? 'active' : '' ?>">
                             <i class="fas fa-phone-alt"></i>
                             <span>Emergency Call</span>
                         </a>
@@ -65,7 +79,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
 <div class="auth-icons">
-    <a href="login.php" class="auth-icon-link" title="Login / Sign Up">
+    <a href="<?= $basePath ?><?= $linkPrefix ?>login.php" class="auth-icon-link" title="Login / Sign Up">
         <i class="fas fa-user-circle"></i>
     </a>
 </div>

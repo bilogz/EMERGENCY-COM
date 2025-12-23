@@ -12,6 +12,7 @@ $current = 'profile.php';
     <link rel="stylesheet" href="<?= $assetBase ?>css/global.css">
     <link rel="stylesheet" href="<?= $assetBase ?>css/buttons.css">
     <link rel="stylesheet" href="<?= $assetBase ?>css/hero.css">
+    <link rel="stylesheet" href="<?= $assetBase ?>css/forms.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/global.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/sidebar.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/content.css">
@@ -56,23 +57,22 @@ $current = 'profile.php';
                 </section>
 
                 <section class="page-content">
-                    <h2>Language Settings</h2>
-                    <p>Choose your preferred language. This will be used for alerts and interface text where available.</p>
+                    <h2 data-translate="profile.language.title">Language Settings</h2>
+                    <p data-translate="profile.language.desc">Choose your preferred language. This will be used for alerts and interface text where available.</p>
                     <form class="auth-form" id="languageSettingsForm">
                         <div class="form-group">
-                            <label>Preferred Language</label>
-                            <div class="form-group-half">
-                                <label>
-                                    <input type="radio" name="preferred_language" value="en">
-                                    English
-                                </label>
-                                <label>
-                                    <input type="radio" name="preferred_language" value="fil">
-                                    Filipino
-                                </label>
-                            </div>
+                            <label data-translate="profile.language.label">Preferred Language</label>
+                            <select name="preferred_language" id="preferredLanguageSelect" class="form-control">
+                                <option value="en">English</option>
+                                <option value="fil">Filipino</option>
+                                <option value="ceb">Cebuano</option>
+                                <option value="ilo">Ilocano</option>
+                                <option value="pam">Kapampangan</option>
+                                <option value="bcl">Bicolano</option>
+                                <option value="war">Waray</option>
+                            </select>
                         </div>
-                        <button type="button" class="btn btn-primary" id="saveLanguageBtn">Save Language</button>
+                        <button type="button" class="btn btn-primary" id="saveLanguageBtn" data-translate="profile.language.save">Save Language</button>
                     </form>
                 </section>
             </div>
@@ -84,25 +84,34 @@ $current = 'profile.php';
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
+    <script src="js/translations.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const savedLang = localStorage.getItem('preferredLanguage') || 'en';
-            const radios = document.querySelectorAll('input[name="preferred_language"]');
+            const selectDropdown = document.getElementById('preferredLanguageSelect');
             const saveBtn = document.getElementById('saveLanguageBtn');
 
-            radios.forEach(r => {
-                if (r.value === savedLang) {
-                    r.checked = true;
-                }
-            });
+            // Set the selected value in dropdown
+            if (selectDropdown) {
+                selectDropdown.value = savedLang;
+            }
 
             if (saveBtn) {
                 saveBtn.addEventListener('click', function () {
-                    const selected = document.querySelector('input[name="preferred_language"]:checked');
-                    if (!selected) return;
-                    const lang = selected.value;
-                    localStorage.setItem('preferredLanguage', lang);
-                    document.documentElement.setAttribute('data-lang', lang);
+                    if (!selectDropdown) return;
+                    const lang = selectDropdown.value;
+                    
+                    // Use the global setLanguage function if available
+                    if (typeof window.setLanguage === 'function') {
+                        window.setLanguage(lang);
+                    } else {
+                        localStorage.setItem('preferredLanguage', lang);
+                        document.documentElement.setAttribute('data-lang', lang);
+                        if (typeof applyTranslations === 'function') {
+                            applyTranslations();
+                        }
+                    }
+                    
                     Swal.fire({
                         icon: 'success',
                         title: 'Language updated',
