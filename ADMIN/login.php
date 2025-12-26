@@ -33,13 +33,14 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="robots" content="noindex, nofollow">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.google.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: https://www.google.com https://www.gstatic.com; frame-src https://www.google.com;">
     <title>Admin Login - Emergency Communication System</title>
     <link rel="icon" type="image/x-icon" href="sidebar/images/favicon.ico">
     <link rel="stylesheet" href="sidebar/css/global.css">
     <link rel="stylesheet" href="sidebar/css/forms.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     <style>
         /* Login Page Specific Styles */
         body {
@@ -396,91 +397,22 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
 
         .captcha-container {
             margin-bottom: 1.5rem;
-            padding: 1rem;
-            background: var(--bg-color-1);
-            border: 2px solid var(--border-color-1);
-            border-radius: 8px;
-            display: none;
-        }
-
-        .captcha-container.show {
-            display: block;
-        }
-
-        .captcha-label {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.75rem;
-            font-weight: 500;
-            color: var(--text-color-1);
-            font-size: 14px;
-        }
-
-        .captcha-label i {
-            color: var(--primary-color-1);
-            font-size: 16px;
-        }
-
-        .captcha-input {
-            width: 100%;
-            padding: 0.875rem 1rem;
-            border: 2px solid var(--border-color-1);
-            border-radius: 8px;
-            font-size: 14px;
-            font-family: var(--font-family-1);
-            background-color: var(--bg-color-1);
-            color: var(--text-color-1);
-            transition: all 0.3s ease;
-            outline: none;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
-        .captcha-input:focus {
-            border-color: var(--primary-color-1);
-            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
-        }
-
-        .captcha-display {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            margin-bottom: 0.75rem;
-        }
-
-        .captcha-code {
-            flex: 1;
-            padding: 1rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 8px;
-            text-align: center;
-            font-size: 24px;
-            font-weight: 700;
-            color: white;
-            letter-spacing: 4px;
-            font-family: 'Courier New', monospace;
-            user-select: none;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-
-        .captcha-refresh {
-            padding: 0.75rem;
-            background: var(--primary-color-1);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
+            display: flex !important;
             justify-content: center;
+            align-items: center;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
 
-        .captcha-refresh:hover {
-            background: #4ca8a6;
-            transform: rotate(180deg);
+        .g-recaptcha {
+            transform: scale(0.9);
+            transform-origin: 0 0;
+        }
+
+        @media (max-width: 480px) {
+            .g-recaptcha {
+                transform: scale(0.85);
+            }
         }
 
         .login-info {
@@ -659,26 +591,9 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 </button>
             </div>
 
-            <!-- CAPTCHA -->
+            <!-- Google reCAPTCHA v2 (visible checkbox) -->
             <div class="captcha-container" id="captchaContainer">
-                <label class="captcha-label">
-                    <i class="fas fa-robot"></i>
-                    Security Verification
-                </label>
-                <div class="captcha-display">
-                    <div class="captcha-code" id="captchaCode">ABCD</div>
-                    <button type="button" class="captcha-refresh" id="captchaRefresh" aria-label="Refresh CAPTCHA">
-                        <i class="fas fa-sync-alt"></i>
-                    </button>
-                </div>
-                <input 
-                    type="text" 
-                    id="captchaInput" 
-                    class="captcha-input" 
-                    placeholder="Enter CAPTCHA code" 
-                    maxlength="4"
-                    autocomplete="off"
-                >
+                <div class="g-recaptcha" data-sitekey="6LeXXjcsAAAAALkrHEDevFsVzUsW_fjRnYKItbLE" data-theme="light"></div>
             </div>
 
             <div class="form-options">
@@ -704,6 +619,91 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             </p>
         </div>
     </div>
+
+    <!-- OTP Verification Modal -->
+    <div id="otpModal" class="otp-modal" style="display: none;">
+        <div class="otp-modal-content">
+            <button class="otp-modal-close" id="otpModalClose">&times;</button>
+            <h3>Verify Your Email</h3>
+            <p style="color: var(--text-secondary-1); margin-bottom: 1.5rem;">
+                We've sent a 6-digit verification code to <strong id="otpEmailDisplay"></strong>
+            </p>
+            
+            <div id="otpSentBanner" style="display:none; margin-bottom:1rem; padding:0.75rem; border-radius:6px; background: rgba(40,167,69,0.12); border:1px solid rgba(40,167,69,0.2); color: #28a745;">
+                <i class="fas fa-check-circle"></i> Verification code sent successfully.
+            </div>
+            <div id="otpWarnBanner" style="display:none; margin-bottom:1rem; padding:0.75rem; border-radius:6px; background: rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.2); color: #856404;">
+                <i class="fas fa-exclamation-triangle"></i> Email delivery failed. Use the debug code below for testing.
+            </div>
+            <div id="otpDebugCode" style="display:none; margin-bottom:1rem; padding:1rem; background: #fffacd; border:2px solid #ffd700; border-radius:6px; font-weight:700; text-align:center; font-size:1.2rem; color: #d4941e;"></div>
+
+            <form id="otpModalForm">
+                <div class="form-group">
+                    <label for="otp" class="form-label"><i class="fas fa-key"></i> Verification Code</label>
+                    <input type="text" id="otp" name="otp" class="form-control" placeholder="Enter 6-digit code" maxlength="6" pattern="[0-9]{6}" required autocomplete="one-time-code" style="text-align: center; font-size: 1.5rem; letter-spacing: 0.5rem;">
+                    <small class="form-text" style="margin-top: 0.25rem; font-size: 12px; color: var(--text-secondary-1);">Enter the 6-digit code sent to your email</small>
+                </div>
+
+                <div class="error-message" id="otpModalErrorMessage" style="display: none;">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="otpModalErrorText"></span>
+                </div>
+
+                <button type="submit" class="btn-login" id="otpVerifyButton">
+                    <i class="fas fa-check"></i>
+                    <span>Verify Code</span>
+                </button>
+                <div style="text-align: center; margin-top: 1rem;">
+                    <button type="button" class="login-footer-link" id="otpResendButton" style="background: none; border: none; cursor: pointer;">Resend Code</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <style>
+        /* OTP Modal Styles */
+        .otp-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+        .otp-modal-content {
+            background: var(--card-bg-1);
+            border-radius: 16px;
+            padding: 2.5rem;
+            max-width: 450px;
+            width: 90%;
+            position: relative;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+        .otp-modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary-1);
+            padding: 0.5rem;
+            line-height: 1;
+        }
+        .otp-modal-close:hover {
+            color: var(--text-color-1);
+        }
+        .otp-modal-content h3 {
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+            color: var(--text-color-1);
+        }
+    </style>
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
@@ -786,10 +786,11 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             const attempts = getLoginAttempts();
             const remaining = SECURITY_CONFIG.MAX_ATTEMPTS - attempts;
             
-            if (attempts >= SECURITY_CONFIG.CAPTCHA_REQUIRED_AFTER) {
-                document.getElementById('captchaContainer').classList.add('show');
-            } else {
-                document.getElementById('captchaContainer').classList.remove('show');
+            // CAPTCHA container is always visible (no need to add show class)
+            // Just ensure it's displayed
+            const captchaContainer = document.getElementById('captchaContainer');
+            if (captchaContainer) {
+                captchaContainer.style.display = 'flex';
             }
             
             if (attempts > 0 && attempts < SECURITY_CONFIG.MAX_ATTEMPTS) {
@@ -800,24 +801,57 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             }
         }
 
-        // CAPTCHA Functions
-        function generateCaptcha() {
-            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-            let captcha = '';
-            for (let i = 0; i < 4; i++) {
-                captcha += chars.charAt(Math.floor(Math.random() * chars.length));
+        // Reset reCAPTCHA v2
+        function resetRecaptcha() {
+            if (typeof grecaptcha !== 'undefined') {
+                grecaptcha.reset();
             }
-            return captcha;
         }
 
-        let currentCaptcha = generateCaptcha();
-        document.getElementById('captchaCode').textContent = currentCaptcha;
+        // OTP Modal functions
+        let pendingLoginData = null;
+        let otpResendTimer = null;
 
-        document.getElementById('captchaRefresh').addEventListener('click', function() {
-            currentCaptcha = generateCaptcha();
-            document.getElementById('captchaCode').textContent = currentCaptcha;
-            document.getElementById('captchaInput').value = '';
-        });
+        function openOtpModal(email, password, recaptchaResponse, rememberMe) {
+            document.getElementById('otpModal').style.display = 'flex';
+            document.getElementById('otpEmailDisplay').textContent = email;
+            document.getElementById('otp').value = '';
+            document.getElementById('otp').focus();
+            document.getElementById('otpModalErrorMessage').style.display = 'none';
+            
+            // Store login data for later use
+            pendingLoginData = {
+                email: email,
+                password: password,
+                recaptcha_response: recaptchaResponse,
+                rememberMe: rememberMe
+            };
+        }
+
+        function closeOtpModal() {
+            document.getElementById('otpModal').style.display = 'none';
+            document.getElementById('otpModalErrorMessage').style.display = 'none';
+            pendingLoginData = null;
+        }
+
+        function startResendCooldown(seconds) {
+            if (otpResendTimer) clearInterval(otpResendTimer);
+            const resendBtn = document.getElementById('otpResendButton');
+            let remaining = seconds;
+            resendBtn.disabled = true;
+            resendBtn.textContent = `Resend Code (${remaining}s)`;
+
+            otpResendTimer = setInterval(() => {
+                remaining--;
+                if (remaining > 0) {
+                    resendBtn.textContent = `Resend Code (${remaining}s)`;
+                } else {
+                    clearInterval(otpResendTimer);
+                    resendBtn.disabled = false;
+                    resendBtn.textContent = 'Resend Code';
+                }
+            }, 1000);
+        }
 
         // Password Toggle
         const passwordToggle = document.getElementById('passwordToggle');
@@ -855,9 +889,29 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             updateLockoutTimer();
             setInterval(updateLockoutTimer, 1000);
         }
-
-        // Update security warnings on page load
-        updateSecurityWarnings();
+        
+        // Ensure CAPTCHA container is visible on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Make sure CAPTCHA container is visible
+            const captchaContainer = document.getElementById('captchaContainer');
+            if (captchaContainer) {
+                captchaContainer.style.display = 'flex';
+                captchaContainer.style.visibility = 'visible';
+                captchaContainer.style.opacity = '1';
+            }
+            
+            // Initialize security warnings
+            updateSecurityWarnings();
+            
+            // Verify reCAPTCHA is loaded
+            if (typeof grecaptcha === 'undefined') {
+                console.warn('reCAPTCHA script not loaded. Check if the script tag is present and network connection.');
+            } else {
+                grecaptcha.ready(function() {
+                    console.log('reCAPTCHA v2 ready');
+                });
+            }
+        });
 
         // Update lockout timer every second if locked
         setInterval(function() {
@@ -888,17 +942,14 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 return;
             }
 
-            // CAPTCHA validation (if required)
-            if (attempts >= SECURITY_CONFIG.CAPTCHA_REQUIRED_AFTER) {
-                const captchaInput = document.getElementById('captchaInput').value.trim().toUpperCase();
-                if (!captchaInput || captchaInput !== currentCaptcha) {
-                    showError('Invalid CAPTCHA code. Please try again.');
-                    // Refresh CAPTCHA on error
-                    currentCaptcha = generateCaptcha();
-                    document.getElementById('captchaCode').textContent = currentCaptcha;
-                    document.getElementById('captchaInput').value = '';
-                    return;
-                }
+            // reCAPTCHA v2 validation
+            let recaptchaResponse = '';
+            if (typeof grecaptcha !== 'undefined') {
+                recaptchaResponse = grecaptcha.getResponse();
+            }
+            if (!recaptchaResponse) {
+                showError('Please complete the "I am not a robot" verification.');
+                return;
             }
 
             // Show loading state
@@ -913,7 +964,8 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                     },
                     body: JSON.stringify({
                         email: email,
-                        password: password
+                        password: password,
+                        recaptcha_response: (typeof grecaptcha !== 'undefined') ? grecaptcha.getResponse() : ''
                     })
                 });
 
@@ -948,6 +1000,56 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                         // Redirect to dashboard
                         window.location.href = 'sidebar/dashboard.php';
                     });
+                } else if (data.requires_otp) {
+                    // Credentials valid, but OTP verification required
+                    loginButton.classList.remove('loading');
+                    loginButton.disabled = false;
+                    
+                    // Send OTP to email
+                    try {
+                        const otpResponse = await fetch('api/send-admin-otp.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                email: email,
+                                name: data.username || 'Admin',
+                                purpose: 'login'
+                            })
+                        });
+
+                        const otpData = await otpResponse.json();
+
+                        if (otpData.success) {
+                            // Show debug OTP if email not sent
+                            if (!otpData.otp_sent && otpData.debug_otp) {
+                                document.getElementById('otpWarnBanner').style.display = 'block';
+                                document.getElementById('otpDebugCode').textContent = otpData.debug_otp;
+                                document.getElementById('otpDebugCode').style.display = 'block';
+                            } else {
+                                document.getElementById('otpSentBanner').style.display = 'block';
+                            }
+
+                            openOtpModal(email, password, recaptchaResponse, rememberMe);
+                            startResendCooldown(60);
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: otpData.message || 'Failed to send verification code. Please try again.',
+                                confirmButtonColor: '#dc3545'
+                            });
+                            resetRecaptcha();
+                        }
+                    } catch (error) {
+                        console.error('Send OTP error:', error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'A connection error occurred. Please try again.',
+                            confirmButtonColor: '#dc3545'
+                        });
+                        resetRecaptcha();
+                    }
                 } else {
                     // Increment failed login attempts
                     const newAttempts = incrementLoginAttempts();
@@ -983,12 +1085,8 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                         }
                     }
                     
-                    // Refresh CAPTCHA on failed attempt
-                    if (newAttempts >= SECURITY_CONFIG.CAPTCHA_REQUIRED_AFTER) {
-                        currentCaptcha = generateCaptcha();
-                        document.getElementById('captchaCode').textContent = currentCaptcha;
-                        document.getElementById('captchaInput').value = '';
-                    }
+                    // Reset reCAPTCHA for next attempt
+                    resetRecaptcha();
                     
                     loginButton.classList.remove('loading');
                     loginButton.disabled = false;
@@ -999,6 +1097,153 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 showError('A connection error occurred. Please check your internet connection and try again.');
                 loginButton.classList.remove('loading');
                 loginButton.disabled = false;
+            }
+        });
+
+        // OTP Modal close and resend handlers
+        document.getElementById('otpModalClose').addEventListener('click', closeOtpModal);
+
+        // OTP Verification form submission
+        const otpForm = document.getElementById('otpModalForm');
+        otpForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!pendingLoginData) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Session expired. Please start over.' });
+                closeOtpModal();
+                return;
+            }
+
+            const otp = document.getElementById('otp').value.trim();
+            if (!otp || otp.length !== 6) {
+                document.getElementById('otpModalErrorText').textContent = 'Please enter a valid 6-digit code.';
+                document.getElementById('otpModalErrorMessage').style.display = 'flex';
+                return;
+            }
+
+            const verifyButton = document.getElementById('otpVerifyButton');
+            verifyButton.disabled = true;
+            verifyButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+
+            try {
+                // Verify OTP
+                const verifyResponse = await fetch('api/verify-admin-otp.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        otp: otp,
+                        email: pendingLoginData.email,
+                        purpose: 'login'
+                    })
+                });
+
+                const verifyData = await verifyResponse.json();
+
+                if (!verifyData.success) {
+                    document.getElementById('otpModalErrorText').textContent = verifyData.message || 'Invalid verification code.';
+                    document.getElementById('otpModalErrorMessage').style.display = 'flex';
+                    verifyButton.disabled = false;
+                    verifyButton.innerHTML = '<i class="fas fa-check"></i> <span>Verify Code</span>';
+                    return;
+                }
+
+                // OTP verified, now complete login
+                // Note: Server will skip reCAPTCHA verification since OTP is already verified
+                const loginResponse = await fetch('api/login-web.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: pendingLoginData.email,
+                        password: pendingLoginData.password,
+                        recaptcha_response: '', // Not needed when OTP is verified
+                        otp_verified: true
+                    })
+                });
+
+                const loginData = await loginResponse.json();
+
+                if (loginData.success) {
+                    // Reset login attempts
+                    resetLoginAttempts();
+                    localStorage.removeItem(SECURITY_CONFIG.LOCKOUT_KEY);
+                    localStorage.removeItem(SECURITY_CONFIG.LOCKOUT_TIME_KEY);
+                    
+                    // Store session data
+                    if (pendingLoginData.rememberMe) {
+                        localStorage.setItem('admin_remember', 'true');
+                        localStorage.setItem('admin_email', pendingLoginData.email);
+                    } else {
+                        localStorage.removeItem('admin_remember');
+                        localStorage.removeItem('admin_email');
+                    }
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Login Successful!',
+                        text: 'Welcome back, ' + (loginData.username || 'Admin') + '!',
+                        showConfirmButton: false,
+                        timer: 1500
+                    }).then(() => {
+                        window.location.href = 'sidebar/dashboard.php';
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: loginData.message || 'Login failed. Please try again.',
+                        confirmButtonColor: '#dc3545'
+                    });
+                    verifyButton.disabled = false;
+                    verifyButton.innerHTML = '<i class="fas fa-check"></i> <span>Verify Code</span>';
+                    closeOtpModal();
+                }
+            } catch (error) {
+                console.error('Verify/Login error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'A connection error occurred. Please try again.',
+                    confirmButtonColor: '#dc3545'
+                });
+                verifyButton.disabled = false;
+                verifyButton.innerHTML = '<i class="fas fa-check"></i> <span>Verify Code</span>';
+            }
+        });
+
+        // Resend OTP button
+        document.getElementById('otpResendButton').addEventListener('click', async function() {
+            if (!pendingLoginData) return;
+
+            try {
+                const response = await fetch('api/send-admin-otp.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: pendingLoginData.email,
+                        name: 'Admin',
+                        purpose: 'login'
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('otpSentBanner').style.display = 'block';
+                    if (data.debug_otp) {
+                        document.getElementById('otpWarnBanner').style.display = 'block';
+                        document.getElementById('otpDebugCode').textContent = data.debug_otp;
+                        document.getElementById('otpDebugCode').style.display = 'block';
+                    }
+                    startResendCooldown(60);
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Code Sent',
+                        text: 'A new verification code has been sent to your email.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                }
+            } catch (error) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to resend code. Please try again.' });
             }
         });
 
@@ -1015,30 +1260,8 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 }
             }, 100);
 
-            // Disable right-click context menu for additional security
-            document.addEventListener('contextmenu', function(e) {
-                e.preventDefault();
-                return false;
-            });
-
-            // Disable common developer tools shortcuts (basic protection)
-            document.addEventListener('keydown', function(e) {
-                // Disable F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
-                if (e.key === 'F12' || 
-                    (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
-                    (e.ctrlKey && e.key === 'U')) {
-                    e.preventDefault();
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Security Notice',
-                        text: 'Developer tools are disabled on this page for security reasons.',
-                        confirmButtonText: 'OK',
-                        confirmButtonColor: '#4c8a89',
-                        timer: 2000
-                    });
-                    return false;
-                }
-            });
+            // Note: Developer tools are enabled for debugging purposes
+            // You can re-enable the restrictions below if needed for production
         });
 
         // Check if email was remembered
@@ -1068,7 +1291,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
         window.addEventListener('beforeunload', function() {
             // Clear password field
             passwordInput.value = '';
-            document.getElementById('captchaInput').value = '';
+            resetRecaptcha();
         });
 
         // Security: Detect if page is being viewed in iframe (clickjacking protection)

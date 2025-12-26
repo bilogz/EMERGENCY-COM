@@ -37,6 +37,12 @@ $pageTitle = 'Log and Audit Trail';
     <div class="main-content">
         <div class="main-container">
             <div class="title">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div style="font-size: 0.9rem; color: var(--text-secondary-1);">
+                        <i class="fas fa-user-circle" style="margin-right: 0.5rem;"></i>
+                        <strong>Admin:</strong> <?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'Admin User'); ?>
+                    </div>
+                </div>
                 <nav class="breadcrumb" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list">
                         <li class="breadcrumb-item">
@@ -179,7 +185,7 @@ $pageTitle = 'Log and Audit Trail';
     </div>
 
     <!-- View Details Modal -->
-    <div id="detailsModal" class="modal" style="display: none;">
+    <div id="detailsModal" class="modal">
         <div class="modal-content" style="max-width: 700px;">
             <div class="modal-header">
                 <h2>Notification Details</h2>
@@ -278,14 +284,36 @@ $pageTitle = 'Log and Audit Trail';
                                 <div><strong>Error Message:</strong> ${log.error_message || 'None'}</div>
                             </div>
                         `;
-                        document.getElementById('detailsModal').style.display = 'block';
+                        document.getElementById('detailsModal').classList.add('show');
+                        document.body.style.overflow = 'hidden';
                     }
                 });
         }
 
         function closeDetailsModal() {
-            document.getElementById('detailsModal').style.display = 'none';
+            document.getElementById('detailsModal').classList.remove('show');
+            document.body.style.overflow = '';
         }
+
+        // Close modal when clicking outside
+        document.addEventListener('click', function(e) {
+            const modal = document.getElementById('detailsModal');
+            if (modal && modal.classList.contains('show')) {
+                if (e.target === modal) {
+                    closeDetailsModal();
+                }
+            }
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('detailsModal');
+                if (modal && modal.classList.contains('show')) {
+                    closeDetailsModal();
+                }
+            }
+        });
 
         function exportAuditTrail() {
             const filters = getFilters();

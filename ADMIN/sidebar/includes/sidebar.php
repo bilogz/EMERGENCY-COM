@@ -44,6 +44,13 @@
                     </li>
                     
                     <li class="sidebar-menu-item">
+                        <a href="admin-approvals.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'admin-approvals.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-user-check" style="margin-right: 0.5rem;"></i>
+                            <span>Admin Approvals</span>
+                        </a>
+                    </li>
+                    
+                    <li class="sidebar-menu-item">
                         <a href="general-settings.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'general-settings.php' ? 'active' : ''; ?>">
                             <i class="fas fa-cog" style="margin-right: 0.5rem;"></i>
                             <span>Settings</span>
@@ -78,10 +85,25 @@
                     </li>
                     
                     <li class="sidebar-menu-item">
-                        <a href="automated-warnings.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' ? 'active' : ''; ?>">
+                        <a href="automated-warnings.php" class="sidebar-link sidebar-submenu-toggle <?php echo (basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' || basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php') ? 'active' : ''; ?>">
                             <i class="fas fa-plug" style="margin-right: 0.5rem;"></i>
                             <span>Automated Warnings</span>
+                            <i class="fas fa-chevron-down submenu-icon"></i>
                         </a>
+                        <ul class="sidebar-submenu <?php echo (basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' || basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php') ? 'sidebar-submenu-open' : ''; ?>">
+                            <li class="sidebar-menu-item">
+                                <a href="automated-warnings.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' ? 'active' : ''; ?>">
+                                    <i class="fas fa-cog" style="margin-right: 0.5rem;"></i>
+                                    <span>Settings</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="weather-monitoring.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php' ? 'active' : ''; ?>">
+                                    <i class="fas fa-cloud-sun" style="margin-right: 0.5rem;"></i>
+                                    <span>Weather Monitoring</span>
+                                </a>
+                            </li>
+                        </ul>
                     </li>
                     
                     <li class="sidebar-menu-item">
@@ -197,5 +219,23 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+    
+    // Also check if the parent link should be active (for automated-warnings submenu)
+    const automatedWarningsToggle = document.querySelector('a[href="automated-warnings.php"].sidebar-submenu-toggle');
+    if (automatedWarningsToggle) {
+        const submenu = automatedWarningsToggle.nextElementSibling;
+        if (submenu && submenu.classList.contains('sidebar-submenu')) {
+            const hasActiveChild = submenu.querySelector('.sidebar-link.active');
+            if (hasActiveChild) {
+                submenu.classList.add('sidebar-submenu-open');
+                automatedWarningsToggle.classList.add('active');
+                const icon = automatedWarningsToggle.querySelector('.submenu-icon');
+                if (icon) {
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-up');
+                }
+            }
+        }
+    }
 });
 </script>

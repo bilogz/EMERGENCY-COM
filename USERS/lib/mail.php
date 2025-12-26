@@ -21,10 +21,23 @@ function sendSMTPMail($to, $subject, $body, $isHtml = false, &$error = null) {
     $cfg = load_mail_config();
     $error = null;
 
-    // Try PHPMailer via Composer if available
-    $composerAutoload = __DIR__ . '/../../vendor/autoload.php';
-    if (file_exists($composerAutoload)) {
-        require_once $composerAutoload;
+    // Try PHPMailer via autoload (check both vendor and VENDOR for case sensitivity)
+    $composerAutoload1 = __DIR__ . '/../../vendor/autoload.php';
+    $composerAutoload2 = __DIR__ . '/../../VENDOR/autoload.php';
+    if (file_exists($composerAutoload1)) {
+        require_once $composerAutoload1;
+    } elseif (file_exists($composerAutoload2)) {
+        require_once $composerAutoload2;
+    }
+
+    // Also try direct path to PHPMailer-master
+    if (!class_exists('PHPMailer\PHPMailer\PHPMailer', false)) {
+        $phpmailerPath = __DIR__ . '/../../VENDOR/PHPMailer-master/src/PHPMailer.php';
+        if (file_exists($phpmailerPath)) {
+            require_once __DIR__ . '/../../VENDOR/PHPMailer-master/src/Exception.php';
+            require_once __DIR__ . '/../../VENDOR/PHPMailer-master/src/PHPMailer.php';
+            require_once __DIR__ . '/../../VENDOR/PHPMailer-master/src/SMTP.php';
+        }
     }
 
     if (class_exists('PHPMailer\PHPMailer\PHPMailer')) {

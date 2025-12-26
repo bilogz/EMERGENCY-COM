@@ -169,7 +169,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) DEFAULT NULL COMMENT 'Email address (optional)',
     phone VARCHAR(20) DEFAULT NULL COMMENT 'Mobile phone number',
     password VARCHAR(255) DEFAULT NULL COMMENT 'Hashed password',
-    status VARCHAR(20) DEFAULT 'active' COMMENT 'active, inactive, suspended',
+    status VARCHAR(20) DEFAULT 'active' COMMENT 'active, inactive, suspended, pending_approval',
     user_type VARCHAR(20) DEFAULT 'citizen' COMMENT 'citizen, admin, guest',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

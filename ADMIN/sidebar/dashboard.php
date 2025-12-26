@@ -4,6 +4,15 @@
  * User-friendly analytics dashboard for non-technical administrators
  */
 
+// Start session and check authentication
+session_start();
+
+// Check if user is logged in
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: ../login.php');
+    exit();
+}
+
 $pageTitle = 'Dashboard';
 ?>
 <!DOCTYPE html>
@@ -200,6 +209,12 @@ $pageTitle = 'Dashboard';
     <div class="main-content">
         <div class="main-container">
             <div class="title">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div style="font-size: 0.9rem; color: var(--text-secondary-1);">
+                        <i class="fas fa-user-circle" style="margin-right: 0.5rem;"></i>
+                        <strong>Admin:</strong> <?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'Admin User'); ?>
+                    </div>
+                </div>
                 <h1>Dashboard <span class="help-tooltip">
                     <i class="fas fa-question-circle"></i>
                     <span class="tooltip-text">Your main control center. Here you can see all important statistics and quickly access key features.</span>
@@ -388,35 +403,57 @@ $pageTitle = 'Dashboard';
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // Load dashboard data
+        // Load dashboard data (prevent multiple simultaneous requests)
+        let isLoading = false;
         function loadDashboardData() {
+            // Prevent multiple simultaneous requests
+            if (isLoading) {
+                return;
+            }
+            
+            isLoading = true;
+            
             fetch('../api/dashboard.php')
                 .then(response => response.json())
                 .then(data => {
+                    isLoading = false;
+                    
                     if (data.success) {
-                        // Update statistics
-                        document.getElementById('totalSubscribers').textContent = data.stats.total_subscribers || 0;
-                        document.getElementById('subscriberChange').textContent = `+${data.stats.subscriber_change || 0} this week`;
-                        document.getElementById('notificationsToday').textContent = data.stats.notifications_today || 0;
-                        document.getElementById('successRate').textContent = (data.stats.success_rate || 0) + '%';
-                        document.getElementById('weatherAlerts').textContent = data.stats.weather_alerts || 0;
-                        document.getElementById('earthquakeAlerts').textContent = data.stats.earthquake_alerts || 0;
-                        document.getElementById('pendingMessages').textContent = data.stats.pending_messages || 0;
+                        // Update statistics only if elements exist
+                        const elements = {
+                            totalSubscribers: document.getElementById('totalSubscribers'),
+                            subscriberChange: document.getElementById('subscriberChange'),
+                            notificationsToday: document.getElementById('notificationsToday'),
+                            successRate: document.getElementById('successRate'),
+                            weatherAlerts: document.getElementById('weatherAlerts'),
+                            earthquakeAlerts: document.getElementById('earthquakeAlerts'),
+                            pendingMessages: document.getElementById('pendingMessages'),
+                            weatherStatus: document.getElementById('weatherStatus'),
+                            earthquakeStatus: document.getElementById('earthquakeStatus')
+                        };
+                        
+                        if (elements.totalSubscribers) elements.totalSubscribers.textContent = data.stats.total_subscribers || 0;
+                        if (elements.subscriberChange) elements.subscriberChange.textContent = `+${data.stats.subscriber_change || 0} this week`;
+                        if (elements.notificationsToday) elements.notificationsToday.textContent = data.stats.notifications_today || 0;
+                        if (elements.successRate) elements.successRate.textContent = (data.stats.success_rate || 0) + '%';
+                        if (elements.weatherAlerts) elements.weatherAlerts.textContent = data.stats.weather_alerts || 0;
+                        if (elements.earthquakeAlerts) elements.earthquakeAlerts.textContent = data.stats.earthquake_alerts || 0;
+                        if (elements.pendingMessages) elements.pendingMessages.textContent = data.stats.pending_messages || 0;
 
                         // Update weather status
-                        if (data.stats.weather_alerts > 0) {
-                            document.getElementById('weatherStatus').innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span style="color: #e74c3c;">Active alerts</span>';
+                        if (elements.weatherStatus && data.stats.weather_alerts > 0) {
+                            elements.weatherStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span style="color: #e74c3c;">Active alerts</span>';
                         }
 
                         // Update earthquake status
-                        if (data.stats.earthquake_alerts > 0) {
-                            document.getElementById('earthquakeStatus').innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span style="color: #e74c3c;">Active alerts</span>';
+                        if (elements.earthquakeStatus && data.stats.earthquake_alerts > 0) {
+                            elements.earthquakeStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span style="color: #e74c3c;">Active alerts</span>';
                         }
 
                         // Load charts
                         if (data.charts) {
-                            loadNotificationsChart(data.charts.notifications);
-                            loadChannelsChart(data.charts.channels);
+                            if (data.charts.notifications) loadNotificationsChart(data.charts.notifications);
+                            if (data.charts.channels) loadChannelsChart(data.charts.channels);
                         }
 
                         // Load recent activity
@@ -426,6 +463,7 @@ $pageTitle = 'Dashboard';
                     }
                 })
                 .catch(error => {
+                    isLoading = false;
                     console.error('Error loading dashboard data:', error);
                 });
         }
@@ -519,11 +557,20 @@ $pageTitle = 'Dashboard';
             });
         }
 
-        // Load data on page load
-        document.addEventListener('DOMContentLoaded', loadDashboardData);
+        // Load data on page load (wait for DOM to be ready)
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadDashboardData);
+        } else {
+            // DOM is already ready
+            loadDashboardData();
+        }
 
-        // Refresh data every 5 minutes
-        setInterval(loadDashboardData, 300000);
+        // Refresh data every 5 minutes (only update data, don't reload page)
+        setInterval(function() {
+            if (!isLoading) {
+                loadDashboardData();
+            }
+        }, 300000);
     </script>
 </body>
 </html>

@@ -61,11 +61,11 @@
         
         <div class="user-profile" id="userProfileBtn">
             <div class="user-info">
-                <div class="user-name">Admin User</div>
+                <div class="user-name" id="adminDisplayName"><?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'Admin User'); ?></div>
                 <div class="user-role">Administrator</div>
             </div>
             <div class="user-avatar">
-                <img src="https://ui-avatars.com/api/?name=Admin+User&background=4c8a89&color=fff&size=128" alt="Admin User" class="avatar-img">
+                <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($_SESSION['admin_username'] ?? 'Admin User'); ?>&background=4c8a89&color=fff&size=128" alt="<?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'Admin User'); ?>" class="avatar-img" id="adminAvatarImg">
             </div>
             <i class="fas fa-chevron-down dropdown-icon"></i>
         </div>
@@ -77,19 +77,19 @@
     <div class="dropdown-header">
         <div class="dropdown-user-info">
             <div class="dropdown-user-avatar">
-                <img src="https://ui-avatars.com/api/?name=Admin+User&background=4c8a89&color=fff&size=128" alt="Admin User">
+                <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($_SESSION['admin_username'] ?? 'Admin User'); ?>&background=4c8a89&color=fff&size=128" alt="<?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'Admin User'); ?>" id="dropdownAdminAvatar">
             </div>
             <div class="dropdown-user-details">
-                <div class="dropdown-user-name">Admin User</div>
-                <div class="dropdown-user-email">admin@example.com</div>
+                <div class="dropdown-user-name" id="dropdownAdminName"><?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'Admin User'); ?></div>
+                <div class="dropdown-user-email" id="dropdownAdminEmail"><?php echo htmlspecialchars($_SESSION['admin_email'] ?? 'admin@example.com'); ?></div>
             </div>
         </div>
     </div>
     
     <div class="dropdown-body">
-        <a href="#" class="dropdown-item">
+        <a href="profile.php" class="dropdown-item" id="viewProfileBtn">
             <i class="fas fa-user"></i>
-            <span>Profile</span>
+            <span>View Profile</span>
         </a>
         <a href="#" class="dropdown-item">
             <i class="fas fa-cog"></i>
@@ -98,7 +98,7 @@
     </div>
     
     <div class="dropdown-footer">
-        <a href="#" class="dropdown-item logout-item">
+        <a href="#" class="dropdown-item logout-item" onclick="event.preventDefault(); handleLogout(); return false;">
             <i class="fas fa-sign-out-alt"></i>
             <span>Logout</span>
         </a>
@@ -625,5 +625,21 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('User profile clicked');
         });
     }
+    
+    // Logout handler
+    function handleLogout() {
+        // Clear localStorage
+        localStorage.removeItem('admin_remember');
+        localStorage.removeItem('admin_email');
+        localStorage.removeItem('admin_login_attempts');
+        localStorage.removeItem('admin_account_locked');
+        localStorage.removeItem('admin_lockout_time');
+        
+        // Redirect to logout page (all sidebar pages are in sidebar/ directory)
+        window.location.href = '../logout.php';
+    }
+    
+    // Make logout handler globally accessible
+    window.handleLogout = handleLogout;
 });
 </script>
