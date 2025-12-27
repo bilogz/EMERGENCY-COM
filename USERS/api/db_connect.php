@@ -6,11 +6,11 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
-$host = '127.0.0.1';
-$port = 3000; // Update this if your MySQL is running on a different port
-$db   = 'emergency_comm_db';
+$host = 'alertaraqc.com';
+$port = 3306; // Default MySQL port
+$db   = 'emer_comm_test';
 $user = 'root';
-$pass = '';
+$pass = 'YsqnXk6q#145';
 $charset = 'utf8mb4';
 
 // Include port in DSN (useful if XAMPP/MySQL uses a non-standard port)
