@@ -9,8 +9,6 @@ header('Content-Type: text/html; charset=utf-8');
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-$host = 'alertaraqc.com';
-$port = 3306;
 $user = 'root';
 $pass = 'YsqnXk6q#145';
 $sourceDb = 'emer_comm_test';
@@ -20,17 +18,40 @@ $charset = 'utf8mb4';
 echo "<h1>Database Duplication Script</h1>";
 echo "<pre>";
 
+// Try multiple connection methods
+$connectionAttempts = [
+    ['host' => 'localhost', 'port' => 3306],
+    ['host' => '127.0.0.1', 'port' => 3306],
+    ['host' => 'alertaraqc.com', 'port' => 3306],
+];
+
+$pdo = null;
+
+foreach ($connectionAttempts as $attempt) {
+    try {
+        $dsn = "mysql:host={$attempt['host']};port={$attempt['port']};charset=$charset";
+        $options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::ATTR_TIMEOUT            => 5,
+        ];
+        
+        $pdo = new PDO($dsn, $user, $pass, $options);
+        echo "✓ Connected to MySQL server at {$attempt['host']}:{$attempt['port']}\n";
+        break;
+    } catch (PDOException $e) {
+        echo "✗ Failed to connect to {$attempt['host']}:{$attempt['port']} - " . $e->getMessage() . "\n";
+    }
+}
+
+if ($pdo === null) {
+    echo "\n✗ Could not connect to MySQL server.\n";
+    echo "</pre>";
+    exit;
+}
+
 try {
-    // Connect to MySQL server
-    $dsn = "mysql:host=$host;port=$port;charset=$charset";
-    $options = [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES   => false,
-    ];
-    
-    $pdo = new PDO($dsn, $user, $pass, $options);
-    echo "✓ Connected to MySQL server\n";
     
     // Check if source database exists
     $stmt = $pdo->query("SHOW DATABASES LIKE '$sourceDb'");

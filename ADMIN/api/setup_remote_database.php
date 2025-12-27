@@ -9,8 +9,6 @@ header('Content-Type: text/html; charset=utf-8');
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-$host = 'alertaraqc.com';
-$port = 3306;
 $user = 'root';
 $pass = 'YsqnXk6q#145';
 $dbName = 'emer_comm_test';
@@ -19,17 +17,45 @@ $charset = 'utf8mb4';
 echo "<h1>Database Setup Script</h1>";
 echo "<pre>";
 
+// Try multiple connection methods
+$connectionAttempts = [
+    ['host' => 'localhost', 'port' => 3306],
+    ['host' => '127.0.0.1', 'port' => 3306],
+    ['host' => 'alertaraqc.com', 'port' => 3306],
+];
+
+$pdo = null;
+$workingHost = null;
+$workingPort = null;
+
+foreach ($connectionAttempts as $attempt) {
+    try {
+        $dsn = "mysql:host={$attempt['host']};port={$attempt['port']};charset=$charset";
+        $options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::ATTR_TIMEOUT            => 5,
+        ];
+        
+        $pdo = new PDO($dsn, $user, $pass, $options);
+        $workingHost = $attempt['host'];
+        $workingPort = $attempt['port'];
+        echo "✓ Connected to MySQL server at {$attempt['host']}:{$attempt['port']}\n";
+        break;
+    } catch (PDOException $e) {
+        echo "✗ Failed to connect to {$attempt['host']}:{$attempt['port']} - " . $e->getMessage() . "\n";
+    }
+}
+
+if ($pdo === null) {
+    echo "\n✗ Could not connect to MySQL server with any configuration.\n";
+    echo "Please run test_db_connection_options.php to find the correct settings.\n";
+    echo "</pre>";
+    exit;
+}
+
 try {
-    // Connect without database first
-    $dsn = "mysql:host=$host;port=$port;charset=$charset";
-    $options = [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES   => false,
-    ];
-    
-    $pdo = new PDO($dsn, $user, $pass, $options);
-    echo "✓ Connected to MySQL server\n";
     
     // Create database if it doesn't exist
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
