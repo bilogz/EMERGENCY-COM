@@ -77,6 +77,24 @@ try {
     
     echo "✓ Executed $executed SQL statements\n";
     
+    // Add username column to users table if it doesn't exist (for existing databases)
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'username'");
+        if ($stmt->rowCount() === 0) {
+            echo "\n⚠ Adding username column to users table...\n";
+            $pdo->exec("ALTER TABLE users ADD COLUMN username VARCHAR(100) DEFAULT NULL COMMENT 'Username for login' AFTER name");
+            $pdo->exec("ALTER TABLE users ADD INDEX idx_username (username)");
+            echo "✓ Username column added successfully\n";
+        } else {
+            echo "✓ Username column already exists\n";
+        }
+    } catch (PDOException $e) {
+        // Ignore if table doesn't exist yet or column already exists
+        if (strpos($e->getMessage(), "doesn't exist") === false && strpos($e->getMessage(), 'Duplicate column') === false) {
+            echo "⚠ Warning adding username column: " . $e->getMessage() . "\n";
+        }
+    }
+    
     // Verify tables were created
     $stmt = $pdo->query("SHOW TABLES");
     $tables = $stmt->fetchAll(PDO::FETCH_COLUMN);

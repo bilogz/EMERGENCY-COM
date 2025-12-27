@@ -6,6 +6,26 @@ error_reporting(E_ALL);
 // ADMIN/create-admin.php
 require_once __DIR__ . '/api/db_connect.php';
 
+// Check database connection
+if ($pdo === null) {
+    die('
+    <!DOCTYPE html>
+    <html>
+    <head><title>Database Error</title></head>
+    <body style="font-family: Arial; padding: 2rem;">
+        <h1>Database Connection Error</h1>
+        <p>The database connection failed. Please ensure:</p>
+        <ul>
+            <li>The database server is accessible</li>
+            <li>You have run <a href="api/setup_remote_database.php">setup_remote_database.php</a> to create the database</li>
+            <li>The database credentials are correct</li>
+        </ul>
+        <p><strong>Error:</strong> ' . htmlspecialchars($dbError ?? 'Unknown error') . '</p>
+        <p><a href="api/setup_remote_database.php">Click here to set up the database</a></p>
+    </body>
+    </html>');
+}
+
 $message = '';
 $success = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -27,22 +47,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = 'Passwords do not match.';
     } else {
         // Check for duplicate username or email
-        $checkStmt = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1");
-        $checkStmt->execute([$username, $email]);
-        if ($checkStmt->fetch()) {
-            $message = 'An account with this username or email already exists.';
-        } else {
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-            try {
-                $stmt = $pdo->prepare("INSERT INTO users (name, username, email, password, status, user_type) VALUES (?, ?, ?, ?, ?, ?)");
-                $status = 'active';
-                $user_type = 'admin';
-                $stmt->execute([$full_name, $username, $email, $hashed_password, $status, $user_type]);
-                $message = 'Admin staff account created successfully!';
-                $success = true;
-            } catch (PDOException $e) {
-                $message = 'Database error: ' . $e->getMessage();
+        try {
+            $checkStmt = $pdo->prepare("SELECT id FROM users WHERE (username = ? AND username IS NOT NULL AND username != '') OR email = ? LIMIT 1");
+            $checkStmt->execute([$username, $email]);
+            if ($checkStmt->fetch()) {
+                $message = 'An account with this username or email already exists.';
+            } else {
+                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                try {
+                    // Check if username column exists, if not use email as username
+                    $stmt = $pdo->prepare("INSERT INTO users (name, username, email, password, status, user_type) VALUES (?, ?, ?, ?, ?, ?)");
+                    $status = 'active';
+                    $user_type = 'admin';
+                    $stmt->execute([$full_name, $username, $email, $hashed_password, $status, $user_type]);
+                    $message = 'Admin staff account created successfully!';
+                    $success = true;
+                } catch (PDOException $e) {
+                    // If username column doesn't exist, try without it
+                    if (strpos($e->getMessage(), 'username') !== false || strpos($e->getMessage(), 'Unknown column') !== false) {
+                        try {
+                            $stmt = $pdo->prepare("INSERT INTO users (name, email, password, status, user_type) VALUES (?, ?, ?, ?, ?)");
+                            $stmt->execute([$full_name, $email, $hashed_password, $status, $user_type]);
+                            $message = 'Admin staff account created successfully! (Note: username column not found, using email only)';
+                            $success = true;
+                        } catch (PDOException $e2) {
+                            $message = 'Database error: ' . $e2->getMessage();
+                        }
+                    } else {
+                        $message = 'Database error: ' . $e->getMessage();
+                    }
+                }
             }
+        } catch (PDOException $e) {
+            $message = 'Database error checking duplicates: ' . $e->getMessage();
         }
     }
 }

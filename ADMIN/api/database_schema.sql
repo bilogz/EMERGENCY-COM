@@ -166,6 +166,7 @@ ON DUPLICATE KEY UPDATE id=id;
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL COMMENT 'Full name of the user',
+    username VARCHAR(100) DEFAULT NULL COMMENT 'Username for login',
     email VARCHAR(255) DEFAULT NULL COMMENT 'Email address (optional)',
     phone VARCHAR(20) DEFAULT NULL COMMENT 'Mobile phone number',
     password VARCHAR(255) DEFAULT NULL COMMENT 'Hashed password',
@@ -175,6 +176,7 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_email (email),
     INDEX idx_phone (phone),
+    INDEX idx_username (username),
     INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
