@@ -339,6 +339,12 @@ if ($action === 'current') {
             'updated_at' => date('Y-m-d H:i:s')
         ]);
     }
+} elseif ($action === 'getApiKey') {
+    // Return OpenWeatherMap API key for layer tiles
+    echo json_encode([
+        'success' => true,
+        'apiKey' => $apiKey
+    ]);
 } else {
     echo json_encode(['success' => false, 'message' => 'Invalid action.']);
 }

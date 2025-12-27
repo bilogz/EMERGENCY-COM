@@ -66,3 +66,4 @@ function logActivity($action, $description = null) {
  * - 'broadcast_alert' - Broadcast emergency alert
  */
 
+

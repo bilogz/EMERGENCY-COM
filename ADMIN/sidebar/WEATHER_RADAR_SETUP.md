@@ -139,3 +139,4 @@ For issues or questions about:
 **Created:** December 2024  
 **Compatible with:** Leaflet 1.9.4, OpenWeatherMap API v2.5
 
+
