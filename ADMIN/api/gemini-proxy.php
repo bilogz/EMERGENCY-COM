@@ -100,32 +100,38 @@ if ($httpCode !== 200) {
     error_log("Model used: $model");
     
     // If model not found error, try alternative models
-    if (($httpCode === 404 || strpos(strtolower($errorMsg), 'model') !== false || strpos(strtolower($errorReason), 'not_found') !== false) && 
-        $model === 'gemini-2.5-flash') {
-        // Try gemini-1.5-flash as fallback
-        $fallbackModel = 'gemini-1.5-flash';
-        $fallbackUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$fallbackModel}:generateContent?key=" . urlencode($apiKey);
+    if ($httpCode === 404 || strpos(strtolower($errorMsg), 'model') !== false || strpos(strtolower($errorReason), 'not_found') !== false) {
+        // Try alternative models as fallback
+        $fallbackModels = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
         
-        $ch2 = curl_init($fallbackUrl);
-        curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch2, CURLOPT_POST, true);
-        curl_setopt($ch2, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch2, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        
-        $fallbackResponse = curl_exec($ch2);
-        $fallbackHttpCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
-        curl_close($ch2);
-        
-        if ($fallbackHttpCode === 200) {
-            $responseData = json_decode($fallbackResponse, true);
-            if (isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
-                $aiResponse = $responseData['candidates'][0]['content']['parts'][0]['text'];
-                echo json_encode([
-                    'success' => true,
-                    'response' => $aiResponse,
-                    'model_used' => $fallbackModel
-                ]);
-                exit();
+        foreach ($fallbackModels as $fallbackModel) {
+            if ($fallbackModel === $model) continue; // Skip if already tried
+            
+            $fallbackUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$fallbackModel}:generateContent?key=" . urlencode($apiKey);
+            
+            $ch2 = curl_init($fallbackUrl);
+            curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch2, CURLOPT_POST, true);
+            curl_setopt($ch2, CURLOPT_POSTFIELDS, json_encode($data));
+            curl_setopt($ch2, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch2, CURLOPT_TIMEOUT, 10);
+            
+            $fallbackResponse = curl_exec($ch2);
+            $fallbackHttpCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+            curl_close($ch2);
+            
+            if ($fallbackHttpCode === 200) {
+                $responseData = json_decode($fallbackResponse, true);
+                if (isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
+                    $aiResponse = $responseData['candidates'][0]['content']['parts'][0]['text'];
+                    error_log("Successfully used fallback model: $fallbackModel");
+                    echo json_encode([
+                        'success' => true,
+                        'response' => $aiResponse,
+                        'model_used' => $fallbackModel
+                    ]);
+                    exit();
+                }
             }
         }
     }

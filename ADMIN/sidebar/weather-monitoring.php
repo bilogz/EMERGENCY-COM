@@ -850,8 +850,8 @@ $pageTitle = 'Weather Monitoring';
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // API Keys - Will be loaded from server
+        // Note: API key is now handled securely server-side via gemini-proxy.php
         let GEMINI_API_KEY = null;
-        const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
         
         // Load Gemini API key from server
         fetch('../api/get-gemini-key.php')
