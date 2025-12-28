@@ -62,7 +62,7 @@ $assetBase = 'ADMIN/header/';
                     </p>
                     <p class="hero-subtitle">
                         <strong data-translate="home.vision">Vision:</strong>
-                        <span data-translate="home.vision.text">A global mode of excellence in Disaster Risk Reduction and Management for its cohesive DRRM system fostering a Sustainable, Future-ready, and Resilient Quezon City.</span>
+                        <span data-translate="home.vision.text">A global model of excellence in Disaster Risk Reduction and Management for its cohesive DRRM system fostering a Sustainable, Future-ready, and Resilient Quezon City.</span>
                     </p>
                 </div>
             </div>

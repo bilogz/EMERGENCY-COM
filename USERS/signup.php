@@ -108,7 +108,7 @@ $assetBase = '../ADMIN/header/';
                         </div>
                         <button type="button" id="googleSignupBtn" class="btn btn-google">
                             <span class="google-logo-wrapper">
-                                <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg">
+                                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
                                     <g fill="#000" fill-rule="evenodd">
                                         <path d="M9 3.48c1.69 0 2.83.73 3.48 1.34l2.54-2.48C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l2.91 2.26C4.6 5.05 6.62 3.48 9 3.48z" fill="#EA4335"/>
                                         <path d="M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.96c-.21 1.18-.84 2.18-1.79 2.87l2.75 2.13c1.66-1.52 2.72-3.76 2.72-6.5z" fill="#4285F4"/>
@@ -201,38 +201,63 @@ $assetBase = '../ADMIN/header/';
             .catch(err => console.error('Failed to load Google config:', err));
 
         function initializeGoogleSignUp() {
-            if (!googleClientId) return;
+            if (!googleClientId) {
+                console.error('Google Client ID not loaded');
+                return;
+            }
+
+            // Wait for Google Identity Services to load
+            if (typeof google === 'undefined' || !google.accounts) {
+                setTimeout(initializeGoogleSignUp, 100);
+                return;
+            }
 
             const googleSignupBtn = document.getElementById('googleSignupBtn');
             if (googleSignupBtn) {
-                googleSignupBtn.addEventListener('click', function() {
-                    google.accounts.oauth2.initTokenClient({
+                googleSignupBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Use Google Identity Services OAuth 2.0
+                    const tokenClient = google.accounts.oauth2.initTokenClient({
                         client_id: googleClientId,
                         scope: 'email profile',
-                        callback: handleGoogleTokenResponse
-                    }).requestAccessToken();
+                        callback: handleGoogleTokenResponse,
+                    });
+                    
+                    tokenClient.requestAccessToken({ prompt: 'consent' });
                 });
             }
         }
 
         function handleGoogleTokenResponse(tokenResponse) {
-            fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-                headers: {
-                    'Authorization': 'Bearer ' + tokenResponse.access_token
-                }
-            })
-            .then(res => res.json())
-            .then(userInfo => {
-                verifyGoogleUser(userInfo);
-            })
-            .catch(err => {
-                console.error('Google token error:', err);
+            if (tokenResponse.error) {
+                console.error('Google OAuth error:', tokenResponse.error);
                 Swal.fire({
                     icon: 'error',
                     title: 'Authentication Error',
-                    text: 'Failed to authenticate with Google. Please try again.'
+                    text: tokenResponse.error_description || 'Failed to authenticate with Google. Please try again.'
                 });
-            });
+                return;
+            }
+
+            fetch('https://www.googleapis.com/oauth2/v2/userinfo?access_token=' + tokenResponse.access_token)
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error('Failed to fetch user info');
+                    }
+                    return res.json();
+                })
+                .then(userInfo => {
+                    verifyGoogleUser(userInfo);
+                })
+                .catch(err => {
+                    console.error('Google token error:', err);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Authentication Error',
+                        text: 'Failed to authenticate with Google. Please try again.'
+                    });
+                });
         }
 
         async function verifyGoogleUser(userInfo) {
