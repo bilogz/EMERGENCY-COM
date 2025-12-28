@@ -198,6 +198,8 @@ $pageTitle = 'Weather Monitoring';
             font-size: 1.2rem;
             font-weight: 500;
             white-space: nowrap;
+            text-align: right;
+            width: 100%;
         }
         
         .gw-condition {
@@ -206,6 +208,7 @@ $pageTitle = 'Weather Monitoring';
             margin-top: 0.25rem;
             word-break: break-word;
             text-align: right;
+            width: 100%;
         }
         
         .gw-location {
@@ -214,6 +217,7 @@ $pageTitle = 'Weather Monitoring';
             margin-top: 0.5rem;
             word-break: break-word;
             text-align: right;
+            width: 100%;
         }
         
         /* Weather Tabs */
