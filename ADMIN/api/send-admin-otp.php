@@ -57,37 +57,43 @@ function sendAdminOTPEmail($to, $subject, $body, $fromEmail, $fromName, &$error 
         try {
             $mail = new PHPMailer\PHPMailer\PHPMailer(true);
             
-            // Load mail config for SMTP settings
-            $mailLibPath = __DIR__ . '/../../USERS/lib/mail.php';
-            if (file_exists($mailLibPath)) {
-                require_once $mailLibPath;
-                $cfg = load_mail_config();
+            // Use alertaraqc.notification@gmail.com SMTP credentials for admin OTP emails
+            // This ensures the From address matches the authenticated account
+            $adminOTPEmail = 'alertaraqc.notification@gmail.com';
+            
+            // Load admin OTP specific config
+            $adminMailConfigPath = __DIR__ . '/admin_otp_mail_config.php';
+            
+            if (file_exists($adminMailConfigPath)) {
+                $adminCfg = include $adminMailConfigPath;
                 
-                // Configure SMTP if available
-                if (!empty($cfg['host'])) {
+                // Configure SMTP with alertaraqc.notification@gmail.com credentials
+                if (!empty($adminCfg['password'])) {
                     $mail->isSMTP();
-                    $mail->Host = $cfg['host'];
-                    $mail->Port = $cfg['port'] ?? 587;
-                    $mail->SMTPAuth = isset($cfg['auth']) ? (bool)$cfg['auth'] : true;
-                    if (!empty($cfg['username'])) {
-                        $mail->Username = $cfg['username'];
-                        $mail->Password = $cfg['password'];
-                    }
-                    if (!empty($cfg['secure'])) {
-                        $mail->SMTPSecure = $cfg['secure'];
-                    }
+                    $mail->Host = $adminCfg['host'] ?? 'smtp.gmail.com';
+                    $mail->Port = $adminCfg['port'] ?? 587;
+                    $mail->SMTPAuth = true;
+                    $mail->Username = $adminOTPEmail;
+                    $mail->Password = $adminCfg['password'];
+                    $mail->SMTPSecure = $adminCfg['secure'] ?? 'tls';
+                    
+                    // Set From address - must match authenticated SMTP account
+                    $mail->setFrom($fromEmail, $fromName);
+                    $mail->addAddress($to);
+                    $mail->Subject = $subject;
+                    $mail->Body = $body;
+                    $mail->isHTML(false);
+                    
+                    $mail->send();
+                    return true;
+                } else {
+                    $error = 'Admin OTP mail config password not set. Please configure admin_otp_mail_config.php';
+                    error_log("Admin OTP email error: " . $error);
                 }
+            } else {
+                $error = 'Admin OTP mail config file not found. Please create admin_otp_mail_config.php';
+                error_log("Admin OTP email error: " . $error);
             }
-            
-            // Set custom sender
-            $mail->setFrom($fromEmail, $fromName);
-            $mail->addAddress($to);
-            $mail->Subject = $subject;
-            $mail->Body = $body;
-            $mail->isHTML(false);
-            
-            $mail->send();
-            return true;
         } catch (Exception $e) {
             $error = $e->getMessage();
             error_log("PHPMailer error: " . $error);
