@@ -1,17 +1,18 @@
 <?php
 /**
- * Translation API - Get translations for specific language
- * Returns translations from database or uses AI translation service
+ * Get Translations API - Simplified Version
+ * Uses local LibreTranslate instance for all languages
  */
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate, max-age=0');
 
 require_once '../../ADMIN/api/db_connect.php';
+require_once 'translation-config.php';
 
 $languageCode = $_GET['lang'] ?? 'en';
 
-// Base English translations (fallback)
+// Base English translations
 $baseTranslations = [
     'home.title' => 'QUEZON CITY EMERGENCY COMMUNICATION PORTAL',
     'home.mission' => 'Mission:',
@@ -43,7 +44,7 @@ $baseTranslations = [
     'home.guide.5' => 'Keep lines open.',
 ];
 
-// Filipino translations
+// Filipino translations (pre-translated for speed)
 $filipinoTranslations = [
     'home.title' => 'QUEZON CITY EMERGENCY COMMUNICATION PORTAL',
     'home.mission' => 'Misyon:',
@@ -75,168 +76,95 @@ $filipinoTranslations = [
     'home.guide.5' => 'Panatilihing bukas ang linya.',
 ];
 
-// Select appropriate translations
-$translations = $baseTranslations;
-$needsAutoTranslation = false;
-
-if ($languageCode === 'fil' || $languageCode === 'tl') {
-    $translations = $filipinoTranslations;
-} elseif ($languageCode !== 'en') {
-    // For other languages, we'll auto-translate
-    $needsAutoTranslation = true;
-    $translations = [];
-    
-    // Try to get translations from cache or translate them
-    foreach ($baseTranslations as $key => $englishText) {
-        // Check cache first
-        $cacheKey = md5($englishText . 'en' . $languageCode);
-        
-        try {
-            if ($pdo) {
-                $stmt = $pdo->prepare("
-                    SELECT translated_text 
-                    FROM translation_cache 
-                    WHERE cache_key = ? 
-                    AND TIMESTAMPDIFF(DAY, created_at, NOW()) < 30
-                ");
-                $stmt->execute([$cacheKey]);
-                $cached = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($cached) {
-                    $translations[$key] = $cached['translated_text'];
-                    continue;
-                }
-            }
-        } catch (Exception $e) {
-            // Cache check failed, will use API
-        }
-        
-        // Not in cache, translate using API
-        $translatedText = translateText($englishText, 'en', $languageCode, $pdo);
-        $translations[$key] = $translatedText;
-    }
-}
-
-/**
- * Translate text using LibreTranslate API
- */
-function translateText($text, $sourceLang, $targetLang, $pdo) {
-    // Language code mapping
-    $langMap = [
-        'fil' => 'tl',
-        'ceb' => 'tl',
-        'ilo' => 'tl',
-        'pam' => 'tl',
-        'zh-TW' => 'zh',
-    ];
-    
-    $targetLang = $langMap[$targetLang] ?? $targetLang;
-    $sourceLang = $langMap[$sourceLang] ?? $sourceLang;
-    
-    if ($targetLang === $sourceLang) {
-        return $text;
-    }
-    
-    // Try LibreTranslate API
-    $apiUrl = 'https://libretranslate.com/translate';
-    $postData = [
-        'q' => $text,
-        'source' => $sourceLang,
-        'target' => $targetLang,
-        'format' => 'text'
-    ];
-    
-    $ch = curl_init($apiUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-        'Accept: application/json'
-    ]);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    
-    if ($httpCode === 200 && $response) {
-        $result = json_decode($response, true);
-        if (isset($result['translatedText'])) {
-            $translatedText = $result['translatedText'];
-            
-            // Cache the translation
-            try {
-                if ($pdo) {
-                    $cacheKey = md5($text . $sourceLang . $targetLang);
-                    $stmt = $pdo->prepare("
-                        INSERT INTO translation_cache 
-                        (cache_key, source_text, source_lang, target_lang, translated_text, translation_method)
-                        VALUES (?, ?, ?, ?, ?, 'libretranslate')
-                        ON DUPLICATE KEY UPDATE 
-                        translated_text = VALUES(translated_text),
-                        updated_at = NOW()
-                    ");
-                    $stmt->execute([$cacheKey, $text, $sourceLang, $targetLang, $translatedText]);
-                }
-            } catch (Exception $e) {
-                // Cache save failed, but we have the translation
-            }
-            
-            return $translatedText;
-        }
-    }
-    
-    // Translation failed, return original
-    return $text;
-}
-
-// Check if language exists in database
 try {
+    // Check if language exists in database
+    $language = null;
     if ($pdo) {
         $stmt = $pdo->prepare("SELECT * FROM supported_languages WHERE language_code = ? AND is_active = 1");
         $stmt->execute([$languageCode]);
         $language = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        if ($language) {
-            echo json_encode([
-                'success' => true,
-                'language_code' => $languageCode,
-                'language_name' => $language['language_name'],
-                'native_name' => $language['native_name'],
-                'translations' => $translations,
-                'is_ai_supported' => (bool)$language['is_ai_supported'],
-                'auto_translated' => $needsAutoTranslation,
-                'note' => $needsAutoTranslation 
-                    ? 'Automatically translated using AI. Quality may vary.' 
-                    : null
-            ]);
-        } else {
-            // Language not found or not active
+        if (!$language) {
             echo json_encode([
                 'success' => false,
                 'message' => 'Language not supported or not active',
-                'language_code' => $languageCode,
-                'translations' => $baseTranslations
+                'language_code' => $languageCode
             ]);
+            exit;
         }
-    } else {
-        // Database not available, return base translations
-        echo json_encode([
-            'success' => true,
-            'language_code' => $languageCode,
-            'translations' => $translations,
-            'note' => 'Database unavailable, using static translations'
-        ]);
     }
-} catch (Exception $e) {
-    // Error occurred, return base translations
+    
+    // Select translations based on language
+    $translations = [];
+    $autoTranslated = false;
+    
+    if ($languageCode === 'en') {
+        // English - use base translations
+        $translations = $baseTranslations;
+    } elseif ($languageCode === 'fil' || $languageCode === 'tl') {
+        // Filipino - use pre-translated
+        $translations = $filipinoTranslations;
+    } else {
+        // Other languages - auto-translate using LibreTranslate
+        $autoTranslated = true;
+        
+        foreach ($baseTranslations as $key => $englishText) {
+            // Check cache first
+            $cacheKey = md5($englishText . 'en' . $languageCode);
+            $cached = null;
+            
+            if ($pdo) {
+                $stmt = $pdo->prepare("
+                    SELECT translated_text 
+                    FROM translation_cache 
+                    WHERE cache_key = ? 
+                    AND TIMESTAMPDIFF(DAY, created_at, NOW()) < ?
+                ");
+                $stmt->execute([$cacheKey, TRANSLATION_CACHE_DAYS]);
+                $cached = $stmt->fetch(PDO::FETCH_ASSOC);
+            }
+            
+            if ($cached) {
+                // Use cached translation
+                $translations[$key] = $cached['translated_text'];
+            } else {
+                // Translate using LibreTranslate
+                $translatedText = translateWithLibre($englishText, 'en', $languageCode);
+                $translations[$key] = $translatedText;
+                
+                // Cache the result
+                if ($pdo && $translatedText !== $englishText) {
+                    $stmt = $pdo->prepare("
+                        INSERT INTO translation_cache 
+                        (cache_key, source_text, source_lang, target_lang, translated_text, translation_method)
+                        VALUES (?, ?, 'en', ?, ?, 'libretranslate')
+                        ON DUPLICATE KEY UPDATE 
+                        translated_text = VALUES(translated_text),
+                        updated_at = NOW()
+                    ");
+                    $stmt->execute([$cacheKey, $englishText, $languageCode, $translatedText]);
+                }
+            }
+        }
+    }
+    
+    // Return translations
     echo json_encode([
         'success' => true,
         'language_code' => $languageCode,
+        'language_name' => $language['language_name'] ?? 'Unknown',
+        'native_name' => $language['native_name'] ?? '',
         'translations' => $translations,
-        'error' => $e->getMessage()
+        'auto_translated' => $autoTranslated,
+        'note' => $autoTranslated ? 'Automatically translated using LibreTranslate AI' : null
+    ]);
+    
+} catch (Exception $e) {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Translation error: ' . $e->getMessage(),
+        'language_code' => $languageCode,
+        'translations' => $baseTranslations
     ]);
 }
 ?>
-
