@@ -31,7 +31,7 @@ if (!isset($input['apiKey']) || !isset($input['prompt'])) {
 $apiKey = $input['apiKey'];
 $prompt = $input['prompt'];
 
-$url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=" . urlencode($apiKey);
+$url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . urlencode($apiKey);
 
 $data = [
     'contents' => [
@@ -43,7 +43,7 @@ $data = [
     ],
     'generationConfig' => [
         'temperature' => 0.7,
-        'maxOutputTokens' => 2048, // Increased for gemini-3-pro-preview
+        'maxOutputTokens' => 2048, // Optimized for gemini-2.5-flash
         'topP' => 0.95,
         'topK' => 40
     ]

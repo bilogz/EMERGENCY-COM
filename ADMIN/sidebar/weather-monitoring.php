@@ -772,7 +772,7 @@ $pageTitle = 'Weather Monitoring';
     <script>
         // API Keys - Will be loaded from server
         let GEMINI_API_KEY = null;
-        const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent';
+        const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
         
         // Load Gemini API key from server
         fetch('../api/get-gemini-key.php')
