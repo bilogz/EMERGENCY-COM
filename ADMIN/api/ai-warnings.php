@@ -1,16 +1,26 @@
 <?php
 /**
  * AI-Powered Auto Warning System API
- * Analyzes weather and earthquake data to automatically send warnings
+ * Analyzes weather and earthquake data using Gemini AI to automatically send warnings
+ * Automatically sends SMS/Email/Push notifications to subscribed users
+ * 
+ * SETUP CRON JOB for automatic checking:
+ * Add this to your crontab (crontab -e):
+ * */30 * * * * curl -s "http://your-domain.com/EMERGENCY-COM/ADMIN/api/ai-warnings.php?action=check&cron=true" > /dev/null 2>&1
+ * 
+ * This will check for dangerous conditions every 30 minutes and automatically send alerts.
  */
 
 header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
+require_once 'secure-api-config.php';
+require_once 'alert-translation-helper.php';
 
 session_start();
 
-// Check if user is logged in
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+// Check if user is logged in (except for automated cron jobs)
+$isCronJob = isset($_GET['cron']) && $_GET['cron'] === 'true';
+if (!$isCronJob && (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true)) {
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit();
 }
@@ -176,17 +186,35 @@ function checkAndSendWarnings() {
     
     $warnings = [];
     
-    // Check weather conditions (using OpenWeatherMap API)
+    // Use Gemini AI to analyze weather and earthquake conditions
+    $warnings = array_merge($warnings, analyzeWithAI($settings));
+    
+    // Also check traditional thresholds as backup
     $warnings = array_merge($warnings, checkWeatherConditions($settings));
-    
-    // Check earthquake conditions
     $warnings = array_merge($warnings, checkEarthquakeConditions($settings));
-    
-    // Check flooding/landslide risks
     $warnings = array_merge($warnings, checkFloodingLandslideRisks($settings));
     
-    // Save warnings to database
+    // Remove duplicates based on type
+    $uniqueWarnings = [];
     foreach ($warnings as $warning) {
+        $key = $warning['type'] . '_' . md5($warning['title']);
+        if (!isset($uniqueWarnings[$key])) {
+            $uniqueWarnings[$key] = $warning;
+        }
+    }
+    $warnings = array_values($uniqueWarnings);
+    
+    $sentCount = 0;
+    $alertIds = [];
+    
+    // Save warnings to database and send notifications
+    foreach ($warnings as $warning) {
+        // Only send if severity is medium or higher
+        if (!in_array($warning['severity'], ['medium', 'high', 'critical'])) {
+            continue;
+        }
+        
+        // Insert into automated_warnings
         $stmt = $pdo->prepare("INSERT INTO automated_warnings 
             (source, type, title, content, severity, status) 
             VALUES (?, ?, ?, ?, ?, ?)");
@@ -198,13 +226,368 @@ function checkAndSendWarnings() {
             $warning['severity'],
             'published'
         ]);
+        $warningId = $pdo->lastInsertId();
+        $alertIds[] = $warningId;
+        
+        // Create alert entry for translation
+        // First, get or create category
+        $categoryName = mapWarningTypeToCategory($warning['type']);
+        $stmt = $pdo->prepare("SELECT id FROM alert_categories WHERE name = ? LIMIT 1");
+        $stmt->execute([$categoryName]);
+        $category = $stmt->fetch();
+        $categoryId = $category ? $category['id'] : null;
+        
+        // Insert alert
+        $stmt = $pdo->prepare("INSERT INTO alerts 
+            (title, message, content, category_id, status, created_at) 
+            VALUES (?, ?, ?, ?, 'active', NOW())");
+        $stmt->execute([
+            $warning['title'],
+            $warning['content'],
+            $warning['content'],
+            $categoryId
+        ]);
+        $alertId = $pdo->lastInsertId();
+        
+        // Send notifications to subscribed users
+        $sent = sendNotificationsToSubscribers($alertId, $warning, $settings);
+        $sentCount += $sent;
     }
     
     echo json_encode([
         'success' => true,
         'warnings_generated' => count($warnings),
+        'notifications_sent' => $sentCount,
+        'alert_ids' => $alertIds,
         'warnings' => $warnings
     ]);
+}
+
+/**
+ * Use Gemini AI to analyze weather and earthquake data
+ */
+function analyzeWithAI($settings) {
+    global $pdo;
+    $warnings = [];
+    
+    $apiKey = getGeminiApiKey();
+    if (empty($apiKey)) {
+        // Try to get from settings
+        $apiKey = $settings['gemini_api_key'] ?? '';
+    }
+    
+    if (empty($apiKey)) {
+        error_log("Gemini API key not configured for AI analysis");
+        return $warnings;
+    }
+    
+    // Get weather data
+    $weatherData = getWeatherData();
+    if (empty($weatherData)) {
+        return $warnings;
+    }
+    
+    // Prepare prompt for Gemini AI
+    $prompt = "Analyze the following weather and earthquake data for the Philippines. " .
+              "Determine if there are any DANGEROUS conditions that require immediate emergency alerts. " .
+              "Consider: heavy rain (>20mm/hour), strong winds (>60km/h), earthquakes (>5.0 magnitude), " .
+              "flooding risks, landslide risks, typhoon conditions, thunderstorms, and other emergencies.\n\n" .
+              "Weather Data:\n" . json_encode($weatherData, JSON_PRETTY_PRINT) . "\n\n" .
+              "Warning Types Enabled: " . ($settings['warning_types'] ?? 'all') . "\n" .
+              "Monitored Areas: " . ($settings['monitored_areas'] ?? 'Quezon City, Manila, Makati') . "\n\n" .
+              "Respond in JSON format with this structure:\n" .
+              "{\n" .
+              "  \"warnings\": [\n" .
+              "    {\n" .
+              "      \"type\": \"typhoon|flooding|earthquake|landslide|heavy_rain|strong_winds|thunderstorm|fire_incident|tsunami|ash_fall\",\n" .
+              "      \"title\": \"Brief alert title\",\n" .
+              "      \"content\": \"Detailed warning message with location and recommendations\",\n" .
+              "      \"severity\": \"medium|high|critical\",\n" .
+              "      \"location\": \"City/Area name\",\n" .
+              "      \"is_dangerous\": true\n" .
+              "    }\n" .
+              "  ]\n" .
+              "}\n\n" .
+              "Only include warnings where is_dangerous is true. Be conservative - only alert for real dangers.";
+    
+    try {
+        $model = getGeminiModel();
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . urlencode($apiKey);
+        
+        $data = [
+            'contents' => [
+                [
+                    'parts' => [
+                        ['text' => $prompt]
+                    ]
+                ]
+            ],
+            'generationConfig' => [
+                'temperature' => 0.3,
+                'maxOutputTokens' => 2048,
+                'topP' => 0.95,
+                'topK' => 40
+            ]
+        ];
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json'
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($httpCode === 200 && $response) {
+            $responseData = json_decode($response, true);
+            
+            if (isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
+                $aiResponse = trim($responseData['candidates'][0]['content']['parts'][0]['text']);
+                
+                // Extract JSON from response (might have markdown code blocks)
+                if (preg_match('/```json\s*(.*?)\s*```/s', $aiResponse, $matches)) {
+                    $aiResponse = $matches[1];
+                } elseif (preg_match('/```\s*(.*?)\s*```/s', $aiResponse, $matches)) {
+                    $aiResponse = $matches[1];
+                }
+                
+                $aiData = json_decode($aiResponse, true);
+                
+                if (isset($aiData['warnings']) && is_array($aiData['warnings'])) {
+                    foreach ($aiData['warnings'] as $warning) {
+                        if (isset($warning['is_dangerous']) && $warning['is_dangerous']) {
+                            $warnings[] = [
+                                'type' => $warning['type'] ?? 'general',
+                                'title' => $warning['title'] ?? 'Emergency Alert',
+                                'content' => $warning['content'] ?? '',
+                                'severity' => $warning['severity'] ?? 'medium',
+                                'location' => $warning['location'] ?? 'Quezon City'
+                            ];
+                        }
+                    }
+                }
+            }
+        } else {
+            error_log("Gemini AI analysis failed: HTTP $httpCode");
+        }
+    } catch (Exception $e) {
+        error_log("AI Analysis Error: " . $e->getMessage());
+    }
+    
+    return $warnings;
+}
+
+/**
+ * Get weather data from OpenWeatherMap
+ */
+function getWeatherData() {
+    global $pdo;
+    
+    $stmt = $pdo->query("SELECT api_key FROM integration_settings WHERE source = 'pagasa' LIMIT 1");
+    $apiKeyRow = $stmt->fetch(PDO::FETCH_ASSOC);
+    $apiKey = $apiKeyRow['api_key'] ?? '';
+    
+    if (empty($apiKey)) {
+        return [];
+    }
+    
+    $weatherData = [];
+    $locations = [
+        ['name' => 'Quezon City', 'lat' => 14.6488, 'lon' => 121.0509],
+        ['name' => 'Manila', 'lat' => 14.5995, 'lon' => 120.9842],
+        ['name' => 'Makati', 'lat' => 14.5547, 'lon' => 121.0244],
+    ];
+    
+    foreach ($locations as $loc) {
+        $url = "https://api.openweathermap.org/data/2.5/weather?lat={$loc['lat']}&lon={$loc['lon']}&appid={$apiKey}&units=metric";
+        $response = @file_get_contents($url);
+        if ($response) {
+            $data = json_decode($response, true);
+            if ($data) {
+                $weatherData[$loc['name']] = $data;
+            }
+        }
+    }
+    
+    return $weatherData;
+}
+
+/**
+ * Send notifications to all subscribed users
+ */
+function sendNotificationsToSubscribers($alertId, $warning, $settings) {
+    global $pdo;
+    
+    $channels = explode(',', $settings['ai_channels'] ?? 'sms,email');
+    $channels = array_map('trim', $channels);
+    
+    // Get all active subscribers
+    $categoryName = mapWarningTypeToCategory($warning['type']);
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT s.user_id, s.categories, s.channels, s.preferred_language,
+               u.name, u.email, u.phone
+        FROM subscriptions s
+        LEFT JOIN users u ON u.id = s.user_id
+        WHERE s.status = 'active'
+        AND (s.categories LIKE ? OR s.categories = 'all' OR s.categories LIKE '%weather%' OR s.categories LIKE '%earthquake%' OR s.categories LIKE '%general%')
+    ");
+    $categoryPattern = "%{$categoryName}%";
+    $stmt->execute([$categoryPattern]);
+    $subscribers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    if (empty($subscribers)) {
+        return 0;
+    }
+    
+    $translationHelper = new AlertTranslationHelper($pdo);
+    $sentCount = 0;
+    
+    foreach ($subscribers as $subscriber) {
+        $userId = $subscriber['user_id'];
+        $userChannels = explode(',', $subscriber['channels'] ?? '');
+        $userChannels = array_map('trim', $userChannels);
+        
+        // Get translated alert for user's preferred language
+        $userLanguage = $subscriber['preferred_language'] ?? 'en';
+        $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $userLanguage, $userId);
+        
+        if (!$translatedAlert) {
+            // Fallback to original warning
+            $translatedAlert = [
+                'title' => $warning['title'],
+                'message' => $warning['content']
+            ];
+        }
+        
+        $message = $translatedAlert['title'] . "\n\n" . $translatedAlert['message'];
+        
+        // Send via each enabled channel
+        foreach ($channels as $channel) {
+            if (!in_array($channel, $userChannels) && !empty($userChannels)) {
+                continue; // User hasn't subscribed to this channel
+            }
+            
+            if ($channel === 'sms' && !empty($subscriber['phone'])) {
+                sendSMSNotification($subscriber['phone'], $message, $alertId);
+                $sentCount++;
+            } elseif ($channel === 'email' && !empty($subscriber['email'])) {
+                sendEmailNotification($subscriber['email'], $subscriber['name'], $translatedAlert['title'], $translatedAlert['message'], $alertId);
+                $sentCount++;
+            } elseif ($channel === 'pa') {
+                // PA System notification (log only)
+                logPANotification($message, $alertId);
+                $sentCount++;
+            }
+        }
+    }
+    
+    return $sentCount;
+}
+
+/**
+ * Send SMS notification
+ */
+function sendSMSNotification($phone, $message, $alertId) {
+    global $pdo;
+    
+    // Log notification
+    $stmt = $pdo->prepare("
+        INSERT INTO notification_logs (channel, message, recipient, recipients, priority, status, sent_at, sent_by, ip_address)
+        VALUES ('sms', ?, ?, ?, 'high', 'pending', NOW(), 'ai_system', '127.0.0.1')
+    ");
+    $stmt->execute([$message, $phone, $phone]);
+    
+    // Try to send via SMS helper if available
+    if (file_exists(__DIR__ . '/../../USERS/lib/sms.php')) {
+        require_once __DIR__ . '/../../USERS/lib/sms.php';
+        $smsError = null;
+        $smsSent = sendSMS($phone, $message, $smsError);
+        
+        if ($smsSent) {
+            $stmt = $pdo->prepare("UPDATE notification_logs SET status = 'success' WHERE id = ?");
+            $stmt->execute([$pdo->lastInsertId()]);
+        } else {
+            error_log("SMS sending failed for $phone: " . ($smsError ?? 'Unknown error'));
+        }
+    } else {
+        error_log("SMS notification queued for $phone (SMS library not available)");
+    }
+}
+
+/**
+ * Send Email notification
+ */
+function sendEmailNotification($email, $name, $subject, $body, $alertId) {
+    global $pdo;
+    
+    // Log notification
+    $stmt = $pdo->prepare("
+        INSERT INTO notification_logs (channel, message, recipient, recipients, priority, status, sent_at, sent_by, ip_address)
+        VALUES ('email', ?, ?, ?, 'high', 'pending', NOW(), 'ai_system', '127.0.0.1')
+    ");
+    $emailMessage = $subject . "\n\n" . $body;
+    $stmt->execute([$emailMessage, $email, $email]);
+    
+    // Try to send email
+    $emailSent = false;
+    
+    // Try PHPMailer if available
+    if (file_exists(__DIR__ . '/../../USERS/lib/mail.php')) {
+        require_once __DIR__ . '/../../USERS/lib/mail.php';
+        $error = null;
+        $emailSent = sendSMTPMail($email, $subject, $body, false, $error);
+    } else {
+        // Fallback to PHP mail()
+        $headers = "From: noreply@emergency-com.local\r\n";
+        $headers .= "Reply-To: support@emergency-com.local\r\n";
+        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+        $emailSent = @mail($email, $subject, $body, $headers);
+    }
+    
+    if ($emailSent) {
+        $stmt = $pdo->prepare("UPDATE notification_logs SET status = 'success' WHERE id = ?");
+        $stmt->execute([$pdo->lastInsertId()]);
+    } else {
+        error_log("Email sending failed for $email");
+    }
+}
+
+/**
+ * Log PA System notification
+ */
+function logPANotification($message, $alertId) {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("
+        INSERT INTO notification_logs (channel, message, recipient, recipients, priority, status, sent_at, sent_by, ip_address)
+        VALUES ('pa', ?, 'pa_system', 'all', 'high', 'success', NOW(), 'ai_system', '127.0.0.1')
+    ");
+    $stmt->execute([$message]);
+}
+
+/**
+ * Map warning type to alert category
+ */
+function mapWarningTypeToCategory($type) {
+    $mapping = [
+        'typhoon' => 'Weather',
+        'heavy_rain' => 'Weather',
+        'flooding' => 'Weather',
+        'strong_winds' => 'Weather',
+        'thunderstorm' => 'Weather',
+        'earthquake' => 'Earthquake',
+        'tsunami' => 'Earthquake',
+        'landslide' => 'General',
+        'fire_incident' => 'Fire',
+        'ash_fall' => 'General'
+    ];
+    
+    return $mapping[$type] ?? 'General';
 }
 
 function checkWeatherConditions($settings) {
