@@ -77,13 +77,118 @@ $filipinoTranslations = [
 
 // Select appropriate translations
 $translations = $baseTranslations;
+$needsAutoTranslation = false;
 
 if ($languageCode === 'fil' || $languageCode === 'tl') {
     $translations = $filipinoTranslations;
 } elseif ($languageCode !== 'en') {
-    // For other languages, return English with a note
-    // In production, you would integrate with a translation service here
-    $translations = $baseTranslations;
+    // For other languages, we'll auto-translate
+    $needsAutoTranslation = true;
+    $translations = [];
+    
+    // Try to get translations from cache or translate them
+    foreach ($baseTranslations as $key => $englishText) {
+        // Check cache first
+        $cacheKey = md5($englishText . 'en' . $languageCode);
+        
+        try {
+            if ($pdo) {
+                $stmt = $pdo->prepare("
+                    SELECT translated_text 
+                    FROM translation_cache 
+                    WHERE cache_key = ? 
+                    AND TIMESTAMPDIFF(DAY, created_at, NOW()) < 30
+                ");
+                $stmt->execute([$cacheKey]);
+                $cached = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($cached) {
+                    $translations[$key] = $cached['translated_text'];
+                    continue;
+                }
+            }
+        } catch (Exception $e) {
+            // Cache check failed, will use API
+        }
+        
+        // Not in cache, translate using API
+        $translatedText = translateText($englishText, 'en', $languageCode, $pdo);
+        $translations[$key] = $translatedText;
+    }
+}
+
+/**
+ * Translate text using LibreTranslate API
+ */
+function translateText($text, $sourceLang, $targetLang, $pdo) {
+    // Language code mapping
+    $langMap = [
+        'fil' => 'tl',
+        'ceb' => 'tl',
+        'ilo' => 'tl',
+        'pam' => 'tl',
+        'zh-TW' => 'zh',
+    ];
+    
+    $targetLang = $langMap[$targetLang] ?? $targetLang;
+    $sourceLang = $langMap[$sourceLang] ?? $sourceLang;
+    
+    if ($targetLang === $sourceLang) {
+        return $text;
+    }
+    
+    // Try LibreTranslate API
+    $apiUrl = 'https://libretranslate.com/translate';
+    $postData = [
+        'q' => $text,
+        'source' => $sourceLang,
+        'target' => $targetLang,
+        'format' => 'text'
+    ];
+    
+    $ch = curl_init($apiUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Accept: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 200 && $response) {
+        $result = json_decode($response, true);
+        if (isset($result['translatedText'])) {
+            $translatedText = $result['translatedText'];
+            
+            // Cache the translation
+            try {
+                if ($pdo) {
+                    $cacheKey = md5($text . $sourceLang . $targetLang);
+                    $stmt = $pdo->prepare("
+                        INSERT INTO translation_cache 
+                        (cache_key, source_text, source_lang, target_lang, translated_text, translation_method)
+                        VALUES (?, ?, ?, ?, ?, 'libretranslate')
+                        ON DUPLICATE KEY UPDATE 
+                        translated_text = VALUES(translated_text),
+                        updated_at = NOW()
+                    ");
+                    $stmt->execute([$cacheKey, $text, $sourceLang, $targetLang, $translatedText]);
+                }
+            } catch (Exception $e) {
+                // Cache save failed, but we have the translation
+            }
+            
+            return $translatedText;
+        }
+    }
+    
+    // Translation failed, return original
+    return $text;
 }
 
 // Check if language exists in database
@@ -101,8 +206,9 @@ try {
                 'native_name' => $language['native_name'],
                 'translations' => $translations,
                 'is_ai_supported' => (bool)$language['is_ai_supported'],
-                'note' => ($languageCode !== 'en' && $languageCode !== 'fil' && $languageCode !== 'tl') 
-                    ? 'Using English translations as fallback. Full translation support coming soon.' 
+                'auto_translated' => $needsAutoTranslation,
+                'note' => $needsAutoTranslation 
+                    ? 'Automatically translated using AI. Quality may vary.' 
                     : null
             ]);
         } else {

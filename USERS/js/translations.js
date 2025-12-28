@@ -245,13 +245,52 @@ window.setLanguage = setLanguage;
 // Apply translations to the page
 async function applyTranslations() {
     const lang = getCurrentLanguage();
-    let translation = translations[lang] || translations.en;
+    let translation = translations[lang];
     
-    // If language is not in static translations, try to fetch from API
-    if (!translations[lang] && lang !== 'en') {
-        console.log(`Language ${lang} not in static translations, using English fallback`);
-        // For now, use English as fallback
-        // In future, you can implement API-based translation fetching here
+    // If language is not in static translations, fetch from API
+    if (!translation && lang !== 'en') {
+        console.log(`🔄 Language ${lang} not in static translations, fetching from API...`);
+        showTranslationLoading(true);
+        
+        try {
+            const apiPath = getApiPath(`api/get-translations.php?lang=${encodeURIComponent(lang)}`);
+            const response = await fetch(apiPath, {
+                cache: 'no-cache',
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.translations) {
+                    // Store fetched translations
+                    translations[lang] = data.translations;
+                    translation = data.translations;
+                    console.log(`✓ Loaded ${Object.keys(translation).length} translations for ${lang}`);
+                    
+                    if (data.auto_translated) {
+                        console.log(`ℹ️ Translations were auto-generated using AI`);
+                    }
+                } else {
+                    console.warn(`⚠️ API returned no translations for ${lang}, using English`);
+                    translation = translations.en;
+                }
+            } else {
+                console.error(`✗ Failed to fetch translations: ${response.status}`);
+                translation = translations.en;
+            }
+        } catch (error) {
+            console.error(`✗ Error fetching translations:`, error);
+            translation = translations.en;
+        } finally {
+            showTranslationLoading(false);
+        }
+    }
+    
+    // Fallback to English if still no translation
+    if (!translation) {
+        translation = translations.en;
     }
     
     // Find all elements with data-translate attribute
@@ -339,6 +378,109 @@ document.addEventListener('languagesUpdated', function() {
     // Refresh translations if needed
     applyTranslations();
 });
+
+/**
+ * Get correct API path based on current page context
+ */
+function getApiPath(relativePath) {
+    const currentPath = window.location.pathname;
+    const isRootContext = currentPath === '/index.php' || 
+                          currentPath === '/EMERGENCY-COM/index.php' ||
+                          (currentPath.endsWith('/index.php') && !currentPath.includes('/USERS/'));
+    const isUsersContext = currentPath.includes('/USERS/');
+    
+    if (isRootContext && !isUsersContext) {
+        if (relativePath.startsWith('api/')) {
+            return 'USERS/' + relativePath;
+        }
+        return relativePath;
+    } else {
+        if (relativePath.startsWith('USERS/api/')) {
+            return relativePath.replace('USERS/', '');
+        }
+        return relativePath;
+    }
+}
+
+/**
+ * Show/hide translation loading indicator
+ */
+function showTranslationLoading(show) {
+    let indicator = document.getElementById('translationLoadingIndicator');
+    
+    if (show) {
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'translationLoadingIndicator';
+            indicator.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(135deg, #4c8a89 0%, #5ba3a2 100%);
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+                animation: slideInRight 0.3s ease;
+            `;
+            indicator.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" opacity="0.3"/>
+                    <path d="M12 2 A10 10 0 0 1 22 12" stroke-linecap="round">
+                        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                    </path>
+                </svg>
+                <span>Translating...</span>
+            `;
+            document.body.appendChild(indicator);
+            
+            // Add animation keyframes
+            if (!document.getElementById('translationAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'translationAnimations';
+                style.textContent = `
+                    @keyframes slideInRight {
+                        from {
+                            opacity: 0;
+                            transform: translateX(100px);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translateX(0);
+                        }
+                    }
+                    @keyframes slideOutRight {
+                        from {
+                            opacity: 1;
+                            transform: translateX(0);
+                        }
+                        to {
+                            opacity: 0;
+                            transform: translateX(100px);
+                        }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+        indicator.style.display = 'flex';
+    } else {
+        if (indicator) {
+            indicator.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => {
+                if (indicator.parentElement) {
+                    indicator.remove();
+                }
+            }, 300);
+        }
+    }
+}
 
 // Debug helper - expose translation function globally
 window.debugTranslations = function() {
