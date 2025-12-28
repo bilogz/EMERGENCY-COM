@@ -30,6 +30,88 @@ if (file_exists($mailLibPath)) {
 
 session_start();
 
+// Custom function to send email with specific sender
+function sendAdminOTPEmail($to, $subject, $body, $fromEmail, $fromName, &$error = null) {
+    $error = null;
+    
+    // Try PHPMailer if available
+    $composerAutoload1 = __DIR__ . '/../../vendor/autoload.php';
+    $composerAutoload2 = __DIR__ . '/../../VENDOR/autoload.php';
+    if (file_exists($composerAutoload1)) {
+        require_once $composerAutoload1;
+    } elseif (file_exists($composerAutoload2)) {
+        require_once $composerAutoload2;
+    }
+    
+    // Also try direct path to PHPMailer-master
+    if (!class_exists('PHPMailer\PHPMailer\PHPMailer', false)) {
+        $phpmailerPath = __DIR__ . '/../../VENDOR/PHPMailer-master/src/PHPMailer.php';
+        if (file_exists($phpmailerPath)) {
+            require_once __DIR__ . '/../../VENDOR/PHPMailer-master/src/Exception.php';
+            require_once __DIR__ . '/../../VENDOR/PHPMailer-master/src/PHPMailer.php';
+            require_once __DIR__ . '/../../VENDOR/PHPMailer-master/src/SMTP.php';
+        }
+    }
+    
+    if (class_exists('PHPMailer\PHPMailer\PHPMailer')) {
+        try {
+            $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+            
+            // Load mail config for SMTP settings
+            $mailLibPath = __DIR__ . '/../../USERS/lib/mail.php';
+            if (file_exists($mailLibPath)) {
+                require_once $mailLibPath;
+                $cfg = load_mail_config();
+                
+                // Configure SMTP if available
+                if (!empty($cfg['host'])) {
+                    $mail->isSMTP();
+                    $mail->Host = $cfg['host'];
+                    $mail->Port = $cfg['port'] ?? 587;
+                    $mail->SMTPAuth = isset($cfg['auth']) ? (bool)$cfg['auth'] : true;
+                    if (!empty($cfg['username'])) {
+                        $mail->Username = $cfg['username'];
+                        $mail->Password = $cfg['password'];
+                    }
+                    if (!empty($cfg['secure'])) {
+                        $mail->SMTPSecure = $cfg['secure'];
+                    }
+                }
+            }
+            
+            // Set custom sender
+            $mail->setFrom($fromEmail, $fromName);
+            $mail->addAddress($to);
+            $mail->Subject = $subject;
+            $mail->Body = $body;
+            $mail->isHTML(false);
+            
+            $mail->send();
+            return true;
+        } catch (Exception $e) {
+            $error = $e->getMessage();
+            error_log("PHPMailer error: " . $error);
+        }
+    }
+    
+    // Fallback to PHP mail() function
+    if (function_exists('mail')) {
+        $headers = "From: {$fromName} <{$fromEmail}>\r\n";
+        $headers .= "Reply-To: {$fromEmail}\r\n";
+        $headers .= "X-Mailer: PHP/" . phpversion();
+        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+        
+        $sent = @mail($to, $subject, $body, $headers);
+        if (!$sent) {
+            $error = 'PHP mail() function failed';
+        }
+        return $sent;
+    }
+    
+    $error = 'No mailer available';
+    return false;
+}
+
 $response = ['success' => false, 'message' => ''];
 
 try {
@@ -100,8 +182,13 @@ try {
     $_SESSION[$sessionKey . '_purpose'] = $purpose;
     
     // Prepare email content
+    // OTP is sent TO the admin's email FROM alertaraqc.notification@gmail.com
+    $senderEmail = 'alertaraqc.notification@gmail.com';
+    $senderName = 'Emergency Communication System';
     $purposeText = $purpose === 'login' ? 'login' : 'account creation';
     $emailSubject = 'Admin ' . ucfirst($purposeText) . ' Verification Code - Emergency Communication System';
+    
+    // Email body personalized for the admin
     $emailBody = "Hello {$name},\n\n";
     $emailBody .= "Your verification code for admin {$purposeText} is: {$otp_code}\n\n";
     $emailBody .= "This code will expire in 10 minutes.\n\n";
@@ -110,39 +197,19 @@ try {
     $emailBody .= "Emergency Communication System\n";
     $emailBody .= "Administrative Panel";
     
-    // Try to send email
+    // Try to send email to admin's email from notification email
     $otp_sent = false;
     $error = null;
     $errorDetails = [];
     
-    // Try sending via SMTP/PHPMailer first (if configured)
-    if (function_exists('sendSMTPMail')) {
-        $otp_sent = sendSMTPMail($email, $emailSubject, $emailBody, false, $error);
-        if (!$otp_sent && $error) {
-            $errorDetails[] = "SMTP Error: " . $error;
-        }
-    } else {
-        $errorDetails[] = "sendSMTPMail function not available (mail_config.php not configured)";
-    }
-    
-    // If SMTP fails, try PHP's mail() function as fallback
-    if (!$otp_sent && function_exists('mail')) {
-        $headers = "From: noreply@emergency-com.local\r\n";
-        $headers .= "Reply-To: support@emergency-com.local\r\n";
-        $headers .= "X-Mailer: PHP/" . phpversion();
-        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
-        
-        $otp_sent = @mail($email, $emailSubject, $emailBody, $headers);
-        if (!$otp_sent) {
-            $errorDetails[] = "PHP mail() function failed (not configured on this server)";
-        }
-    } else if (!$otp_sent) {
-        $errorDetails[] = "PHP mail() function not available";
+    $otp_sent = sendAdminOTPEmail($email, $emailSubject, $emailBody, $senderEmail, $senderName, $error);
+    if (!$otp_sent && $error) {
+        $errorDetails[] = "Email Error: " . $error;
     }
     
     // Log detailed error information
     if (!$otp_sent && !empty($errorDetails)) {
-        error_log("Email send failed for {$email}: " . implode("; ", $errorDetails));
+        error_log("Email send failed for {$email} (from: {$senderEmail}): " . implode("; ", $errorDetails));
     }
     
     $response['success'] = true;
@@ -156,7 +223,7 @@ try {
     $response['debug_message'] = 'If email not received, use this OTP code: ' . $otp_code;
     
     // Log the attempt
-    error_log("Admin OTP attempt for {$email} (purpose: {$purpose}). Sent via email: " . ($otp_sent ? 'YES' : 'NO') . ". Debug OTP: {$otp_code}");
+    error_log("Admin OTP attempt for {$email} (purpose: {$purpose}). Sent from {$senderEmail}: " . ($otp_sent ? 'YES' : 'NO') . ". Debug OTP: {$otp_code}");
     
 } catch (Exception $e) {
     $response['success'] = false;
