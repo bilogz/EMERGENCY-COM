@@ -23,6 +23,72 @@ $pageTitle = 'Multilingual Support for Alerts';
     <link rel="stylesheet" href="css/hero.css">
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
+    <style>
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-content {
+            background-color: #fff;
+            margin: 5% auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            animation: slideDown 0.3s;
+        }
+        
+        @keyframes slideDown {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .modal-close {
+            color: #999;
+            font-size: 28px;
+            font-weight: bold;
+            transition: color 0.2s;
+        }
+        
+        .modal-close:hover,
+        .modal-close:focus {
+            color: #333;
+            text-decoration: none;
+        }
+        
+        .language-list-item {
+            cursor: default;
+        }
+        
+        .language-list-item:hover {
+            background-color: #f8f9fa !important;
+        }
+        
+        #languageSearch:focus {
+            outline: none;
+            border-color: #2196f3;
+            box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+        }
+    </style>
 </head>
 <body>
     <!-- Include Sidebar Component -->
@@ -73,10 +139,33 @@ $pageTitle = 'Multilingual Support for Alerts';
                             </p>
                         </div>
                         <div>
-                            <div id="languagesGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                                <div style="text-align: center; padding: 2rem; color: #999;">
-                                    <i class="fas fa-spinner fa-spin"></i> Loading languages...
+                            <button class="btn btn-primary" onclick="openLanguagesModal()">
+                                <i class="fas fa-list"></i> View Supported Languages (<span id="languageCount">-</span>)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Languages Modal -->
+                    <div id="languagesModal" class="modal" style="display: none;">
+                        <div class="modal-content" style="max-width: 600px; max-height: 80vh;">
+                            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid #ddd;">
+                                <h3 style="margin: 0;"><i class="fas fa-language"></i> Supported Languages</h3>
+                                <span class="modal-close" onclick="closeLanguagesModal()" style="cursor: pointer; font-size: 1.5rem; color: #999;">&times;</span>
+                            </div>
+                            <div class="modal-body" style="padding: 1rem; max-height: 60vh; overflow-y: auto;">
+                                <div style="margin-bottom: 1rem;">
+                                    <input type="text" id="languageSearch" placeholder="Search languages..." 
+                                           style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"
+                                           onkeyup="filterLanguages()">
                                 </div>
+                                <div id="languagesList" style="list-style: none; padding: 0; margin: 0;">
+                                    <div style="text-align: center; padding: 2rem; color: #999;">
+                                        <i class="fas fa-spinner fa-spin"></i> Loading languages...
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer" style="padding: 1rem; border-top: 1px solid #ddd; text-align: right;">
+                                <button class="btn btn-secondary" onclick="closeLanguagesModal()">Close</button>
                             </div>
                         </div>
                     </div>
@@ -200,12 +289,125 @@ $pageTitle = 'Multilingual Support for Alerts';
                 .then(data => {
                     if (data.success && data.languages) {
                         supportedLanguages = data.languages;
-                        loadLanguagesGrid();
+                        document.getElementById('languageCount').textContent = data.languages.length;
+                        loadLanguagesList();
                     }
                 })
                 .catch(error => {
                     console.error('Error loading languages:', error);
+                    document.getElementById('languageCount').textContent = '0';
                 });
+        }
+        
+        // Load languages into modal list
+        function loadLanguagesList() {
+            const list = document.getElementById('languagesList');
+            list.innerHTML = '';
+            
+            if (supportedLanguages.length === 0) {
+                list.innerHTML = '<div style="text-align: center; padding: 2rem; color: #999;">No languages found</div>';
+                return;
+            }
+            
+            supportedLanguages.forEach(lang => {
+                const listItem = document.createElement('div');
+                listItem.className = 'language-list-item';
+                listItem.dataset.languageName = (lang.language_name + ' ' + (lang.native_name || '') + ' ' + lang.language_code).toLowerCase();
+                listItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; border-bottom: 1px solid #f0f0f0; transition: background 0.2s;';
+                listItem.onmouseover = function() { this.style.background = '#f8f9fa'; };
+                listItem.onmouseout = function() { this.style.background = ''; };
+                
+                const leftSection = document.createElement('div');
+                leftSection.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; flex: 1;';
+                
+                const flag = document.createElement('span');
+                flag.style.cssText = 'font-size: 1.5rem;';
+                flag.textContent = lang.flag_emoji || '🌐';
+                
+                const info = document.createElement('div');
+                info.style.cssText = 'flex: 1;';
+                
+                const name = document.createElement('div');
+                name.style.cssText = 'font-weight: 600; color: #333; margin-bottom: 0.25rem;';
+                name.textContent = lang.language_name;
+                
+                const native = document.createElement('div');
+                native.style.cssText = 'font-size: 0.85rem; color: #666;';
+                native.textContent = lang.native_name || lang.language_name;
+                
+                info.appendChild(name);
+                info.appendChild(native);
+                
+                const rightSection = document.createElement('div');
+                rightSection.style.cssText = 'display: flex; align-items: center; gap: 0.5rem;';
+                
+                const statusBadge = document.createElement('span');
+                statusBadge.className = 'badge ' + (lang.is_active ? 'success' : 'warning');
+                statusBadge.style.cssText = 'font-size: 0.75rem; padding: 0.25rem 0.5rem;';
+                statusBadge.textContent = lang.is_active ? 'Active' : 'Inactive';
+                
+                const aiBadge = document.createElement('span');
+                if (lang.is_ai_supported) {
+                    aiBadge.style.cssText = 'color: #2196f3; font-size: 1rem;';
+                    aiBadge.innerHTML = '<i class="fas fa-robot" title="AI Supported"></i>';
+                }
+                
+                rightSection.appendChild(statusBadge);
+                if (lang.is_ai_supported) {
+                    rightSection.appendChild(aiBadge);
+                }
+                
+                leftSection.appendChild(flag);
+                leftSection.appendChild(info);
+                listItem.appendChild(leftSection);
+                listItem.appendChild(rightSection);
+                list.appendChild(listItem);
+            });
+        }
+        
+        // Filter languages in modal
+        function filterLanguages() {
+            const searchTerm = document.getElementById('languageSearch').value.toLowerCase();
+            const items = document.querySelectorAll('.language-list-item');
+            
+            items.forEach(item => {
+                const languageName = item.dataset.languageName || '';
+                if (languageName.includes(searchTerm)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+        
+        // Open languages modal
+        function openLanguagesModal() {
+            const modal = document.getElementById('languagesModal');
+            modal.style.display = 'block';
+            document.getElementById('languageSearch').focus();
+            
+            // Load languages if not already loaded
+            if (supportedLanguages.length === 0) {
+                loadLanguages();
+            } else {
+                loadLanguagesList();
+            }
+        }
+        
+        // Close languages modal
+        function closeLanguagesModal() {
+            const modal = document.getElementById('languagesModal');
+            modal.style.display = 'none';
+            document.getElementById('languageSearch').value = '';
+            filterLanguages(); // Reset filter
+        }
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('languagesModal');
+            if (event.target === modal) {
+                closeLanguagesModal();
+            }
         }
 
         function loadTranslations() {
@@ -248,40 +450,6 @@ $pageTitle = 'Multilingual Support for Alerts';
                 });
         }
 
-        function loadLanguagesGrid() {
-            fetch('../api/multilingual-alerts.php?action=languages')
-                .then(response => response.json())
-                .then(data => {
-                    const grid = document.getElementById('languagesGrid');
-                    grid.innerHTML = '';
-                    
-                    if (data.success && data.languages) {
-                        data.languages.forEach(lang => {
-                            const card = document.createElement('div');
-                            card.className = 'channel-card';
-                            card.innerHTML = `
-                                <div>
-                                    <h3>${lang.flag_emoji || '🌐'} ${lang.language_name}</h3>
-                                    <p>Native: ${lang.native_name || lang.language_name}</p>
-                                    <p>Status: <span class="badge ${lang.is_active ? 'success' : 'warning'}">${lang.is_active ? 'Active' : 'Inactive'}</span></p>
-                                    ${lang.is_ai_supported ? '<p><i class="fas fa-robot" style="color: #2196f3;"></i> AI Supported</p>' : ''}
-                                    <button class="btn btn-sm btn-primary" onclick="manageLanguage('${lang.language_code}')">
-                                        <i class="fas fa-cog"></i> Manage
-                                    </button>
-                                </div>
-                            `;
-                            grid.appendChild(card);
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading languages:', error);
-                });
-        }
-        
-        function manageLanguage(langCode) {
-            alert('Language management for ' + langCode + ' - Feature coming soon!');
-        }
 
         function editTranslation(id) {
             alert('Edit translation ' + id);
@@ -340,57 +508,6 @@ $pageTitle = 'Multilingual Support for Alerts';
                                     <td>${new Date(log.created_at).toLocaleString()}</td>
                                     <td><code>${log.action_type}</code></td>
                                     <td>${log.alert_title || 'Alert #' + (log.alert_id || 'N/A')}</td>
-                                    <td>${log.source_language || 'en'} → ${log.target_language || 'N/A'}</td>
-                                    <td>${methodBadge}</td>
-                                    <td>${statusBadge}</td>
-                                `;
-                                tbody.appendChild(row);
-                            });
-                        }
-                        
-                        table.style.display = 'table';
-                        loadingDiv.style.display = 'none';
-                    } else {
-                        loadingDiv.innerHTML = '<span style="color: #f44336;">Error loading activity logs: ' + (data.message || 'Unknown error') + '</span>';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading activity logs:', error);
-                    loadingDiv.innerHTML = '<span style="color: #f44336;">Error loading activity logs. Please try again.</span>';
-                });
-        }
-        
-        function loadActivityLogs() {
-            const loadingDiv = document.getElementById('activityLogsLoading');
-            const table = document.getElementById('activityLogsTable');
-            
-            loadingDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading activity logs...';
-            
-            fetch('../api/multilingual-alerts.php?action=activity')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.logs) {
-                        const tbody = document.querySelector('#activityLogsTable tbody');
-                        tbody.innerHTML = '';
-                        
-                        if (data.logs.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #999;">No activity logs found</td></tr>';
-                        } else {
-                            data.logs.forEach(log => {
-                                const row = document.createElement('tr');
-                                const statusBadge = log.success 
-                                    ? '<span class="badge success">Success</span>'
-                                    : '<span class="badge error">Failed</span>';
-                                const methodBadge = log.translation_method === 'ai'
-                                    ? '<span class="badge" style="background: #2196f3;"><i class="fas fa-robot"></i> AI</span>'
-                                    : log.translation_method === 'manual'
-                                    ? '<span class="badge" style="background: #666;"><i class="fas fa-user"></i> Manual</span>'
-                                    : '';
-                                
-                                row.innerHTML = `
-                                    <td>${new Date(log.created_at).toLocaleString()}</td>
-                                    <td><code>${log.action_type}</code></td>
-                                    <td>${log.alert_title || 'Alert #' + log.alert_id || 'N/A'}</td>
                                     <td>${log.source_language || 'en'} → ${log.target_language || 'N/A'}</td>
                                     <td>${methodBadge}</td>
                                     <td>${statusBadge}</td>
