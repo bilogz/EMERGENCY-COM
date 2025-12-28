@@ -10,7 +10,7 @@
 
 ✅ API Key Stored Securely
    → File: USERS/api/config.local.php
-   → Key: AIzaSyB5HwXvCaGEH_RKU4j77AxVyHeN7CnNZ64
+   → Key: [Stored securely - not shown here]
    → Model: Gemini 2.5 Flash (gemini-2.0-flash-exp)
 
 ✅ Security Protection

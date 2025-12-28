@@ -22,11 +22,32 @@ if ($pdo === null) {
 
 echo "✓ Database connection successful!\n\n";
 
-// The Google AI API key provided by user
-$geminiApiKey = 'AIzaSyBqTLidxNdgJDGmEI4W7RFZDIuwOgIOvhA';
+require_once 'secure-api-config.php';
+
+// Get API key securely (from config file, database, or environment)
+$geminiApiKey = getGeminiApiKey();
+
+if (empty($geminiApiKey)) {
+    echo "✗ Error: API key not found!\n";
+    echo "\nPlease do ONE of the following:\n";
+    echo "1. Create USERS/api/config.local.php with your API key\n";
+    echo "2. Set GEMINI_API_KEY environment variable\n";
+    echo "3. Pass ?api_key=YOUR_KEY in URL (not recommended for production)\n";
+    echo "\nExample config.local.php:\n";
+    echo "<?php\n";
+    echo "return [\n";
+    echo "    'AI_API_KEY' => 'your-api-key-here',\n";
+    echo "];\n";
+    echo "</pre>";
+    exit;
+}
 
 try {
-    // Insert or update the Gemini API key
+    // Store API key in database (for backward compatibility)
+    // Primary source is config.local.php, but we also store in DB
+    storeGeminiApiKeyInDatabase($geminiApiKey);
+    
+    // Also update using direct query for verification
     $stmt = $pdo->prepare("
         INSERT INTO integration_settings (source, enabled, api_key, api_url, updated_at)
         VALUES ('gemini', 0, ?, 'https://generativelanguage.googleapis.com/v1beta/', NOW())

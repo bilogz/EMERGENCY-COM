@@ -18,9 +18,19 @@ class AITranslationService {
     }
     
     /**
-     * Load Gemini API key from database
+     * Load Gemini API key securely (from config file, database, or environment)
      */
     private function loadApiKey() {
+        // Use secure config helper if available
+        if (file_exists(__DIR__ . '/secure-api-config.php')) {
+            require_once __DIR__ . '/secure-api-config.php';
+            $this->apiKey = getGeminiApiKey();
+            if ($this->apiKey) {
+                return;
+            }
+        }
+        
+        // Fallback to database (for backward compatibility)
         try {
             $stmt = $this->pdo->prepare("SELECT api_key FROM integration_settings WHERE source = 'gemini' LIMIT 1");
             $stmt->execute();

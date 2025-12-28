@@ -275,7 +275,7 @@ CREATE TABLE `integration_settings` (
 INSERT INTO `integration_settings` (`id`, `source`, `enabled`, `api_key`, `api_url`, `last_sync`, `updated_at`) VALUES
 (1, 'pagasa', 1, 'f35609a701ba47952fba4fd4604c12c7', NULL, NULL, '2025-12-28 09:03:12'),
 (2, 'phivolcs', 1, NULL, NULL, NULL, '2025-12-28 09:03:13'),
-(6, 'gemini', 0, 'AIzaSyBqTLidxNdgJDGmEI4W7RFZDIuwOgIOvhA', 'https://generativelanguage.googleapis.com/v1beta/', NULL, '2025-12-28 04:29:25');
+(6, 'gemini', 0, '[API_KEY_REMOVED_FOR_SECURITY]', 'https://generativelanguage.googleapis.com/v1beta/', NULL, '2025-12-28 04:29:25');
 
 -- --------------------------------------------------------
 

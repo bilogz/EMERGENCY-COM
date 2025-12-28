@@ -7,8 +7,26 @@ USERS/api/config.local.php
 .env.local
 .env.*.local
 
-# API Keys
+# API Keys - Protect all API keys
 *api-key*
 *apikey*
 *secret*
+*_key.php
+*key*.php
+setup-*-key.php
+
+# Test files that might contain keys
+emer_comm_test.sql
+*test*.sql
+
+# Documentation with keys (if any)
+SECURE_SETUP_COMPLETE.txt
+NEW_KEY_SETUP_COMPLETE.md
+FINAL_SECURITY_SUMMARY.txt
+SECURITY_CHECKLIST.txt
+URGENT_SECURITY_FIX.md
+DO_NOT_COMMIT.txt
+
+# Google API Keys (common patterns)
+AIzaSy*
 
