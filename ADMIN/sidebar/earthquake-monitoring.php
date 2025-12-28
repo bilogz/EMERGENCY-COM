@@ -160,6 +160,32 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             font-weight: 600;
             color: var(--primary-color-1);
         }
+        
+        /* Map always shows natural colors - not affected by dark mode */
+        #earthquakeMap {
+            filter: none !important;
+        }
+        
+        .leaflet-container {
+            background-color: #a3ccff !important; /* Light blue ocean background */
+        }
+        
+        .leaflet-tile-container img {
+            filter: none !important;
+        }
+        
+        /* Prevent dark mode from affecting map */
+        [data-theme="dark"] #earthquakeMap {
+            filter: none !important;
+        }
+        
+        [data-theme="dark"] .leaflet-container {
+            background-color: #a3ccff !important;
+        }
+        
+        [data-theme="dark"] .leaflet-tile-container img {
+            filter: none !important;
+        }
     </style>
 </head>
 <body>
@@ -271,7 +297,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         
         // Initialize map
         function initMap() {
-            // Focus on Quezon City
+            // Focus on Quezon City center
             map = L.map('earthquakeMap').setView([14.6488, 121.0509], 12);
             
             // Standard OpenStreetMap tiles (green land, blue ocean)
@@ -280,12 +306,46 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 maxZoom: 19
             }).addTo(map);
             
+            // Load Quezon City boundary with vibrant border
+            loadQuezonCityBoundary();
+            
             // Load earthquake data
             loadEarthquakeData();
             
             // Setup button handlers
             document.getElementById('refreshBtn')?.addEventListener('click', loadEarthquakeData);
             document.getElementById('filterBtn')?.addEventListener('click', showFilterDialog);
+            
+            // Ensure Quezon City stays focused on resize
+            window.addEventListener('resize', () => {
+                setTimeout(() => {
+                    if (map) {
+                        map.invalidateSize();
+                        if (!map.getBounds().contains([14.6488, 121.0509])) {
+                            map.setView([14.6488, 121.0509], map.getZoom());
+                        }
+                    }
+                }, 100);
+            });
+        }
+        
+        // Load Quezon City boundary with vibrant, visible border
+        function loadQuezonCityBoundary() {
+            fetch('../api/quezon-city.geojson')
+                .then(response => response.json())
+                .then(geojsonData => {
+                    L.geoJSON(geojsonData, {
+                        style: {
+                            color: '#FF5722', // Vibrant orange-red color
+                            weight: 5, // Thicker line for visibility
+                            fillColor: '#4c8a89', // Teal fill
+                            fillOpacity: 0.15, // Slight transparency
+                            dashArray: '10, 5', // Dashed line pattern
+                            opacity: 1.0 // Full opacity for vibrant appearance
+                        }
+                    }).addTo(map);
+                })
+                .catch(err => console.error('Error loading Quezon City boundary:', err));
         }
         
         // Load PHIVOLCS/USGS earthquake data for Philippines
