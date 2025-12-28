@@ -85,12 +85,12 @@
                     </li>
                     
                     <li class="sidebar-menu-item">
-                        <a href="automated-warnings.php" class="sidebar-link sidebar-submenu-toggle <?php echo (basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' || basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php') ? 'active' : ''; ?>">
+                        <a href="automated-warnings.php" class="sidebar-link sidebar-submenu-toggle <?php echo (basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' || basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php' || basename($_SERVER['PHP_SELF']) == 'earthquake-monitoring.php') ? 'active' : ''; ?>">
                             <i class="fas fa-plug" style="margin-right: 0.5rem;"></i>
                             <span>Automated Warnings</span>
                             <i class="fas fa-chevron-down submenu-icon"></i>
                         </a>
-                        <ul class="sidebar-submenu <?php echo (basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' || basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php') ? 'sidebar-submenu-open' : ''; ?>">
+                        <ul class="sidebar-submenu <?php echo (basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' || basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php' || basename($_SERVER['PHP_SELF']) == 'earthquake-monitoring.php') ? 'sidebar-submenu-open' : ''; ?>">
                             <li class="sidebar-menu-item">
                                 <a href="automated-warnings.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' ? 'active' : ''; ?>">
                                     <i class="fas fa-cog" style="margin-right: 0.5rem;"></i>
@@ -101,6 +101,12 @@
                                 <a href="weather-monitoring.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php' ? 'active' : ''; ?>">
                                     <i class="fas fa-cloud-sun" style="margin-right: 0.5rem;"></i>
                                     <span>Weather Monitoring</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="earthquake-monitoring.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'earthquake-monitoring.php' ? 'active' : ''; ?>">
+                                    <i class="fas fa-mountain" style="margin-right: 0.5rem;"></i>
+                                    <span>Earthquake Monitoring</span>
                                 </a>
                             </li>
                         </ul>

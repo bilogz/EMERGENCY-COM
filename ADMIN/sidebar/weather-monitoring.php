@@ -402,7 +402,7 @@ $pageTitle = 'Weather Monitoring';
             gap: 0.25rem;
             min-width: 80px;
             transition: all 0.3s ease;
-            opacity: 0.5;
+            opacity: 0.25; /* Low opacity for better map visibility */
             backdrop-filter: blur(4px);
         }
         
@@ -624,6 +624,56 @@ $pageTitle = 'Weather Monitoring';
         /* Ensure tiles display with natural colors */
         .leaflet-tile-container img {
             filter: none !important;
+        }
+        
+        /* Precipitation Info Box */
+        .precipitation-info {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            max-width: 280px;
+            font-size: 0.9rem;
+        }
+        
+        .precipitation-info-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+            color: #2196F3;
+        }
+        
+        .precipitation-info-content p {
+            margin: 0.5rem 0;
+            color: #333;
+        }
+        
+        .precipitation-legend {
+            margin-top: 0.75rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid rgba(0,0,0,0.2);
         }
         
         /* Automated Warning Status */
@@ -1156,6 +1206,9 @@ $pageTitle = 'Weather Monitoring';
                 if (precipitationLayer && map.hasLayer(precipitationLayer)) {
                     map.removeLayer(precipitationLayer);
                 }
+                // Remove info box
+                const infoBox = document.getElementById('precipitationInfo');
+                if (infoBox) infoBox.remove();
             } else {
                 // Turn off all other modes first
                 disableAllMapModes();
@@ -1176,6 +1229,9 @@ $pageTitle = 'Weather Monitoring';
                 
                 precipitationLayer.addTo(map);
                 
+                // Show precipitation info
+                showPrecipitationInfo();
+                
                 // Update precipitation every 10 minutes
                 if (window.precipitationUpdateInterval) {
                     clearInterval(window.precipitationUpdateInterval);
@@ -1186,6 +1242,36 @@ $pageTitle = 'Weather Monitoring';
                         precipitationLayer.setUrl(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`);
                     }
                 }, 600000); // 10 minutes
+            }
+        }
+        
+        // Show precipitation information
+        function showPrecipitationInfo() {
+            // Create or update info box
+            let infoBox = document.getElementById('precipitationInfo');
+            if (!infoBox) {
+                infoBox = document.createElement('div');
+                infoBox.id = 'precipitationInfo';
+                infoBox.className = 'precipitation-info';
+                infoBox.innerHTML = `
+                    <div class="precipitation-info-header">
+                        <i class="fas fa-cloud-rain"></i>
+                        <span>Precipitation Layer Active</span>
+                        <button onclick="document.getElementById('precipitationInfo').remove()" style="background:none;border:none;color:inherit;cursor:pointer;margin-left:auto;">×</button>
+                    </div>
+                    <div class="precipitation-info-content">
+                        <p><strong>Intensity:</strong> Real-time radar data</p>
+                        <p><strong>Update:</strong> Every 10 minutes</p>
+                        <p><strong>Source:</strong> RainViewer API</p>
+                        <div class="precipitation-legend">
+                            <div class="legend-item"><span class="legend-color" style="background:rgba(0,0,255,0.3)"></span> Light</div>
+                            <div class="legend-item"><span class="legend-color" style="background:rgba(0,255,0,0.5)"></span> Moderate</div>
+                            <div class="legend-item"><span class="legend-color" style="background:rgba(255,255,0,0.7)"></span> Heavy</div>
+                            <div class="legend-item"><span class="legend-color" style="background:rgba(255,0,0,0.8)"></span> Intense</div>
+                        </div>
+                    </div>
+                `;
+                document.querySelector('.map-container').appendChild(infoBox);
             }
         }
         
