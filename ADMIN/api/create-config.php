@@ -56,10 +56,31 @@ return [
 ];
 ";
         
+        // Try to create the file
+        $fileCreated = false;
+        $errorMsg = '';
+        
+        // First, try to make directory writable temporarily
+        $originalPerms = null;
+        if (is_dir($configDir)) {
+            $originalPerms = substr(sprintf('%o', fileperms($configDir)), -4);
+            @chmod($configDir, 0755);
+        }
+        
         if (file_put_contents($configPath, $configContent)) {
-            // Set secure permissions
-            chmod($configPath, 0600);
-            
+            // Set secure permissions on the file
+            @chmod($configPath, 0600);
+            $fileCreated = true;
+        } else {
+            $errorMsg = error_get_last()['message'] ?? 'Unknown error';
+        }
+        
+        // Restore original permissions if we changed them
+        if ($originalPerms !== null) {
+            @chmod($configDir, octdec($originalPerms));
+        }
+        
+        if ($fileCreated) {
             echo "<div class='success'>";
             echo "✅ <strong>Config file created successfully!</strong><br><br>";
             echo "Location: <code>$configPath</code><br>";
@@ -70,9 +91,27 @@ return [
             echo "</div>";
         } else {
             echo "<div class='error'>";
-            echo "❌ Failed to create config file!<br>";
-            echo "Please check file permissions. The directory needs to be writable.<br>";
-            echo "Path: <code>$configPath</code><br>";
+            echo "❌ <strong>Failed to create config file!</strong><br><br>";
+            echo "Error: <code>$errorMsg</code><br><br>";
+            echo "<strong>Solution Options:</strong><br><br>";
+            echo "<strong>Option 1: Fix permissions via SSH</strong><br>";
+            echo "Run these commands on your server:<br>";
+            echo "<pre style='background:#000;padding:10px;border-radius:5px;'>";
+            echo "cd /var/www/html/emergency_communication_alertaraqc\n";
+            echo "sudo chmod 755 USERS/api\n";
+            echo "sudo chown www-data:www-data USERS/api\n";
+            echo "</pre><br>";
+            echo "<strong>Option 2: Create file manually</strong><br>";
+            echo "1. Use FTP/cPanel File Manager<br>";
+            echo "2. Navigate to: <code>USERS/api/</code><br>";
+            echo "3. Create file: <code>config.local.php</code><br>";
+            echo "4. Paste this content:<br>";
+            echo "<pre style='background:#000;padding:10px;border-radius:5px;max-height:200px;overflow:auto;'>";
+            echo htmlspecialchars($configContent);
+            echo "</pre><br>";
+            echo "<strong>Option 3: Copy from local</strong><br>";
+            echo "If you have the file locally, upload it via FTP to:<br>";
+            echo "<code>$configPath</code><br>";
             echo "</div>";
         }
     }
