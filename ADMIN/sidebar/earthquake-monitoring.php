@@ -52,9 +52,9 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         }
         
         .earthquake-control-btn {
-            background: rgba(255, 255, 255, 0.95);
+            background: var(--card-bg-1);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color-1);
             border-radius: 6px;
             padding: 0.75rem 1rem;
             cursor: pointer;
@@ -64,28 +64,30 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             font-size: 0.9rem;
             transition: all 0.2s;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            color: var(--text-color-1);
         }
         
         .earthquake-control-btn:hover {
-            background: rgba(255, 255, 255, 1);
+            background: var(--card-bg-1);
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
         }
         
         .earthquake-control-btn.active {
-            background: #FF5722;
+            background: var(--primary-color-1);
             color: white;
-            border-color: #FF5722;
+            border-color: var(--primary-color-1);
         }
         
         .earthquake-info {
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(255, 255, 255, 0.95);
+            background: var(--card-bg-1);
             backdrop-filter: blur(10px);
             border-radius: 8px;
             padding: 1rem;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: 1px solid var(--border-color-1);
             z-index: 1000;
             max-width: 300px;
             font-size: 0.9rem;
@@ -97,12 +99,12 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             gap: 0.5rem;
             margin-bottom: 0.75rem;
             font-weight: 600;
-            color: #FF5722;
+            color: var(--primary-color-1);
         }
         
         .earthquake-info-content p {
             margin: 0.5rem 0;
-            color: #333;
+            color: var(--text-color-1);
         }
         
         .earthquake-legend {
@@ -140,22 +142,23 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         }
         
         .stat-card {
-            background: white;
+            background: var(--card-bg-1);
             padding: 1rem;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid var(--primary-color-1);
         }
         
         .stat-card h3 {
             margin: 0 0 0.5rem 0;
             font-size: 0.9rem;
-            color: #666;
+            color: var(--text-secondary-1);
         }
         
         .stat-card .stat-value {
             font-size: 2rem;
             font-weight: 600;
-            color: #FF5722;
+            color: var(--primary-color-1);
         }
     </style>
 </head>
@@ -226,7 +229,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                         <div id="earthquakeMap"></div>
                         
                         <!-- Quezon City Focus Status -->
-                        <div id="quezonCityStatus" onclick="focusQuezonCity()" style="cursor: pointer; position: absolute; bottom: 20px; right: 20px; background: rgba(255, 152, 0, 0.9); color: white; padding: 0.75rem 1rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 1000; display: flex; align-items: center; gap: 0.5rem; font-weight: 500;" title="Click to focus on Quezon City">
+                        <div id="quezonCityStatus" onclick="focusQuezonCity()" style="cursor: pointer; position: absolute; bottom: 20px; right: 20px; background: var(--primary-color-1); color: white; padding: 0.75rem 1rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 1000; display: flex; align-items: center; gap: 0.5rem; font-weight: 500;" title="Click to focus on Quezon City">
                             <i class="fas fa-map-marker-alt"></i>
                             <span>Focused on Quezon City</span>
                         </div>

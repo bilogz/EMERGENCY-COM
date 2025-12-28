@@ -31,22 +31,7 @@ $pageTitle = 'Weather Monitoring';
     <link rel="stylesheet" href="css/modules.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root {
-            --primary-color-1: #3498db;
-            --text-color-1: #2c3e50;
-            --text-secondary-1: #7f8c8d;
-            --card-bg-1: #ffffff;
-            --bg-color-1: #f8f9fa;
-            --border-color-1: #e0e0e0;
-        }
-        
-        [data-theme="dark"] {
-            --text-color-1: #ecf0f1;
-            --text-secondary-1: #bdc3c7;
-            --card-bg-1: #2c3e50;
-            --bg-color-1: #34495e;
-            --border-color-1: #4a5568;
-        }
+        /* Colors are inherited from global.css - using consistent color scheme */
         
         .weather-container {
             display: flex;
@@ -344,7 +329,7 @@ $pageTitle = 'Weather Monitoring';
         .forecast-bar {
             height: 100%;
             border-radius: 3px;
-            background: linear-gradient(90deg, #3498db, #f39c12);
+            background: linear-gradient(90deg, var(--primary-color-1), #3d6f6e);
         }
         
         .forecast-precip {
@@ -352,7 +337,7 @@ $pageTitle = 'Weather Monitoring';
             align-items: center;
             gap: 0.25rem;
             font-size: 0.8rem;
-            color: #3498db;
+            color: var(--primary-color-1);
         }
         
         /* Map Controls */
@@ -367,8 +352,8 @@ $pageTitle = 'Weather Monitoring';
         }
         
         .map-control-btn {
-            background: white;
-            border: 1px solid #ddd;
+            background: var(--card-bg-1);
+            border: 1px solid var(--border-color-1);
             border-radius: 6px;
             padding: 0.5rem 0.75rem;
             cursor: pointer;
@@ -378,10 +363,11 @@ $pageTitle = 'Weather Monitoring';
             font-size: 0.85rem;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             transition: all 0.2s;
+            color: var(--text-color-1);
         }
         
         .map-control-btn:hover {
-            background: #f5f5f5;
+            background: var(--bg-color-1);
         }
         
         .map-control-btn.active {
@@ -420,12 +406,12 @@ $pageTitle = 'Weather Monitoring';
         .weather-marker-temp {
             font-size: 1rem;
             font-weight: 600;
-            color: #2c3e50;
+            color: var(--text-color-1);
         }
         
         .weather-marker-city {
             font-size: 0.7rem;
-            color: #7f8c8d;
+            color: var(--text-secondary-1);
             white-space: nowrap;
         }
         
@@ -446,7 +432,7 @@ $pageTitle = 'Weather Monitoring';
         }
         
         .ai-status.loading {
-            background: #f39c12;
+            background: var(--primary-color-1);
             animation: pulse 1s infinite;
         }
         
@@ -561,7 +547,7 @@ $pageTitle = 'Weather Monitoring';
             bottom: 10px;
             right: 10px;
             z-index: 1000;
-            background: linear-gradient(135deg, #f39c12, #e67e22);
+            background: linear-gradient(135deg, var(--primary-color-1), #3d6f6e);
             color: white;
             padding: 0.5rem 1rem;
             border-radius: 8px;
@@ -570,7 +556,7 @@ $pageTitle = 'Weather Monitoring';
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.4);
+            box-shadow: 0 4px 12px rgba(76, 138, 137, 0.4);
             animation: pulseFocus 2s ease-in-out infinite;
         }
         
@@ -582,11 +568,11 @@ $pageTitle = 'Weather Monitoring';
         @keyframes pulseFocus {
             0%, 100% { 
                 transform: scale(1);
-                box-shadow: 0 4px 12px rgba(243, 156, 18, 0.4);
+                box-shadow: 0 4px 12px rgba(76, 138, 137, 0.4);
             }
             50% { 
                 transform: scale(1.02);
-                box-shadow: 0 6px 16px rgba(243, 156, 18, 0.6);
+                box-shadow: 0 6px 16px rgba(76, 138, 137, 0.6);
             }
         }
         
@@ -631,11 +617,12 @@ $pageTitle = 'Weather Monitoring';
             position: absolute;
             top: 60px;
             right: 20px;
-            background: rgba(255, 255, 255, 0.95);
+            background: var(--card-bg-1);
             backdrop-filter: blur(10px);
             border-radius: 8px;
             padding: 1rem;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: 1px solid var(--border-color-1);
             z-index: 1000;
             max-width: 280px;
             font-size: 0.9rem;
@@ -647,12 +634,12 @@ $pageTitle = 'Weather Monitoring';
             gap: 0.5rem;
             margin-bottom: 0.75rem;
             font-weight: 600;
-            color: #2196F3;
+            color: var(--primary-color-1);
         }
         
         .precipitation-info-content p {
             margin: 0.5rem 0;
-            color: #333;
+            color: var(--text-color-1);
         }
         
         .precipitation-legend {
@@ -703,8 +690,8 @@ $pageTitle = 'Weather Monitoring';
         }
         
         .auto-warning-status.info {
-            background: linear-gradient(135deg, #3498db, #2980b9);
-            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+            background: linear-gradient(135deg, var(--primary-color-1), #3d6f6e);
+            box-shadow: 0 4px 12px rgba(76, 138, 137, 0.4);
         }
         
         @keyframes pulseWarning {
@@ -1652,7 +1639,7 @@ $pageTitle = 'Weather Monitoring';
                 .then(geojsonData => {
                     L.geoJSON(geojsonData, {
                         style: {
-                            color: '#f39c12',
+                            color: '#4c8a89',
                             weight: 3,
                             fillColor: '#4c8a89',
                             fillOpacity: 0.08,
@@ -1693,17 +1680,17 @@ $pageTitle = 'Weather Monitoring';
                 // Quezon City is focused
                 statusDiv.style.display = 'flex';
                 statusDiv.innerHTML = '<i class="fas fa-map-marker-alt"></i><span>Focused on Quezon City</span>';
-                statusDiv.style.background = 'linear-gradient(135deg, #f39c12, #e67e22)';
+                statusDiv.style.background = 'linear-gradient(135deg, var(--primary-color-1), #3d6f6e)';
             } else if (isInView) {
                 // Quezon City is visible but not centered
                 statusDiv.style.display = 'flex';
                 statusDiv.innerHTML = '<i class="fas fa-eye"></i><span>Quezon City in view - Click to focus</span>';
-                statusDiv.style.background = 'linear-gradient(135deg, #3498db, #2980b9)';
+                statusDiv.style.background = 'linear-gradient(135deg, var(--primary-color-1), #3d6f6e)';
             } else {
                 // Quezon City is not in view
                 statusDiv.style.display = 'flex';
                 statusDiv.innerHTML = '<i class="fas fa-map-marker-alt"></i><span>Click to focus on Quezon City</span>';
-                statusDiv.style.background = 'linear-gradient(135deg, #95a5a6, #7f8c8d)';
+                statusDiv.style.background = 'linear-gradient(135deg, var(--text-secondary-1), var(--border-color-1))';
             }
         }
         
@@ -1774,15 +1761,15 @@ $pageTitle = 'Weather Monitoring';
                         </div>
                         <div class="gw-details">
                             <div class="gw-detail-item">
-                                <i class="fas fa-tint" style="color: #3498db;"></i>
+                                <i class="fas fa-tint" style="color: var(--primary-color-1);"></i>
                                 Precipitation: ${precip > 0 && precip < 100 ? precip + 'mm' : precip + '%'}
                             </div>
                             <div class="gw-detail-item">
-                                <i class="fas fa-water" style="color: #1abc9c;"></i>
+                                <i class="fas fa-water" style="color: var(--primary-color-1);"></i>
                                 Humidity: ${humidity}%
                             </div>
                             <div class="gw-detail-item">
-                                <i class="fas fa-wind" style="color: #95a5a6;"></i>
+                                <i class="fas fa-wind" style="color: var(--text-secondary-1);"></i>
                                 Wind: ${windSpeed} km/h
                             </div>
                         </div>
@@ -1841,8 +1828,8 @@ $pageTitle = 'Weather Monitoring';
                     labels: labels,
                     datasets: [{
                         data: temps,
-                        borderColor: '#f39c12',
-                        backgroundColor: 'rgba(243, 156, 18, 0.1)',
+                        borderColor: 'var(--primary-color-1)',
+                        backgroundColor: 'rgba(76, 138, 137, 0.1)',
                         borderWidth: 2,
                         fill: true,
                         tension: 0.4,
@@ -2423,20 +2410,20 @@ Keep concise and actionable.`;
             switch(type) {
                 case 'precipitation':
                     data = hourlyData.map(item => item.rain || 0);
-                    borderColor = '#3498db';
-                    backgroundColor = 'rgba(52, 152, 219, 0.2)';
+                    borderColor = 'var(--primary-color-1)';
+                    backgroundColor = 'rgba(76, 138, 137, 0.2)';
                     label = 'mm';
                     break;
                 case 'wind':
                     data = hourlyData.map(item => (item.wind_speed || 0) * 3.6);
-                    borderColor = '#95a5a6';
-                    backgroundColor = 'rgba(149, 165, 166, 0.2)';
+                    borderColor = 'var(--text-secondary-1)';
+                    backgroundColor = 'rgba(161, 161, 170, 0.2)';
                     label = 'km/h';
                     break;
                 default:
                     data = hourlyData.map(item => Math.round(item.temp));
-                    borderColor = '#f39c12';
-                    backgroundColor = 'rgba(243, 156, 18, 0.1)';
+                    borderColor = 'var(--primary-color-1)';
+                    backgroundColor = 'rgba(76, 138, 137, 0.1)';
                     label = '°C';
             }
             

@@ -117,12 +117,6 @@ $pageTitle = 'Two-Way Communication Interface';
     <div class="main-content">
         <div class="main-container">
             <div class="title">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <div style="font-size: 0.9rem; color: var(--text-secondary-1);">
-                        <i class="fas fa-user-circle" style="margin-right: 0.5rem;"></i>
-                        <strong>Admin:</strong> <?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'Admin User'); ?>
-                    </div>
-                </div>
                 <nav class="breadcrumb" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list">
                         <li class="breadcrumb-item">

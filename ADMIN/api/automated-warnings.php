@@ -15,26 +15,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($data['action']) && $data['action'] === 'toggle') {
         $source = $data['source'] ?? '';
         $enabled = $data['enabled'] ?? false;
-        $apiKey = $data['api_key'] ?? null;
         
         try {
-            if ($apiKey !== null) {
-                // Update with API key
-                $stmt = $pdo->prepare("
-                    INSERT INTO integration_settings (source, enabled, api_key, updated_at)
-                    VALUES (?, ?, ?, NOW())
-                    ON DUPLICATE KEY UPDATE enabled = ?, api_key = ?, updated_at = NOW()
-                ");
-                $stmt->execute([$source, $enabled ? 1 : 0, $apiKey, $enabled ? 1 : 0, $apiKey]);
-            } else {
-                // Update without changing API key
-                $stmt = $pdo->prepare("
-                    INSERT INTO integration_settings (source, enabled, updated_at)
-                    VALUES (?, ?, NOW())
-                    ON DUPLICATE KEY UPDATE enabled = ?, updated_at = NOW()
-                ");
-                $stmt->execute([$source, $enabled ? 1 : 0, $enabled ? 1 : 0]);
-            }
+            $stmt = $pdo->prepare("
+                INSERT INTO integration_settings (source, enabled, updated_at)
+                VALUES (?, ?, NOW())
+                ON DUPLICATE KEY UPDATE enabled = ?, updated_at = NOW()
+            ");
+            $stmt->execute([$source, $enabled ? 1 : 0, $enabled ? 1 : 0]);
             
             echo json_encode([
                 'success' => true,
@@ -70,25 +58,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 } elseif ($action === 'status') {
     try {
-        $stmt = $pdo->query("SELECT source, enabled, api_key FROM integration_settings");
-        $settings = [];
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $settings[$row['source']] = [
-                'enabled' => (bool)$row['enabled'],
-                'api_key' => $row['api_key']
-            ];
-        }
+        $stmt = $pdo->query("SELECT source, enabled FROM integration_settings");
+        $settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
         
         echo json_encode([
             'success' => true,
-            'pagasa' => [
-                'enabled' => isset($settings['pagasa']) && $settings['pagasa']['enabled'],
-                'api_key' => $settings['pagasa']['api_key'] ?? null
-            ],
-            'phivolcs' => [
-                'enabled' => isset($settings['phivolcs']) && $settings['phivolcs']['enabled'],
-                'api_key' => $settings['phivolcs']['api_key'] ?? null
-            ]
+            'pagasa' => ['enabled' => isset($settings['pagasa']) && $settings['pagasa']],
+            'phivolcs' => ['enabled' => isset($settings['phivolcs']) && $settings['phivolcs']]
         ]);
     } catch (PDOException $e) {
         error_log("Get Status Error: " . $e->getMessage());
