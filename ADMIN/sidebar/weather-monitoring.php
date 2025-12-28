@@ -120,11 +120,11 @@ $pageTitle = 'Weather Monitoring';
             border: none;
             padding: 0;
             overflow: visible;
-            min-height: 200px;
+            min-height: 280px;
         }
         
         .google-weather-display {
-            padding: 1.5rem;
+            padding: 2rem;
             overflow: visible;
             word-wrap: break-word;
         }
@@ -133,14 +133,14 @@ $pageTitle = 'Weather Monitoring';
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 1rem;
-            gap: 1rem;
+            margin-bottom: 1.5rem;
+            gap: 1.5rem;
             flex-wrap: wrap;
         }
         
         .gw-left {
             flex: 1;
-            min-width: 200px;
+            min-width: 220px;
         }
         
         .gw-main-temp {
@@ -172,10 +172,10 @@ $pageTitle = 'Weather Monitoring';
         .gw-details {
             display: flex;
             flex-wrap: wrap;
-            gap: 1rem;
+            gap: 1.25rem;
             font-size: 0.9rem;
             opacity: 0.9;
-            margin-top: 1rem;
+            margin-top: 1.25rem;
         }
         
         .gw-detail-item {
@@ -187,7 +187,7 @@ $pageTitle = 'Weather Monitoring';
         
         .gw-right {
             text-align: left;
-            min-width: 150px;
+            min-width: 180px;
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
