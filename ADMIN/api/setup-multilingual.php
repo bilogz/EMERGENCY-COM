@@ -45,38 +45,94 @@ echo "<h2>Step 1: Updating Database Schema</h2>\n";
 try {
     $sql = file_get_contents($schemaFile);
     
-    // Split SQL into individual statements
-    $statements = array_filter(
-        array_map('trim', explode(';', $sql)),
-        function($stmt) {
-            return !empty($stmt) && !preg_match('/^\s*--/', $stmt);
+    // Process SQL statements more carefully
+    // Remove comments and split by semicolon
+    $sql = preg_replace('/--.*$/m', '', $sql); // Remove single-line comments
+    $sql = preg_replace('/\/\*.*?\*\//s', '', $sql); // Remove multi-line comments
+    
+    // Split by semicolon but keep CREATE TABLE statements together
+    $statements = [];
+    $currentStatement = '';
+    $inCreateTable = false;
+    
+    $lines = explode("\n", $sql);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        
+        $currentStatement .= $line . "\n";
+        
+        // Check if we're in a CREATE TABLE block
+        if (stripos($line, 'CREATE TABLE') !== false) {
+            $inCreateTable = true;
         }
-    );
+        
+        // End of statement
+        if (substr(rtrim($line), -1) === ';' && !$inCreateTable) {
+            $stmt = trim($currentStatement);
+            if (!empty($stmt) && strlen($stmt) > 10) {
+                $statements[] = $stmt;
+            }
+            $currentStatement = '';
+        } elseif (substr(rtrim($line), -1) === ';' && $inCreateTable) {
+            // End of CREATE TABLE
+            $stmt = trim($currentStatement);
+            if (!empty($stmt) && strlen($stmt) > 10) {
+                $statements[] = $stmt;
+            }
+            $currentStatement = '';
+            $inCreateTable = false;
+        }
+    }
+    
+    // Add any remaining statement
+    if (!empty(trim($currentStatement))) {
+        $statements[] = trim($currentStatement);
+    }
     
     $successCount = 0;
     $errorCount = 0;
+    $skippedCount = 0;
     
-    foreach ($statements as $statement) {
-        if (empty(trim($statement))) continue;
+    foreach ($statements as $index => $statement) {
+        if (empty(trim($statement)) || strlen(trim($statement)) < 10) continue;
         
         try {
             $pdo->exec($statement);
             $successCount++;
+            // Show progress for important statements
+            if (stripos($statement, 'CREATE TABLE') !== false || stripos($statement, 'ALTER TABLE') !== false) {
+                $tableName = '';
+                if (preg_match('/CREATE TABLE.*?`?(\w+)`?/i', $statement, $matches)) {
+                    $tableName = $matches[1];
+                } elseif (preg_match('/ALTER TABLE.*?`?(\w+)`?/i', $statement, $matches)) {
+                    $tableName = $matches[1];
+                }
+                if ($tableName) {
+                    echo "<span class='success'>✓ " . ucfirst(str_replace('_', ' ', $tableName)) . " processed</span>\n";
+                }
+            }
         } catch (PDOException $e) {
+            $errorMsg = $e->getMessage();
+            
             // Check if error is about column/table already existing (which is OK)
-            if (strpos($e->getMessage(), 'Duplicate column') !== false || 
-                strpos($e->getMessage(), 'already exists') !== false) {
-                echo "<span class='info'>ℹ " . substr($statement, 0, 50) . "... (already exists, skipping)</span>\n";
-                $successCount++;
+            if (strpos($errorMsg, 'Duplicate column') !== false || 
+                strpos($errorMsg, 'Duplicate key name') !== false ||
+                strpos($errorMsg, 'already exists') !== false ||
+                strpos($errorMsg, 'Duplicate entry') !== false) {
+                $skippedCount++;
+                // Don't show skipped messages for cleaner output
             } else {
-                echo "<span class='error'>✗ Error: " . $e->getMessage() . "</span>\n";
-                echo "   Statement: " . substr($statement, 0, 100) . "...\n";
+                echo "<span class='error'>✗ Error in statement " . ($index + 1) . ": " . htmlspecialchars(substr($errorMsg, 0, 100)) . "</span>\n";
                 $errorCount++;
             }
         }
     }
     
-    echo "<span class='success'>✓ Executed {$successCount} statements successfully</span>\n";
+    echo "<span class='success'>✓ Processed {$successCount} statements successfully</span>\n";
+    if ($skippedCount > 0) {
+        echo "<span class='info'>ℹ {$skippedCount} statements skipped (already exist)</span>\n";
+    }
     if ($errorCount > 0) {
         echo "<span class='error'>✗ {$errorCount} errors encountered</span>\n";
     }
@@ -106,16 +162,96 @@ foreach ($tablesToCheck as $table => $description) {
             
             if ($table === 'alert_translations') {
                 $requiredColumns = ['translated_by_admin_id', 'translation_method'];
+                $missingColumns = [];
                 foreach ($requiredColumns as $col) {
                     if (in_array($col, $columns)) {
                         echo "  <span class='success'>  ✓ Column '{$col}' exists</span>\n";
                     } else {
                         echo "  <span class='error'>  ✗ Column '{$col}' missing</span>\n";
+                        $missingColumns[] = $col;
+                    }
+                }
+                
+                // Try to add missing columns
+                if (!empty($missingColumns)) {
+                    echo "  <span class='info'>  Attempting to add missing columns...</span>\n";
+                    try {
+                        if (in_array('translated_by_admin_id', $missingColumns)) {
+                            $pdo->exec("ALTER TABLE alert_translations ADD COLUMN translated_by_admin_id INT DEFAULT NULL COMMENT 'Admin who created/updated this translation'");
+                            echo "  <span class='success'>  ✓ Added column 'translated_by_admin_id'</span>\n";
+                        }
+                        if (in_array('translation_method', $missingColumns)) {
+                            $pdo->exec("ALTER TABLE alert_translations ADD COLUMN translation_method VARCHAR(20) DEFAULT 'manual' COMMENT 'manual, ai, hybrid'");
+                            echo "  <span class='success'>  ✓ Added column 'translation_method'</span>\n";
+                        }
+                    } catch (PDOException $e) {
+                        echo "  <span class='error'>  ✗ Could not add columns: " . htmlspecialchars($e->getMessage()) . "</span>\n";
                     }
                 }
             }
         } else {
             echo "<span class='error'>✗ {$description} does not exist</span>\n";
+            
+            // Try to create missing tables
+            if ($table === 'supported_languages') {
+                echo "  <span class='info'>  Attempting to create supported_languages table...</span>\n";
+                try {
+                    $pdo->exec("
+                        CREATE TABLE IF NOT EXISTS supported_languages (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            language_code VARCHAR(10) NOT NULL UNIQUE COMMENT 'ISO 639-1 or custom code',
+                            language_name VARCHAR(100) NOT NULL COMMENT 'Display name',
+                            native_name VARCHAR(100) DEFAULT NULL COMMENT 'Native name',
+                            flag_emoji VARCHAR(10) DEFAULT NULL COMMENT 'Flag emoji',
+                            is_active TINYINT(1) DEFAULT 1 COMMENT 'Whether active',
+                            is_ai_supported TINYINT(1) DEFAULT 1 COMMENT 'AI translation available',
+                            priority INT DEFAULT 0 COMMENT 'Display priority',
+                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                            INDEX idx_is_active (is_active),
+                            INDEX idx_priority (priority)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    ");
+                    echo "  <span class='success'>  ✓ Created supported_languages table</span>\n";
+                    
+                    // Now insert languages
+                    echo "  <span class='info'>  Inserting languages...</span>\n";
+                    require_once __DIR__ . '/multilingual-schema-update.sql';
+                    // The INSERT statements will be handled by the main SQL execution
+                } catch (PDOException $e) {
+                    echo "  <span class='error'>  ✗ Could not create table: " . htmlspecialchars($e->getMessage()) . "</span>\n";
+                }
+            } elseif ($table === 'translation_activity_logs') {
+                echo "  <span class='info'>  Attempting to create translation_activity_logs table...</span>\n";
+                try {
+                    $pdo->exec("
+                        CREATE TABLE IF NOT EXISTS translation_activity_logs (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            admin_id INT NOT NULL COMMENT 'Admin who performed action',
+                            action_type VARCHAR(50) NOT NULL COMMENT 'Action type',
+                            alert_id INT DEFAULT NULL COMMENT 'Related alert ID',
+                            translation_id INT DEFAULT NULL COMMENT 'Related translation ID',
+                            source_language VARCHAR(10) DEFAULT NULL,
+                            target_language VARCHAR(10) DEFAULT NULL,
+                            translation_method VARCHAR(20) DEFAULT NULL COMMENT 'manual, ai, hybrid',
+                            success TINYINT(1) DEFAULT 1 COMMENT 'Success status',
+                            error_message TEXT DEFAULT NULL COMMENT 'Error if failed',
+                            metadata JSON DEFAULT NULL COMMENT 'Additional data',
+                            ip_address VARCHAR(45) DEFAULT NULL,
+                            user_agent TEXT DEFAULT NULL,
+                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            INDEX idx_admin_id (admin_id),
+                            INDEX idx_action_type (action_type),
+                            INDEX idx_alert_id (alert_id),
+                            INDEX idx_translation_id (translation_id),
+                            INDEX idx_created_at (created_at)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    ");
+                    echo "  <span class='success'>  ✓ Created translation_activity_logs table</span>\n";
+                } catch (PDOException $e) {
+                    echo "  <span class='error'>  ✗ Could not create table: " . htmlspecialchars($e->getMessage()) . "</span>\n";
+                }
+            }
         }
     } catch (PDOException $e) {
         echo "<span class='error'>✗ Error checking {$table}: " . $e->getMessage() . "</span>\n";

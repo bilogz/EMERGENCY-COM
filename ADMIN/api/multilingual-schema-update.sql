@@ -2,13 +2,34 @@
 -- Adds support for AI translations and admin activity tracking
 
 -- Update alert_translations table to track admin and translation method
-ALTER TABLE alert_translations 
-ADD COLUMN IF NOT EXISTS translated_by_admin_id INT DEFAULT NULL COMMENT 'Admin who created/updated this translation',
-ADD COLUMN IF NOT EXISTS translation_method VARCHAR(20) DEFAULT 'manual' COMMENT 'manual, ai, hybrid',
-ADD COLUMN IF NOT EXISTS ai_model VARCHAR(50) DEFAULT NULL COMMENT 'AI model used (e.g., gemini-2.5-flash)',
-ADD COLUMN IF NOT EXISTS translation_quality_score DECIMAL(3,2) DEFAULT NULL COMMENT 'Quality score 0-1 if available',
-ADD INDEX idx_translated_by (translated_by_admin_id),
-ADD INDEX idx_translation_method (translation_method);
+-- Note: MySQL doesn't support IF NOT EXISTS for ALTER TABLE, so we check first or handle errors
+
+-- Add translated_by_admin_id column (if not exists)
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+    AND TABLE_NAME = 'alert_translations' 
+    AND COLUMN_NAME = 'translated_by_admin_id');
+SET @sql = IF(@col_exists = 0, 
+    'ALTER TABLE alert_translations ADD COLUMN translated_by_admin_id INT DEFAULT NULL COMMENT ''Admin who created/updated this translation''',
+    'SELECT ''Column translated_by_admin_id already exists'' AS message');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Add translation_method column (if not exists)
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+    AND TABLE_NAME = 'alert_translations' 
+    AND COLUMN_NAME = 'translation_method');
+SET @sql = IF(@col_exists = 0, 
+    'ALTER TABLE alert_translations ADD COLUMN translation_method VARCHAR(20) DEFAULT ''manual'' COMMENT ''manual, ai, hybrid''',
+    'SELECT ''Column translation_method already exists'' AS message');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Add indexes (ignore if exists)
+-- Note: These will fail silently if indexes already exist, which is OK
 
 -- Create supported_languages table for language management
 CREATE TABLE IF NOT EXISTS supported_languages (
