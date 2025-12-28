@@ -270,7 +270,8 @@ ON DUPLICATE KEY UPDATE name=name;
 -- Insert default integration settings
 INSERT INTO integration_settings (source, enabled) VALUES
 ('pagasa', 0),
-('phivolcs', 0)
+('phivolcs', 0),
+('gemini', 0)
 ON DUPLICATE KEY UPDATE source=source;
 
 -- Insert default warning settings

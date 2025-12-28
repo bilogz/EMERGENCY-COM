@@ -770,9 +770,23 @@ $pageTitle = 'Weather Monitoring';
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // API Keys
-        const GEMINI_API_KEY = 'AIzaSyC9YYvvf2ujzIXkHmRndgP1XlKgi5zrlnE';
+        // API Keys - Will be loaded from server
+        let GEMINI_API_KEY = null;
         const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent';
+        
+        // Load Gemini API key from server
+        fetch('../api/get-gemini-key.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.apiKey) {
+                    GEMINI_API_KEY = data.apiKey;
+                } else {
+                    console.warn('Gemini API key not configured:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading Gemini API key:', error);
+            });
         
         let map;
         let markers = [];
@@ -1714,6 +1728,28 @@ $pageTitle = 'Weather Monitoring';
             if (!window.currentWeatherData) {
                 container.innerHTML = '<p style="color: #e74c3c;">Please wait for weather data to load.</p>';
                 return;
+            }
+            
+            // Check if API key is loaded
+            if (!GEMINI_API_KEY) {
+                // Try to load it again
+                try {
+                    const keyResponse = await fetch('../api/get-gemini-key.php');
+                    const keyData = await keyResponse.json();
+                    if (keyData.success && keyData.apiKey) {
+                        GEMINI_API_KEY = keyData.apiKey;
+                    } else {
+                        container.innerHTML = '<p style="color: #e74c3c;">Google AI API key not configured. Please run setup-gemini-key.php to configure it.</p>';
+                        statusBadge.textContent = 'Error';
+                        statusBadge.className = 'ai-status error';
+                        return;
+                    }
+                } catch (error) {
+                    container.innerHTML = '<p style="color: #e74c3c;">Error loading API key. Please check setup.</p>';
+                    statusBadge.textContent = 'Error';
+                    statusBadge.className = 'ai-status error';
+                    return;
+                }
             }
             
             statusBadge.textContent = 'Analyzing...';
