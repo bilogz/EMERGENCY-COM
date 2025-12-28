@@ -2,6 +2,7 @@
 /**
  * Gemini AI API Proxy
  * Handles CORS and API calls to Google Gemini
+ * SECURE: Uses API key from secure config, not from client
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -20,18 +21,33 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
-$input = json_decode(file_get_contents('php://input'), true);
+// Load secure API configuration
+require_once __DIR__ . '/secure-api-config.php';
 
-if (!isset($input['apiKey']) || !isset($input['prompt'])) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Missing apiKey or prompt']);
+// Get API key securely from config file (not from client)
+$apiKey = getGeminiApiKey();
+if (empty($apiKey)) {
+    http_response_code(500);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'API key expired or invalid. Please update your Gemini API key in Automated Warnings → AI Warning Settings.'
+    ]);
     exit();
 }
 
-$apiKey = $input['apiKey'];
+$input = json_decode(file_get_contents('php://input'), true);
+
+if (!isset($input['prompt'])) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Missing prompt']);
+    exit();
+}
+
 $prompt = $input['prompt'];
 
-$url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . urlencode($apiKey);
+// Get model from config (defaults to gemini-2.5-flash)
+$model = getGeminiModel();
+$url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . urlencode($apiKey);
 
 $data = [
     'contents' => [

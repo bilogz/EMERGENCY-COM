@@ -2065,12 +2065,11 @@ $pageTitle = 'Weather Monitoring';
                 
                 const prompt = buildWeatherPrompt(weather, forecast, locationName);
                 
-                // Use PHP proxy to avoid CORS issues
+                // Use PHP proxy to avoid CORS issues (API key is handled securely server-side)
                 const response = await fetch('../api/gemini-proxy.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        apiKey: GEMINI_API_KEY,
                         prompt: prompt
                     })
                 });
