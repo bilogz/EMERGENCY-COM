@@ -4,81 +4,123 @@
  * Integrate with external warning feeds (PAGASA, PHIVOLCS)
  */
 
+// Set error handling to prevent output before JSON
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Start output buffering to catch any unexpected output
+ob_start();
+
 header('Content-Type: application/json; charset=utf-8');
-require_once 'db_connect.php';
-require_once 'activity_logger.php';
+
+try {
+    require_once 'db_connect.php';
+    require_once 'activity_logger.php';
+} catch (Exception $e) {
+    ob_end_clean();
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Failed to load required files: ' . $e->getMessage()]);
+    exit();
+}
 
 session_start();
 
 $action = $_GET['action'] ?? 'status';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $data = json_decode(file_get_contents('php://input'), true);
-    
-    if (isset($data['action']) && $data['action'] === 'toggle') {
-        $source = $data['source'] ?? '';
-        $enabled = $data['enabled'] ?? false;
-        $adminId = $_SESSION['admin_user_id'] ?? null;
+    try {
+        $data = json_decode(file_get_contents('php://input'), true);
         
-        try {
-            $stmt = $pdo->prepare("
-                INSERT INTO integration_settings (source, enabled, updated_at)
-                VALUES (?, ?, NOW())
-                ON DUPLICATE KEY UPDATE enabled = ?, updated_at = NOW()
-            ");
-            $stmt->execute([$source, $enabled ? 1 : 0, $enabled ? 1 : 0]);
+        if (isset($data['action']) && $data['action'] === 'toggle') {
+            $source = $data['source'] ?? '';
+            $enabled = $data['enabled'] ?? false;
+            $adminId = $_SESSION['admin_user_id'] ?? null;
             
-            // Log admin activity
-            if ($adminId) {
-                logAdminActivity($adminId, 'toggle_integration', 
-                    ucfirst($source) . " integration " . ($enabled ? 'enabled' : 'disabled'));
+            if ($pdo === null) {
+                throw new Exception('Database connection not available');
             }
             
-            echo json_encode([
-                'success' => true,
-                'message' => 'Integration toggled successfully.'
-            ]);
-        } catch (PDOException $e) {
-            error_log("Toggle Integration Error: " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
-        }
-    } else {
-        // Save settings
-        $syncInterval = $_POST['sync_interval'] ?? 15;
-        $autoPublish = isset($_POST['auto_publish']) ? 1 : 0;
-        $channels = $_POST['channels'] ?? [];
-        $adminId = $_SESSION['admin_user_id'] ?? null;
-        
-        try {
-            $stmt = $pdo->prepare("
-                INSERT INTO warning_settings (sync_interval, auto_publish, notification_channels, updated_at)
-                VALUES (?, ?, ?, NOW())
-                ON DUPLICATE KEY UPDATE sync_interval = ?, auto_publish = ?, notification_channels = ?, updated_at = NOW()
-            ");
-            $channelsStr = is_array($channels) ? implode(',', $channels) : '';
-            $stmt->execute([$syncInterval, $autoPublish, $channelsStr, $syncInterval, $autoPublish, $channelsStr]);
+            try {
+                $stmt = $pdo->prepare("
+                    INSERT INTO integration_settings (source, enabled, updated_at)
+                    VALUES (?, ?, NOW())
+                    ON DUPLICATE KEY UPDATE enabled = ?, updated_at = NOW()
+                ");
+                $stmt->execute([$source, $enabled ? 1 : 0, $enabled ? 1 : 0]);
+                
+                // Log admin activity
+                if ($adminId && function_exists('logAdminActivity')) {
+                    logAdminActivity($adminId, 'toggle_integration', 
+                        ucfirst($source) . " integration " . ($enabled ? 'enabled' : 'disabled'));
+                }
+                
+                ob_clean();
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Integration toggled successfully.'
+                ]);
+            } catch (PDOException $e) {
+                ob_clean();
+                error_log("Toggle Integration Error: " . $e->getMessage());
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
+            }
+        } else {
+            // Save settings
+            $syncInterval = $_POST['sync_interval'] ?? 15;
+            $autoPublish = isset($_POST['auto_publish']) ? 1 : 0;
+            $channels = $_POST['channels'] ?? [];
+            $adminId = $_SESSION['admin_user_id'] ?? null;
             
-            // Log admin activity
-            if ($adminId) {
-                $changes = [
-                    "Sync Interval: {$syncInterval} minutes",
-                    "Auto Publish: " . ($autoPublish ? 'Yes' : 'No'),
-                    "Channels: {$channelsStr}"
-                ];
-                logAdminActivity($adminId, 'update_warning_settings', 'Updated warning settings: ' . implode(', ', $changes));
+            if ($pdo === null) {
+                throw new Exception('Database connection not available');
             }
             
-            echo json_encode([
-                'success' => true,
-                'message' => 'Settings saved successfully.'
-            ]);
-        } catch (PDOException $e) {
-            error_log("Save Settings Error: " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
+            try {
+                $stmt = $pdo->prepare("
+                    INSERT INTO warning_settings (sync_interval, auto_publish, notification_channels, updated_at)
+                    VALUES (?, ?, ?, NOW())
+                    ON DUPLICATE KEY UPDATE sync_interval = ?, auto_publish = ?, notification_channels = ?, updated_at = NOW()
+                ");
+                $channelsStr = is_array($channels) ? implode(',', $channels) : '';
+                $stmt->execute([$syncInterval, $autoPublish, $channelsStr, $syncInterval, $autoPublish, $channelsStr]);
+                
+                // Log admin activity
+                if ($adminId && function_exists('logAdminActivity')) {
+                    $changes = [
+                        "Sync Interval: {$syncInterval} minutes",
+                        "Auto Publish: " . ($autoPublish ? 'Yes' : 'No'),
+                        "Channels: {$channelsStr}"
+                    ];
+                    logAdminActivity($adminId, 'update_warning_settings', 'Updated warning settings: ' . implode(', ', $changes));
+                }
+                
+                ob_clean();
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Settings saved successfully.'
+                ]);
+            } catch (PDOException $e) {
+                ob_clean();
+                error_log("Save Settings Error: " . $e->getMessage());
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
+            }
         }
+    } catch (Exception $e) {
+        ob_clean();
+        error_log("POST Request Error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Request error: ' . $e->getMessage()]);
     }
 } elseif ($action === 'status') {
     try {
+        // Check database connection first
+        if ($pdo === null) {
+            throw new Exception('Database connection not available');
+        }
+        
         $stmt = $pdo->query("SELECT source, enabled FROM integration_settings");
         $settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
         
@@ -89,20 +131,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         try {
             // Check secure config file first (most reliable)
-            require_once 'secure-api-config.php';
-            $secureApiKey = getGeminiApiKey();
+            $secureConfigPath = __DIR__ . '/secure-api-config.php';
+            $secureApiKey = null;
+            if (file_exists($secureConfigPath)) {
+                require_once $secureConfigPath;
+                if (function_exists('getGeminiApiKey')) {
+                    try {
+                        $secureApiKey = getGeminiApiKey();
+                    } catch (Exception $keyEx) {
+                        error_log("Error getting Gemini API key: " . $keyEx->getMessage());
+                        $secureApiKey = null;
+                    }
+                }
+            }
             
             // Check AI warning settings table
             try {
                 $aiStmt = $pdo->query("SELECT ai_enabled, gemini_api_key FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
                 $aiSettings = $aiStmt->fetch(PDO::FETCH_ASSOC);
             } catch (PDOException $e) {
-                // Table might not exist yet
+                // Table might not exist yet - this is okay
                 $aiSettings = null;
+                error_log("AI warning settings table check: " . $e->getMessage());
             }
             
             if ($aiSettings) {
-                $geminiEnabled = $aiSettings['ai_enabled'] == 1;
+                $geminiEnabled = isset($aiSettings['ai_enabled']) && $aiSettings['ai_enabled'] == 1;
                 // Check if API key is set in either table or secure config
                 $dbApiKey = !empty($aiSettings['gemini_api_key']) ? $aiSettings['gemini_api_key'] : null;
                 $geminiApiKeySet = !empty($dbApiKey) || !empty($secureApiKey);
@@ -125,15 +179,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } catch (Exception $e) {
             // Fallback: check secure config only
-            if (file_exists(__DIR__ . '/secure-api-config.php')) {
-                require_once 'secure-api-config.php';
-                $secureApiKey = getGeminiApiKey();
-                if (!empty($secureApiKey)) {
-                    $geminiApiKeySet = true;
-                    $geminiStatusMessage = 'API Key Found - Configure Settings';
+            error_log("Gemini status check error: " . $e->getMessage());
+            $secureConfigPath = __DIR__ . '/secure-api-config.php';
+            if (file_exists($secureConfigPath)) {
+                try {
+                    require_once $secureConfigPath;
+                    if (function_exists('getGeminiApiKey')) {
+                        $secureApiKey = getGeminiApiKey();
+                        if (!empty($secureApiKey)) {
+                            $geminiApiKeySet = true;
+                            $geminiStatusMessage = 'API Key Found - Configure Settings';
+                        }
+                    }
+                } catch (Exception $ex) {
+                    error_log("Fallback Gemini key check error: " . $ex->getMessage());
                 }
             }
         }
+        
+        // Clear any unexpected output before JSON
+        ob_clean();
         
         echo json_encode([
             'success' => true,
@@ -146,11 +211,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]
         ]);
     } catch (PDOException $e) {
+        ob_clean();
         error_log("Get Status Error: " . $e->getMessage());
+        http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
+    } catch (Exception $e) {
+        ob_clean();
+        error_log("Get Status Error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Error occurred: ' . $e->getMessage()]);
     }
 } elseif ($action === 'warnings') {
     try {
+        if ($pdo === null) {
+            throw new Exception('Database connection not available');
+        }
+        
         $stmt = $pdo->query("
             SELECT id, source, type, title, severity, status, received_at
             FROM automated_warnings
@@ -159,19 +235,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ");
         $warnings = $stmt->fetchAll();
         
+        ob_clean();
         echo json_encode([
             'success' => true,
             'warnings' => $warnings
         ]);
     } catch (PDOException $e) {
+        ob_clean();
         error_log("Get Warnings Error: " . $e->getMessage());
+        http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
+    } catch (Exception $e) {
+        ob_clean();
+        error_log("Get Warnings Error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Error occurred: ' . $e->getMessage()]);
     }
 } elseif ($action === 'getSettings') {
     try {
+        if ($pdo === null) {
+            throw new Exception('Database connection not available');
+        }
+        
         $stmt = $pdo->query("SELECT * FROM warning_settings ORDER BY id DESC LIMIT 1");
         $settings = $stmt->fetch(PDO::FETCH_ASSOC);
         
+        ob_clean();
         if (!$settings) {
             // Return default settings
             echo json_encode([
@@ -186,11 +275,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => true, 'settings' => $settings]);
         }
     } catch (PDOException $e) {
+        ob_clean();
         error_log("Get Settings Error: " . $e->getMessage());
+        http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
+    } catch (Exception $e) {
+        ob_clean();
+        error_log("Get Settings Error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Error occurred: ' . $e->getMessage()]);
     }
 } else {
+    ob_clean();
+    http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Invalid action.']);
 }
+
+// End output buffering and send output
+ob_end_flush();
 ?>
 

@@ -13,9 +13,15 @@ function getGeminiApiKey() {
     // Priority 1: Secure config file (most secure, not in Git)
     $secureConfigFile = __DIR__ . '/../../USERS/api/config.local.php';
     if (file_exists($secureConfigFile)) {
-        $secureConfig = require $secureConfigFile;
-        if (!empty($secureConfig['AI_API_KEY'])) {
-            return $secureConfig['AI_API_KEY'];
+        try {
+            $secureConfig = require $secureConfigFile;
+            if (is_array($secureConfig) && !empty($secureConfig['AI_API_KEY'])) {
+                return $secureConfig['AI_API_KEY'];
+            }
+        } catch (Exception $e) {
+            error_log("Error loading secure config file: " . $e->getMessage());
+        } catch (Error $e) {
+            error_log("Fatal error loading secure config file: " . $e->getMessage());
         }
     }
     
@@ -54,8 +60,16 @@ function getGeminiApiKey() {
 function getGeminiModel() {
     $secureConfigFile = __DIR__ . '/../../USERS/api/config.local.php';
     if (file_exists($secureConfigFile)) {
-        $secureConfig = require $secureConfigFile;
-        return $secureConfig['GEMINI_MODEL'] ?? 'gemini-2.5-flash';
+        try {
+            $secureConfig = require $secureConfigFile;
+            if (is_array($secureConfig) && isset($secureConfig['GEMINI_MODEL'])) {
+                return $secureConfig['GEMINI_MODEL'];
+            }
+        } catch (Exception $e) {
+            error_log("Error loading secure config file for model: " . $e->getMessage());
+        } catch (Error $e) {
+            error_log("Fatal error loading secure config file for model: " . $e->getMessage());
+        }
     }
     return 'gemini-2.5-flash';
 }
