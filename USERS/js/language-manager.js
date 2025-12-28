@@ -14,14 +14,14 @@ class LanguageManager {
     }
     
     async init() {
-        // Detect device language first
+        // Load languages from server first (needed for device language matching)
+        await this.loadLanguages();
+        
+        // Detect device language (will use browser fallback if API fails)
         await this.detectDeviceLanguage();
         
         // Load user preference
         await this.loadUserPreference();
-        
-        // Load languages from server
-        await this.loadLanguages();
         
         // Start real-time updates
         this.startRealTimeUpdates();
@@ -33,8 +33,13 @@ class LanguageManager {
     async detectDeviceLanguage() {
         try {
             // Determine correct API path based on context
-            const apiPath = this.getApiPath('languages.php?action=detect');
-            const response = await fetch(apiPath);
+            const apiPath = this.getApiPath('api/languages.php?action=detect');
+            const response = await fetch(apiPath, {
+                cache: 'no-cache',
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
+            });
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -59,12 +64,25 @@ class LanguageManager {
                 return this.deviceLanguage;
             }
         } catch (error) {
-            console.error('Error detecting device language:', error);
+            // Silently fall back to browser detection - this is expected if API is unavailable
+            console.log('Using browser language detection (API unavailable)');
         }
         
-        // Fallback: detect from browser
+        // Fallback: detect from browser (always works)
         const browserLang = navigator.language || navigator.userLanguage || 'en';
         this.deviceLanguage = browserLang.split('-')[0].toLowerCase();
+        
+        // Try to match with supported languages
+        if (this.supportedLanguages.length > 0) {
+            const matched = this.supportedLanguages.find(l => 
+                l.language_code === this.deviceLanguage || 
+                l.language_code.startsWith(this.deviceLanguage)
+            );
+            if (matched) {
+                this.deviceLanguage = matched.language_code;
+            }
+        }
+        
         return this.deviceLanguage;
     }
     

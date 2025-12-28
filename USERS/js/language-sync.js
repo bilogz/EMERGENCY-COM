@@ -151,13 +151,27 @@ class LanguageSync {
     getApiPath(relativePath) {
         // Check if we're in root context (index.php) or USERS folder
         const currentPath = window.location.pathname;
-        const isRootContext = !currentPath.includes('/USERS/') && currentPath.includes('/index.php');
+        const currentUrl = window.location.href;
         
-        if (isRootContext) {
+        // Check if we're accessing from root (index.php) or from USERS folder
+        const isRootContext = currentPath === '/index.php' || 
+                              currentPath === '/EMERGENCY-COM/index.php' ||
+                              currentPath.endsWith('/index.php') && !currentPath.includes('/USERS/');
+        
+        // Also check if URL contains /USERS/ in path
+        const isUsersContext = currentPath.includes('/USERS/') || currentUrl.includes('/USERS/');
+        
+        if (isRootContext && !isUsersContext) {
             // From root, API is at USERS/api/
-            return relativePath.replace('api/', 'USERS/api/');
+            if (relativePath.startsWith('api/')) {
+                return 'USERS/' + relativePath;
+            }
+            return relativePath;
         } else {
-            // From USERS folder, API is at api/
+            // From USERS folder, API is at api/ (relative)
+            if (relativePath.startsWith('USERS/api/')) {
+                return relativePath.replace('USERS/', '');
+            }
             return relativePath;
         }
     }
