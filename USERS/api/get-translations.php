@@ -1,14 +1,14 @@
 <?php
 /**
- * Get Translations API - Simplified Version
- * Uses local LibreTranslate instance for all languages
+ * Get Translations API - AI-Powered Version
+ * Uses AI (OpenAI/Gemini/Claude/Groq) for high-quality translations
  */
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate, max-age=0');
 
 require_once '../../ADMIN/api/db_connect.php';
-require_once 'translation-config.php';
+require_once 'ai-translation-config.php';
 
 $languageCode = $_GET['lang'] ?? 'en';
 
@@ -105,7 +105,7 @@ try {
         // Filipino - use pre-translated
         $translations = $filipinoTranslations;
     } else {
-        // Other languages - auto-translate using LibreTranslate
+        // Other languages - AI translate
         $autoTranslated = true;
         
         foreach ($baseTranslations as $key => $englishText) {
@@ -128,8 +128,8 @@ try {
                 // Use cached translation
                 $translations[$key] = $cached['translated_text'];
             } else {
-                // Translate using LibreTranslate
-                $translatedText = translateWithLibre($englishText, 'en', $languageCode);
+                // Translate using AI
+                $translatedText = translateWithAI($englishText, 'en', $languageCode);
                 $translations[$key] = $translatedText;
                 
                 // Cache the result
@@ -137,12 +137,12 @@ try {
                     $stmt = $pdo->prepare("
                         INSERT INTO translation_cache 
                         (cache_key, source_text, source_lang, target_lang, translated_text, translation_method)
-                        VALUES (?, ?, 'en', ?, ?, 'libretranslate')
+                        VALUES (?, ?, 'en', ?, ?, ?)
                         ON DUPLICATE KEY UPDATE 
                         translated_text = VALUES(translated_text),
                         updated_at = NOW()
                     ");
-                    $stmt->execute([$cacheKey, $englishText, $languageCode, $translatedText]);
+                    $stmt->execute([$cacheKey, $englishText, $languageCode, $translatedText, AI_PROVIDER . '_ai']);
                 }
             }
         }
@@ -156,7 +156,8 @@ try {
         'native_name' => $language['native_name'] ?? '',
         'translations' => $translations,
         'auto_translated' => $autoTranslated,
-        'note' => $autoTranslated ? 'Automatically translated using LibreTranslate AI' : null
+        'ai_provider' => $autoTranslated ? AI_PROVIDER : null,
+        'note' => $autoTranslated ? 'Automatically translated using ' . strtoupper(AI_PROVIDER) . ' AI' : null
     ]);
     
 } catch (Exception $e) {

@@ -1,0 +1,14 @@
+# Translation API Keys (Sensitive)
+USERS/api/.env.translation
+USERS/api/config.local.php
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# API Keys
+*api-key*
+*apikey*
+*secret*
+
