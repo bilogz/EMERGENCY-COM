@@ -66,24 +66,13 @@ $assetBase = '../ADMIN/header/';
                                 <input type="tel" id="phone" name="phone" pattern="[0-9]{10}" maxlength="10" placeholder="9XXXXXXXXX" title="Enter 10 digits without spaces" required autocomplete="tel">
                             </div>
                         </div>
-                        <div class="form-group form-group-half">
-                            <div>
-                                <label for="district">District</label>
-                                <select id="district" name="district" required>
-                                    <option value="" disabled selected>Select district</option>
-                                    <option value="district1">District 1</option>
-                                    <option value="district2">District 2</option>
-                                    <option value="district3">District 3</option>
-                                    <option value="district4">District 4</option>
-                                    <option value="district5">District 5</option>
-                                    <option value="district6">District 6</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="barangay">Barangay</label>
-                                <input list="barangayList" id="barangay" name="barangay" placeholder="Select Barangay" required>
-                                <datalist id="barangayList"></datalist>
-                            </div>
+                        <div class="form-group">
+                            <label for="barangay">
+                                <i class="fas fa-map-marker-alt"></i> Barangay (Quezon City)
+                            </label>
+                            <input type="text" id="barangay" name="barangay" placeholder="Type to search barangay..." required autocomplete="off">
+                            <div id="barangaySuggestions" class="suggestions-dropdown" style="display: none;"></div>
+                            <small class="form-hint">Start typing to search for your barangay</small>
                         </div>
                         <div class="form-group">
                             <label for="house_number">House / Unit No.</label>
@@ -107,6 +96,19 @@ $assetBase = '../ADMIN/header/';
                                     <i class="fas fa-spinner fa-spin"></i>
                                 </span>
                             </button>
+                        </div>
+
+                        <!-- Google OAuth Sign Up -->
+                        <div class="auth-divider">
+                            <span>OR</span>
+                        </div>
+                        <button type="button" id="googleSignupBtn" class="btn btn-google">
+                            <i class="fab fa-google"></i>
+                            <span>Sign Up with Google</span>
+                        </button>
+
+                        <div class="auth-switch">
+                            <span>Already have an account?</span>
                             <a href="login.php" class="btn btn-secondary login-btn">
                                 <i class="fas fa-sign-in-alt"></i>
                                 <span>Login</span>
@@ -170,31 +172,154 @@ $assetBase = '../ADMIN/header/';
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
+    <!-- Google Sign-In API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
-        (function () {
-            const districtBarangays = {
-                district1: ["Vasra","Bagong Pag-asa","Sto. Cristo","Project 6","Ramon Magsaysay","Alicia","Bahay Toro","Katipunan","San Antonio","Veterans Village","Bungad","Phil-Am","West Triangle","Sta. Cruz","Nayong Kanluran","Paltok","Paraiso","Mariblo","Damayan","Del Monte","Masambong","Talayan","Sto. Domingo","Siena","St. Peter","San Jose","Manresa","Damar","Pag-ibig sa Nayon","Balingasa","Sta. Teresita","San Isidro Labrador","Paang Bundok","Salvacion","N.S Amoranto","Maharlika","Lourdes"],
-                district2: ["Bagong Silangan","Batasan Hills","Commonwealth","Holy Spirit","Payatas"],
-                district3: ["Silangan","Socorro","E. Rodriguez","West Kamias","East Kamias","Quirino 2-A","Quirino 2-B","Quirino 2-C","Quirino 3-A","Claro (Quirino 3-B)","Duyan-Duyan","Amihan","Matandang Balara","Pansol","Loyola Heights","San Roque","Mangga","Masagana","Villa Maria Clara","Bayanihan","Camp Aguinaldo","White Plains","Libis","Ugong Norte","Bagumbayan","Blue Ridge A","Blue Ridge B","St. Ignatius","Milagrosa","Escopa I","Escopa II","Escopa III","Escopa IV","Marilag","Bagumbuhay","Tagumpay","Dioquino Zobel"],
-                district4: ["Sacred Heart","Laging Handa","Obrero","Paligsahan","Roxas","Kamuning","South Triangle","Pinagkaisahan","Immaculate Concepcion","San Martin De Porres","Kaunlaran","Bagong Lipunan ng Crame","Horseshoe","Valencia","Tatalon","Kalusugan","Kristong Hari","Damayang Lagi","Mariana","Doña Imelda","Santol","Sto. Niño","San Isidro Galas","Doña Aurora","Don Manuel","Doña Josefa","UP Village","Old Capitol Site","UP Campus","San Vicente","Teachers Village East","Teachers Village West","Central","Pinyahan","Malaya","Sikatuna Village","Botocan","Krus Na Ligas"],
-                district5: ["Bagbag","Capri","Greater Lagro","Gulod","Kaligayahan","Nagkaisang Nayon","North Fairview","Novaliches Proper","Pasong Putik Proper","San Agustin","San Bartolome","Sta. Lucia","Sta. Monica","Fairview"],
-                district6: ["Apolonio Samson","Baesa","Balon Bato","Culiat","New Era","Pasong Tamo","Sangandaan","Tandang Sora","Unang Sigaw","Sauyo","Talipapa"]
-            };
+        // Google OAuth Sign Up
+        let googleClientId = null;
+        fetch('api/get-google-config.php')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.client_id) {
+                    googleClientId = data.client_id;
+                    initializeGoogleSignUp();
+                }
+            })
+            .catch(err => console.error('Failed to load Google config:', err));
 
-            const districtSelect = document.getElementById('district');
-            const barangayDatalist = document.getElementById('barangayList');
+        function initializeGoogleSignUp() {
+            if (!googleClientId) return;
 
-            function renderBarangays(key) {
-                const barangays = districtBarangays[key] || [];
-                barangayDatalist.innerHTML = barangays.map(name => `<option value="${name}"></option>`).join('');
-            }
-
-            if (districtSelect) {
-                districtSelect.addEventListener('change', function () {
-                    renderBarangays(this.value);
+            const googleSignupBtn = document.getElementById('googleSignupBtn');
+            if (googleSignupBtn) {
+                googleSignupBtn.addEventListener('click', function() {
+                    google.accounts.oauth2.initTokenClient({
+                        client_id: googleClientId,
+                        scope: 'email profile',
+                        callback: handleGoogleTokenResponse
+                    }).requestAccessToken();
                 });
-                // Preload first district
-                renderBarangays(districtSelect.value || 'district1');
+            }
+        }
+
+        function handleGoogleTokenResponse(tokenResponse) {
+            fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                headers: {
+                    'Authorization': 'Bearer ' + tokenResponse.access_token
+                }
+            })
+            .then(res => res.json())
+            .then(userInfo => {
+                verifyGoogleUser(userInfo);
+            })
+            .catch(err => {
+                console.error('Google token error:', err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Authentication Error',
+                    text: 'Failed to authenticate with Google. Please try again.'
+                });
+            });
+        }
+
+        async function verifyGoogleUser(userInfo) {
+            try {
+                const response = await fetch('api/google-oauth.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'verify',
+                        user_info: userInfo
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: data.is_new_user ? 'Account Created!' : 'Login Successful!',
+                        text: 'Welcome, ' + data.username,
+                        showConfirmButton: false,
+                        timer: 1500
+                    }).then(() => {
+                        window.location.href = '../index.php';
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.message || 'Failed to authenticate with Google.'
+                    });
+                }
+            } catch (error) {
+                console.error('Google OAuth error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Connection Error',
+                    text: 'Please check your internet connection and try again.'
+                });
+            }
+        }
+    </script>
+    <script>
+        // Barangay Autocomplete
+        (function () {
+            let barangays = [];
+            const barangayInput = document.getElementById('barangay');
+            const suggestionsDiv = document.getElementById('barangaySuggestions');
+            let selectedBarangay = null;
+
+            // Load barangays from API
+            fetch('api/get-barangays.php')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.barangays) {
+                        barangays = data.barangays;
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load barangays:', err);
+                });
+
+            if (barangayInput && suggestionsDiv) {
+                barangayInput.addEventListener('input', function() {
+                    const query = this.value.trim().toLowerCase();
+                    suggestionsDiv.innerHTML = '';
+                    suggestionsDiv.style.display = 'none';
+
+                    if (query.length < 2) {
+                        return;
+                    }
+
+                    const matches = barangays.filter(b => 
+                        b.toLowerCase().includes(query)
+                    ).slice(0, 10);
+
+                    if (matches.length > 0) {
+                        matches.forEach(barangay => {
+                            const item = document.createElement('div');
+                            item.className = 'suggestion-item';
+                            item.textContent = barangay;
+                            item.addEventListener('click', function() {
+                                barangayInput.value = barangay;
+                                selectedBarangay = barangay;
+                                suggestionsDiv.style.display = 'none';
+                            });
+                            suggestionsDiv.appendChild(item);
+                        });
+                        suggestionsDiv.style.display = 'block';
+                    }
+                });
+
+                // Hide suggestions when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!barangayInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                        suggestionsDiv.style.display = 'none';
+                    }
+                });
             }
         })();
     </script>
@@ -252,14 +377,30 @@ $assetBase = '../ADMIN/header/';
             const email = document.getElementById('email').value.trim();
             const phone = document.getElementById('phone').value.trim();
             const nationality = document.getElementById('nationality').value.trim();
-            const district = document.getElementById('district').value.trim();
             const barangay = document.getElementById('barangay').value.trim();
             const houseNumber = document.getElementById('house_number').value.trim();
             const street = document.getElementById('street').value.trim();
             
             // Validation
-            if (!fullName || !email || !phone || !nationality || !district || !barangay || !houseNumber || !street) {
+            if (!fullName || !email || !phone || !nationality || !barangay || !houseNumber || !street) {
                 showError('Please fill out all required fields.');
+                return;
+            }
+            
+            // Validate barangay is from Quezon City list
+            const barangayLower = barangay.toLowerCase();
+            const isValidBarangay = await fetch('api/get-barangays.php')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.barangays) {
+                        return data.barangays.some(b => b.toLowerCase() === barangayLower);
+                    }
+                    return true; // Allow if API fails
+                })
+                .catch(() => true); // Allow if API fails
+            
+            if (!isValidBarangay) {
+                showError('Please select a valid Quezon City barangay from the list.');
                 return;
             }
             
@@ -293,7 +434,6 @@ $assetBase = '../ADMIN/header/';
                         email: email,
                         phone: phoneWithPrefix,
                         nationality: nationality,
-                        district: district,
                         barangay: barangay,
                         house_number: houseNumber,
                         street: street

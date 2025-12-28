@@ -47,7 +47,6 @@ $name = trim($data['name']);
 $email = trim($data['email']);
 $phone = trim($data['phone']);
 $nationality = trim($data['nationality'] ?? '');
-$district = trim($data['district'] ?? '');
 $barangay = trim($data['barangay']);
 $houseNumber = trim($data['house_number']);
 $street = trim($data['street']);
@@ -130,19 +129,41 @@ try {
     }
     
     // Insert new user (citizens only - login with phone + CAPTCHA)
-    $insertSql = "INSERT INTO `users` (`name`, `email`, `phone`, `nationality`, `district`, `barangay`, `house_number`, `street`, `address`, `status`, `created_at`) VALUES (:name, :email, :phone, :nationality, :district, :barangay, :house_number, :street, :address, 'active', NOW())";
+    // Check if district column exists
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+                           WHERE TABLE_SCHEMA = DATABASE() 
+                           AND TABLE_NAME = 'users' 
+                           AND COLUMN_NAME = 'district'");
+    $stmt->execute();
+    $hasDistrict = $stmt->fetchColumn() > 0;
+    
+    if ($hasDistrict) {
+        $insertSql = "INSERT INTO `users` (`name`, `email`, `phone`, `nationality`, `district`, `barangay`, `house_number`, `street`, `address`, `status`, `created_at`) VALUES (:name, :email, :phone, :nationality, :district, :barangay, :house_number, :street, :address, 'active', NOW())";
+        $params = [
+            ':name' => $name,
+            ':email' => $email,
+            ':phone' => $phoneNormalized,
+            ':nationality' => $nationality ?: null,
+            ':district' => null,
+            ':barangay' => $barangay,
+            ':house_number' => $houseNumber,
+            ':street' => $street,
+            ':address' => $address
+        ];
+    } else {
+        $insertSql = "INSERT INTO `users` (`name`, `email`, `phone`, `nationality`, `barangay`, `house_number`, `street`, `address`, `status`, `created_at`) VALUES (:name, :email, :phone, :nationality, :barangay, :house_number, :street, :address, 'active', NOW())";
+        $params = [
+            ':name' => $name,
+            ':email' => $email,
+            ':phone' => $phoneNormalized,
+            ':nationality' => $nationality ?: null,
+            ':barangay' => $barangay,
+            ':house_number' => $houseNumber,
+            ':street' => $street,
+            ':address' => $address
+        ];
+    }
     $stmt = $pdo->prepare($insertSql);
-    $params = [
-        ':name' => $name,
-        ':email' => $email,
-        ':phone' => $phoneNormalized,
-        ':nationality' => $nationality ?: null,
-        ':district' => $district ?: null,
-        ':barangay' => $barangay,
-        ':house_number' => $houseNumber,
-        ':street' => $street,
-        ':address' => $address
-    ];
     
     error_log("Attempting to register user: $name ($email) with phone: $phoneNormalized");
     

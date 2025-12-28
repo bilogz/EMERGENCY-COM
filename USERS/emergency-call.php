@@ -101,37 +101,57 @@ $assetBase = '../ADMIN/header/';
                     </div>
                 </section>
 
-                <section id="contacts" class="page-content">
-                    <h2>Quezon City Hotlines</h2>
-                    <p>Official QCDRRMO and Quezon City emergency numbers. Save these for quick access.</p>
+                <section id="contacts" class="page-content emergency-hotlines-section">
+                    <h2>Quezon City Emergency Hotlines</h2>
+                    <p style="font-size: 1.1rem; margin-bottom: 2rem;">Official QCDRRMO and Quezon City emergency numbers. Save these for quick access.</p>
                     <div class="cards-grid">
-                        <div class="card">
-                            <h4>QCDRRMO Landline</h4>
-                            <p>8927-5914 / 8928-4396</p>
-                            <div class="action-buttons">
-                                <a href="tel:0289275914" class="btn btn-primary">Call 8927-5914</a>
-                                <a href="tel:0289284396" class="btn btn-secondary">Call 8928-4396</a>
+                        <div class="card emergency-card">
+                            <div class="emergency-card-header">
+                                <h3>QC HELPLINE</h3>
                             </div>
+                            <div class="emergency-number-large">DIAL 122</div>
+                            <a href="tel:122" class="btn btn-primary">
+                                <i class="fas fa-phone"></i> Call 122
+                            </a>
                         </div>
-                        <div class="card">
-                            <h4>QC Emergency Hotline</h4>
-                            <p>122</p>
-                            <a href="tel:122" class="btn btn-primary">Call 122</a>
-                        </div>
-                        <div class="card">
-                            <h4>Emergency Operations Center (EOC)</h4>
-                            <p>0977-031-2892 (Globe)<br>0947-885-9929 (Smart)<br>8-988-4242 local 7245</p>
+                        <div class="card emergency-card">
+                            <div class="emergency-card-header">
+                                <h3>Emergency Operations Center (EOC)</h3>
+                            </div>
+                            <div class="emergency-numbers">
+                                <p><strong>0977 031 2892</strong> (GLOBE)</p>
+                                <p><strong>0947 885 9929</strong> (SMART)</p>
+                                <p><strong>8988 4242</strong> local 7245</p>
+                            </div>
                             <div class="action-buttons">
                                 <a href="tel:+639770312892" class="btn btn-primary">Call Globe</a>
                                 <a href="tel:+639478859929" class="btn btn-secondary">Call Smart</a>
                                 <a href="tel:0289884242,,7245" class="btn btn-secondary">Call Local 7245</a>
                             </div>
                         </div>
-                        <div class="card">
-                            <h4>EMS / Search and Rescue</h4>
-                            <p>0947-884-7498 (Smart)<br>8928-4396</p>
+                        <div class="card emergency-card">
+                            <div class="emergency-card-header">
+                                <h3>Emergency Medical Services / Urban Search and Rescue</h3>
+                            </div>
+                            <div class="emergency-numbers">
+                                <p><strong>0947 884 7498</strong> (SMART)</p>
+                                <p><strong>8928 4396</strong></p>
+                            </div>
                             <div class="action-buttons">
-                                <a href="tel:+639478847498" class="btn btn-primary">Call EMS (Smart)</a>
+                                <a href="tel:+639478847498" class="btn btn-primary">Call EMS</a>
+                                <a href="tel:0289284396" class="btn btn-secondary">Call 8928-4396</a>
+                            </div>
+                        </div>
+                        <div class="card emergency-card">
+                            <div class="emergency-card-header">
+                                <h3>QCDRRMO Landline</h3>
+                            </div>
+                            <div class="emergency-numbers">
+                                <p><strong>8927-5914</strong></p>
+                                <p><strong>8928-4396</strong></p>
+                            </div>
+                            <div class="action-buttons">
+                                <a href="tel:0289275914" class="btn btn-primary">Call 8927-5914</a>
                                 <a href="tel:0289284396" class="btn btn-secondary">Call 8928-4396</a>
                             </div>
                         </div>

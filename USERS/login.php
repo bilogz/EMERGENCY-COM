@@ -72,6 +72,27 @@ $assetBase = '../ADMIN/header/';
                         </button>
                     </form>
 
+                    <!-- Google OAuth Login -->
+                    <div class="auth-divider">
+                        <span>OR</span>
+                    </div>
+                    <button type="button" id="googleLoginBtn" class="btn btn-google">
+                        <i class="fab fa-google"></i>
+                        <span>Continue with Google</span>
+                    </button>
+
+                    <!-- Guest Login Option -->
+                    <div class="auth-divider">
+                        <span>OR</span>
+                    </div>
+                    <button type="button" id="guestLoginBtn" class="btn btn-secondary guest-login-btn">
+                        <i class="fas fa-user-secret"></i>
+                        <span>Continue as Guest (Emergency Only)</span>
+                    </button>
+                    <p class="guest-notice" style="margin-top: 0.5rem; font-size: 0.85rem; color: #666; text-align: center;">
+                        <i class="fas fa-info-circle"></i> Guest access is limited to emergency calls only
+                    </p>
+
                     <div class="auth-switch">
                         <span>Don't have an account?</span>
                         <a href="signup.php" class="btn btn-secondary sign-up-btn">
@@ -89,6 +110,174 @@ $assetBase = '../ADMIN/header/';
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
+    <!-- Google Sign-In API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        // Load Google OAuth Client ID
+        let googleClientId = null;
+        fetch('api/get-google-config.php')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.client_id) {
+                    googleClientId = data.client_id;
+                    initializeGoogleSignIn();
+                }
+            })
+            .catch(err => console.error('Failed to load Google config:', err));
+
+        function initializeGoogleSignIn() {
+            if (!googleClientId) return;
+
+            const googleLoginBtn = document.getElementById('googleLoginBtn');
+            if (googleLoginBtn) {
+                googleLoginBtn.addEventListener('click', function() {
+                    // Use Google Identity Services
+                    google.accounts.oauth2.initTokenClient({
+                        client_id: googleClientId,
+                        scope: 'email profile',
+                        callback: handleGoogleTokenResponse
+                    }).requestAccessToken();
+                });
+            }
+        }
+
+        function handleGoogleTokenResponse(tokenResponse) {
+            // Exchange access token for user info
+            fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                headers: {
+                    'Authorization': 'Bearer ' + tokenResponse.access_token
+                }
+            })
+            .then(res => res.json())
+            .then(userInfo => {
+                // Send user info to backend for verification
+                verifyGoogleUser(userInfo);
+            })
+            .catch(err => {
+                console.error('Google token error:', err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Authentication Error',
+                    text: 'Failed to authenticate with Google. Please try again.'
+                });
+            });
+        }
+
+        async function verifyGoogleUser(userInfo) {
+            try {
+                const response = await fetch('api/google-oauth.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'verify',
+                        user_info: userInfo
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: data.is_new_user ? 'Account Created!' : 'Login Successful!',
+                        text: 'Welcome, ' + data.username,
+                        showConfirmButton: false,
+                        timer: 1500
+                    }).then(() => {
+                        window.location.href = '../index.php';
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.message || 'Failed to authenticate with Google.'
+                    });
+                }
+            } catch (error) {
+                console.error('Google OAuth error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Connection Error',
+                    text: 'Please check your internet connection and try again.'
+                });
+            }
+        }
+
+        // Guest Login Handler
+        document.addEventListener('DOMContentLoaded', function() {
+            const guestLoginBtn = document.getElementById('guestLoginBtn');
+            if (guestLoginBtn) {
+                guestLoginBtn.addEventListener('click', async function() {
+                    const result = await Swal.fire({
+                        title: 'Continue as Guest?',
+                        html: `
+                            <p>Guest access is limited to emergency calls only.</p>
+                            <p><strong>You will be able to:</strong></p>
+                            <ul style="text-align: left; margin: 1rem 0;">
+                                <li>Access emergency hotlines</li>
+                                <li>Make emergency calls</li>
+                            </ul>
+                            <p><strong>You will NOT be able to:</strong></p>
+                            <ul style="text-align: left; margin: 1rem 0;">
+                                <li>Receive personalized alerts</li>
+                                <li>Access your profile</li>
+                                <li>Manage preferences</li>
+                            </ul>
+                        `,
+                        icon: 'info',
+                        showCancelButton: true,
+                        confirmButtonText: 'Continue as Guest',
+                        cancelButtonText: 'Cancel',
+                        confirmButtonColor: '#28a745'
+                    });
+
+                    if (result.isConfirmed) {
+                        try {
+                            const response = await fetch('api/user-login.php', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    login_type: 'guest',
+                                    agreement_accepted: true
+                                })
+                            });
+
+                            const data = await response.json();
+
+                            if (data.success) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Guest Access Granted',
+                                    text: 'Redirecting to emergency services...',
+                                    timer: 1500,
+                                    showConfirmButton: false
+                                }).then(() => {
+                                    window.location.href = 'emergency-call.php';
+                                });
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Error',
+                                    text: data.message || 'Failed to grant guest access.'
+                                });
+                            }
+                        } catch (error) {
+                            console.error('Guest login error:', error);
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Connection Error',
+                                text: 'Please check your internet connection.'
+                            });
+                        }
+                    }
+                });
+            }
+        });
+    </script>
     <script>
         // Form Elements
         const loginForm = document.getElementById('loginForm');

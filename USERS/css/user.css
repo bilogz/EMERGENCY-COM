@@ -1536,3 +1536,202 @@
     }
 }
 
+/* Google OAuth Button */
+.btn-google {
+    background: #ffffff;
+    color: #4285f4;
+    border: 1px solid #dadce0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn-google:hover {
+    background: #f8f9fa;
+    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.2);
+    transform: translateY(-1px);
+}
+
+.btn-google i {
+    font-size: 1.2rem;
+}
+
+[data-theme="dark"] .btn-google {
+    background: #2d2d2d;
+    color: #8ab4f8;
+    border-color: #5f6368;
+}
+
+[data-theme="dark"] .btn-google:hover {
+    background: #3d3d3d;
+}
+
+/* Auth Divider */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    margin: 1.5rem 0;
+    text-align: center;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--card-border, #e5e7eb);
+}
+
+.auth-divider span {
+    padding: 0 1rem;
+    color: var(--text-muted, #6b7280);
+    font-size: 0.9rem;
+}
+
+/* Emergency Cards */
+.emergency-hotlines-section {
+    margin-top: 2rem;
+}
+
+.emergency-card {
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.emergency-card-header {
+    margin-bottom: 1rem;
+}
+
+.emergency-card-header h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-color);
+    margin: 0;
+}
+
+.emergency-number-large {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #dc3545;
+    margin: 1rem 0;
+    letter-spacing: 0.05em;
+}
+
+.emergency-numbers {
+    margin: 1rem 0;
+    text-align: left;
+}
+
+.emergency-numbers p {
+    margin: 0.5rem 0;
+    font-size: 1rem;
+    color: var(--text-color);
+}
+
+.emergency-numbers strong {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+.emergency-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+}
+
+.guest-login-btn {
+    width: 100%;
+    max-width: 400px;
+}
+
+.guest-notice {
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-top: 1rem;
+}
+
+.guest-notice a {
+    color: var(--primary-color, #8e44ad);
+    text-decoration: underline;
+}
+
+/* Barangay Suggestions Dropdown */
+.suggestions-dropdown {
+    position: absolute;
+    z-index: 1000;
+    background: var(--card-bg, #ffffff);
+    border: 1px solid var(--card-border, #e5e7eb);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 0.25rem;
+    width: 100%;
+}
+
+.suggestion-item {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--card-border, #e5e7eb);
+    transition: background 0.2s ease;
+}
+
+.suggestion-item:hover {
+    background: var(--primary-color, #8e44ad);
+    color: #ffffff;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.form-group {
+    position: relative;
+}
+
+/* APK Download Button */
+.app-download-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 2rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff;
+    text-decoration: none;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.app-download-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    color: #ffffff;
+}
+
+.app-download-btn i {
+    font-size: 1.5rem;
+}
+
+.app-btn-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.app-btn-large {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.app-btn-small {
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
