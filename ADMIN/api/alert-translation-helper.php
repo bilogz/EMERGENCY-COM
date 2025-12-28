@@ -116,24 +116,52 @@ class AlertTranslationHelper {
         }
         
         // Check if translation exists
-        $stmt = $this->pdo->prepare("
-            SELECT title, message, translation_method, ai_model
-            FROM alert_translations
-            WHERE alert_id = ? AND target_language = ? AND status = 'active'
-            ORDER BY created_at DESC
-            LIMIT 1
-        ");
-        $stmt->execute([$alertId, $targetLanguage]);
-        $translation = $stmt->fetch();
-        
-        if ($translation) {
-            return [
-                'title' => $translation['title'],
-                'message' => $translation['message'],
-                'language' => $targetLanguage,
-                'method' => $translation['translation_method'],
-                'ai_model' => $translation['ai_model']
-            ];
+        // Try both column name formats for compatibility
+        try {
+            $stmt = $this->pdo->prepare("
+                SELECT translated_title, translated_content, translation_method, ai_model
+                FROM alert_translations
+                WHERE alert_id = ? AND target_language = ? AND status = 'active'
+                ORDER BY translated_at DESC, created_at DESC
+                LIMIT 1
+            ");
+            $stmt->execute([$alertId, $targetLanguage]);
+            $translation = $stmt->fetch();
+            
+            if ($translation && isset($translation['translated_title'])) {
+                return [
+                    'title' => $translation['translated_title'],
+                    'message' => $translation['translated_content'],
+                    'language' => $targetLanguage,
+                    'method' => $translation['translation_method'] ?? 'manual',
+                    'ai_model' => $translation['ai_model'] ?? null
+                ];
+            }
+        } catch (PDOException $e) {
+            // Try alternative column names (for backward compatibility)
+            try {
+                $stmt = $this->pdo->prepare("
+                    SELECT title, message, translation_method, ai_model
+                    FROM alert_translations
+                    WHERE alert_id = ? AND target_language = ? AND status = 'active'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ");
+                $stmt->execute([$alertId, $targetLanguage]);
+                $translation = $stmt->fetch();
+                
+                if ($translation && isset($translation['title'])) {
+                    return [
+                        'title' => $translation['title'],
+                        'message' => $translation['message'],
+                        'language' => $targetLanguage,
+                        'method' => $translation['translation_method'] ?? 'manual',
+                        'ai_model' => $translation['ai_model'] ?? null
+                    ];
+                }
+            } catch (PDOException $e2) {
+                error_log("Error fetching translation: " . $e2->getMessage());
+            }
         }
         
         // Translation doesn't exist - try to auto-translate
@@ -180,17 +208,26 @@ class AlertTranslationHelper {
             return $original;
         }
         
-        // Check if language supports AI translation
-        $stmt = $this->pdo->prepare("
-            SELECT is_ai_supported FROM supported_languages 
-            WHERE language_code = ? AND is_active = 1
-        ");
-        $stmt->execute([$targetLanguage]);
-        $lang = $stmt->fetch();
-        
-        if (!$lang || !$lang['is_ai_supported']) {
-            // Language doesn't support AI translation
-            return $original;
+        // Check if language exists in supported_languages table (optional check)
+        // If table doesn't exist or check fails, proceed anyway (AI can translate any language)
+        try {
+            $stmt = $this->pdo->prepare("
+                SELECT is_ai_supported FROM supported_languages 
+                WHERE language_code = ? AND is_active = 1
+            ");
+            $stmt->execute([$targetLanguage]);
+            $lang = $stmt->fetch();
+            
+            // If language exists in table and is_ai_supported is explicitly 0, skip
+            if ($lang && isset($lang['is_ai_supported']) && $lang['is_ai_supported'] == 0) {
+                // Language explicitly marked as not AI-supported
+                return $original;
+            }
+            // Otherwise proceed with AI translation (table doesn't exist, or is_ai_supported is 1/null)
+        } catch (PDOException $e) {
+            // Table might not exist or column might not exist - proceed anyway
+            error_log("Note: Could not check supported_languages table: " . $e->getMessage());
+            // Continue with AI translation
         }
         
         try {
@@ -243,21 +280,22 @@ class AlertTranslationHelper {
      */
     private function saveTranslation($alertId, $targetLanguage, $title, $message, $method = 'ai', $adminId = null) {
         try {
+            // Try with standard column names first
             $stmt = $this->pdo->prepare("
                 INSERT INTO alert_translations (
                     alert_id,
                     target_language,
-                    title,
-                    message,
+                    translated_title,
+                    translated_content,
                     translation_method,
                     ai_model,
                     translated_by_admin_id,
                     status,
-                    created_at
+                    translated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NOW())
                 ON DUPLICATE KEY UPDATE
-                    title = VALUES(title),
-                    message = VALUES(message),
+                    translated_title = VALUES(translated_title),
+                    translated_content = VALUES(translated_content),
                     translation_method = VALUES(translation_method),
                     ai_model = VALUES(ai_model),
                     updated_at = NOW()
@@ -277,8 +315,45 @@ class AlertTranslationHelper {
             
             return true;
         } catch (PDOException $e) {
-            error_log("Error saving translation: " . $e->getMessage());
-            return false;
+            // Try alternative column names for backward compatibility
+            try {
+                $stmt = $this->pdo->prepare("
+                    INSERT INTO alert_translations (
+                        alert_id,
+                        target_language,
+                        title,
+                        message,
+                        translation_method,
+                        ai_model,
+                        translated_by_admin_id,
+                        status,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NOW())
+                    ON DUPLICATE KEY UPDATE
+                        title = VALUES(title),
+                        message = VALUES(message),
+                        translation_method = VALUES(translation_method),
+                        ai_model = VALUES(ai_model),
+                        updated_at = NOW()
+                ");
+                
+                $aiModel = ($method === 'ai') ? 'gemini-2.5-flash' : null;
+                
+                $stmt->execute([
+                    $alertId,
+                    $targetLanguage,
+                    $title,
+                    $message,
+                    $method,
+                    $aiModel,
+                    $adminId
+                ]);
+                
+                return true;
+            } catch (PDOException $e2) {
+                error_log("Error saving translation: " . $e2->getMessage());
+                return false;
+            }
         }
     }
     

@@ -339,16 +339,110 @@ async function applyTranslations() {
 // Export for global access
 window.applyTranslations = applyTranslations;
 
+/**
+ * Auto-detect browser/device language preference
+ */
+function detectBrowserLanguage() {
+    // Check if user has already set a language preference
+    if (localStorage.getItem('user_language_set') === 'true') {
+        return null; // User has explicitly set language, don't override
+    }
+    
+    // Try to get from browser
+    const browserLang = navigator.language || navigator.userLanguage || 'en';
+    const langCode = browserLang.split('-')[0].toLowerCase();
+    
+    // Map common browser language codes to our supported languages
+    const langMap = {
+        'en': 'en',
+        'fil': 'fil', 'tl': 'fil',
+        'es': 'es',
+        'fr': 'fr',
+        'de': 'de',
+        'it': 'it',
+        'pt': 'pt',
+        'zh': 'zh', 'zh-cn': 'zh', 'zh-tw': 'zh',
+        'ja': 'ja',
+        'ko': 'ko',
+        'ar': 'ar',
+        'hi': 'hi',
+        'th': 'th',
+        'vi': 'vi',
+        'id': 'id',
+        'ms': 'ms',
+        'ru': 'ru',
+        'tr': 'tr'
+    };
+    
+    const detectedLang = langMap[langCode] || langMap[browserLang.toLowerCase()] || 'en';
+    
+    if (detectedLang !== 'en') {
+        console.log(`🌍 Auto-detected browser language: ${browserLang} -> ${detectedLang}`);
+        return detectedLang;
+    }
+    
+    return null;
+}
+
+/**
+ * Auto-detect and set language preference from user profile or browser
+ */
+async function autoDetectAndSetLanguage() {
+    // First, try to get from user profile (if logged in)
+    try {
+        const apiPath = getApiPath('api/user-language.php?action=get');
+        const response = await fetch(apiPath);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.language && data.language !== 'en') {
+                console.log(`✓ Using user profile language: ${data.language}`);
+                setLanguage(data.language);
+                return;
+            }
+        }
+    } catch (error) {
+        console.log('Could not fetch user language preference:', error);
+    }
+    
+    // If no user preference, try browser detection
+    const detectedLang = detectBrowserLanguage();
+    if (detectedLang) {
+        console.log(`✓ Auto-setting language from browser: ${detectedLang}`);
+        setLanguage(detectedLang);
+        
+        // Save to user profile if logged in
+        try {
+            const apiPath = getApiPath('api/user-language.php?action=set');
+            await fetch(apiPath, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ language: detectedLang })
+            });
+        } catch (error) {
+            // Silent fail - preference saved locally anyway
+        }
+    }
+}
+
 // Initialize translations on page load
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🌍 Translation system initializing...');
-    const currentLang = getCurrentLanguage();
-    console.log(`Current language: ${currentLang}`);
-    document.documentElement.setAttribute('data-lang', currentLang);
-    document.documentElement.setAttribute('lang', currentLang);
     
-    // Apply translations immediately
-    applyTranslations();
+    // Auto-detect and set language if not already set
+    const currentLang = getCurrentLanguage();
+    if (currentLang === 'en' && localStorage.getItem('user_language_set') !== 'true') {
+        // Auto-detect language
+        autoDetectAndSetLanguage().then(() => {
+            const newLang = getCurrentLanguage();
+            document.documentElement.setAttribute('data-lang', newLang);
+            document.documentElement.setAttribute('lang', newLang);
+            applyTranslations();
+        });
+    } else {
+        document.documentElement.setAttribute('data-lang', currentLang);
+        document.documentElement.setAttribute('lang', currentLang);
+        applyTranslations();
+    }
     
     // Also apply after a short delay to catch dynamically loaded content
     setTimeout(() => {
