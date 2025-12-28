@@ -19,6 +19,9 @@ $assetBase = '../ADMIN/header/';
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="js/translations.js"></script>
+    <script src="js/language-manager.js"></script>
+    <script src="js/language-selector-enhanced.js"></script>
 </head>
 <body>
     <?php include 'includes/sidebar.php'; ?>

@@ -58,22 +58,43 @@ $current = 'profile.php';
 
                 <section class="page-content">
                     <h2 data-translate="profile.language.title">Language Settings</h2>
-                    <p data-translate="profile.language.desc">Choose your preferred language. This will be used for alerts and interface text where available.</p>
+                    <p data-translate="profile.language.desc">Choose your preferred language. This will be used for alerts and interface text where available. Languages update automatically when new ones are added.</p>
+                    
+                    <div class="info-box" style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem;">
+                        <i class="fas fa-info-circle" style="color: #2196f3;"></i>
+                        <strong>Auto-Detection:</strong> Your device language has been detected. You can change it below or use the language selector icon in the top-right corner.
+                    </div>
+                    
                     <form class="auth-form" id="languageSettingsForm">
                         <div class="form-group">
                             <label data-translate="profile.language.label">Preferred Language</label>
                             <select name="preferred_language" id="preferredLanguageSelect" class="form-control">
-                                <option value="en">English</option>
-                                <option value="fil">Filipino</option>
-                                <option value="ceb">Cebuano</option>
-                                <option value="ilo">Ilocano</option>
-                                <option value="pam">Kapampangan</option>
-                                <option value="bcl">Bicolano</option>
-                                <option value="war">Waray</option>
+                                <option value="">Loading languages...</option>
                             </select>
+                            <small class="form-text" style="margin-top: 0.5rem; color: #666;">
+                                <i class="fas fa-sync-alt"></i> Languages are updated in real-time. New languages will appear automatically.
+                            </small>
                         </div>
-                        <button type="button" class="btn btn-primary" id="saveLanguageBtn" data-translate="profile.language.save">Save Language</button>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="autoDetectLanguage" checked>
+                                <span>Auto-detect device language</span>
+                            </label>
+                            <small class="form-text" style="display: block; margin-top: 0.5rem; color: #666;">
+                                Automatically use your device's language when available
+                            </small>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="saveLanguageBtn" data-translate="profile.language.save">
+                            <i class="fas fa-save"></i> Save Language Settings
+                        </button>
                     </form>
+                    
+                    <div id="languageInfo" style="margin-top: 1.5rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+                        <h3 style="font-size: 14px; margin-bottom: 0.5rem;">Current Language Information</h3>
+                        <div id="currentLanguageInfo" style="font-size: 13px; color: #666;">
+                            Loading...
+                        </div>
+                    </div>
                 </section>
             </div>
         </div>
@@ -85,42 +106,142 @@ $current = 'profile.php';
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
     <script src="js/translations.js"></script>
+    <script src="js/language-manager.js"></script>
+    <script src="js/language-selector-enhanced.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const savedLang = localStorage.getItem('preferredLanguage') || 'en';
+        document.addEventListener('DOMContentLoaded', async function () {
             const selectDropdown = document.getElementById('preferredLanguageSelect');
             const saveBtn = document.getElementById('saveLanguageBtn');
-
-            // Set the selected value in dropdown
-            if (selectDropdown) {
-                selectDropdown.value = savedLang;
+            const autoDetectCheckbox = document.getElementById('autoDetectLanguage');
+            const languageInfo = document.getElementById('currentLanguageInfo');
+            
+            // Wait for language manager to initialize
+            if (typeof window.languageManager === 'undefined') {
+                await new Promise(resolve => {
+                    const checkInterval = setInterval(() => {
+                        if (typeof window.languageManager !== 'undefined') {
+                            clearInterval(checkInterval);
+                            resolve();
+                        }
+                    }, 100);
+                });
             }
-
+            
+            const langManager = window.languageManager;
+            
+            // Load languages into dropdown
+            async function loadLanguagesIntoDropdown() {
+                if (!selectDropdown) return;
+                
+                selectDropdown.innerHTML = '<option value="">Select language...</option>';
+                
+                langManager.supportedLanguages.forEach(lang => {
+                    const option = document.createElement('option');
+                    option.value = lang.language_code;
+                    const displayText = lang.flag_emoji ? `${lang.flag_emoji} ${lang.language_name}` : lang.language_name;
+                    option.textContent = displayText;
+                    if (lang.language_code === langManager.currentLanguage) {
+                        option.selected = true;
+                    }
+                    selectDropdown.appendChild(option);
+                });
+            }
+            
+            // Update language info display
+            function updateLanguageInfo() {
+                if (!languageInfo) return;
+                
+                const currentLang = langManager.currentLanguage;
+                const langInfo = langManager.getLanguageInfo(currentLang);
+                const deviceLang = langManager.deviceLanguage;
+                
+                let infoHTML = `
+                    <strong>Current:</strong> ${langManager.getLanguageDisplay(currentLang)}<br>
+                `;
+                
+                if (langInfo && langInfo.native_name && langInfo.native_name !== langInfo.language_name) {
+                    infoHTML += `<strong>Native Name:</strong> ${langInfo.native_name}<br>`;
+                }
+                
+                if (deviceLang && deviceLang !== currentLang) {
+                    infoHTML += `<strong>Device Language:</strong> ${langManager.getLanguageDisplay(deviceLang)}<br>`;
+                }
+                
+                infoHTML += `<strong>Total Languages:</strong> ${langManager.supportedLanguages.length} available`;
+                
+                languageInfo.innerHTML = infoHTML;
+            }
+            
+            // Load languages
+            await loadLanguagesIntoDropdown();
+            updateLanguageInfo();
+            
+            // Set auto-detect checkbox
+            if (autoDetectCheckbox) {
+                const autoDetectEnabled = localStorage.getItem('auto_detect_language') !== 'false';
+                autoDetectCheckbox.checked = autoDetectEnabled;
+                
+                autoDetectCheckbox.addEventListener('change', function() {
+                    localStorage.setItem('auto_detect_language', this.checked ? 'true' : 'false');
+                });
+            }
+            
+            // Listen for language updates
+            document.addEventListener('languagesUpdated', async () => {
+                await loadLanguagesIntoDropdown();
+                updateLanguageInfo();
+            });
+            
+            // Save language
             if (saveBtn) {
-                saveBtn.addEventListener('click', function () {
+                saveBtn.addEventListener('click', async function () {
                     if (!selectDropdown) return;
                     const lang = selectDropdown.value;
                     
-                    // Use the global setLanguage function if available
-                    if (typeof window.setLanguage === 'function') {
-                        window.setLanguage(lang);
-                    } else {
-                        localStorage.setItem('preferredLanguage', lang);
-                        document.documentElement.setAttribute('data-lang', lang);
-                        if (typeof applyTranslations === 'function') {
-                            applyTranslations();
-                        }
+                    if (!lang) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Please select a language',
+                            text: 'You must select a language before saving.'
+                        });
+                        return;
                     }
                     
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Language updated',
-                        text: 'Your preferred language has been saved.',
-                        timer: 1500,
-                        showConfirmButton: false
-                    });
+                    try {
+                        await langManager.setLanguage(lang);
+                        
+                        // Update auto-detect setting
+                        if (autoDetectCheckbox) {
+                            localStorage.setItem('auto_detect_language', autoDetectCheckbox.checked ? 'true' : 'false');
+                        }
+                        
+                        updateLanguageInfo();
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Language updated',
+                            text: `Your preferred language has been set to ${langManager.getLanguageDisplay(lang)}.`,
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } catch (error) {
+                        console.error('Error saving language:', error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Failed to save language preference. Please try again.'
+                        });
+                    }
                 });
             }
+            
+            // Update info when language changes
+            document.addEventListener('languageChanged', () => {
+                if (selectDropdown) {
+                    selectDropdown.value = langManager.currentLanguage;
+                }
+                updateLanguageInfo();
+            });
         });
     </script>
 </body>
