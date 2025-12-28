@@ -17,6 +17,34 @@ try {
     // Ensure admin_user table exists
     ensureAdminUserTable($pdo);
     
+    // Fix user_id column and foreign key constraint to allow NULL
+    // This fixes the issue where the database schema has user_id as NOT NULL
+    try {
+        // First, try to drop the existing foreign key constraint if it exists
+        $pdo->exec("ALTER TABLE admin_user DROP FOREIGN KEY admin_user_ibfk_1");
+    } catch (PDOException $e) {
+        // Constraint might not exist or have different name, continue
+        // This is expected if the constraint doesn't exist yet
+    }
+    
+    try {
+        // Modify user_id column to allow NULL
+        $pdo->exec("ALTER TABLE admin_user MODIFY COLUMN user_id INT DEFAULT NULL COMMENT 'Optional reference to users table (NULL for standalone admin accounts)'");
+    } catch (PDOException $e) {
+        // Column might already be nullable, continue anyway
+        error_log("Note: Could not alter user_id column: " . $e->getMessage());
+    }
+    
+    try {
+        // Recreate foreign key with ON DELETE SET NULL (allows NULL values)
+        $pdo->exec("ALTER TABLE admin_user ADD CONSTRAINT admin_user_ibfk_1 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL");
+    } catch (PDOException $e) {
+        // Foreign key might already exist, continue anyway
+        if (strpos($e->getMessage(), 'Duplicate key name') === false && strpos($e->getMessage(), 'already exists') === false) {
+            error_log("Note: Could not recreate foreign key: " . $e->getMessage());
+        }
+    }
+    
     // Check authorization - only super_admin can create accounts
     $authCheck = checkAdminAuthorization($pdo);
     
