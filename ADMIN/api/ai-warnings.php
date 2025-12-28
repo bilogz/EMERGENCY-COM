@@ -51,17 +51,23 @@ function getAISettings() {
         echo json_encode([
             'success' => true,
             'settings' => [
+                'gemini_api_key' => '',
                 'ai_enabled' => false,
                 'ai_check_interval' => 30,
                 'wind_threshold' => 60,
                 'rain_threshold' => 20,
                 'earthquake_threshold' => 5.0,
-                'warning_types' => 'flooding,landslide,typhoon,earthquake',
+                'warning_types' => 'heavy_rain,flooding,earthquake,strong_winds,tsunami,landslide,thunderstorm,ash_fall,fire_incident,typhoon',
                 'monitored_areas' => 'Quezon City\nManila\nMakati',
                 'ai_channels' => 'sms,email,pa'
             ]
         ]);
     } else {
+        // Mask API key for security (only show last 4 characters)
+        if (!empty($settings['gemini_api_key'])) {
+            $apiKey = $settings['gemini_api_key'];
+            $settings['gemini_api_key'] = str_repeat('*', max(0, strlen($apiKey) - 4)) . substr($apiKey, -4);
+        }
         echo json_encode(['success' => true, 'settings' => $settings]);
     }
 }
@@ -72,6 +78,7 @@ function saveAISettings() {
     // Create table if not exists
     $pdo->exec("CREATE TABLE IF NOT EXISTS ai_warning_settings (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        gemini_api_key VARCHAR(255) DEFAULT NULL,
         ai_enabled TINYINT(1) DEFAULT 0,
         ai_check_interval INT DEFAULT 30,
         wind_threshold DECIMAL(5,2) DEFAULT 60,
@@ -83,6 +90,7 @@ function saveAISettings() {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     
+    $geminiApiKey = $_POST['gemini_api_key'] ?? '';
     $aiEnabled = isset($_POST['ai_enabled']) ? 1 : 0;
     $aiCheckInterval = intval($_POST['ai_check_interval'] ?? 30);
     $windThreshold = floatval($_POST['wind_threshold'] ?? 60);
@@ -93,11 +101,19 @@ function saveAISettings() {
     $aiChannels = implode(',', $_POST['ai_channels'] ?? []);
     
     // Check if settings exist
-    $stmt = $pdo->query("SELECT id FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+    $stmt = $pdo->query("SELECT id, gemini_api_key FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
     $existing = $stmt->fetch();
     
     if ($existing) {
+        // Only update API key if a new one is provided (not masked)
+        $updateApiKey = $geminiApiKey;
+        if (empty($geminiApiKey) || (strlen($geminiApiKey) <= 4 && strpos($geminiApiKey, '*') !== false)) {
+            // API key is masked or empty, keep existing one
+            $updateApiKey = $existing['gemini_api_key'];
+        }
+        
         $stmt = $pdo->prepare("UPDATE ai_warning_settings SET 
+            gemini_api_key = ?,
             ai_enabled = ?, 
             ai_check_interval = ?, 
             wind_threshold = ?, 
@@ -108,17 +124,17 @@ function saveAISettings() {
             ai_channels = ?
             WHERE id = ?");
         $stmt->execute([
-            $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
+            $updateApiKey, $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
             $earthquakeThreshold, $warningTypes, $monitoredAreas, $aiChannels,
             $existing['id']
         ]);
     } else {
         $stmt = $pdo->prepare("INSERT INTO ai_warning_settings 
-            (ai_enabled, ai_check_interval, wind_threshold, rain_threshold, 
+            (gemini_api_key, ai_enabled, ai_check_interval, wind_threshold, rain_threshold, 
              earthquake_threshold, warning_types, monitored_areas, ai_channels) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
-            $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
+            $geminiApiKey, $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
             $earthquakeThreshold, $warningTypes, $monitoredAreas, $aiChannels
         ]);
     }

@@ -26,46 +26,148 @@ function verifyCSRFToken($token) {
 
 /**
  * Check if current user is authorized to create admin accounts
+ * Only super_admin can create admin accounts
  * @param PDO $pdo Database connection
- * @return array ['authorized' => bool, 'reason' => string]
+ * @return array ['authorized' => bool, 'reason' => string, 'admin_data' => array|null]
  */
 function checkAdminAuthorization($pdo) {
-    // Check if any admin exists in the system
     try {
-        $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM users WHERE user_type = 'admin' AND status = 'active'");
-        $stmt->execute();
-        $result = $stmt->fetch();
-        $adminCount = (int)$result['count'];
-        
-        // If no admins exist, allow creation (initial setup)
-        if ($adminCount === 0) {
-            return ['authorized' => true, 'reason' => 'initial_setup'];
+        // Check if admin_user table exists, if not, check users table (backward compatibility)
+        $tableExists = false;
+        try {
+            $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
+            $tableExists = true;
+        } catch (PDOException $e) {
+            // Table doesn't exist, use users table
         }
         
-        // If admins exist, require logged-in admin
-        if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-            return ['authorized' => false, 'reason' => 'not_logged_in'];
+        if ($tableExists) {
+            // Use admin_user table
+            $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM admin_user WHERE status = 'active'");
+            $stmt->execute();
+            $result = $stmt->fetch();
+            $adminCount = (int)$result['count'];
+            
+            // If no admins exist, allow creation (initial setup)
+            if ($adminCount === 0) {
+                return ['authorized' => true, 'reason' => 'initial_setup', 'admin_data' => null];
+            }
+            
+            // If admins exist, require logged-in super_admin
+            if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+                return ['authorized' => false, 'reason' => 'not_logged_in', 'admin_data' => null];
+            }
+            
+            // Verify the logged-in user is actually a super_admin
+            if (!isset($_SESSION['admin_user_id'])) {
+                return ['authorized' => false, 'reason' => 'invalid_session', 'admin_data' => null];
+            }
+            
+            // Check in admin_user table - session stores admin_user.id
+            $stmt = $pdo->prepare("SELECT id, user_id, name, email, role, status FROM admin_user WHERE id = ? AND status = 'active'");
+            $stmt->execute([$_SESSION['admin_user_id']]);
+            $admin = $stmt->fetch();
+            
+            if (!$admin) {
+                return ['authorized' => false, 'reason' => 'not_admin', 'admin_data' => null];
+            }
+            
+            // Only super_admin can create admin accounts
+            if ($admin['role'] !== 'super_admin') {
+                return ['authorized' => false, 'reason' => 'not_super_admin', 'admin_data' => $admin];
+            }
+            
+            return ['authorized' => true, 'reason' => 'authorized_super_admin', 'admin_data' => $admin];
+        } else {
+            // Fallback to users table (backward compatibility)
+            $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM users WHERE user_type = 'admin' AND status = 'active'");
+            $stmt->execute();
+            $result = $stmt->fetch();
+            $adminCount = (int)$result['count'];
+            
+            // If no admins exist, allow creation (initial setup)
+            if ($adminCount === 0) {
+                return ['authorized' => true, 'reason' => 'initial_setup', 'admin_data' => null];
+            }
+            
+            // If admins exist, require logged-in admin
+            if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+                return ['authorized' => false, 'reason' => 'not_logged_in', 'admin_data' => null];
+            }
+            
+            // Verify the logged-in user is actually an admin in the database
+            if (!isset($_SESSION['admin_user_id'])) {
+                return ['authorized' => false, 'reason' => 'invalid_session', 'admin_data' => null];
+            }
+            
+            $stmt = $pdo->prepare("SELECT id, user_type, status FROM users WHERE id = ? AND user_type = 'admin' AND status = 'active'");
+            $stmt->execute([$_SESSION['admin_user_id']]);
+            $user = $stmt->fetch();
+            
+            if (!$user) {
+                return ['authorized' => false, 'reason' => 'not_admin', 'admin_data' => null];
+            }
+            
+            // For backward compatibility, allow first admin to create accounts
+            // In production, migrate to admin_user table for proper role-based access
+            return ['authorized' => true, 'reason' => 'authorized_admin', 'admin_data' => $user];
         }
-        
-        // Verify the logged-in user is actually an admin in the database
-        if (!isset($_SESSION['admin_user_id'])) {
-            return ['authorized' => false, 'reason' => 'invalid_session'];
-        }
-        
-        $stmt = $pdo->prepare("SELECT id, user_type, status FROM users WHERE id = ? AND user_type = 'admin' AND status = 'active'");
-        $stmt->execute([$_SESSION['admin_user_id']]);
-        $user = $stmt->fetch();
-        
-        if (!$user) {
-            return ['authorized' => false, 'reason' => 'not_admin'];
-        }
-        
-        return ['authorized' => true, 'reason' => 'authorized_admin'];
         
     } catch (PDOException $e) {
         error_log('Admin authorization check error: ' . $e->getMessage());
-        return ['authorized' => false, 'reason' => 'database_error'];
+        return ['authorized' => false, 'reason' => 'database_error', 'admin_data' => null];
     }
+}
+
+/**
+ * Check if admin_user table exists and create it if needed
+ * @param PDO $pdo Database connection
+ * @return bool True if table exists or was created successfully
+ */
+function ensureAdminUserTable($pdo) {
+    try {
+        $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
+        return true; // Table exists
+    } catch (PDOException $e) {
+        // Table doesn't exist, create it
+        try {
+            $sql = file_get_contents(__DIR__ . '/create_admin_user_table.sql');
+            if ($sql) {
+                // Execute only the CREATE TABLE statement
+                $createTableSQL = "CREATE TABLE IF NOT EXISTS admin_user (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT DEFAULT NULL COMMENT 'Optional reference to users table (NULL for standalone admin accounts)',
+                    name VARCHAR(255) NOT NULL COMMENT 'Full name of the admin',
+                    username VARCHAR(100) DEFAULT NULL COMMENT 'Username for login',
+                    email VARCHAR(255) NOT NULL COMMENT 'Email address (unique)',
+                    password VARCHAR(255) NOT NULL COMMENT 'Hashed password',
+                    role VARCHAR(20) DEFAULT 'admin' COMMENT 'super_admin, admin, staff',
+                    status VARCHAR(20) DEFAULT 'pending_approval' COMMENT 'active, inactive, suspended, pending_approval',
+                    phone VARCHAR(20) DEFAULT NULL COMMENT 'Phone number',
+                    created_by INT DEFAULT NULL COMMENT 'ID of admin who created this account',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    last_login DATETIME DEFAULT NULL,
+                    UNIQUE KEY unique_email (email),
+                    UNIQUE KEY unique_username (username),
+                    INDEX idx_user_id (user_id),
+                    INDEX idx_role (role),
+                    INDEX idx_status (status),
+                    INDEX idx_created_by (created_by),
+                    INDEX idx_created_at (created_at),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+                    FOREIGN KEY (created_by) REFERENCES admin_user(id) ON DELETE SET NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+                
+                $pdo->exec($createTableSQL);
+                return true;
+            }
+        } catch (PDOException $e2) {
+            error_log('Failed to create admin_user table: ' . $e2->getMessage());
+            return false;
+        }
+    }
+    return false;
 }
 
 /**

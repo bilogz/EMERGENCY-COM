@@ -36,10 +36,25 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit();
 }
 
-// Verify admin status
+// Verify admin status - check admin_user table
 try {
     $adminId = $_SESSION['admin_user_id'] ?? null;
-    $stmt = $pdo->prepare("SELECT id, user_type, status FROM users WHERE id = ? AND user_type = 'admin' AND status = 'active'");
+    
+    // Check if admin_user table exists
+    $useAdminUserTable = false;
+    try {
+        $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
+        $useAdminUserTable = true;
+    } catch (PDOException $e) {
+        // admin_user table doesn't exist, use users table (backward compatibility)
+    }
+    
+    if ($useAdminUserTable) {
+        $stmt = $pdo->prepare("SELECT id, role, status FROM admin_user WHERE id = ? AND status = 'active'");
+    } else {
+        $stmt = $pdo->prepare("SELECT id, user_type, status FROM users WHERE id = ? AND user_type = 'admin' AND status = 'active'");
+    }
+    
     $stmt->execute([$adminId]);
     $admin = $stmt->fetch();
     
@@ -57,14 +72,32 @@ $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
 try {
+    // Check if admin_user table exists
+    $useAdminUserTable = false;
+    try {
+        $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
+        $useAdminUserTable = true;
+    } catch (PDOException $e) {
+        // admin_user table doesn't exist, use users table (backward compatibility)
+    }
+    
     if ($method === 'GET' && $action === 'list') {
         // List all pending admin approvals
-        $stmt = $pdo->prepare("
-            SELECT id, name, email, status, created_at, updated_at 
-            FROM users 
-            WHERE user_type = 'admin' AND status = 'pending_approval' 
-            ORDER BY created_at DESC
-        ");
+        if ($useAdminUserTable) {
+            $stmt = $pdo->prepare("
+                SELECT id, name, email, role, status, created_at, updated_at 
+                FROM admin_user 
+                WHERE status = 'pending_approval' 
+                ORDER BY created_at DESC
+            ");
+        } else {
+            $stmt = $pdo->prepare("
+                SELECT id, name, email, status, created_at, updated_at 
+                FROM users 
+                WHERE user_type = 'admin' AND status = 'pending_approval' 
+                ORDER BY created_at DESC
+            ");
+        }
         $stmt->execute();
         $pendingAdmins = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
@@ -92,7 +125,11 @@ try {
         }
         
         // Verify the user exists and is pending approval
-        $stmt = $pdo->prepare("SELECT id, name, email, status FROM users WHERE id = ? AND user_type = 'admin' AND status = 'pending_approval'");
+        if ($useAdminUserTable) {
+            $stmt = $pdo->prepare("SELECT id, name, email, status FROM admin_user WHERE id = ? AND status = 'pending_approval'");
+        } else {
+            $stmt = $pdo->prepare("SELECT id, name, email, status FROM users WHERE id = ? AND user_type = 'admin' AND status = 'pending_approval'");
+        }
         $stmt->execute([$userId]);
         $user = $stmt->fetch();
         
@@ -109,8 +146,24 @@ try {
         
         if ($approvalAction === 'approve') {
             // Approve the account
-            $stmt = $pdo->prepare("UPDATE users SET status = 'active', updated_at = NOW() WHERE id = ?");
-            $stmt->execute([$userId]);
+            if ($useAdminUserTable) {
+                // Get user_id first
+                $getUserStmt = $pdo->prepare("SELECT user_id FROM admin_user WHERE id = ?");
+                $getUserStmt->execute([$userId]);
+                $adminUser = $getUserStmt->fetch();
+                
+                $stmt = $pdo->prepare("UPDATE admin_user SET status = 'active', updated_at = NOW() WHERE id = ?");
+                $stmt->execute([$userId]);
+                
+                // Also update users table if linked
+                if ($adminUser && $adminUser['user_id']) {
+                    $updateUserStmt = $pdo->prepare("UPDATE users SET status = 'active', updated_at = NOW() WHERE id = ?");
+                    $updateUserStmt->execute([$adminUser['user_id']]);
+                }
+            } else {
+                $stmt = $pdo->prepare("UPDATE users SET status = 'active', updated_at = NOW() WHERE id = ?");
+                $stmt->execute([$userId]);
+            }
             
             // Log the approval action
             logAdminActivity($adminId, 'approve_admin', "Approved admin account: {$user['name']} ({$user['email']})");
@@ -122,8 +175,24 @@ try {
             ]);
         } elseif ($approvalAction === 'reject') {
             // Reject the account (set to inactive)
-            $stmt = $pdo->prepare("UPDATE users SET status = 'inactive', updated_at = NOW() WHERE id = ?");
-            $stmt->execute([$userId]);
+            if ($useAdminUserTable) {
+                // Get user_id first
+                $getUserStmt = $pdo->prepare("SELECT user_id FROM admin_user WHERE id = ?");
+                $getUserStmt->execute([$userId]);
+                $adminUser = $getUserStmt->fetch();
+                
+                $stmt = $pdo->prepare("UPDATE admin_user SET status = 'inactive', updated_at = NOW() WHERE id = ?");
+                $stmt->execute([$userId]);
+                
+                // Also update users table if linked
+                if ($adminUser && $adminUser['user_id']) {
+                    $updateUserStmt = $pdo->prepare("UPDATE users SET status = 'inactive', updated_at = NOW() WHERE id = ?");
+                    $updateUserStmt->execute([$adminUser['user_id']]);
+                }
+            } else {
+                $stmt = $pdo->prepare("UPDATE users SET status = 'inactive', updated_at = NOW() WHERE id = ?");
+                $stmt->execute([$userId]);
+            }
             
             // Log the rejection action
             logAdminActivity($adminId, 'reject_admin', "Rejected admin account: {$user['name']} ({$user['email']})");
@@ -139,9 +208,15 @@ try {
         
     } elseif ($method === 'GET' && $action === 'stats') {
         // Get statistics about pending approvals
-        $pendingCount = $pdo->query("SELECT COUNT(*) FROM users WHERE user_type = 'admin' AND status = 'pending_approval'")->fetchColumn();
-        $activeCount = $pdo->query("SELECT COUNT(*) FROM users WHERE user_type = 'admin' AND status = 'active'")->fetchColumn();
-        $inactiveCount = $pdo->query("SELECT COUNT(*) FROM users WHERE user_type = 'admin' AND status = 'inactive'")->fetchColumn();
+        if ($useAdminUserTable) {
+            $pendingCount = $pdo->query("SELECT COUNT(*) FROM admin_user WHERE status = 'pending_approval'")->fetchColumn();
+            $activeCount = $pdo->query("SELECT COUNT(*) FROM admin_user WHERE status = 'active'")->fetchColumn();
+            $inactiveCount = $pdo->query("SELECT COUNT(*) FROM admin_user WHERE status = 'inactive'")->fetchColumn();
+        } else {
+            $pendingCount = $pdo->query("SELECT COUNT(*) FROM users WHERE user_type = 'admin' AND status = 'pending_approval'")->fetchColumn();
+            $activeCount = $pdo->query("SELECT COUNT(*) FROM users WHERE user_type = 'admin' AND status = 'active'")->fetchColumn();
+            $inactiveCount = $pdo->query("SELECT COUNT(*) FROM users WHERE user_type = 'admin' AND status = 'inactive'")->fetchColumn();
+        }
         
         echo json_encode([
             "success" => true,

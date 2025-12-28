@@ -166,15 +166,60 @@ const translations = {
     }
 };
 
-// Language codes mapping
+// Language codes mapping - Extended with many languages
 const languageCodes = {
     'English': 'en',
     'Filipino': 'fil',
+    'Tagalog': 'tl',
     'Cebuano': 'ceb',
     'Ilocano': 'ilo',
     'Kapampangan': 'pam',
     'Bicolano': 'bcl',
-    'Waray': 'war'
+    'Waray': 'war',
+    'Spanish': 'es',
+    'French': 'fr',
+    'German': 'de',
+    'Italian': 'it',
+    'Portuguese': 'pt',
+    'Chinese': 'zh',
+    'Japanese': 'ja',
+    'Korean': 'ko',
+    'Arabic': 'ar',
+    'Hindi': 'hi',
+    'Thai': 'th',
+    'Vietnamese': 'vi',
+    'Indonesian': 'id',
+    'Malay': 'ms',
+    'Russian': 'ru',
+    'Turkish': 'tr'
+};
+
+// Language display names with flags
+const languageDisplayNames = {
+    'en': '🇺🇸 English',
+    'fil': '🇵🇭 Filipino',
+    'tl': '🇵🇭 Tagalog',
+    'ceb': '🇵🇭 Cebuano',
+    'ilo': '🇵🇭 Ilocano',
+    'pam': '🇵🇭 Kapampangan',
+    'bcl': '🇵🇭 Bicolano',
+    'war': '🇵🇭 Waray',
+    'es': '🇪🇸 Spanish',
+    'fr': '🇫🇷 French',
+    'de': '🇩🇪 German',
+    'it': '🇮🇹 Italian',
+    'pt': '🇵🇹 Portuguese',
+    'zh': '🇨🇳 Chinese',
+    'ja': '🇯🇵 Japanese',
+    'ko': '🇰🇷 Korean',
+    'ar': '🇸🇦 Arabic',
+    'hi': '🇮🇳 Hindi',
+    'th': '🇹🇭 Thai',
+    'vi': '🇻🇳 Vietnamese',
+    'id': '🇮🇩 Indonesian',
+    'ms': '🇲🇾 Malay',
+    'ru': '🇷🇺 Russian',
+    'tr': '🇹🇷 Turkish'
 };
 
 // Get current language

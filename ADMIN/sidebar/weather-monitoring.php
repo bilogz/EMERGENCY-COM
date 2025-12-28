@@ -120,11 +120,11 @@ $pageTitle = 'Weather Monitoring';
             border: none;
             padding: 0;
             overflow: visible;
-            min-height: 200px;
+            min-height: 280px;
         }
         
         .google-weather-display {
-            padding: 1.5rem;
+            padding: 2rem;
             overflow: visible;
             word-wrap: break-word;
         }
@@ -133,14 +133,14 @@ $pageTitle = 'Weather Monitoring';
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 1rem;
-            gap: 1rem;
+            margin-bottom: 1.5rem;
+            gap: 1.5rem;
             flex-wrap: wrap;
         }
         
         .gw-left {
             flex: 1;
-            min-width: 200px;
+            min-width: 220px;
         }
         
         .gw-main-temp {
@@ -172,10 +172,10 @@ $pageTitle = 'Weather Monitoring';
         .gw-details {
             display: flex;
             flex-wrap: wrap;
-            gap: 1rem;
+            gap: 1.25rem;
             font-size: 0.9rem;
             opacity: 0.9;
-            margin-top: 1rem;
+            margin-top: 1.25rem;
         }
         
         .gw-detail-item {
@@ -186,29 +186,41 @@ $pageTitle = 'Weather Monitoring';
         }
         
         .gw-right {
-            text-align: right;
-            min-width: 150px;
+            text-align: left;
+            min-width: 180px;
             flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: flex-start;
         }
         
         .gw-day {
             font-size: 1.2rem;
             font-weight: 500;
             white-space: nowrap;
+            text-align: left;
+            width: 100%;
+            margin-bottom: 0.25rem;
         }
         
         .gw-condition {
             opacity: 0.8;
             font-size: 0.95rem;
-            margin-top: 0.25rem;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
             word-break: break-word;
+            text-align: left;
+            width: 100%;
         }
         
         .gw-location {
             font-size: 0.8rem;
             opacity: 0.7;
-            margin-top: 0.5rem;
+            margin-top: 0;
             word-break: break-word;
+            text-align: left;
+            width: 100%;
         }
         
         /* Weather Tabs */
@@ -593,12 +605,7 @@ $pageTitle = 'Weather Monitoring';
             left: 0;
         }
         
-        /* Dark Mode - Removed filter for better visibility */
-        .map-dark-mode {
-            /* No filter - tiles are already dark themed */
-        }
-        
-        /* Ensure map shows natural green land and blue ocean colors */
+        /* Map always shows natural green land and blue ocean colors - not affected by dark mode */
         #weatherMap {
             filter: none !important;
         }
@@ -607,8 +614,21 @@ $pageTitle = 'Weather Monitoring';
             background-color: #a3ccff; /* Light blue ocean background - only shows when tiles haven't loaded */
         }
         
-        /* Ensure tiles display with natural colors */
+        /* Ensure tiles display with natural colors - always light mode */
         .leaflet-tile-container img {
+            filter: none !important;
+        }
+        
+        /* Prevent dark mode from affecting map container */
+        [data-theme="dark"] #weatherMap {
+            filter: none !important;
+        }
+        
+        [data-theme="dark"] .leaflet-container {
+            background-color: #a3ccff !important;
+        }
+        
+        [data-theme="dark"] .leaflet-tile-container img {
             filter: none !important;
         }
         
@@ -743,10 +763,6 @@ $pageTitle = 'Weather Monitoring';
                     
                     <!-- Map Controls -->
                     <div class="map-controls">
-                        <button id="darkModeBtn" class="map-control-btn" title="Toggle Dark Mode">
-                            <i class="fas fa-moon"></i>
-                            <span>Dark Mode</span>
-                        </button>
                         <button id="windFlowBtn" class="map-control-btn" title="Toggle Wind Flow Animation">
                             <i class="fas fa-wind"></i>
                             <span>Wind Flow</span>
@@ -861,7 +877,6 @@ $pageTitle = 'Weather Monitoring';
         let temperatureEnabled = false;
         let windSpeedEnabled = false;
         let cloudsEnabled = false;
-        let darkModeEnabled = false;
         
         // Weather layers
         let radarLayer = null;
@@ -875,9 +890,7 @@ $pageTitle = 'Weather Monitoring';
         let windParticles = [];
         let animationFrameId = null;
         
-        // Map tile layers
-        let lightTileLayer = null;
-        let darkTileLayer = null;
+        // Map tile layer - always uses light tiles (not affected by dark mode)
         let currentTileLayer = null;
         
         // Automated warning system
@@ -889,22 +902,12 @@ $pageTitle = 'Weather Monitoring';
             // Focus on Quezon City with smooth animation
             map = L.map('weatherMap').setView([14.6488, 121.0509], 12);
             
-            // Light mode tiles - Standard OpenStreetMap (green land, blue ocean)
-            lightTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            // Always use light mode tiles - Standard OpenStreetMap (green land, blue ocean)
+            // Map is not affected by page dark mode setting
+            currentTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
                 maxZoom: 19
             });
-            
-            // Dark mode tiles - CartoDB Dark Matter
-            darkTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd',
-                maxZoom: 20
-            });
-            
-            // Set light mode as default (green land, blue ocean style)
-            darkModeEnabled = false;
-            currentTileLayer = lightTileLayer;
             currentTileLayer.addTo(map);
             
             // Ensure map shows green land and blue ocean clearly
@@ -1026,7 +1029,6 @@ $pageTitle = 'Weather Monitoring';
         
         // Setup layer toggle buttons
         function setupLayerButtons() {
-            document.getElementById('darkModeBtn')?.addEventListener('click', toggleDarkMode);
             document.getElementById('windFlowBtn')?.addEventListener('click', toggleWindFlow);
             document.getElementById('radarBtn')?.addEventListener('click', toggleRadar);
             document.getElementById('precipitationBtn')?.addEventListener('click', togglePrecipitation);
@@ -1036,38 +1038,8 @@ $pageTitle = 'Weather Monitoring';
             document.getElementById('cloudsBtn')?.addEventListener('click', toggleClouds);
         }
         
-        // Toggle dark mode
-        function toggleDarkMode() {
-            darkModeEnabled = !darkModeEnabled;
-            const btn = document.getElementById('darkModeBtn');
-            const icon = btn.querySelector('i');
-            
-            if (darkModeEnabled) {
-                btn.classList.add('active');
-                icon.className = 'fas fa-sun';
-                btn.querySelector('span').textContent = 'Light Mode';
-                
-                // Switch to dark tiles
-                map.removeLayer(currentTileLayer);
-                currentTileLayer = darkTileLayer;
-                currentTileLayer.addTo(map);
-                
-                // No need for filter - tiles are already styled
-                document.getElementById('weatherMap').classList.add('map-dark-mode');
-            } else {
-                btn.classList.remove('active');
-                icon.className = 'fas fa-moon';
-                btn.querySelector('span').textContent = 'Dark Mode';
-                
-                // Switch to light tiles
-                map.removeLayer(currentTileLayer);
-                currentTileLayer = lightTileLayer;
-                currentTileLayer.addTo(map);
-                
-                // Remove dark mode class
-                document.getElementById('weatherMap').classList.remove('map-dark-mode');
-            }
-        }
+        // Map always uses light tiles - not affected by page dark mode
+        // Removed toggleDarkMode function to keep map consistent
         
         // Helper function to disable all other map modes
         function disableAllMapModes() {
@@ -1103,9 +1075,7 @@ $pageTitle = 'Weather Monitoring';
             
             // Remove active class from all buttons
             document.querySelectorAll('.map-control-btn').forEach(btn => {
-                if (btn.id !== 'darkModeBtn') {
-                    btn.classList.remove('active');
-                }
+                btn.classList.remove('active');
             });
         }
         
@@ -1158,29 +1128,57 @@ $pageTitle = 'Weather Monitoring';
                 btn.classList.add('active');
                 
                 // Use RainViewer API for radar (free, no API key needed)
-                // Radar blends with map - looks like normal map
-                if (!radarLayer) {
-                    // Get current timestamp for latest radar image
-                    const timestamp = Math.floor(Date.now() / 1000);
-                    radarLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`, {
-                        attribution: 'RainViewer &copy; <a href="https://www.rainviewer.com">RainViewer.com</a>',
-                        opacity: 0.35, // Very low opacity to blend naturally with map
-                        zIndex: 300
+                // First, get available radar timestamps
+                fetch('https://api.rainviewer.com/public/weather-maps.json')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data && data.radar && data.radar.past && data.radar.past.length > 0) {
+                            // Get the latest available timestamp
+                            const latestTimestamp = data.radar.past[data.radar.past.length - 1].time;
+                            
+                            // Remove existing radar layer if any
+                            if (radarLayer && map.hasLayer(radarLayer)) {
+                                map.removeLayer(radarLayer);
+                            }
+                            
+                            // Create new radar layer with latest timestamp
+                            radarLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${latestTimestamp}/256/{z}/{x}/{y}/2/1_1.png`, {
+                                attribution: 'RainViewer &copy; <a href="https://www.rainviewer.com">RainViewer.com</a>',
+                                opacity: 0.6, // Increased opacity for better visibility
+                                zIndex: 300
+                            });
+                            
+                            radarLayer.addTo(map);
+                            
+                            // Update radar every 10 minutes
+                            if (window.radarUpdateInterval) {
+                                clearInterval(window.radarUpdateInterval);
+                            }
+                            window.radarUpdateInterval = setInterval(() => {
+                                if (radarEnabled && radarLayer) {
+                                    fetch('https://api.rainviewer.com/public/weather-maps.json')
+                                        .then(response => response.json())
+                                        .then(updateData => {
+                                            if (updateData && updateData.radar && updateData.radar.past && updateData.radar.past.length > 0) {
+                                                const newTimestamp = updateData.radar.past[updateData.radar.past.length - 1].time;
+                                                radarLayer.setUrl(`https://tilecache.rainviewer.com/v2/radar/${newTimestamp}/256/{z}/{x}/{y}/2/1_1.png`);
+                                            }
+                                        })
+                                        .catch(err => console.error('Error updating radar:', err));
+                                }
+                            }, 600000); // 10 minutes
+                        } else {
+                            alert('Radar data is currently unavailable. Please try again later.');
+                            radarEnabled = false;
+                            btn.classList.remove('active');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading radar:', error);
+                        alert('Could not load radar data. Please check your internet connection.');
+                        radarEnabled = false;
+                        btn.classList.remove('active');
                     });
-                }
-                
-                radarLayer.addTo(map);
-                
-                // Update radar every 10 minutes
-                if (window.radarUpdateInterval) {
-                    clearInterval(window.radarUpdateInterval);
-                }
-                window.radarUpdateInterval = setInterval(() => {
-                    if (radarEnabled && radarLayer) {
-                        const timestamp = Math.floor(Date.now() / 1000);
-                        radarLayer.setUrl(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`);
-                    }
-                }, 600000); // 10 minutes
             }
         }
         
@@ -1639,11 +1637,12 @@ $pageTitle = 'Weather Monitoring';
                 .then(geojsonData => {
                     L.geoJSON(geojsonData, {
                         style: {
-                            color: '#4c8a89',
-                            weight: 3,
-                            fillColor: '#4c8a89',
-                            fillOpacity: 0.08,
-                            dashArray: '10, 5'
+                            color: '#FF5722', // Vibrant orange-red color for visibility
+                            weight: 5, // Thicker line for easy visibility
+                            fillColor: '#4c8a89', // Teal fill
+                            fillOpacity: 0.15, // Slight transparency
+                            dashArray: '10, 5', // Dashed line pattern
+                            opacity: 1.0 // Full opacity for vibrant appearance
                         }
                     }).addTo(map);
                 })
@@ -1822,18 +1821,32 @@ $pageTitle = 'Weather Monitoring';
                 window.hourlyChart.destroy();
             }
             
+            // Detect dark mode
+            const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+            const textColor = isDarkMode ? '#fafafa' : '#171717';
+            const gridColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+            const borderColor = isDarkMode ? '#4c8a89' : '#4c8a89';
+            const backgroundColor = isDarkMode ? 'rgba(76, 138, 137, 0.3)' : 'rgba(76, 138, 137, 0.1)';
+            
             window.hourlyChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: [{
                         data: temps,
-                        borderColor: 'var(--primary-color-1)',
-                        backgroundColor: 'rgba(76, 138, 137, 0.1)',
-                        borderWidth: 2,
+                        borderColor: borderColor,
+                        backgroundColor: backgroundColor,
+                        borderWidth: 3,
                         fill: true,
                         tension: 0.4,
-                        pointRadius: 4
+                        pointRadius: 5,
+                        pointBackgroundColor: borderColor,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 7,
+                        pointHoverBackgroundColor: borderColor,
+                        pointHoverBorderColor: '#ffffff',
+                        pointHoverBorderWidth: 3
                     }]
                 },
                 options: {
@@ -1841,11 +1854,38 @@ $pageTitle = 'Weather Monitoring';
                     maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: (ctx) => ctx.raw + '°C' } }
+                        tooltip: { 
+                            backgroundColor: isDarkMode ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                            titleColor: textColor,
+                            bodyColor: textColor,
+                            borderColor: borderColor,
+                            borderWidth: 1,
+                            callbacks: { label: (ctx) => ctx.raw + '°C' } 
+                        }
                     },
                     scales: {
-                        x: { grid: { display: false } },
-                        y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { callback: (val) => val + '°' } }
+                        x: { 
+                            grid: { 
+                                display: true,
+                                color: gridColor
+                            },
+                            ticks: {
+                                color: textColor,
+                                font: { size: 11 }
+                            }
+                        },
+                        y: { 
+                            grid: { 
+                                color: gridColor,
+                                drawBorder: true,
+                                borderColor: gridColor
+                            }, 
+                            ticks: { 
+                                color: textColor,
+                                font: { size: 11 },
+                                callback: (val) => val + '°' 
+                            }
+                        }
                     }
                 }
             });
@@ -2405,25 +2445,30 @@ Keep concise and actionable.`;
                 return date.getHours() + ':00';
             });
             
+            // Detect dark mode
+            const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+            const textColor = isDarkMode ? '#fafafa' : '#171717';
+            const gridColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+            
             let data, borderColor, backgroundColor, label;
             
             switch(type) {
                 case 'precipitation':
                     data = hourlyData.map(item => item.rain || 0);
-                    borderColor = 'var(--primary-color-1)';
-                    backgroundColor = 'rgba(76, 138, 137, 0.2)';
+                    borderColor = isDarkMode ? '#4c8a89' : '#4c8a89';
+                    backgroundColor = isDarkMode ? 'rgba(76, 138, 137, 0.3)' : 'rgba(76, 138, 137, 0.2)';
                     label = 'mm';
                     break;
                 case 'wind':
                     data = hourlyData.map(item => (item.wind_speed || 0) * 3.6);
-                    borderColor = 'var(--text-secondary-1)';
-                    backgroundColor = 'rgba(161, 161, 170, 0.2)';
+                    borderColor = isDarkMode ? '#a1a1aa' : '#575757';
+                    backgroundColor = isDarkMode ? 'rgba(161, 161, 170, 0.3)' : 'rgba(161, 161, 170, 0.2)';
                     label = 'km/h';
                     break;
                 default:
                     data = hourlyData.map(item => Math.round(item.temp));
-                    borderColor = 'var(--primary-color-1)';
-                    backgroundColor = 'rgba(76, 138, 137, 0.1)';
+                    borderColor = isDarkMode ? '#4c8a89' : '#4c8a89';
+                    backgroundColor = isDarkMode ? 'rgba(76, 138, 137, 0.3)' : 'rgba(76, 138, 137, 0.1)';
                     label = '°C';
             }
             
@@ -2439,10 +2484,17 @@ Keep concise and actionable.`;
                         data: data,
                         borderColor: borderColor,
                         backgroundColor: backgroundColor,
-                        borderWidth: 2,
+                        borderWidth: 3,
                         fill: true,
                         tension: 0.4,
-                        pointRadius: 4
+                        pointRadius: 5,
+                        pointBackgroundColor: borderColor,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 7,
+                        pointHoverBackgroundColor: borderColor,
+                        pointHoverBorderColor: '#ffffff',
+                        pointHoverBorderWidth: 3
                     }]
                 },
                 options: {
@@ -2450,11 +2502,38 @@ Keep concise and actionable.`;
                     maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: (ctx) => ctx.raw + ' ' + label } }
+                        tooltip: { 
+                            backgroundColor: isDarkMode ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                            titleColor: textColor,
+                            bodyColor: textColor,
+                            borderColor: borderColor,
+                            borderWidth: 1,
+                            callbacks: { label: (ctx) => ctx.raw + ' ' + label } 
+                        }
                     },
                     scales: {
-                        x: { grid: { display: false } },
-                        y: { beginAtZero: type === 'precipitation', grid: { color: 'rgba(0,0,0,0.05)' } }
+                        x: { 
+                            grid: { 
+                                display: true,
+                                color: gridColor
+                            },
+                            ticks: {
+                                color: textColor,
+                                font: { size: 11 }
+                            }
+                        },
+                        y: { 
+                            beginAtZero: type === 'precipitation',
+                            grid: { 
+                                color: gridColor,
+                                drawBorder: true,
+                                borderColor: gridColor
+                            },
+                            ticks: {
+                                color: textColor,
+                                font: { size: 11 }
+                            }
+                        }
                     }
                 }
             });

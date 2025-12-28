@@ -61,10 +61,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->query("SELECT source, enabled FROM integration_settings");
         $settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
         
+        // Check Gemini status from AI settings
+        $geminiEnabled = false;
+        $geminiApiKeySet = false;
+        try {
+            $aiStmt = $pdo->query("SELECT ai_enabled, gemini_api_key FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+            $aiSettings = $aiStmt->fetch(PDO::FETCH_ASSOC);
+            if ($aiSettings) {
+                $geminiEnabled = $aiSettings['ai_enabled'] == 1;
+                $geminiApiKeySet = !empty($aiSettings['gemini_api_key']);
+            }
+        } catch (PDOException $e) {
+            // Table might not exist yet
+        }
+        
         echo json_encode([
             'success' => true,
             'pagasa' => ['enabled' => isset($settings['pagasa']) && $settings['pagasa']],
-            'phivolcs' => ['enabled' => isset($settings['phivolcs']) && $settings['phivolcs']]
+            'phivolcs' => ['enabled' => isset($settings['phivolcs']) && $settings['phivolcs']],
+            'gemini' => ['enabled' => $geminiEnabled, 'api_key_set' => $geminiApiKeySet]
         ]);
     } catch (PDOException $e) {
         error_log("Get Status Error: " . $e->getMessage());
@@ -86,6 +101,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
     } catch (PDOException $e) {
         error_log("Get Warnings Error: " . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
+    }
+} elseif ($action === 'getSettings') {
+    try {
+        $stmt = $pdo->query("SELECT * FROM warning_settings ORDER BY id DESC LIMIT 1");
+        $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$settings) {
+            // Return default settings
+            echo json_encode([
+                'success' => true,
+                'settings' => [
+                    'sync_interval' => 15,
+                    'auto_publish' => 0,
+                    'notification_channels' => 'sms,email'
+                ]
+            ]);
+        } else {
+            echo json_encode(['success' => true, 'settings' => $settings]);
+        }
+    } catch (PDOException $e) {
+        error_log("Get Settings Error: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
     }
 } else {

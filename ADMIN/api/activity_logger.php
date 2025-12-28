@@ -63,11 +63,12 @@ initializeActivityTables();
 /**
  * Log admin activity
  * @param int $adminId Admin user ID
- * @param string $action Action performed (e.g., 'login', 'logout', 'send_notification')
+ * @param string $action Action performed (e.g., 'login', 'logout', 'send_notification', 'ai_translation', 'create_translation')
  * @param string|null $description Optional description
+ * @param array|null $metadata Optional metadata (JSON)
  * @return bool Success status
  */
-function logAdminActivity($adminId, $action, $description = null) {
+function logAdminActivity($adminId, $action, $description = null, $metadata = null) {
     global $pdo;
     
     if (!$pdo) {
@@ -79,15 +80,106 @@ function logAdminActivity($adminId, $action, $description = null) {
         $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
         $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
         
-        $stmt = $pdo->prepare("
-            INSERT INTO admin_activity_logs (admin_id, action, description, ip_address, user_agent)
-            VALUES (?, ?, ?, ?, ?)
-        ");
+        // Check if admin_activity_logs table has metadata column
+        $hasMetadata = false;
+        try {
+            $checkStmt = $pdo->query("SHOW COLUMNS FROM admin_activity_logs LIKE 'metadata'");
+            $hasMetadata = $checkStmt->rowCount() > 0;
+        } catch (PDOException $e) {
+            // Table might not exist or column doesn't exist, continue without metadata
+        }
         
-        return $stmt->execute([$adminId, $action, $description, $ipAddress, $userAgent]);
+        if ($hasMetadata && $metadata !== null) {
+            $stmt = $pdo->prepare("
+                INSERT INTO admin_activity_logs (admin_id, action, description, ip_address, user_agent, metadata)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ");
+            return $stmt->execute([$adminId, $action, $description, $ipAddress, $userAgent, json_encode($metadata)]);
+        } else {
+            $stmt = $pdo->prepare("
+                INSERT INTO admin_activity_logs (admin_id, action, description, ip_address, user_agent)
+                VALUES (?, ?, ?, ?, ?)
+            ");
+            return $stmt->execute([$adminId, $action, $description, $ipAddress, $userAgent]);
+        }
     } catch (PDOException $e) {
         error_log('Activity Logger Error: ' . $e->getMessage());
         return false;
+    }
+}
+
+/**
+ * Log multilingual/translation activity specifically
+ * @param int $adminId Admin user ID
+ * @param string $actionType Action type (e.g., 'ai_translate', 'create_translation', 'update_translation')
+ * @param int|null $alertId Alert ID
+ * @param int|null $translationId Translation ID
+ * @param string|null $sourceLanguage Source language code
+ * @param string|null $targetLanguage Target language code
+ * @param string|null $translationMethod Translation method (manual, ai, hybrid)
+ * @param bool $success Whether the action succeeded
+ * @param string|null $errorMessage Error message if failed
+ * @param array|null $metadata Additional metadata
+ * @return bool Success status
+ */
+function logTranslationActivity($adminId, $actionType, $alertId = null, $translationId = null, 
+                                $sourceLanguage = null, $targetLanguage = null, $translationMethod = null,
+                                $success = true, $errorMessage = null, $metadata = null) {
+    global $pdo;
+    
+    if (!$pdo) {
+        error_log('Translation Activity Logger: Database connection not available');
+        return false;
+    }
+    
+    try {
+        // Check if translation_activity_logs table exists
+        $tableExists = false;
+        try {
+            $checkStmt = $pdo->query("SHOW TABLES LIKE 'translation_activity_logs'");
+            $tableExists = $checkStmt->rowCount() > 0;
+        } catch (PDOException $e) {
+            // Table doesn't exist, fall back to regular activity log
+        }
+        
+        if ($tableExists) {
+            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
+            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
+            
+            $stmt = $pdo->prepare("
+                INSERT INTO translation_activity_logs 
+                (admin_id, action_type, alert_id, translation_id, source_language, target_language, 
+                 translation_method, success, error_message, metadata, ip_address, user_agent)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            
+            return $stmt->execute([
+                $adminId,
+                $actionType,
+                $alertId,
+                $translationId,
+                $sourceLanguage,
+                $targetLanguage,
+                $translationMethod,
+                $success ? 1 : 0,
+                $errorMessage,
+                $metadata ? json_encode($metadata) : null,
+                $ipAddress,
+                $userAgent
+            ]);
+        } else {
+            // Fall back to regular activity log
+            $description = "Translation activity: {$actionType}";
+            if ($alertId) $description .= " (Alert #{$alertId})";
+            if ($targetLanguage) $description .= " → {$targetLanguage}";
+            if (!$success && $errorMessage) $description .= " - Error: {$errorMessage}";
+            
+            return logAdminActivity($adminId, $actionType, $description, $metadata);
+        }
+    } catch (PDOException $e) {
+        error_log('Translation Activity Logger Error: ' . $e->getMessage());
+        // Fall back to regular activity log
+        return logAdminActivity($adminId, $actionType, "Translation activity: {$actionType}");
     }
 }
 
