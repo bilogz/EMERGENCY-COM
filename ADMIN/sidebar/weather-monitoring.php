@@ -618,7 +618,12 @@ $pageTitle = 'Weather Monitoring';
         }
         
         .leaflet-container {
-            background-color: #a3ccff !important; /* Light blue ocean background */
+            background-color: #a3ccff; /* Light blue ocean background - only shows when tiles haven't loaded */
+        }
+        
+        /* Ensure tiles display with natural colors */
+        .leaflet-tile-container img {
+            filter: none !important;
         }
         
         /* Automated Warning Status */
@@ -847,11 +852,10 @@ $pageTitle = 'Weather Monitoring';
             // Focus on Quezon City with smooth animation
             map = L.map('weatherMap').setView([14.6488, 121.0509], 12);
             
-            // Light mode tiles - Stamen Terrain (vibrant green land, blue ocean)
-            lightTileLayer = L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}{r}.png', {
-                attribution: 'Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                subdomains: 'abcd',
-                maxZoom: 18
+            // Light mode tiles - Standard OpenStreetMap (green land, blue ocean)
+            lightTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 19
             });
             
             // Dark mode tiles - CartoDB Dark Matter
