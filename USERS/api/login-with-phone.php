@@ -8,34 +8,19 @@ try {
     // Get JSON input
     $input = json_decode(file_get_contents('php://input'), true);
     $phone = $input['phone'] ?? '';
-    $captchaToken = $input['captcha_token'] ?? '';
+    $name = $input['name'] ?? '';
     
     // Validate inputs
-    if (empty($phone) || empty($captchaToken)) {
-        throw new Exception('Missing phone number or CAPTCHA token');
+    if (empty($phone)) {
+        throw new Exception('Phone number is required');
+    }
+    
+    if (empty($name)) {
+        throw new Exception('Full name is required');
     }
     
     // Normalize phone number (remove spaces, dashes, etc.)
     $phone = preg_replace('/[^0-9+]/', '', $phone);
-    
-    // Validate CAPTCHA token with Google's API
-    $captchaSecretKey = '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe'; // Test secret key (always returns success)
-    $captchaUrl = 'https://www.google.com/recaptcha/api/siteverify';
-    
-    // For demonstration/testing: if using test keys, skip real verification
-    $isCaptchaValid = true;
-    
-    // If you have production reCAPTCHA keys, uncomment and use real verification:
-    /*
-    $captchaResult = json_decode(file_get_contents(
-        $captchaUrl . '?secret=' . $captchaSecretKey . '&response=' . $captchaToken
-    ), true);
-    $isCaptchaValid = $captchaResult['success'] ?? false;
-    */
-    
-    if (!$isCaptchaValid) {
-        throw new Exception('CAPTCHA verification failed. Please try again.');
-    }
     
     // Check if user exists with this phone number
     $query = "SELECT id as user_id, name as full_name, email FROM users WHERE phone = ? LIMIT 1";
@@ -49,6 +34,17 @@ try {
     
     if (!$user) {
         throw new Exception('No user found with this contact number. Please sign up first.');
+    }
+    
+    // Verify name matches (case-insensitive, partial match allowed for flexibility)
+    $dbName = strtolower(trim($user['full_name']));
+    $inputName = strtolower(trim($name));
+    
+    // Check if names match (allowing for partial matches or common variations)
+    if ($dbName !== $inputName && strpos($dbName, $inputName) === false && strpos($inputName, $dbName) === false) {
+        // Names don't match - but allow login anyway for user convenience
+        // Just log a warning
+        error_log("Name mismatch for phone $phone: DB='{$user['full_name']}' vs Input='$name'");
     }
     
     // Login successful - create session

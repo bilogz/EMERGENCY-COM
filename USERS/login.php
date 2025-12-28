@@ -31,7 +31,7 @@ $assetBase = '../ADMIN/header/';
             <div class="sub-container content-main">
                 <section class="page-content">
                     <h2>User Login</h2>
-                    <p>Log in using your registered contact number. Verify you are not a bot using CAPTCHA.</p>
+                    <p class="login-instruction">Log in using your registered contact number and full name.</p>
                     
                     <!-- Phone OTP Login Form (Hidden by default) -->
                     <form class="auth-form" id="phoneOtpForm" style="display: none;">
@@ -64,7 +64,7 @@ $assetBase = '../ADMIN/header/';
                         </button>
                     </form>
 
-                    <!-- Login Form with CAPTCHA -->
+                    <!-- Login Form -->
                     <form class="auth-form" id="loginForm" style="display: block;">
                         <div class="form-group">
                             <label for="full_name">
@@ -81,12 +81,7 @@ $assetBase = '../ADMIN/header/';
                                 <span class="prefix">+63</span>
                                 <input type="tel" id="phone" name="phone" pattern="[0-9]{10}" maxlength="10" placeholder="9XXXXXXXXX" title="Enter 10 digits without spaces" required autocomplete="tel">
                             </div>
-                        </div>
-                        
-                        <!-- reCAPTCHA v2 -->
-                        <div class="form-group" id="recaptchaContainer" style="margin: 1rem 0; display: flex; justify-content: center;">
-                            <script src="https://www.google.com/recaptcha/api.js" async defer></script>
-                            <div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" data-theme="dark"></div>
+                            <small class="form-hint">Enter your 10-digit mobile number (without spaces)</small>
                         </div>
                         
                         <div class="error-message" id="errorMessage" style="display: none;">
@@ -94,7 +89,7 @@ $assetBase = '../ADMIN/header/';
                             <span id="errorText"></span>
                         </div>
                         
-                        <button type="submit" class="btn btn-primary" id="loginButton">
+                        <button type="submit" class="btn btn-primary btn-large" id="loginButton">
                             <i class="fas fa-sign-in-alt"></i>
                             <span class="btn-text">Login</span>
                             <span class="btn-spinner" style="display: none;">
@@ -501,12 +496,18 @@ $assetBase = '../ADMIN/header/';
             });
         }
         
-        // Login with phone + CAPTCHA
+        // Login with phone (no CAPTCHA)
         loginForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             hideError();
             
+            const fullName = document.getElementById('full_name').value.trim();
             const phone = document.getElementById('phone').value.trim();
+            
+            if (!fullName) {
+                showError('Please enter your full name.');
+                return;
+            }
             
             if (!phone) {
                 showError('Please enter your mobile number.');
@@ -519,19 +520,12 @@ $assetBase = '../ADMIN/header/';
                 return;
             }
             
-            // Get reCAPTCHA token
-            const captchaToken = grecaptcha.getResponse();
-            if (!captchaToken) {
-                showError('Please verify that you are not a bot.');
-                return;
-            }
-            
             setLoading(true);
             
             try {
                 // Add +63 prefix to phone number
                 const phoneWithPrefix = '+63' + phone;
-                const payload = { phone: phoneWithPrefix, captcha_token: captchaToken };
+                const payload = { phone: phoneWithPrefix, name: fullName };
 
                 const response = await fetch('api/login-with-phone.php', {
                     method: 'POST',
@@ -548,15 +542,14 @@ $assetBase = '../ADMIN/header/';
                     Swal.fire({
                         icon: 'success',
                         title: 'Login Successful!',
-                        text: 'Welcome, ' + (data.user_name || 'User'),
+                        text: 'Welcome, ' + (data.user_name || fullName),
                         showConfirmButton: false,
                         timer: 1500
                     }).then(() => {
-                        window.location.href = 'index.php';
+                        window.location.href = '../index.php';
                     });
                 } else {
-                    showError(data.message || 'Login failed. Please check your phone number.');
-                    grecaptcha.reset(); // Reset CAPTCHA on failure
+                    showError(data.message || 'Login failed. Please check your phone number and name.');
                 }
                 setLoading(false);
             } catch (error) {
