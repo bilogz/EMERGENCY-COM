@@ -44,22 +44,54 @@ $assetBase = '../ADMIN/header/';
                             <input type="email" id="email" name="email" placeholder="juan@example.com" required>
                         </div>
                         <div class="form-group">
+                            <label for="nationality">Nationality</label>
+                            <input list="nationalityList" id="nationality" name="nationality" placeholder="Select nationality" required>
+                            <datalist id="nationalityList">
+                                <option value="Filipino"></option>
+                                <option value="American"></option>
+                                <option value="Canadian"></option>
+                                <option value="British"></option>
+                                <option value="Australian"></option>
+                                <option value="Japanese"></option>
+                                <option value="Chinese"></option>
+                                <option value="Korean"></option>
+                                <option value="Indian"></option>
+                                <option value="German"></option>
+                            </datalist>
+                        </div>
+                        <div class="form-group">
                             <label for="phone">Mobile Number</label>
-                            <input type="tel" id="phone" name="phone" placeholder="+63 9XX XXX XXXX" required>
+                            <div class="input-with-prefix">
+                                <span class="prefix">+63</span>
+                                <input type="tel" id="phone" name="phone" pattern="[0-9]{10}" maxlength="10" placeholder="9XXXXXXXXX" title="Enter 10 digits without spaces" required autocomplete="tel">
+                            </div>
                         </div>
                         <div class="form-group form-group-half">
                             <div>
-                                <label for="barangay">Barangay</label>
-                                <input type="text" id="barangay" name="barangay" placeholder="e.g. Barangay Central" required>
+                                <label for="district">District</label>
+                                <select id="district" name="district" required>
+                                    <option value="" disabled selected>Select district</option>
+                                    <option value="district1">District 1</option>
+                                    <option value="district2">District 2</option>
+                                    <option value="district3">District 3</option>
+                                    <option value="district4">District 4</option>
+                                    <option value="district5">District 5</option>
+                                    <option value="district6">District 6</option>
+                                </select>
                             </div>
                             <div>
-                                <label for="house_number">House / Unit No.</label>
-                                <input type="text" id="house_number" name="house_number" placeholder="e.g. #123" required>
+                                <label for="barangay">Barangay</label>
+                                <input list="barangayList" id="barangay" name="barangay" placeholder="Select Barangay" required>
+                                <datalist id="barangayList"></datalist>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="address">Complete Address</label>
-                            <textarea id="address" name="address" rows="3" placeholder="Complete address in Quezon City" required></textarea>
+                            <label for="house_number">House / Unit No.</label>
+                            <input type="text" id="house_number" name="house_number" placeholder="e.g. #123" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="street">Street</label>
+                            <input type="text" id="street" name="street" placeholder="Street name in Quezon City" required>
                         </div>
                         
                         <div class="error-message" id="errorMessage" style="display: none;">
@@ -67,17 +99,19 @@ $assetBase = '../ADMIN/header/';
                             <span id="errorText"></span>
                         </div>
                         
-                        <button type="submit" class="btn btn-primary" id="signupButton">
-                            <i class="fas fa-paper-plane"></i>
-                            <span class="btn-text">Send Verification Code</span>
-                            <span class="btn-spinner" style="display: none;">
-                                <i class="fas fa-spinner fa-spin"></i>
-                            </span>
-                        </button>
-                        <p class="auth-switch">
-                            Already have an account?
-                            <a href="login.php">Login</a>
-                        </p>
+                        <div class="auth-actions">
+                            <button type="submit" class="btn btn-primary" id="signupButton">
+                                <i class="fas fa-user-plus"></i>
+                                <span class="btn-text">Sign Up</span>
+                                <span class="btn-spinner" style="display: none;">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                </span>
+                            </button>
+                            <a href="login.php" class="btn btn-secondary login-btn">
+                                <i class="fas fa-sign-in-alt"></i>
+                                <span>Login</span>
+                            </a>
+                        </div>
                     </form>
                     
                     <!-- OTP Verification Modal -->
@@ -136,6 +170,34 @@ $assetBase = '../ADMIN/header/';
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
+    <script>
+        (function () {
+            const districtBarangays = {
+                district1: ["Vasra","Bagong Pag-asa","Sto. Cristo","Project 6","Ramon Magsaysay","Alicia","Bahay Toro","Katipunan","San Antonio","Veterans Village","Bungad","Phil-Am","West Triangle","Sta. Cruz","Nayong Kanluran","Paltok","Paraiso","Mariblo","Damayan","Del Monte","Masambong","Talayan","Sto. Domingo","Siena","St. Peter","San Jose","Manresa","Damar","Pag-ibig sa Nayon","Balingasa","Sta. Teresita","San Isidro Labrador","Paang Bundok","Salvacion","N.S Amoranto","Maharlika","Lourdes"],
+                district2: ["Bagong Silangan","Batasan Hills","Commonwealth","Holy Spirit","Payatas"],
+                district3: ["Silangan","Socorro","E. Rodriguez","West Kamias","East Kamias","Quirino 2-A","Quirino 2-B","Quirino 2-C","Quirino 3-A","Claro (Quirino 3-B)","Duyan-Duyan","Amihan","Matandang Balara","Pansol","Loyola Heights","San Roque","Mangga","Masagana","Villa Maria Clara","Bayanihan","Camp Aguinaldo","White Plains","Libis","Ugong Norte","Bagumbayan","Blue Ridge A","Blue Ridge B","St. Ignatius","Milagrosa","Escopa I","Escopa II","Escopa III","Escopa IV","Marilag","Bagumbuhay","Tagumpay","Dioquino Zobel"],
+                district4: ["Sacred Heart","Laging Handa","Obrero","Paligsahan","Roxas","Kamuning","South Triangle","Pinagkaisahan","Immaculate Concepcion","San Martin De Porres","Kaunlaran","Bagong Lipunan ng Crame","Horseshoe","Valencia","Tatalon","Kalusugan","Kristong Hari","Damayang Lagi","Mariana","Doña Imelda","Santol","Sto. Niño","San Isidro Galas","Doña Aurora","Don Manuel","Doña Josefa","UP Village","Old Capitol Site","UP Campus","San Vicente","Teachers Village East","Teachers Village West","Central","Pinyahan","Malaya","Sikatuna Village","Botocan","Krus Na Ligas"],
+                district5: ["Bagbag","Capri","Greater Lagro","Gulod","Kaligayahan","Nagkaisang Nayon","North Fairview","Novaliches Proper","Pasong Putik Proper","San Agustin","San Bartolome","Sta. Lucia","Sta. Monica","Fairview"],
+                district6: ["Apolonio Samson","Baesa","Balon Bato","Culiat","New Era","Pasong Tamo","Sangandaan","Tandang Sora","Unang Sigaw","Sauyo","Talipapa"]
+            };
+
+            const districtSelect = document.getElementById('district');
+            const barangayDatalist = document.getElementById('barangayList');
+
+            function renderBarangays(key) {
+                const barangays = districtBarangays[key] || [];
+                barangayDatalist.innerHTML = barangays.map(name => `<option value="${name}"></option>`).join('');
+            }
+
+            if (districtSelect) {
+                districtSelect.addEventListener('change', function () {
+                    renderBarangays(this.value);
+                });
+                // Preload first district
+                renderBarangays(districtSelect.value || 'district1');
+            }
+        })();
+    </script>
 
     <script>
         // Form Elements
@@ -143,6 +205,16 @@ $assetBase = '../ADMIN/header/';
         const signupButton = document.getElementById('signupButton');
         const errorMessage = document.getElementById('errorMessage');
         const errorText = document.getElementById('errorText');
+        const phoneInput = document.getElementById('phone');
+
+        if (phoneInput) {
+            phoneInput.addEventListener('input', function () {
+                this.value = this.value.replace(/\D/g, '');
+                if (this.value.length === 1 && this.value === '0') {
+                    this.value = '';
+                }
+            });
+        }
         
         function showError(message) {
             errorText.textContent = message;
@@ -179,20 +251,30 @@ $assetBase = '../ADMIN/header/';
             const fullName = document.getElementById('full_name').value.trim();
             const email = document.getElementById('email').value.trim();
             const phone = document.getElementById('phone').value.trim();
+            const nationality = document.getElementById('nationality').value.trim();
+            const district = document.getElementById('district').value.trim();
             const barangay = document.getElementById('barangay').value.trim();
             const houseNumber = document.getElementById('house_number').value.trim();
-            const address = document.getElementById('address').value.trim();
+            const street = document.getElementById('street').value.trim();
             
             // Validation
-            if (!fullName || !email || !phone || !barangay || !houseNumber || !address) {
+            if (!fullName || !email || !phone || !nationality || !district || !barangay || !houseNumber || !street) {
                 showError('Please fill out all required fields.');
+                return;
+            }
+            
+            // Validate phone number (should be 10 digits)
+            if (phone.length !== 10 || !/^[1-9]\d{9}$/.test(phone)) {
+                showError('Please enter a valid 10-digit mobile number.');
                 return;
             }
             
             setLoading(true);
             
             try {
-                const payload = { email: email, name: fullName, phone: phone };
+                // Add +63 prefix to phone number
+                const phoneWithPrefix = '+63' + phone;
+                const payload = { email: email, name: fullName, phone: phoneWithPrefix };
 
                 const response = await fetch('api/send-signup-email-otp.php', {
                     method: 'POST',
@@ -209,10 +291,12 @@ $assetBase = '../ADMIN/header/';
                     pendingSignupData = {
                         name: fullName,
                         email: email,
-                        phone: phone,
+                        phone: phoneWithPrefix,
+                        nationality: nationality,
+                        district: district,
                         barangay: barangay,
                         house_number: houseNumber,
-                        address: address
+                        street: street
                     };
                     
                     // Open OTP modal
@@ -311,12 +395,13 @@ $assetBase = '../ADMIN/header/';
                 const email = document.getElementById('otpEmailDisplay').textContent;
                 const fullName = document.getElementById('full_name').value.trim();
                 const phone = document.getElementById('phone').value.trim();
+                const phoneWithPrefix = '+63' + phone;
                 
                 try {
                     const response = await fetch('api/send-signup-email-otp.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email: email, name: fullName, phone: phone })
+                        body: JSON.stringify({ email: email, name: fullName, phone: phoneWithPrefix })
                     });
                     
                     const data = await response.json();

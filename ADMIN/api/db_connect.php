@@ -12,7 +12,8 @@ $host = 'localhost'; // Changed from 'alertaraqc.com' - use localhost if PHP and
 $port = 3306; // Default MySQL port
 $db   = 'emer_comm_test';
 $user = 'root';
-$pass = 'YsqnXk6q#145';
+// Try empty password first (XAMPP default), then custom password
+$passAttempts = ['', 'YsqnXk6q#145'];
 $charset = 'utf8mb4';
 
 $options = [
@@ -33,15 +34,17 @@ $connectionAttempts = [
 ];
 
 foreach ($connectionAttempts as $attempt) {
-    try {
-        $dsn = "mysql:host={$attempt['host']};port={$attempt['port']};dbname=$db;charset=$charset";
-        $pdo = new PDO($dsn, $user, $pass, $options);
-        // Connection successful, break out of loop
-        break;
-    } catch (PDOException $e) {
-        $dbError = $e->getMessage();
-        // Continue to next attempt
-        $pdo = null;
+    foreach ($passAttempts as $pass) {
+        try {
+            $dsn = "mysql:host={$attempt['host']};port={$attempt['port']};dbname=$db;charset=$charset";
+            $pdo = new PDO($dsn, $user, $pass, $options);
+            // Connection successful, break out of loops
+            break 2;
+        } catch (PDOException $e) {
+            $dbError = $e->getMessage();
+            // Continue to next attempt
+            $pdo = null;
+        }
     }
 }
 

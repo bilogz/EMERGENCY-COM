@@ -7,7 +7,19 @@ ini_set('display_errors', 1);
 
 require_once 'api/db_connect.php';
 
+// Check if database connection was successful
+if (!isset($pdo) || $pdo === null) {
+    echo "❌ Database connection failed!\n";
+    echo "Please check your database configuration in api/db_connect.php\n";
+    die();
+}
+
 try {
+    // Show which database we're connected to
+    $stmt = $pdo->query("SELECT DATABASE() as db");
+    $dbName = $stmt->fetch()['db'];
+    echo "✓ Connected to database: $dbName\n";
+    echo "✓ Using remote database connection\n\n";
     // ============================================
     // CREATE USERS TABLE (if not exists)
     // ============================================
@@ -17,11 +29,15 @@ try {
         name VARCHAR(255) NOT NULL COMMENT 'Full name of the user',
         email VARCHAR(255) DEFAULT NULL COMMENT 'Email address (optional)',
         phone VARCHAR(20) NOT NULL COMMENT 'Mobile phone number (primary identifier)',
-        password VARCHAR(255) DEFAULT NULL COMMENT 'Hashed password (optional, for email/password login)',
+        
+        -- Personal Information
+        nationality VARCHAR(100) DEFAULT NULL COMMENT 'User nationality',
         
         -- Address Information
+        district VARCHAR(50) DEFAULT NULL COMMENT 'District in Quezon City',
         barangay VARCHAR(100) DEFAULT NULL COMMENT 'Barangay name',
         house_number VARCHAR(50) DEFAULT NULL COMMENT 'House or unit number',
+        street VARCHAR(255) DEFAULT NULL COMMENT 'Street name',
         address TEXT DEFAULT NULL COMMENT 'Complete address',
         
         -- Account Status
@@ -100,37 +116,36 @@ try {
     // ============================================
     // CHECK AND ADD EMAIL COLUMN IF MISSING
     // ============================================
-    // Check if email column exists
-    $checkEmailColumn = "SHOW COLUMNS FROM users LIKE 'email'";
-    $result = $pdo->query($checkEmailColumn)->fetchAll();
-    
-    if (empty($result)) {
-        // Email column doesn't exist, add it
-        $addEmailColumn = "ALTER TABLE users ADD COLUMN email VARCHAR(255) DEFAULT NULL AFTER name";
-        $pdo->exec($addEmailColumn);
-        echo "✓ Added email column to users table\n";
-    } else {
-        echo "✓ Email column already exists in users table\n";
-    }
-    
     // ============================================
-    // ADD UNIQUE CONSTRAINT IF MISSING
+    // ADD MISSING COLUMNS TO EXISTING USERS TABLE
     // ============================================
-    // Check if unique email constraint exists
-    $checkConstraint = "SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-                        WHERE TABLE_NAME = 'users' AND COLUMN_NAME = 'email' AND CONSTRAINT_NAME != 'PRIMARY'";
-    $result = $pdo->query($checkConstraint)->fetchAll();
+    $columnsToAdd = [
+        'nationality' => "VARCHAR(100) DEFAULT NULL COMMENT 'User nationality'",
+        'district' => "VARCHAR(50) DEFAULT NULL COMMENT 'District in Quezon City'",
+        'barangay' => "VARCHAR(100) DEFAULT NULL COMMENT 'Barangay name'",
+        'house_number' => "VARCHAR(50) DEFAULT NULL COMMENT 'House or unit number'",
+        'street' => "VARCHAR(255) DEFAULT NULL COMMENT 'Street name'",
+        'address' => "TEXT DEFAULT NULL COMMENT 'Complete address'"
+    ];
     
-    if (empty($result)) {
-        try {
-            $addConstraint = "ALTER TABLE users ADD UNIQUE KEY unique_email (email)";
-            $pdo->exec($addConstraint);
-            echo "✓ Added unique constraint on email column\n";
-        } catch (Exception $e) {
-            echo "ℹ Email constraint not added (may already exist): " . $e->getMessage() . "\n";
+    foreach ($columnsToAdd as $columnName => $definition) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+                               WHERE TABLE_SCHEMA = DATABASE() 
+                               AND TABLE_NAME = 'users' 
+                               AND COLUMN_NAME = ?");
+        $stmt->execute([$columnName]);
+        $exists = $stmt->fetchColumn() > 0;
+        
+        if (!$exists) {
+            try {
+                $pdo->exec("ALTER TABLE users ADD COLUMN `$columnName` $definition");
+                echo "✓ Added column: $columnName\n";
+            } catch (PDOException $e) {
+                echo "⚠ Could not add column $columnName: " . $e->getMessage() . "\n";
+            }
+        } else {
+            echo "✓ Column '$columnName' already exists\n";
         }
-    } else {
-        echo "✓ Email unique constraint already exists\n";
     }
     
     echo "\n✅ Database setup complete! All tables are ready.\n";

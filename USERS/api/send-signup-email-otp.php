@@ -5,6 +5,12 @@ require_once '../lib/mail.php';
 
 $response = ['success' => false, 'message' => ''];
 
+// Check if database connection was successful
+if (!isset($pdo) || $pdo === null) {
+    echo json_encode(['success' => false, 'message' => 'Database connection failed. Please check your database configuration and ensure MySQL is running.']);
+    exit();
+}
+
 try {
     // Get JSON input
     $input = json_decode(file_get_contents('php://input'), true);

@@ -7,8 +7,18 @@
 session_start();
 header('Content-Type: application/json');
 
-// Include DB connection
-require_once '../../ADMIN/api/db_connect.php';
+// Include DB connection - try local first, then admin
+if (file_exists(__DIR__ . '/db_connect.php')) {
+    require_once __DIR__ . '/db_connect.php';
+} else {
+    require_once '../../ADMIN/api/db_connect.php';
+}
+
+// Check if database connection was successful
+if (!isset($pdo) || $pdo === null) {
+    echo json_encode(["success" => false, "message" => "Database connection failed. Please check your database configuration."]);
+    exit();
+}
 
 // Verify that OTP was actually verified
 if (!isset($_SESSION['signup_otp_verified']) || $_SESSION['signup_otp_verified'] !== true) {
@@ -25,7 +35,7 @@ if ($data === null) {
 }
 
 // Validate required fields
-$required = ['name', 'email', 'phone', 'barangay', 'house_number', 'address'];
+$required = ['name', 'email', 'phone', 'barangay', 'house_number', 'street'];
 foreach ($required as $field) {
     if (!isset($data[$field])) {
         echo json_encode(["success" => false, "message" => ucfirst($field) . " is required."]);
@@ -36,13 +46,15 @@ foreach ($required as $field) {
 $name = trim($data['name']);
 $email = trim($data['email']);
 $phone = trim($data['phone']);
+$nationality = trim($data['nationality'] ?? '');
+$district = trim($data['district'] ?? '');
 $barangay = trim($data['barangay']);
 $houseNumber = trim($data['house_number']);
-$address = trim($data['address']);
+$street = trim($data['street']);
 
 // Validation
-if (empty($name) || empty($email) || empty($phone) || empty($barangay) || empty($houseNumber) || empty($address)) {
-    echo json_encode(["success" => false, "message" => "All fields must be filled."]);
+if (empty($name) || empty($email) || empty($phone) || empty($barangay) || empty($houseNumber) || empty($street)) {
+    echo json_encode(["success" => false, "message" => "All required fields must be filled."]);
     exit();
 }
 
@@ -76,41 +88,67 @@ try {
         exit();
     }
     
-    // Generate a random password for emergency access (user logs in via OTP, not password)
-    $password = bin2hex(random_bytes(8)); // Generate 16-character random password
-    
-    // Hash the password
-    $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-    
-    // Ensure optional columns exist
-    $needed = ['email' => "VARCHAR(255) DEFAULT NULL", 'phone' => "VARCHAR(20) DEFAULT NULL", 'barangay' => "VARCHAR(100) DEFAULT NULL", 'house_number' => "VARCHAR(50) DEFAULT NULL", 'address' => "TEXT DEFAULT NULL"];
+    // Ensure optional columns exist (removed password - not needed for citizen accounts)
+    $needed = [
+        'email' => "VARCHAR(255) DEFAULT NULL", 
+        'phone' => "VARCHAR(20) DEFAULT NULL", 
+        'barangay' => "VARCHAR(100) DEFAULT NULL", 
+        'house_number' => "VARCHAR(50) DEFAULT NULL", 
+        'street' => "VARCHAR(255) DEFAULT NULL",
+        'district' => "VARCHAR(50) DEFAULT NULL",
+        'nationality' => "VARCHAR(100) DEFAULT NULL"
+    ];
     foreach ($needed as $col => $def) {
-        $stmt = $pdo->prepare("SHOW COLUMNS FROM `users` LIKE ?");
+        // Check if column exists using INFORMATION_SCHEMA (compatible with MariaDB)
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+                               WHERE TABLE_SCHEMA = DATABASE() 
+                               AND TABLE_NAME = 'users' 
+                               AND COLUMN_NAME = ?");
         $stmt->execute([$col]);
-        $colExists = $stmt->fetch(PDO::FETCH_ASSOC);
+        $colExists = $stmt->fetchColumn() > 0;
+        
         if (!$colExists) {
             try {
                 $pdo->exec("ALTER TABLE `users` ADD COLUMN `$col` $def");
+                error_log("Added column $col to users table");
             } catch (PDOException $ae) {
                 error_log("Could not add column $col: " . $ae->getMessage());
             }
         }
     }
     
-    // Insert new user
-    $insertSql = "INSERT INTO `users` (`name`, `email`, `phone`, `password`, `barangay`, `house_number`, `address`, `created_at`) VALUES (:name, :email, :phone, :password, :barangay, :house_number, :address, NOW())";
+    // Build address string from components
+    $address = trim($houseNumber . ' ' . $street . ', ' . $barangay . ', Quezon City');
+    
+    // Log which database we're using
+    try {
+        $dbCheck = $pdo->query("SELECT DATABASE() as db, @@hostname as hostname");
+        $dbInfo = $dbCheck->fetch();
+        error_log("Registering user in database: {$dbInfo['db']} on host: {$dbInfo['hostname']}");
+    } catch (Exception $e) {
+        error_log("Could not get database info: " . $e->getMessage());
+    }
+    
+    // Insert new user (citizens only - login with phone + CAPTCHA)
+    $insertSql = "INSERT INTO `users` (`name`, `email`, `phone`, `nationality`, `district`, `barangay`, `house_number`, `street`, `address`, `status`, `created_at`) VALUES (:name, :email, :phone, :nationality, :district, :barangay, :house_number, :street, :address, 'active', NOW())";
     $stmt = $pdo->prepare($insertSql);
     $params = [
         ':name' => $name,
         ':email' => $email,
         ':phone' => $phoneNormalized,
-        ':password' => $hashedPassword,
+        ':nationality' => $nationality ?: null,
+        ':district' => $district ?: null,
         ':barangay' => $barangay,
         ':house_number' => $houseNumber,
+        ':street' => $street,
         ':address' => $address
     ];
     
+    error_log("Attempting to register user: $name ($email) with phone: $phoneNormalized");
+    
     if ($stmt->execute($params)) {
+        $userId = $pdo->lastInsertId();
+        error_log("User registered successfully! ID: $userId");
         // Clear session OTP data after successful registration
         unset($_SESSION['signup_otp_code']);
         unset($_SESSION['signup_otp_email']);
@@ -132,16 +170,36 @@ try {
     }
     
 } catch (PDOException $e) {
-    error_log("Register After OTP PDO Exception: " . $e->getMessage());
-    echo json_encode([
-        "success" => false,
-        "message" => "Database error occurred. Please try again."
-    ]);
+    $errorMsg = $e->getMessage();
+    error_log("Register After OTP PDO Exception: " . $errorMsg);
+    
+    // Provide more helpful error messages
+    if (strpos($errorMsg, "doesn't exist") !== false) {
+        echo json_encode([
+            "success" => false,
+            "message" => "Database table error. Please run the database setup: /USERS/api/fix-users-table.php"
+        ]);
+    } elseif (strpos($errorMsg, "Unknown column") !== false) {
+        echo json_encode([
+            "success" => false,
+            "message" => "Database column missing. Please run: /USERS/api/fix-users-table.php"
+        ]);
+    } elseif (strpos($errorMsg, "Duplicate entry") !== false) {
+        echo json_encode([
+            "success" => false,
+            "message" => "Email or phone number already registered."
+        ]);
+    } else {
+        echo json_encode([
+            "success" => false,
+            "message" => "Database error: " . $errorMsg
+        ]);
+    }
 } catch (Exception $e) {
     error_log("Register After OTP General Exception: " . $e->getMessage());
     echo json_encode([
         "success" => false,
-        "message" => "Server error occurred. Please try again."
+        "message" => "Server error: " . $e->getMessage()
     ]);
 }
 

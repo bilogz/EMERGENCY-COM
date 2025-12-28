@@ -38,7 +38,7 @@ try {
     }
     
     // Check if user exists with this phone number
-    $query = "SELECT user_id, full_name, email FROM users WHERE phone = ? LIMIT 1";
+    $query = "SELECT id as user_id, name as full_name, email FROM users WHERE phone = ? LIMIT 1";
     $stmt = $pdo->prepare($query);
     
     if (!$stmt->execute([$phone])) {
