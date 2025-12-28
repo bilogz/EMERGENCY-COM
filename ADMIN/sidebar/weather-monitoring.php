@@ -186,37 +186,40 @@ $pageTitle = 'Weather Monitoring';
         }
         
         .gw-right {
-            text-align: right;
+            text-align: left;
             min-width: 150px;
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
-            align-items: flex-end;
+            align-items: flex-start;
+            justify-content: flex-start;
         }
         
         .gw-day {
             font-size: 1.2rem;
             font-weight: 500;
             white-space: nowrap;
-            text-align: right;
+            text-align: left;
             width: 100%;
+            margin-bottom: 0.25rem;
         }
         
         .gw-condition {
             opacity: 0.8;
             font-size: 0.95rem;
-            margin-top: 0.25rem;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
             word-break: break-word;
-            text-align: right;
+            text-align: left;
             width: 100%;
         }
         
         .gw-location {
             font-size: 0.8rem;
             opacity: 0.7;
-            margin-top: 0.5rem;
+            margin-top: 0;
             word-break: break-word;
-            text-align: right;
+            text-align: left;
             width: 100%;
         }
         
@@ -1818,18 +1821,32 @@ $pageTitle = 'Weather Monitoring';
                 window.hourlyChart.destroy();
             }
             
+            // Detect dark mode
+            const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+            const textColor = isDarkMode ? '#fafafa' : '#171717';
+            const gridColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+            const borderColor = isDarkMode ? '#4c8a89' : '#4c8a89';
+            const backgroundColor = isDarkMode ? 'rgba(76, 138, 137, 0.3)' : 'rgba(76, 138, 137, 0.1)';
+            
             window.hourlyChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: [{
                         data: temps,
-                        borderColor: 'var(--primary-color-1)',
-                        backgroundColor: 'rgba(76, 138, 137, 0.1)',
-                        borderWidth: 2,
+                        borderColor: borderColor,
+                        backgroundColor: backgroundColor,
+                        borderWidth: 3,
                         fill: true,
                         tension: 0.4,
-                        pointRadius: 4
+                        pointRadius: 5,
+                        pointBackgroundColor: borderColor,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 7,
+                        pointHoverBackgroundColor: borderColor,
+                        pointHoverBorderColor: '#ffffff',
+                        pointHoverBorderWidth: 3
                     }]
                 },
                 options: {
@@ -1837,11 +1854,38 @@ $pageTitle = 'Weather Monitoring';
                     maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: (ctx) => ctx.raw + '°C' } }
+                        tooltip: { 
+                            backgroundColor: isDarkMode ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                            titleColor: textColor,
+                            bodyColor: textColor,
+                            borderColor: borderColor,
+                            borderWidth: 1,
+                            callbacks: { label: (ctx) => ctx.raw + '°C' } 
+                        }
                     },
                     scales: {
-                        x: { grid: { display: false } },
-                        y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { callback: (val) => val + '°' } }
+                        x: { 
+                            grid: { 
+                                display: true,
+                                color: gridColor
+                            },
+                            ticks: {
+                                color: textColor,
+                                font: { size: 11 }
+                            }
+                        },
+                        y: { 
+                            grid: { 
+                                color: gridColor,
+                                drawBorder: true,
+                                borderColor: gridColor
+                            }, 
+                            ticks: { 
+                                color: textColor,
+                                font: { size: 11 },
+                                callback: (val) => val + '°' 
+                            }
+                        }
                     }
                 }
             });
@@ -2401,25 +2445,30 @@ Keep concise and actionable.`;
                 return date.getHours() + ':00';
             });
             
+            // Detect dark mode
+            const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+            const textColor = isDarkMode ? '#fafafa' : '#171717';
+            const gridColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+            
             let data, borderColor, backgroundColor, label;
             
             switch(type) {
                 case 'precipitation':
                     data = hourlyData.map(item => item.rain || 0);
-                    borderColor = 'var(--primary-color-1)';
-                    backgroundColor = 'rgba(76, 138, 137, 0.2)';
+                    borderColor = isDarkMode ? '#4c8a89' : '#4c8a89';
+                    backgroundColor = isDarkMode ? 'rgba(76, 138, 137, 0.3)' : 'rgba(76, 138, 137, 0.2)';
                     label = 'mm';
                     break;
                 case 'wind':
                     data = hourlyData.map(item => (item.wind_speed || 0) * 3.6);
-                    borderColor = 'var(--text-secondary-1)';
-                    backgroundColor = 'rgba(161, 161, 170, 0.2)';
+                    borderColor = isDarkMode ? '#a1a1aa' : '#575757';
+                    backgroundColor = isDarkMode ? 'rgba(161, 161, 170, 0.3)' : 'rgba(161, 161, 170, 0.2)';
                     label = 'km/h';
                     break;
                 default:
                     data = hourlyData.map(item => Math.round(item.temp));
-                    borderColor = 'var(--primary-color-1)';
-                    backgroundColor = 'rgba(76, 138, 137, 0.1)';
+                    borderColor = isDarkMode ? '#4c8a89' : '#4c8a89';
+                    backgroundColor = isDarkMode ? 'rgba(76, 138, 137, 0.3)' : 'rgba(76, 138, 137, 0.1)';
                     label = '°C';
             }
             
@@ -2435,10 +2484,17 @@ Keep concise and actionable.`;
                         data: data,
                         borderColor: borderColor,
                         backgroundColor: backgroundColor,
-                        borderWidth: 2,
+                        borderWidth: 3,
                         fill: true,
                         tension: 0.4,
-                        pointRadius: 4
+                        pointRadius: 5,
+                        pointBackgroundColor: borderColor,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 7,
+                        pointHoverBackgroundColor: borderColor,
+                        pointHoverBorderColor: '#ffffff',
+                        pointHoverBorderWidth: 3
                     }]
                 },
                 options: {
@@ -2446,11 +2502,38 @@ Keep concise and actionable.`;
                     maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: (ctx) => ctx.raw + ' ' + label } }
+                        tooltip: { 
+                            backgroundColor: isDarkMode ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                            titleColor: textColor,
+                            bodyColor: textColor,
+                            borderColor: borderColor,
+                            borderWidth: 1,
+                            callbacks: { label: (ctx) => ctx.raw + ' ' + label } 
+                        }
                     },
                     scales: {
-                        x: { grid: { display: false } },
-                        y: { beginAtZero: type === 'precipitation', grid: { color: 'rgba(0,0,0,0.05)' } }
+                        x: { 
+                            grid: { 
+                                display: true,
+                                color: gridColor
+                            },
+                            ticks: {
+                                color: textColor,
+                                font: { size: 11 }
+                            }
+                        },
+                        y: { 
+                            beginAtZero: type === 'precipitation',
+                            grid: { 
+                                color: gridColor,
+                                drawBorder: true,
+                                borderColor: gridColor
+                            },
+                            ticks: {
+                                color: textColor,
+                                font: { size: 11 }
+                            }
+                        }
                     }
                 }
             });
