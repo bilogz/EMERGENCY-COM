@@ -700,9 +700,13 @@ $pageTitle = 'Weather Monitoring';
                             <i class="fas fa-wind"></i>
                             <span>Wind Flow</span>
                         </button>
-                        <button id="radarBtn" class="map-control-btn" title="Toggle Precipitation Radar">
-                            <i class="fas fa-cloud-rain"></i>
+                        <button id="radarBtn" class="map-control-btn" title="Toggle Weather Radar">
+                            <i class="fas fa-radar"></i>
                             <span>Radar</span>
+                        </button>
+                        <button id="precipitationBtn" class="map-control-btn" title="Toggle Precipitation Layer">
+                            <i class="fas fa-cloud-rain"></i>
+                            <span>Precipitation</span>
                         </button>
                         <button id="humidityBtn" class="map-control-btn" title="Toggle Humidity Layer">
                             <i class="fas fa-tint"></i>
@@ -801,6 +805,7 @@ $pageTitle = 'Weather Monitoring';
         let mapInitialized = false;
         let windFlowEnabled = false;
         let radarEnabled = false;
+        let precipitationEnabled = false;
         let humidityEnabled = false;
         let temperatureEnabled = false;
         let windSpeedEnabled = false;
@@ -809,6 +814,7 @@ $pageTitle = 'Weather Monitoring';
         
         // Weather layers
         let radarLayer = null;
+        let precipitationLayer = null;
         let humidityLayer = null;
         let temperatureLayer = null;
         let windSpeedLayer = null;
@@ -832,37 +838,23 @@ $pageTitle = 'Weather Monitoring';
             // Focus on Quezon City with smooth animation
             map = L.map('weatherMap').setView([14.6488, 121.0509], 12);
             
-            // Light mode tiles
+            // Light mode tiles - Standard OpenStreetMap (green land, blue ocean)
             lightTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors',
                 maxZoom: 19
             });
             
-            // Dark mode tiles - CartoDB Dark Matter (better visibility, modern dark theme)
+            // Dark mode tiles - CartoDB Dark Matter
             darkTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
                 subdomains: 'abcd',
                 maxZoom: 20
             });
             
-            // Set dark mode as default for better visibility
-            darkModeEnabled = true;
-            currentTileLayer = darkTileLayer;
+            // Set light mode as default (green land, blue ocean style)
+            darkModeEnabled = false;
+            currentTileLayer = lightTileLayer;
             currentTileLayer.addTo(map);
-            
-            // Update dark mode button state
-            setTimeout(() => {
-                const darkBtn = document.getElementById('darkModeBtn');
-                if (darkBtn) {
-                    darkBtn.classList.add('active');
-                    const icon = darkBtn.querySelector('i');
-                    if (icon) {
-                        icon.className = 'fas fa-sun';
-                        darkBtn.querySelector('span').textContent = 'Light Mode';
-                    }
-                }
-                document.getElementById('weatherMap').classList.add('map-dark-mode');
-            }, 100);
             
             // Smooth fly to Quezon City center
             setTimeout(() => {
@@ -983,6 +975,7 @@ $pageTitle = 'Weather Monitoring';
             document.getElementById('darkModeBtn')?.addEventListener('click', toggleDarkMode);
             document.getElementById('windFlowBtn')?.addEventListener('click', toggleWindFlow);
             document.getElementById('radarBtn')?.addEventListener('click', toggleRadar);
+            document.getElementById('precipitationBtn')?.addEventListener('click', togglePrecipitation);
             document.getElementById('humidityBtn')?.addEventListener('click', toggleHumidity);
             document.getElementById('temperatureBtn')?.addEventListener('click', toggleTemperature);
             document.getElementById('windSpeedBtn')?.addEventListener('click', toggleWindSpeed);
@@ -1027,6 +1020,7 @@ $pageTitle = 'Weather Monitoring';
             // Disable all modes
             windFlowEnabled = false;
             radarEnabled = false;
+            precipitationEnabled = false;
             humidityEnabled = false;
             temperatureEnabled = false;
             windSpeedEnabled = false;
@@ -1035,6 +1029,9 @@ $pageTitle = 'Weather Monitoring';
             // Remove all layers
             if (radarLayer && map.hasLayer(radarLayer)) {
                 map.removeLayer(radarLayer);
+            }
+            if (precipitationLayer && map.hasLayer(precipitationLayer)) {
+                map.removeLayer(precipitationLayer);
             }
             if (humidityLayer && map.hasLayer(humidityLayer)) {
                 map.removeLayer(humidityLayer);
@@ -1095,6 +1092,9 @@ $pageTitle = 'Weather Monitoring';
                 if (radarLayer && map.hasLayer(radarLayer)) {
                     map.removeLayer(radarLayer);
                 }
+                if (window.radarUpdateInterval) {
+                    clearInterval(window.radarUpdateInterval);
+                }
             } else {
                 // Turn off all other modes first
                 disableAllMapModes();
@@ -1104,14 +1104,14 @@ $pageTitle = 'Weather Monitoring';
                 btn.classList.add('active');
                 
                 // Use RainViewer API for radar (free, no API key needed)
-                // Radar blends with map - looks like original map
+                // Radar blends with map - looks like normal map
                 if (!radarLayer) {
                     // Get current timestamp for latest radar image
                     const timestamp = Math.floor(Date.now() / 1000);
                     radarLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`, {
                         attribution: 'RainViewer &copy; <a href="https://www.rainviewer.com">RainViewer.com</a>',
-                        opacity: 0.4, // Lower opacity to blend with map
-                        zIndex: 400
+                        opacity: 0.35, // Very low opacity to blend naturally with map
+                        zIndex: 300
                     });
                 }
                 
@@ -1125,6 +1125,48 @@ $pageTitle = 'Weather Monitoring';
                     if (radarEnabled && radarLayer) {
                         const timestamp = Math.floor(Date.now() / 1000);
                         radarLayer.setUrl(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`);
+                    }
+                }, 600000); // 10 minutes
+            }
+        }
+        
+        function togglePrecipitation() {
+            const btn = document.getElementById('precipitationBtn');
+            if (precipitationEnabled) {
+                // Turn off
+                precipitationEnabled = false;
+                btn.classList.remove('active');
+                if (precipitationLayer && map.hasLayer(precipitationLayer)) {
+                    map.removeLayer(precipitationLayer);
+                }
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on precipitation
+                precipitationEnabled = true;
+                btn.classList.add('active');
+                
+                // Use RainViewer API for precipitation (free, no API key needed)
+                if (!precipitationLayer) {
+                    const timestamp = Math.floor(Date.now() / 1000);
+                    precipitationLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`, {
+                        attribution: 'RainViewer &copy; <a href="https://www.rainviewer.com">RainViewer.com</a>',
+                        opacity: 0.5, // Moderate opacity for precipitation visibility
+                        zIndex: 350
+                    });
+                }
+                
+                precipitationLayer.addTo(map);
+                
+                // Update precipitation every 10 minutes
+                if (window.precipitationUpdateInterval) {
+                    clearInterval(window.precipitationUpdateInterval);
+                }
+                window.precipitationUpdateInterval = setInterval(() => {
+                    if (precipitationEnabled && precipitationLayer) {
+                        const timestamp = Math.floor(Date.now() / 1000);
+                        precipitationLayer.setUrl(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`);
                     }
                 }, 600000); // 10 minutes
             }
