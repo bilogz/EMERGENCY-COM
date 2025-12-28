@@ -79,8 +79,12 @@ $assetBase = '../ADMIN/header/';
                             <input type="text" id="house_number" name="house_number" placeholder="e.g. #123" required>
                         </div>
                         <div class="form-group">
-                            <label for="street">Street</label>
-                            <input type="text" id="street" name="street" placeholder="Street name in Quezon City" required>
+                            <label for="street">
+                                <i class="fas fa-road"></i> Street (Quezon City)
+                            </label>
+                            <input type="text" id="street" name="street" placeholder="Type to search street..." required autocomplete="off">
+                            <div id="streetSuggestions" class="suggestions-dropdown" style="display: none;"></div>
+                            <small class="form-hint">Start typing to search for your street</small>
                         </div>
                         
                         <div class="error-message" id="errorMessage" style="display: none;">
@@ -269,7 +273,7 @@ $assetBase = '../ADMIN/header/';
         (function () {
             let barangays = [];
             const barangayInput = document.getElementById('barangay');
-            const suggestionsDiv = document.getElementById('barangaySuggestions');
+            const barangaySuggestionsDiv = document.getElementById('barangaySuggestions');
             let selectedBarangay = null;
 
             // Load barangays from API
@@ -284,19 +288,19 @@ $assetBase = '../ADMIN/header/';
                     console.error('Failed to load barangays:', err);
                 });
 
-            if (barangayInput && suggestionsDiv) {
+            if (barangayInput && barangaySuggestionsDiv) {
                 barangayInput.addEventListener('input', function() {
                     const query = this.value.trim().toLowerCase();
-                    suggestionsDiv.innerHTML = '';
-                    suggestionsDiv.style.display = 'none';
+                    barangaySuggestionsDiv.innerHTML = '';
+                    barangaySuggestionsDiv.style.display = 'none';
 
-                    if (query.length < 2) {
+                    if (query.length < 1) {
                         return;
                     }
 
                     const matches = barangays.filter(b => 
                         b.toLowerCase().includes(query)
-                    ).slice(0, 10);
+                    ).slice(0, 15);
 
                     if (matches.length > 0) {
                         matches.forEach(barangay => {
@@ -306,18 +310,134 @@ $assetBase = '../ADMIN/header/';
                             item.addEventListener('click', function() {
                                 barangayInput.value = barangay;
                                 selectedBarangay = barangay;
-                                suggestionsDiv.style.display = 'none';
+                                barangaySuggestionsDiv.style.display = 'none';
                             });
-                            suggestionsDiv.appendChild(item);
+                            barangaySuggestionsDiv.appendChild(item);
                         });
-                        suggestionsDiv.style.display = 'block';
+                        barangaySuggestionsDiv.style.display = 'block';
+                    } else if (query.length >= 2) {
+                        const noResult = document.createElement('div');
+                        noResult.className = 'suggestion-item';
+                        noResult.style.color = '#999';
+                        noResult.textContent = 'No barangay found';
+                        barangaySuggestionsDiv.appendChild(noResult);
+                        barangaySuggestionsDiv.style.display = 'block';
+                    }
+                });
+
+                // Show all barangays when focused
+                barangayInput.addEventListener('focus', function() {
+                    if (this.value.length === 0) {
+                        const topBarangays = barangays.slice(0, 15);
+                        barangaySuggestionsDiv.innerHTML = '';
+                        topBarangays.forEach(barangay => {
+                            const item = document.createElement('div');
+                            item.className = 'suggestion-item';
+                            item.textContent = barangay;
+                            item.addEventListener('click', function() {
+                                barangayInput.value = barangay;
+                                selectedBarangay = barangay;
+                                barangaySuggestionsDiv.style.display = 'none';
+                            });
+                            barangaySuggestionsDiv.appendChild(item);
+                        });
+                        barangaySuggestionsDiv.style.display = 'block';
                     }
                 });
 
                 // Hide suggestions when clicking outside
                 document.addEventListener('click', function(e) {
-                    if (!barangayInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
-                        suggestionsDiv.style.display = 'none';
+                    if (!barangayInput.contains(e.target) && !barangaySuggestionsDiv.contains(e.target)) {
+                        barangaySuggestionsDiv.style.display = 'none';
+                    }
+                });
+            }
+        })();
+
+        // Street Autocomplete
+        (function () {
+            let streets = [];
+            const streetInput = document.getElementById('street');
+            const streetSuggestionsDiv = document.getElementById('streetSuggestions');
+            let selectedStreet = null;
+
+            // Load streets from API
+            fetch('api/get-streets.php')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.streets) {
+                        streets = data.streets;
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load streets:', err);
+                });
+
+            if (streetInput && streetSuggestionsDiv) {
+                streetInput.addEventListener('input', function() {
+                    const query = this.value.trim().toLowerCase();
+                    streetSuggestionsDiv.innerHTML = '';
+                    streetSuggestionsDiv.style.display = 'none';
+
+                    if (query.length < 1) {
+                        return;
+                    }
+
+                    const matches = streets.filter(s => 
+                        s.toLowerCase().includes(query)
+                    ).slice(0, 15);
+
+                    if (matches.length > 0) {
+                        matches.forEach(street => {
+                            const item = document.createElement('div');
+                            item.className = 'suggestion-item';
+                            item.textContent = street;
+                            item.addEventListener('click', function() {
+                                streetInput.value = street;
+                                selectedStreet = street;
+                                streetSuggestionsDiv.style.display = 'none';
+                            });
+                            streetSuggestionsDiv.appendChild(item);
+                        });
+                        streetSuggestionsDiv.style.display = 'block';
+                    } else if (query.length >= 2) {
+                        const noResult = document.createElement('div');
+                        noResult.className = 'suggestion-item';
+                        noResult.style.color = '#999';
+                        noResult.textContent = 'No street found. You can type your street name.';
+                        streetSuggestionsDiv.appendChild(noResult);
+                        streetSuggestionsDiv.style.display = 'block';
+                    }
+                });
+
+                // Show popular streets when focused
+                streetInput.addEventListener('focus', function() {
+                    if (this.value.length === 0) {
+                        const popularStreets = streets.filter(s => 
+                            s.includes('Avenue') || s.includes('Boulevard') || s.includes('Highway')
+                        ).slice(0, 15);
+                        streetSuggestionsDiv.innerHTML = '';
+                        popularStreets.forEach(street => {
+                            const item = document.createElement('div');
+                            item.className = 'suggestion-item';
+                            item.textContent = street;
+                            item.addEventListener('click', function() {
+                                streetInput.value = street;
+                                selectedStreet = street;
+                                streetSuggestionsDiv.style.display = 'none';
+                            });
+                            streetSuggestionsDiv.appendChild(item);
+                        });
+                        if (popularStreets.length > 0) {
+                            streetSuggestionsDiv.style.display = 'block';
+                        }
+                    }
+                });
+
+                // Hide suggestions when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!streetInput.contains(e.target) && !streetSuggestionsDiv.contains(e.target)) {
+                        streetSuggestionsDiv.style.display = 'none';
                     }
                 });
             }
