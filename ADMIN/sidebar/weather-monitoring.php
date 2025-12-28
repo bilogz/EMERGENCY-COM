@@ -612,6 +612,15 @@ $pageTitle = 'Weather Monitoring';
             /* No filter - tiles are already dark themed */
         }
         
+        /* Ensure map shows natural green land and blue ocean colors */
+        #weatherMap {
+            filter: none !important;
+        }
+        
+        .leaflet-container {
+            background-color: #a3ccff !important; /* Light blue ocean background */
+        }
+        
         /* Automated Warning Status */
         .auto-warning-status {
             position: absolute;
@@ -838,10 +847,11 @@ $pageTitle = 'Weather Monitoring';
             // Focus on Quezon City with smooth animation
             map = L.map('weatherMap').setView([14.6488, 121.0509], 12);
             
-            // Light mode tiles - Standard OpenStreetMap (green land, blue ocean)
-            lightTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19
+            // Light mode tiles - Stamen Terrain (vibrant green land, blue ocean)
+            lightTileLayer = L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}{r}.png', {
+                attribution: 'Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                subdomains: 'abcd',
+                maxZoom: 18
             });
             
             // Dark mode tiles - CartoDB Dark Matter
@@ -855,6 +865,9 @@ $pageTitle = 'Weather Monitoring';
             darkModeEnabled = false;
             currentTileLayer = lightTileLayer;
             currentTileLayer.addTo(map);
+            
+            // Ensure map shows green land and blue ocean clearly
+            document.getElementById('weatherMap').style.filter = 'none';
             
             // Smooth fly to Quezon City center
             setTimeout(() => {
