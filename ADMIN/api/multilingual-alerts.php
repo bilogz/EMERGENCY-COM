@@ -2,6 +2,10 @@
 /**
  * Enhanced Multilingual Support for Alerts API
  * Manage alert translations with AI support
+ * 
+ * NOTE: Alerts are automatically translated when sent to users based on their
+ * language preference (from login or guest login). This API is mainly for
+ * viewing translation history and manual translations if needed.
  */
 
 session_start();

@@ -55,21 +55,21 @@ $pageTitle = 'Multilingual Support for Alerts';
                     </ol>
                 </nav>
                 <h1>Multilingual Support for Alerts</h1>
-                <p>Manage alert translations to ensure alerts can be delivered in multiple languages for better accessibility.</p>
+                <p>AI-powered automatic translation ensures alerts are delivered in each user's preferred language.</p>
                 <div class="info-box" style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 1rem; border-radius: 4px; margin-top: 1rem;">
-                    <i class="fas fa-info-circle" style="color: #2196f3;"></i>
-                    <strong>How to use:</strong> Select an alert, choose the target language, and provide the translated title and content. The system will automatically send alerts in the subscriber's preferred language.
+                    <i class="fas fa-robot" style="color: #2196f3;"></i>
+                    <strong>Automatic Translation:</strong> When alerts are sent, the AI automatically translates them based on each user's language preference (from login) or guest language preference. No manual translation needed!
                 </div>
             </div>
             
             <div class="sub-container">
                 <div class="page-content">
-                    <!-- Supported Languages -->
+                    <!-- Supported Languages Info -->
                     <div class="module-card">
                         <div class="module-card-header">
                             <h2><i class="fas fa-language"></i> Supported Languages</h2>
                             <p style="margin-top: 0.5rem; color: #666; font-size: 0.9rem;">
-                                <i class="fas fa-info-circle"></i> Languages marked with <i class="fas fa-robot"></i> support AI translation
+                                <i class="fas fa-info-circle"></i> AI can translate alerts to any language supported by Gemini AI
                             </p>
                         </div>
                         <div>
@@ -81,54 +81,27 @@ $pageTitle = 'Multilingual Support for Alerts';
                         </div>
                     </div>
 
-                    <!-- Translate Alert -->
+                    <!-- Automatic Translation Info -->
                     <div class="module-card">
                         <div class="module-card-header">
-                            <h2><i class="fas fa-language"></i> Translate Alert</h2>
-                            <div style="margin-top: 0.5rem;">
-                                <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" id="useAI" checked>
-                                    <span><i class="fas fa-robot"></i> Use AI Translation (Gemini)</span>
-                                </label>
-                            </div>
+                            <h2><i class="fas fa-robot"></i> Automatic AI Translation</h2>
                         </div>
                         <div>
-                            <form id="translationForm">
-                                <div class="form-group">
-                                    <label for="alertSelect">Select Alert</label>
-                                    <select id="alertSelect" name="alert_id" required>
-                                        <option value="">-- Select an alert --</option>
-                                        <!-- Options will be loaded via API -->
-                                    </select>
+                            <div style="padding: 1.5rem; background: #f8f9fa; border-radius: 8px;">
+                                <h3 style="margin-top: 0; color: #2196f3;">
+                                    <i class="fas fa-magic"></i> How It Works
+                                </h3>
+                                <ol style="line-height: 2; color: #555;">
+                                    <li><strong>User Language Preference:</strong> When users log in or login as guests, their language preference is automatically detected and saved.</li>
+                                    <li><strong>Automatic Translation:</strong> When alerts are sent, the AI automatically translates each alert to match the recipient's preferred language.</li>
+                                    <li><strong>No Manual Work:</strong> Admins don't need to manually translate alerts - the AI handles it automatically!</li>
+                                    <li><strong>Real-time:</strong> Translations happen in real-time when alerts are sent, ensuring accuracy and freshness.</li>
+                                </ol>
+                                <div style="margin-top: 1.5rem; padding: 1rem; background: #e8f5e9; border-left: 4px solid #4caf50; border-radius: 4px;">
+                                    <i class="fas fa-check-circle" style="color: #4caf50;"></i>
+                                    <strong>Status:</strong> <span id="aiServiceStatus">Checking AI service...</span>
                                 </div>
-                                <div class="form-group">
-                                    <label for="targetLanguage">Target Language</label>
-                                    <select id="targetLanguage" name="target_language" required>
-                                        <option value="">-- Loading languages --</option>
-                                    </select>
-                                </div>
-                                <div id="manualTranslationFields" style="display: none;">
-                                    <div class="form-group">
-                                        <label for="translatedTitle">Translated Title *</label>
-                                        <input type="text" id="translatedTitle" name="translated_title">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="translatedContent">Translated Content *</label>
-                                        <textarea id="translatedContent" name="translated_content" rows="6"></textarea>
-                                    </div>
-                                </div>
-                                <div id="aiTranslationStatus" style="display: none; padding: 1rem; background: #f5f5f5; border-radius: 4px; margin-bottom: 1rem;">
-                                    <div id="aiStatusMessage"></div>
-                                </div>
-                                <div class="form-actions">
-                                    <button type="submit" class="btn btn-primary" id="translateBtn">
-                                        <i class="fas fa-language"></i> <span id="translateBtnText">Translate with AI</span>
-                                    </button>
-                                    <button type="button" class="btn btn-secondary" onclick="loadPreview()" id="previewBtn" style="display: none;">
-                                        <i class="fas fa-eye"></i> Preview Translation
-                                    </button>
-                                </div>
-                            </form>
+                            </div>
                         </div>
                     </div>
 
@@ -199,262 +172,39 @@ $pageTitle = 'Multilingual Support for Alerts';
         let supportedLanguages = [];
         let aiServiceAvailable = false;
         
-        // Load supported languages
-        function loadLanguages() {
-            fetch('../api/multilingual-alerts.php?action=languages')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.languages) {
-                        supportedLanguages = data.languages;
-                        const select = document.getElementById('targetLanguage');
-                        select.innerHTML = '<option value="">-- Select language --</option>';
-                        
-                        data.languages.forEach(lang => {
-                            const option = document.createElement('option');
-                            option.value = lang.language_code;
-                            const displayName = lang.flag_emoji ? `${lang.flag_emoji} ${lang.language_name}` : lang.language_name;
-                            option.textContent = displayName;
-                            option.dataset.aiSupported = lang.is_ai_supported ? '1' : '0';
-                            select.appendChild(option);
-                        });
-                        
-                        // Check AI availability
-                        checkAIAvailability();
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading languages:', error);
-                    // Fallback to basic languages
-                    const select = document.getElementById('targetLanguage');
-                    select.innerHTML = `
-                        <option value="fil">🇵🇭 Filipino</option>
-                        <option value="ceb">🇵🇭 Cebuano</option>
-                        <option value="es">🇪🇸 Spanish</option>
-                        <option value="fr">🇫🇷 French</option>
-                    `;
-                });
-        }
-        
         // Check if AI translation is available
         function checkAIAvailability() {
             fetch('../api/ai-translation-service.php')
                 .then(response => response.json())
                 .then(data => {
                     aiServiceAvailable = data.available === true;
-                    updateUIForAI();
+                    const statusElement = document.getElementById('aiServiceStatus');
+                    if (aiServiceAvailable) {
+                        statusElement.innerHTML = '<span style="color: #4caf50;"><i class="fas fa-check-circle"></i> AI Translation Service is Active and Ready</span>';
+                    } else {
+                        statusElement.innerHTML = '<span style="color: #f44336;"><i class="fas fa-exclamation-triangle"></i> AI Translation Service is Not Available. Please configure Gemini API key.</span>';
+                    }
                 })
                 .catch(error => {
                     console.error('Error checking AI availability:', error);
                     aiServiceAvailable = false;
-                    updateUIForAI();
+                    const statusElement = document.getElementById('aiServiceStatus');
+                    statusElement.innerHTML = '<span style="color: #f44336;"><i class="fas fa-exclamation-triangle"></i> Error checking AI service status.</span>';
                 });
         }
         
-        // Update UI based on AI availability and checkbox state
-        function updateUIForAI() {
-            const useAI = document.getElementById('useAI').checked;
-            const manualFields = document.getElementById('manualTranslationFields');
-            const translateBtn = document.getElementById('translateBtn');
-            const translateBtnText = document.getElementById('translateBtnText');
-            const targetLanguage = document.getElementById('targetLanguage');
-            const selectedOption = targetLanguage.options[targetLanguage.selectedIndex];
-            const isAISupported = selectedOption && selectedOption.dataset.aiSupported === '1';
-            
-            if (useAI && aiServiceAvailable && isAISupported) {
-                manualFields.style.display = 'none';
-                translateBtnText.textContent = 'Translate with AI';
-                translateBtn.querySelector('i').className = 'fas fa-robot';
-            } else {
-                manualFields.style.display = 'block';
-                translateBtnText.textContent = 'Save Translation';
-                translateBtn.querySelector('i').className = 'fas fa-save';
-                
-                if (!aiServiceAvailable) {
-                    document.getElementById('useAI').disabled = true;
-                    showAIStatus('AI translation is not available. Please configure Gemini API key.', 'warning');
-                } else if (!isAISupported) {
-                    showAIStatus('AI translation is not supported for this language. Please provide manual translation.', 'info');
-                }
-            }
-        }
-        
-        function showAIStatus(message, type = 'info') {
-            const statusDiv = document.getElementById('aiTranslationStatus');
-            const messageDiv = document.getElementById('aiStatusMessage');
-            const colors = {
-                'info': '#2196f3',
-                'warning': '#ff9800',
-                'success': '#4caf50',
-                'error': '#f44336'
-            };
-            messageDiv.innerHTML = `<i class="fas fa-info-circle"></i> ${message}`;
-            statusDiv.style.borderLeft = `4px solid ${colors[type] || colors.info}`;
-            statusDiv.style.display = 'block';
-        }
-        
-        function loadAlerts() {
-            fetch('../api/alerts.php')
+        // Load supported languages for display
+        function loadLanguages() {
+            fetch('../api/multilingual-alerts.php?action=languages')
                 .then(response => response.json())
                 .then(data => {
-                    const select = document.getElementById('alertSelect');
-                    select.innerHTML = '<option value="">-- Select an alert --</option>';
-                    
-                    if (Array.isArray(data)) {
-                        data.forEach(alert => {
-                            const option = document.createElement('option');
-                            option.value = alert.id;
-                            option.textContent = alert.title;
-                            select.appendChild(option);
-                        });
-                    }
-                });
-        }
-
-        document.getElementById('alertSelect').addEventListener('change', function() {
-            const alertId = this.value;
-            if (alertId) {
-                fetch(`../api/alerts.php?id=${alertId}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data && data.length > 0) {
-                            const alert = data[0];
-                            document.getElementById('translatedTitle').placeholder = alert.title;
-                            document.getElementById('translatedContent').placeholder = alert.message || alert.content;
-                        }
-                    });
-            }
-        });
-
-        document.getElementById('translationForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const alertId = document.getElementById('alertSelect').value;
-            const targetLanguage = document.getElementById('targetLanguage').value;
-            const useAI = document.getElementById('useAI').checked;
-            
-            if (!alertId || !targetLanguage) {
-                alert('Please select an alert and target language.');
-                return;
-            }
-            
-            // Show loading state
-            const translateBtn = document.getElementById('translateBtn');
-            const originalText = translateBtn.innerHTML;
-            translateBtn.disabled = true;
-            translateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Translating...';
-            
-            if (useAI && aiServiceAvailable) {
-                // AI Translation
-                fetch('../api/multilingual-alerts.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        alert_id: alertId,
-                        target_language: targetLanguage,
-                        use_ai: true,
-                        source_language: 'en'
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    translateBtn.disabled = false;
-                    translateBtn.innerHTML = originalText;
-                    
-                    if (data.success) {
-                        showAIStatus(`Translation completed successfully! (Method: ${data.method})`, 'success');
-                        document.getElementById('translatedTitle').value = data.translated_title || '';
-                        document.getElementById('translatedContent').value = data.translated_content || '';
-                        document.getElementById('previewBtn').style.display = 'inline-block';
-                        loadTranslations();
-                        
-                        // Auto-hide success message after 5 seconds
-                        setTimeout(() => {
-                            document.getElementById('aiTranslationStatus').style.display = 'none';
-                        }, 5000);
-                    } else {
-                        showAIStatus('Translation failed: ' + data.message, 'error');
-                        // Show manual fields as fallback
-                        document.getElementById('manualTranslationFields').style.display = 'block';
+                    if (data.success && data.languages) {
+                        supportedLanguages = data.languages;
+                        loadLanguagesGrid();
                     }
                 })
                 .catch(error => {
-                    console.error('Error:', error);
-                    translateBtn.disabled = false;
-                    translateBtn.innerHTML = originalText;
-                    showAIStatus('An error occurred during AI translation. Please try manual translation.', 'error');
-                    document.getElementById('manualTranslationFields').style.display = 'block';
-                });
-            } else {
-                // Manual Translation
-                const translatedTitle = document.getElementById('translatedTitle').value;
-                const translatedContent = document.getElementById('translatedContent').value;
-                
-                if (!translatedTitle || !translatedContent) {
-                    alert('Please provide translated title and content for manual translation.');
-                    translateBtn.disabled = false;
-                    translateBtn.innerHTML = originalText;
-                    return;
-                }
-                
-                const formData = new FormData();
-                formData.append('alert_id', alertId);
-                formData.append('target_language', targetLanguage);
-                formData.append('translated_title', translatedTitle);
-                formData.append('translated_content', translatedContent);
-                formData.append('use_ai', '0');
-                
-                fetch('../api/multilingual-alerts.php', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    translateBtn.disabled = false;
-                    translateBtn.innerHTML = originalText;
-                    
-                    if (data.success) {
-                        alert('Translation saved successfully!');
-                        this.reset();
-                        loadTranslations();
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    translateBtn.disabled = false;
-                    translateBtn.innerHTML = originalText;
-                    alert('An error occurred while saving the translation.');
-                });
-            }
-        });
-        
-        // Update UI when AI checkbox changes
-        document.getElementById('useAI').addEventListener('change', updateUIForAI);
-        document.getElementById('targetLanguage').addEventListener('change', updateUIForAI);
-        
-        function loadPreview() {
-            const alertId = document.getElementById('alertSelect').value;
-            const targetLanguage = document.getElementById('targetLanguage').value;
-            
-            if (!alertId || !targetLanguage) {
-                alert('Please select an alert and target language first.');
-                return;
-            }
-            
-            fetch(`../api/multilingual-alerts.php?action=list&alert_id=${alertId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.translations) {
-                        const translation = data.translations.find(t => t.target_language === targetLanguage);
-                        if (translation) {
-                            alert(`Preview:\n\nTitle: ${translation.translated_title}\n\nContent: ${translation.translated_content.substring(0, 200)}...`);
-                        } else {
-                            alert('No translation found for this language.');
-                        }
-                    }
+                    console.error('Error loading languages:', error);
                 });
         }
 
@@ -663,9 +413,8 @@ $pageTitle = 'Multilingual Support for Alerts';
 
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
+            checkAIAvailability();
             loadLanguages();
-            loadLanguagesGrid();
-            loadAlerts();
             loadTranslations();
         });
     </script>

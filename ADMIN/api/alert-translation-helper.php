@@ -18,17 +18,50 @@ class AlertTranslationHelper {
     
     /**
      * Get user's preferred language
-     * Checks user_preferences table, falls back to device language
+     * Checks user_preferences table, users table, guest sessions, or falls back to device language
      */
     public function getUserLanguage($userId) {
+        // Handle guest users (guest_* prefix)
+        if ($userId && strpos($userId, 'guest_') === 0) {
+            // For guests, check session or default to browser language
+            // Note: In production, guest language should be passed from frontend
+            // For now, we'll check if there's a way to get it from session
+            if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['guest_language'])) {
+                return $_SESSION['guest_language'];
+            }
+            // Try to detect from Accept-Language header
+            $acceptLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
+            if ($acceptLanguage) {
+                $langCode = strtolower(explode('-', explode(',', $acceptLanguage)[0])[0]);
+                // Validate it's a reasonable language code
+                if (strlen($langCode) === 2) {
+                    return $langCode;
+                }
+            }
+            return 'en'; // Default for guests
+        }
+        
         if (!$userId) {
             return 'en'; // Default for guests
         }
         
         try {
+            // First check user_preferences table
             $stmt = $this->pdo->prepare("
                 SELECT preferred_language FROM user_preferences 
                 WHERE user_id = ?
+            ");
+            $stmt->execute([$userId]);
+            $result = $stmt->fetch();
+            
+            if ($result && $result['preferred_language']) {
+                return $result['preferred_language'];
+            }
+            
+            // Fallback to users table
+            $stmt = $this->pdo->prepare("
+                SELECT preferred_language FROM users 
+                WHERE id = ?
             ");
             $stmt->execute([$userId]);
             $result = $stmt->fetch();
@@ -44,13 +77,37 @@ class AlertTranslationHelper {
     }
     
     /**
+     * Get user language with explicit language parameter (for API calls)
+     * This allows passing language preference directly when sending alerts
+     */
+    public function getUserLanguageWithFallback($userId, $explicitLanguage = null) {
+        // If explicit language is provided, use it
+        if ($explicitLanguage && strlen($explicitLanguage) >= 2) {
+            return $explicitLanguage;
+        }
+        
+        // Otherwise, use the standard method
+        return $this->getUserLanguage($userId);
+    }
+    
+    /**
      * Get or create translation for an alert
      * Returns translated title and message
+     * @param int $alertId Alert ID
+     * @param string|null $targetLanguage Explicit target language (optional)
+     * @param string|int|null $userId User ID or guest ID (optional)
+     * @param string|null $explicitLanguage Explicit language preference (for API calls)
      */
-    public function getTranslatedAlert($alertId, $targetLanguage = null, $userId = null) {
+    public function getTranslatedAlert($alertId, $targetLanguage = null, $userId = null, $explicitLanguage = null) {
         // Determine target language
-        if (!$targetLanguage && $userId) {
-            $targetLanguage = $this->getUserLanguage($userId);
+        if (!$targetLanguage) {
+            if ($explicitLanguage) {
+                $targetLanguage = $explicitLanguage;
+            } elseif ($userId) {
+                $targetLanguage = $this->getUserLanguage($userId);
+            } else {
+                $targetLanguage = 'en'; // Default to English
+            }
         }
         
         if (!$targetLanguage || $targetLanguage === 'en') {
@@ -228,12 +285,22 @@ class AlertTranslationHelper {
     /**
      * Translate alert for multiple users
      * Returns array of user_id => translated_alert
+     * @param int $alertId Alert ID
+     * @param array $userIds Array of user IDs
+     * @param array|null $userLanguages Optional array of user_id => language_code for explicit preferences
      */
-    public function translateAlertForUsers($alertId, $userIds) {
+    public function translateAlertForUsers($alertId, $userIds, $userLanguages = null) {
         $results = [];
         
         foreach ($userIds as $userId) {
-            $language = $this->getUserLanguage($userId);
+            // Use explicit language if provided, otherwise get from user preference
+            $language = null;
+            if ($userLanguages && isset($userLanguages[$userId])) {
+                $language = $userLanguages[$userId];
+            } else {
+                $language = $this->getUserLanguage($userId);
+            }
+            
             $translated = $this->getTranslatedAlert($alertId, $language, $userId);
             
             if ($translated) {
@@ -247,9 +314,13 @@ class AlertTranslationHelper {
     /**
      * Get alert message for sending (SMS/Email)
      * Formats the alert appropriately for the channel
+     * @param int $alertId Alert ID
+     * @param string|int|null $userId User ID or guest ID
+     * @param string $channel Channel type ('sms', 'email', etc.)
+     * @param string|null $explicitLanguage Explicit language preference (optional)
      */
-    public function getAlertMessageForChannel($alertId, $userId, $channel = 'sms') {
-        $alert = $this->getTranslatedAlert($alertId, null, $userId);
+    public function getAlertMessageForChannel($alertId, $userId, $channel = 'sms', $explicitLanguage = null) {
+        $alert = $this->getTranslatedAlert($alertId, null, $userId, $explicitLanguage);
         
         if (!$alert) {
             return null;
