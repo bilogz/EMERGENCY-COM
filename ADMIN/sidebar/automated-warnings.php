@@ -150,6 +150,103 @@ $pageTitle = 'Automated Warning Integration';
                         </div>
                     </div>
 
+                    <!-- AI Warning Settings -->
+                    <div class="module-card">
+                        <div class="module-card-header">
+                            <h2><i class="fas fa-robot"></i> AI-Powered Auto Warning System</h2>
+                        </div>
+                        <div>
+                            <form id="aiWarningSettingsForm">
+                                <div class="form-group">
+                                    <label for="aiEnabled">Enable AI Auto Warnings</label>
+                                    <label class="switch">
+                                        <input type="checkbox" id="aiEnabled" name="ai_enabled">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <small>Use AI to automatically detect dangerous weather conditions and send mass notifications</small>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="aiCheckInterval">AI Analysis Interval (minutes)</label>
+                                    <input type="number" id="aiCheckInterval" name="ai_check_interval" value="30" min="5" max="120">
+                                    <small>How often AI analyzes weather data for dangerous conditions</small>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Danger Thresholds</label>
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 0.5rem;">
+                                        <div>
+                                            <label for="windThreshold">Wind Speed (km/h)</label>
+                                            <input type="number" id="windThreshold" name="wind_threshold" value="60" min="0" step="5">
+                                            <small>Alert if wind exceeds this speed</small>
+                                        </div>
+                                        <div>
+                                            <label for="rainThreshold">Rainfall (mm/hour)</label>
+                                            <input type="number" id="rainThreshold" name="rain_threshold" value="20" min="0" step="1">
+                                            <small>Alert if rainfall exceeds this rate</small>
+                                        </div>
+                                        <div>
+                                            <label for="earthquakeThreshold">Earthquake Magnitude</label>
+                                            <input type="number" id="earthquakeThreshold" name="earthquake_threshold" value="5.0" min="0" step="0.1">
+                                            <small>Alert if earthquake magnitude exceeds this</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Auto Warning Types</label>
+                                    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem;">
+                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" name="warning_types[]" value="flooding" checked>
+                                            <span><i class="fas fa-water" style="color: #2196F3;"></i> Flooding Warnings</span>
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" name="warning_types[]" value="landslide" checked>
+                                            <span><i class="fas fa-mountain" style="color: #FF9800;"></i> Landslide Warnings</span>
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" name="warning_types[]" value="typhoon" checked>
+                                            <span><i class="fas fa-hurricane" style="color: #F44336;"></i> Typhoon/Storm Warnings</span>
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" name="warning_types[]" value="earthquake" checked>
+                                            <span><i class="fas fa-mountain" style="color: #E91E63;"></i> Earthquake Warnings</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Monitored Areas</label>
+                                    <div style="margin-top: 0.5rem;">
+                                        <textarea id="monitoredAreas" name="monitored_areas" rows="4" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" placeholder="Enter areas to monitor (one per line):&#10;Quezon City&#10;Manila&#10;Makati"></textarea>
+                                        <small>List areas to monitor for flooding/landslide risks (one per line)</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="aiNotificationChannels">AI Warning Channels</label>
+                                    <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+                                        <label><input type="checkbox" name="ai_channels[]" value="sms" checked> SMS</label>
+                                        <label><input type="checkbox" name="ai_channels[]" value="email" checked> Email</label>
+                                        <label><input type="checkbox" name="ai_channels[]" value="pa" checked> PA System</label>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-save"></i> Save AI Settings
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" onclick="testAIWarning()">
+                                        <i class="fas fa-vial"></i> Test AI Warning
+                                    </button>
+                                    <button type="button" class="btn btn-info" onclick="checkAIWarnings(event)">
+                                        <i class="fas fa-search"></i> Check Now
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
                     <!-- Recent Warnings -->
                     <div class="module-card">
                         <div class="module-card-header">
@@ -276,10 +373,120 @@ $pageTitle = 'Automated Warning Integration';
             });
         });
 
+        // AI Warning Settings Form Handler
+        document.getElementById('aiWarningSettingsForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            fetch('../api/ai-warnings.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('AI Warning Settings saved successfully!');
+                    loadAISettings();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            });
+        });
+
+        // Load AI Settings
+        function loadAISettings() {
+            fetch('../api/ai-warnings.php?action=getSettings')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.settings) {
+                        const settings = data.settings;
+                        document.getElementById('aiEnabled').checked = settings.ai_enabled || false;
+                        document.getElementById('aiCheckInterval').value = settings.ai_check_interval || 30;
+                        document.getElementById('windThreshold').value = settings.wind_threshold || 60;
+                        document.getElementById('rainThreshold').value = settings.rain_threshold || 20;
+                        document.getElementById('earthquakeThreshold').value = settings.earthquake_threshold || 5.0;
+                        document.getElementById('monitoredAreas').value = settings.monitored_areas || '';
+                        
+                        // Set warning types
+                        if (settings.warning_types) {
+                            const types = settings.warning_types.split(',');
+                            document.querySelectorAll('input[name="warning_types[]"]').forEach(checkbox => {
+                                checkbox.checked = types.includes(checkbox.value);
+                            });
+                        }
+                        
+                        // Set channels
+                        if (settings.ai_channels) {
+                            const channels = settings.ai_channels.split(',');
+                            document.querySelectorAll('input[name="ai_channels[]"]').forEach(checkbox => {
+                                checkbox.checked = channels.includes(checkbox.value);
+                            });
+                        }
+                    }
+                });
+        }
+
+        // Test AI Warning
+        function testAIWarning() {
+            if (confirm('This will send a test AI warning notification. Continue?')) {
+                fetch('../api/ai-warnings.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'test'
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Test warning sent successfully! Check mass notifications.');
+                        loadWarnings(); // Refresh warnings table
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                });
+            }
+        }
+
+        // Check AI Warnings Now
+        function checkAIWarnings() {
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+            btn.disabled = true;
+            
+            fetch('../api/ai-warnings.php?action=check')
+                .then(response => response.json())
+                .then(data => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    
+                    if (data.success) {
+                        const count = data.warnings_generated || 0;
+                        if (count > 0) {
+                            alert(`AI Warning System checked conditions and generated ${count} warning(s). Check Recent Warnings table.`);
+                        } else {
+                            alert('AI Warning System checked conditions. No dangerous conditions detected at this time.');
+                        }
+                        loadWarnings(); // Refresh warnings table
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    alert('Error checking warnings: ' + error.message);
+                });
+        }
+
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadIntegrationStatus();
             loadWarnings();
+            loadAISettings();
         });
     </script>
 </body>

@@ -225,6 +225,12 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                     <div class="map-container">
                         <div id="earthquakeMap"></div>
                         
+                        <!-- Quezon City Focus Status -->
+                        <div id="quezonCityStatus" onclick="focusQuezonCity()" style="cursor: pointer; position: absolute; bottom: 20px; right: 20px; background: rgba(255, 152, 0, 0.9); color: white; padding: 0.75rem 1rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 1000; display: flex; align-items: center; gap: 0.5rem; font-weight: 500;" title="Click to focus on Quezon City">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>Focused on Quezon City</span>
+                        </div>
+                        
                         <!-- Controls -->
                         <div class="earthquake-controls">
                             <button id="refreshBtn" class="earthquake-control-btn" title="Refresh Earthquake Data">
@@ -262,8 +268,8 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         
         // Initialize map
         function initMap() {
-            // Focus on Philippines
-            map = L.map('earthquakeMap').setView([14.5995, 120.9842], 6);
+            // Focus on Quezon City
+            map = L.map('earthquakeMap').setView([14.6488, 121.0509], 12);
             
             // Standard OpenStreetMap tiles (green land, blue ocean)
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -454,6 +460,16 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
             const days = Math.floor(hours / 24);
             return `${days} day${days > 1 ? 's' : ''} ago`;
+        }
+        
+        // Focus on Quezon City
+        function focusQuezonCity() {
+            if (map) {
+                map.flyTo([14.6488, 121.0509], 12, {
+                    duration: 1.5,
+                    easeLinearity: 0.25
+                });
+            }
         }
         
         // Initialize on page load
