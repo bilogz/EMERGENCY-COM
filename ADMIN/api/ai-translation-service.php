@@ -10,11 +10,26 @@ require_once 'activity_logger.php';
 class AITranslationService {
     private $pdo;
     private $apiKey;
-    private $apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+    private $apiUrl;
     
     public function __construct($pdo) {
         $this->pdo = $pdo;
         $this->loadApiKey();
+        $this->loadApiUrl();
+    }
+    
+    /**
+     * Load API URL dynamically based on configured model
+     */
+    private function loadApiUrl() {
+        if (file_exists(__DIR__ . '/secure-api-config.php')) {
+            require_once __DIR__ . '/secure-api-config.php';
+            $model = getGeminiModel();
+            $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+        } else {
+            // Fallback to default
+            $this->apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+        }
     }
     
     /**

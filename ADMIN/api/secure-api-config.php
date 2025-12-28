@@ -55,9 +55,9 @@ function getGeminiModel() {
     $secureConfigFile = __DIR__ . '/../../USERS/api/config.local.php';
     if (file_exists($secureConfigFile)) {
         $secureConfig = require $secureConfigFile;
-        return $secureConfig['GEMINI_MODEL'] ?? 'gemini-2.0-flash-exp';
+        return $secureConfig['GEMINI_MODEL'] ?? 'gemini-2.5-flash';
     }
-    return 'gemini-2.0-flash-exp';
+    return 'gemini-2.5-flash';
 }
 
 /**
