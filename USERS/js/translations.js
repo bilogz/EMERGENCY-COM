@@ -227,22 +227,41 @@ function getCurrentLanguage() {
     return localStorage.getItem('preferredLanguage') || 'en';
 }
 
+// Export for global access
+window.getCurrentLanguage = getCurrentLanguage;
+
 // Set language
 function setLanguage(code) {
     localStorage.setItem('preferredLanguage', code);
+    localStorage.setItem('user_language_set', 'true');
     document.documentElement.setAttribute('data-lang', code);
+    document.documentElement.setAttribute('lang', code);
     applyTranslations();
 }
 
+// Export for global access
+window.setLanguage = setLanguage;
+
 // Apply translations to the page
-function applyTranslations() {
+async function applyTranslations() {
     const lang = getCurrentLanguage();
-    const translation = translations[lang] || translations.en;
+    let translation = translations[lang] || translations.en;
+    
+    // If language is not in static translations, try to fetch from API
+    if (!translations[lang] && lang !== 'en') {
+        console.log(`Language ${lang} not in static translations, using English fallback`);
+        // For now, use English as fallback
+        // In future, you can implement API-based translation fetching here
+    }
     
     // Find all elements with data-translate attribute
     document.querySelectorAll('[data-translate]').forEach(element => {
         const key = element.getAttribute('data-translate');
         if (translation[key]) {
+            // Store original text if not already stored
+            if (!element.hasAttribute('data-original-text')) {
+                element.setAttribute('data-original-text', element.textContent);
+            }
             element.textContent = translation[key];
         }
     });
@@ -251,6 +270,9 @@ function applyTranslations() {
     document.querySelectorAll('[data-translate-html]').forEach(element => {
         const key = element.getAttribute('data-translate-html');
         if (translation[key]) {
+            if (!element.hasAttribute('data-original-html')) {
+                element.setAttribute('data-original-html', element.innerHTML);
+            }
             element.innerHTML = translation[key];
         }
     });
@@ -259,6 +281,9 @@ function applyTranslations() {
     document.querySelectorAll('[data-translate-placeholder]').forEach(element => {
         const key = element.getAttribute('data-translate-placeholder');
         if (translation[key]) {
+            if (!element.hasAttribute('data-original-placeholder')) {
+                element.setAttribute('data-original-placeholder', element.placeholder);
+            }
             element.placeholder = translation[key];
         }
     });
@@ -268,29 +293,58 @@ function applyTranslations() {
     if (titleKey && translation[titleKey]) {
         document.title = translation[titleKey];
     }
+    
+    console.log(`✓ Translations applied for language: ${lang}`);
 }
+
+// Export for global access
+window.applyTranslations = applyTranslations;
 
 // Initialize translations on page load
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🌍 Translation system initializing...');
     const currentLang = getCurrentLanguage();
+    console.log(`Current language: ${currentLang}`);
     document.documentElement.setAttribute('data-lang', currentLang);
+    document.documentElement.setAttribute('lang', currentLang);
+    
+    // Apply translations immediately
     applyTranslations();
+    
+    // Also apply after a short delay to catch dynamically loaded content
+    setTimeout(() => {
+        applyTranslations();
+    }, 500);
 });
 
 // Listen for language changes and apply translations
 document.addEventListener('languageChanged', function(event) {
+    console.log('🔄 Language changed event received');
     const lang = event.detail?.language || getCurrentLanguage();
+    console.log(`Switching to language: ${lang}`);
     localStorage.setItem('preferredLanguage', lang);
-    applyTranslations();
+    localStorage.setItem('user_language_set', 'true');
     
-    // Also update HTML lang attribute
+    // Update HTML attributes
     document.documentElement.setAttribute('lang', lang);
     document.documentElement.setAttribute('data-lang', lang);
+    
+    // Apply translations
+    applyTranslations();
 });
 
 // Also listen for languagesUpdated event
 document.addEventListener('languagesUpdated', function() {
+    console.log('📋 Languages list updated');
     // Refresh translations if needed
     applyTranslations();
 });
+
+// Debug helper - expose translation function globally
+window.debugTranslations = function() {
+    console.log('Current language:', getCurrentLanguage());
+    console.log('Available translations:', Object.keys(translations));
+    console.log('Elements with data-translate:', document.querySelectorAll('[data-translate]').length);
+    applyTranslations();
+};
 
