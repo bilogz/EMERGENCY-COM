@@ -392,21 +392,29 @@ $pageTitle = 'Weather Monitoring';
         
         /* Weather Markers */
         .weather-marker-icon {
-            background: white;
+            background: rgba(255, 255, 255, 0.75);
             border-radius: 50%;
             padding: 0.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 0.25rem;
             min-width: 80px;
             transition: all 0.3s ease;
+            opacity: 0.5;
+            backdrop-filter: blur(4px);
+        }
+        
+        .weather-marker-icon:hover {
+            opacity: 0.9;
+            background: rgba(255, 255, 255, 0.95);
         }
         
         .weather-marker-icon img {
             width: 40px;
             height: 40px;
+            opacity: 0.8;
         }
         
         .weather-marker-temp {
@@ -873,20 +881,22 @@ $pageTitle = 'Weather Monitoring';
                 if (indicator) {
                     indicator.textContent = `Zoom: ${zoom} ${zoom > 12 ? '(Icons hidden)' : ''}`;
                 }
-                if (windFlowEnabled) {
+                if (windFlowEnabled && windFlowCanvas) {
                     createWindParticles();
-                }
-            });
-            
-            map.on('moveend', function() {
-                if (windFlowEnabled) {
-                    createWindParticles();
+                    if (animationFrameId) {
+                        drawWindFlow();
+                    }
                 }
                 updateQuezonCityStatus();
             });
             
-            // Update status on zoom
-            map.on('zoomend', function() {
+            map.on('moveend', function() {
+                if (windFlowEnabled && windFlowCanvas) {
+                    createWindParticles();
+                    if (animationFrameId) {
+                        drawWindFlow();
+                    }
+                }
                 updateQuezonCityStatus();
             });
             
@@ -916,12 +926,8 @@ $pageTitle = 'Weather Monitoring';
         
         // Initialize weather layers
         function initWeatherLayers() {
-            // RainViewer Radar (Free, Real-time)
-            radarLayer = L.tileLayer('https://tilecache.rainviewer.com/v2/radar/{time}/256/{z}/{x}/{y}/2/1_1.png', {
-                attribution: 'RainViewer &copy; <a href="https://www.rainviewer.com">RainViewer.com</a>',
-                opacity: 0.7,
-                time: Date.now()
-            });
+            // RainViewer Radar will be initialized when needed (no need to create it here)
+            radarLayer = null;
             
             // OpenWeatherMap Humidity Layer (requires API key)
             humidityLayer = L.tileLayer('https://tile.openweathermap.org/map/humidity_new/{z}/{x}/{y}.png?appid={apiKey}', {
@@ -1002,11 +1008,56 @@ $pageTitle = 'Weather Monitoring';
             }
         }
         
-        // Toggle functions
+        // Helper function to disable all other map modes
+        function disableAllMapModes() {
+            // Disable all modes
+            windFlowEnabled = false;
+            radarEnabled = false;
+            humidityEnabled = false;
+            temperatureEnabled = false;
+            windSpeedEnabled = false;
+            cloudsEnabled = false;
+            
+            // Remove all layers
+            if (radarLayer && map.hasLayer(radarLayer)) {
+                map.removeLayer(radarLayer);
+            }
+            if (humidityLayer && map.hasLayer(humidityLayer)) {
+                map.removeLayer(humidityLayer);
+            }
+            if (temperatureLayer && map.hasLayer(temperatureLayer)) {
+                map.removeLayer(temperatureLayer);
+            }
+            if (windSpeedLayer && map.hasLayer(windSpeedLayer)) {
+                map.removeLayer(windSpeedLayer);
+            }
+            if (cloudsLayer && map.hasLayer(cloudsLayer)) {
+                map.removeLayer(cloudsLayer);
+            }
+            stopWindFlowAnimation();
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('.map-control-btn').forEach(btn => {
+                if (btn.id !== 'darkModeBtn') {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+        
+        // Toggle functions - Only one mode can be active at a time
         function toggleWindFlow() {
-            windFlowEnabled = !windFlowEnabled;
             const btn = document.getElementById('windFlowBtn');
             if (windFlowEnabled) {
+                // Turn off
+                windFlowEnabled = false;
+                btn.classList.remove('active');
+                stopWindFlowAnimation();
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on wind flow
+                windFlowEnabled = true;
                 btn.classList.add('active');
                 if (markers.length > 0) {
                     startWindFlowAnimation();
@@ -1018,70 +1069,129 @@ $pageTitle = 'Weather Monitoring';
                         }
                     }, 500);
                 }
-            } else {
-                btn.classList.remove('active');
-                stopWindFlowAnimation();
             }
         }
         
         function toggleRadar() {
-            radarEnabled = !radarEnabled;
             const btn = document.getElementById('radarBtn');
             if (radarEnabled) {
-                btn.classList.add('active');
-                radarLayer.addTo(map);
-                updateRadarTime();
-            } else {
+                // Turn off
+                radarEnabled = false;
                 btn.classList.remove('active');
-                map.removeLayer(radarLayer);
+                if (radarLayer && map.hasLayer(radarLayer)) {
+                    map.removeLayer(radarLayer);
+                }
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on radar
+                radarEnabled = true;
+                btn.classList.add('active');
+                
+                // Use RainViewer API for radar (free, no API key needed)
+                if (!radarLayer) {
+                    // Get current timestamp for latest radar image
+                    const timestamp = Math.floor(Date.now() / 1000);
+                    radarLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`, {
+                        attribution: 'RainViewer &copy; <a href="https://www.rainviewer.com">RainViewer.com</a>',
+                        opacity: 0.6,
+                        zIndex: 500
+                    });
+                }
+                
+                radarLayer.addTo(map);
+                
+                // Update radar every 10 minutes
+                if (window.radarUpdateInterval) {
+                    clearInterval(window.radarUpdateInterval);
+                }
+                window.radarUpdateInterval = setInterval(() => {
+                    if (radarEnabled && radarLayer) {
+                        const timestamp = Math.floor(Date.now() / 1000);
+                        radarLayer.setUrl(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`);
+                    }
+                }, 600000); // 10 minutes
             }
         }
         
         function toggleHumidity() {
-            humidityEnabled = !humidityEnabled;
             const btn = document.getElementById('humidityBtn');
             if (humidityEnabled) {
+                // Turn off
+                humidityEnabled = false;
+                btn.classList.remove('active');
+                if (humidityLayer && map.hasLayer(humidityLayer)) {
+                    map.removeLayer(humidityLayer);
+                }
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on humidity
+                humidityEnabled = true;
                 btn.classList.add('active');
                 loadOpenWeatherLayer('humidity', humidityLayer);
-            } else {
-                btn.classList.remove('active');
-                map.removeLayer(humidityLayer);
             }
         }
         
         function toggleTemperature() {
-            temperatureEnabled = !temperatureEnabled;
             const btn = document.getElementById('temperatureBtn');
             if (temperatureEnabled) {
+                // Turn off
+                temperatureEnabled = false;
+                btn.classList.remove('active');
+                if (temperatureLayer && map.hasLayer(temperatureLayer)) {
+                    map.removeLayer(temperatureLayer);
+                }
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on temperature
+                temperatureEnabled = true;
                 btn.classList.add('active');
                 loadOpenWeatherLayer('temp', temperatureLayer);
-            } else {
-                btn.classList.remove('active');
-                map.removeLayer(temperatureLayer);
             }
         }
         
         function toggleWindSpeed() {
-            windSpeedEnabled = !windSpeedEnabled;
             const btn = document.getElementById('windSpeedBtn');
             if (windSpeedEnabled) {
+                // Turn off
+                windSpeedEnabled = false;
+                btn.classList.remove('active');
+                if (windSpeedLayer && map.hasLayer(windSpeedLayer)) {
+                    map.removeLayer(windSpeedLayer);
+                }
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on wind speed
+                windSpeedEnabled = true;
                 btn.classList.add('active');
                 loadOpenWeatherLayer('wind', windSpeedLayer);
-            } else {
-                btn.classList.remove('active');
-                map.removeLayer(windSpeedLayer);
             }
         }
         
         function toggleClouds() {
-            cloudsEnabled = !cloudsEnabled;
             const btn = document.getElementById('cloudsBtn');
             if (cloudsEnabled) {
+                // Turn off
+                cloudsEnabled = false;
+                btn.classList.remove('active');
+                if (cloudsLayer && map.hasLayer(cloudsLayer)) {
+                    map.removeLayer(cloudsLayer);
+                }
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on clouds
+                cloudsEnabled = true;
                 btn.classList.add('active');
                 loadOpenWeatherLayer('clouds', cloudsLayer);
-            } else {
-                btn.classList.remove('active');
-                map.removeLayer(cloudsLayer);
             }
         }
         
@@ -1104,11 +1214,11 @@ $pageTitle = 'Weather Monitoring';
                 });
         }
         
-        // Update radar time for animation
+        // Update radar time for animation (no longer needed - handled in toggleRadar)
         function updateRadarTime() {
             if (radarEnabled && radarLayer) {
-                const now = Date.now();
-                radarLayer.setUrl(`https://tilecache.rainviewer.com/v2/radar/${now}/256/{z}/{x}/{y}/2/1_1.png`);
+                const timestamp = Math.floor(Date.now() / 1000);
+                radarLayer.setUrl(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`);
             }
         }
         
@@ -1337,8 +1447,22 @@ $pageTitle = 'Weather Monitoring';
         
         // Start wind flow animation
         function startWindFlowAnimation() {
-            createWindParticles();
-            animateWindFlow();
+            if (!windFlowCanvas) {
+                // Re-initialize if needed
+                initWindFlowCanvas();
+            }
+            if (markers.length > 0) {
+                createWindParticles();
+                animateWindFlow();
+            } else {
+                // Wait for markers
+                setTimeout(() => {
+                    if (markers.length > 0 && windFlowEnabled) {
+                        createWindParticles();
+                        animateWindFlow();
+                    }
+                }, 1000);
+            }
         }
         
         // Stop wind flow animation
@@ -1347,7 +1471,7 @@ $pageTitle = 'Weather Monitoring';
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
             }
-            if (windFlowCtx && windFlowCanvas) {
+            if (windFlowCtx && windFlowCanvas && windFlowCanvas._canvas) {
                 windFlowCtx.clearRect(0, 0, windFlowCanvas._canvas.width, windFlowCanvas._canvas.height);
             }
             windParticles = [];
@@ -1680,8 +1804,11 @@ $pageTitle = 'Weather Monitoring';
                         });
                         
                         // Create wind particles if wind flow is enabled
-                        if (windFlowEnabled && markers.length > 0) {
+                        if (windFlowEnabled && markers.length > 0 && windFlowCanvas) {
                             createWindParticles();
+                            if (!animationFrameId) {
+                                startWindFlowAnimation();
+                            }
                         }
                     }
                 })
