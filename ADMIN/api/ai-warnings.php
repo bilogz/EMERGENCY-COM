@@ -15,6 +15,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
 require_once 'secure-api-config.php';
 require_once 'alert-translation-helper.php';
+require_once 'activity_logger.php';
 
 session_start();
 
@@ -85,6 +86,8 @@ function getAISettings() {
 function saveAISettings() {
     global $pdo;
     
+    $adminId = $_SESSION['admin_user_id'] ?? null;
+    
     // Create table if not exists
     $pdo->exec("CREATE TABLE IF NOT EXISTS ai_warning_settings (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -149,11 +152,28 @@ function saveAISettings() {
         ]);
     }
     
+    // Log admin activity
+    if ($adminId) {
+        $changes = [];
+        if (isset($_POST['ai_enabled'])) {
+            $changes[] = 'AI Enabled: ' . ($_POST['ai_enabled'] ? 'Yes' : 'No');
+        }
+        if (isset($_POST['ai_check_interval'])) {
+            $changes[] = 'Check Interval: ' . $_POST['ai_check_interval'] . ' minutes';
+        }
+        if (isset($_POST['warning_types'])) {
+            $changes[] = 'Warning Types: ' . implode(', ', $_POST['warning_types']);
+        }
+        logAdminActivity($adminId, 'update_ai_warning_settings', 'Updated AI warning settings: ' . implode(', ', $changes));
+    }
+    
     echo json_encode(['success' => true, 'message' => 'AI settings saved successfully']);
 }
 
 function sendTestWarning() {
     global $pdo;
+    
+    $adminId = $_SESSION['admin_user_id'] ?? null;
     
     // Create a test warning
     $title = "Test AI Warning - Dangerous Weather Detected";
@@ -164,16 +184,25 @@ function sendTestWarning() {
         (source, type, title, content, severity, status) 
         VALUES (?, ?, ?, ?, ?, ?)");
     $stmt->execute(['ai', 'test', $title, $content, 'high', 'published']);
+    $warningId = $pdo->lastInsertId();
+    
+    // Log admin activity
+    if ($adminId) {
+        logAdminActivity($adminId, 'test_ai_warning', "Sent test AI warning (ID: {$warningId})");
+    }
     
     echo json_encode([
         'success' => true, 
         'message' => 'Test warning created successfully',
-        'warning_id' => $pdo->lastInsertId()
+        'warning_id' => $warningId
     ]);
 }
 
 function checkAndSendWarnings() {
     global $pdo;
+    
+    $adminId = $_SESSION['admin_user_id'] ?? null;
+    $isCronJob = isset($_GET['cron']) && $_GET['cron'] === 'true';
     
     // Get AI settings
     $stmt = $pdo->query("SELECT * FROM ai_warning_settings WHERE ai_enabled = 1 ORDER BY id DESC LIMIT 1");
@@ -182,6 +211,11 @@ function checkAndSendWarnings() {
     if (!$settings || !$settings['ai_enabled']) {
         echo json_encode(['success' => false, 'message' => 'AI warnings are disabled']);
         return;
+    }
+    
+    // Log activity if manual check (not cron)
+    if ($adminId && !$isCronJob) {
+        logAdminActivity($adminId, 'check_ai_warnings', 'Manually triggered AI warning check');
     }
     
     $warnings = [];
@@ -252,6 +286,13 @@ function checkAndSendWarnings() {
         // Send notifications to subscribed users
         $sent = sendNotificationsToSubscribers($alertId, $warning, $settings);
         $sentCount += $sent;
+    }
+    
+    // Log activity if warnings were generated
+    if ($adminId && count($warnings) > 0) {
+        $source = $isCronJob ? 'cron' : 'manual';
+        logAdminActivity($adminId, 'ai_warnings_generated', 
+            "AI generated {$sentCount} notifications for " . count($warnings) . " warning(s) via {$source} check");
     }
     
     echo json_encode([

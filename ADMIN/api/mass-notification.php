@@ -6,6 +6,9 @@
 
 header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
+require_once 'activity_logger.php';
+
+session_start();
 
 $action = $_GET['action'] ?? 'send';
 
@@ -43,6 +46,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         
         $stmt = $pdo->prepare("UPDATE notification_logs SET status = ? WHERE id = ?");
         $stmt->execute([$status, $notificationId]);
+        
+        // Log admin activity
+        $adminId = $_SESSION['admin_user_id'] ?? null;
+        if ($adminId) {
+            $recipientCount = is_array($recipients) ? count($recipients) : (strpos($recipientsStr, ',') !== false ? substr_count($recipientsStr, ',') + 1 : 1);
+            logAdminActivity($adminId, 'send_mass_notification', 
+                "Sent {$channel} notification to {$recipientCount} recipient(s) via {$source}. Priority: {$priority}");
+        }
         
         echo json_encode([
             'success' => true,

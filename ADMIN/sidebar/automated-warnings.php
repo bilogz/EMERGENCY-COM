@@ -530,7 +530,7 @@ $pageTitle = 'Automated Warning Integration';
                             const isConnected = data.gemini.enabled && data.gemini.api_key_set;
                             document.getElementById('geminiStatus').textContent = isConnected ? 'CONNECTED' : 'DISCONNECTED';
                             document.getElementById('geminiStatus').className = 'badge ' + (isConnected ? 'success' : 'secondary');
-                            document.getElementById('geminiStatusText').textContent = isConnected ? 'AI Active' : (data.gemini.api_key_set ? 'API Key Set - Enable AI' : 'API Key Required');
+                            document.getElementById('geminiStatusText').textContent = data.gemini.status_message || (isConnected ? 'AI Active' : (data.gemini.api_key_set ? 'API Key Set - Enable AI' : 'API Key Required'));
                         } else {
                             document.getElementById('geminiStatus').textContent = 'DISCONNECTED';
                             document.getElementById('geminiStatus').className = 'badge secondary';

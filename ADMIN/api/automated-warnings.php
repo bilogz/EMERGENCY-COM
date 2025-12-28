@@ -6,6 +6,9 @@
 
 header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
+require_once 'activity_logger.php';
+
+session_start();
 
 $action = $_GET['action'] ?? 'status';
 
@@ -15,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($data['action']) && $data['action'] === 'toggle') {
         $source = $data['source'] ?? '';
         $enabled = $data['enabled'] ?? false;
+        $adminId = $_SESSION['admin_user_id'] ?? null;
         
         try {
             $stmt = $pdo->prepare("
@@ -23,6 +27,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ON DUPLICATE KEY UPDATE enabled = ?, updated_at = NOW()
             ");
             $stmt->execute([$source, $enabled ? 1 : 0, $enabled ? 1 : 0]);
+            
+            // Log admin activity
+            if ($adminId) {
+                logAdminActivity($adminId, 'toggle_integration', 
+                    ucfirst($source) . " integration " . ($enabled ? 'enabled' : 'disabled'));
+            }
             
             echo json_encode([
                 'success' => true,
@@ -37,6 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $syncInterval = $_POST['sync_interval'] ?? 15;
         $autoPublish = isset($_POST['auto_publish']) ? 1 : 0;
         $channels = $_POST['channels'] ?? [];
+        $adminId = $_SESSION['admin_user_id'] ?? null;
         
         try {
             $stmt = $pdo->prepare("
@@ -46,6 +57,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
             $channelsStr = is_array($channels) ? implode(',', $channels) : '';
             $stmt->execute([$syncInterval, $autoPublish, $channelsStr, $syncInterval, $autoPublish, $channelsStr]);
+            
+            // Log admin activity
+            if ($adminId) {
+                $changes = [
+                    "Sync Interval: {$syncInterval} minutes",
+                    "Auto Publish: " . ($autoPublish ? 'Yes' : 'No'),
+                    "Channels: {$channelsStr}"
+                ];
+                logAdminActivity($adminId, 'update_warning_settings', 'Updated warning settings: ' . implode(', ', $changes));
+            }
             
             echo json_encode([
                 'success' => true,
@@ -61,25 +82,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->query("SELECT source, enabled FROM integration_settings");
         $settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
         
-        // Check Gemini status from AI settings
+        // Check Gemini status from AI settings and secure config
         $geminiEnabled = false;
         $geminiApiKeySet = false;
+        $geminiStatusMessage = 'API Key Required';
+        
         try {
+            // Check secure config file first (most reliable)
+            require_once 'secure-api-config.php';
+            $secureApiKey = getGeminiApiKey();
+            
+            // Check AI warning settings table
             $aiStmt = $pdo->query("SELECT ai_enabled, gemini_api_key FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
             $aiSettings = $aiStmt->fetch(PDO::FETCH_ASSOC);
+            
             if ($aiSettings) {
                 $geminiEnabled = $aiSettings['ai_enabled'] == 1;
-                $geminiApiKeySet = !empty($aiSettings['gemini_api_key']);
+                // Check if API key is set in either table or secure config
+                $geminiApiKeySet = !empty($aiSettings['gemini_api_key']) || !empty($secureApiKey);
+                
+                if ($geminiApiKeySet && $geminiEnabled) {
+                    $geminiStatusMessage = 'AI Active and Monitoring';
+                } elseif ($geminiApiKeySet && !$geminiEnabled) {
+                    $geminiStatusMessage = 'API Key Set - Enable AI';
+                } elseif (!$geminiApiKeySet) {
+                    $geminiStatusMessage = 'API Key Required';
+                }
+            } else {
+                // No settings in table, but check secure config
+                if (!empty($secureApiKey)) {
+                    $geminiApiKeySet = true;
+                    $geminiStatusMessage = 'API Key Found - Configure Settings';
+                }
             }
         } catch (PDOException $e) {
-            // Table might not exist yet
+            // Table might not exist yet, check secure config
+            if (file_exists(__DIR__ . '/secure-api-config.php')) {
+                require_once 'secure-api-config.php';
+                $secureApiKey = getGeminiApiKey();
+                if (!empty($secureApiKey)) {
+                    $geminiApiKeySet = true;
+                    $geminiStatusMessage = 'API Key Found - Configure Settings';
+                }
+            }
         }
         
         echo json_encode([
             'success' => true,
             'pagasa' => ['enabled' => isset($settings['pagasa']) && $settings['pagasa']],
             'phivolcs' => ['enabled' => isset($settings['phivolcs']) && $settings['phivolcs']],
-            'gemini' => ['enabled' => $geminiEnabled, 'api_key_set' => $geminiApiKeySet]
+            'gemini' => [
+                'enabled' => $geminiEnabled, 
+                'api_key_set' => $geminiApiKeySet,
+                'status_message' => $geminiStatusMessage
+            ]
         ]);
     } catch (PDOException $e) {
         error_log("Get Status Error: " . $e->getMessage());
