@@ -144,14 +144,10 @@ try {
         $createdBy = $authCheck['admin_data']['id'];
     }
     
-    // Create user record first (for foreign key)
-    $createUserStmt = $pdo->prepare("INSERT INTO users (name, username, email, password, user_type, status, phone) VALUES (?, ?, ?, ?, 'admin', ?, ?)");
-    $createUserStmt->execute([$name, $username, $email, $hashedPassword, $status, $phone]);
-    $userId = $pdo->lastInsertId();
-    
-    // Create admin_user record
+    // Create admin_user record ONLY (no duplication in users table)
+    // user_id is set to NULL since admin accounts are separate from regular users
     $createAdminStmt = $pdo->prepare("INSERT INTO admin_user (user_id, name, username, email, password, role, status, phone, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $createAdminStmt->execute([$userId, $name, $username, $email, $hashedPassword, $role, $status, $phone, $createdBy]);
+    $createAdminStmt->execute([null, $name, $username, $email, $hashedPassword, $role, $status, $phone, $createdBy]);
     $adminId = $pdo->lastInsertId();
     
     // Log the creation

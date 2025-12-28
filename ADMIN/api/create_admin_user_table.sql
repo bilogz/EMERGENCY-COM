@@ -4,7 +4,7 @@
 -- ============================================
 CREATE TABLE IF NOT EXISTS admin_user (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL COMMENT 'Reference to users table',
+    user_id INT DEFAULT NULL COMMENT 'Optional reference to users table (NULL for standalone admin accounts)',
     name VARCHAR(255) NOT NULL COMMENT 'Full name of the admin',
     username VARCHAR(100) DEFAULT NULL COMMENT 'Username for login',
     email VARCHAR(255) NOT NULL COMMENT 'Email address (unique)',
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS admin_user (
     INDEX idx_created_at (created_at),
     
     -- Foreign keys
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (created_by) REFERENCES admin_user(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -53,14 +53,14 @@ AND NOT EXISTS (
 -- ============================================
 -- Set first admin as super_admin if none exists
 -- ============================================
+-- Use variables to avoid MySQL error #1093 (can't update table in FROM clause)
+SET @super_admin_exists = (SELECT COUNT(*) FROM admin_user WHERE role = 'super_admin' AND status = 'active');
+
+SET @first_admin_id = (SELECT id FROM admin_user ORDER BY created_at ASC LIMIT 1);
+
 UPDATE admin_user 
 SET role = 'super_admin', status = 'active'
-WHERE id = (
-    SELECT id FROM (
-        SELECT id FROM admin_user ORDER BY created_at ASC LIMIT 1
-    ) AS temp
-)
-AND NOT EXISTS (
-    SELECT 1 FROM admin_user WHERE role = 'super_admin' AND status = 'active'
-);
+WHERE id = @first_admin_id
+AND @super_admin_exists = 0
+AND @first_admin_id IS NOT NULL;
 

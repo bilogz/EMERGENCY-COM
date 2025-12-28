@@ -147,7 +147,7 @@ try {
     $createTableSQL = "
     CREATE TABLE IF NOT EXISTS admin_user (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL COMMENT 'Reference to users table',
+        user_id INT DEFAULT NULL COMMENT 'Optional reference to users table (NULL for standalone admin accounts)',
         name VARCHAR(255) NOT NULL COMMENT 'Full name of the admin',
         username VARCHAR(100) DEFAULT NULL COMMENT 'Username for login',
         email VARCHAR(255) NOT NULL COMMENT 'Email address (unique)',
@@ -168,7 +168,7 @@ try {
         INDEX idx_created_by (created_by),
         INDEX idx_created_at (created_at),
         
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
         FOREIGN KEY (created_by) REFERENCES admin_user(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ";
