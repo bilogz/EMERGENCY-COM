@@ -832,23 +832,37 @@ $pageTitle = 'Weather Monitoring';
             // Focus on Quezon City with smooth animation
             map = L.map('weatherMap').setView([14.6488, 121.0509], 12);
             
-            // Light mode tiles (default)
+            // Light mode tiles
             lightTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors',
                 maxZoom: 19
             });
             
-            // Dark mode tiles (Stamen Toner Lite - better visibility)
-            darkTileLayer = L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | Map tiles by <a href="http://stamen.com">Stamen Design</a>',
+            // Dark mode tiles - CartoDB Dark Matter (better visibility, modern dark theme)
+            darkTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
                 subdomains: 'abcd',
-                maxZoom: 20,
-                opacity: 0.9
+                maxZoom: 20
             });
             
-            // Add default light layer
-            currentTileLayer = lightTileLayer;
+            // Set dark mode as default for better visibility
+            darkModeEnabled = true;
+            currentTileLayer = darkTileLayer;
             currentTileLayer.addTo(map);
+            
+            // Update dark mode button state
+            setTimeout(() => {
+                const darkBtn = document.getElementById('darkModeBtn');
+                if (darkBtn) {
+                    darkBtn.classList.add('active');
+                    const icon = darkBtn.querySelector('i');
+                    if (icon) {
+                        icon.className = 'fas fa-sun';
+                        darkBtn.querySelector('span').textContent = 'Light Mode';
+                    }
+                }
+                document.getElementById('weatherMap').classList.add('map-dark-mode');
+            }, 100);
             
             // Smooth fly to Quezon City center
             setTimeout(() => {
@@ -1090,13 +1104,14 @@ $pageTitle = 'Weather Monitoring';
                 btn.classList.add('active');
                 
                 // Use RainViewer API for radar (free, no API key needed)
+                // Radar blends with map - looks like original map
                 if (!radarLayer) {
                     // Get current timestamp for latest radar image
                     const timestamp = Math.floor(Date.now() / 1000);
                     radarLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`, {
                         attribution: 'RainViewer &copy; <a href="https://www.rainviewer.com">RainViewer.com</a>',
-                        opacity: 0.6,
-                        zIndex: 500
+                        opacity: 0.4, // Lower opacity to blend with map
+                        zIndex: 400
                     });
                 }
                 
@@ -1291,7 +1306,27 @@ $pageTitle = 'Weather Monitoring';
             }
         }
         
-        // Create wind particles from marker data
+        // Get color based on wind speed
+        function getWindSpeedColor(speed) {
+            // Speed in km/h
+            if (speed < 5) {
+                return { r: 100, g: 150, b: 255, opacity: 0.4 }; // Light blue - calm
+            } else if (speed < 10) {
+                return { r: 50, g: 200, b: 255, opacity: 0.5 }; // Blue - light breeze
+            } else if (speed < 20) {
+                return { r: 0, g: 255, b: 200, opacity: 0.6 }; // Cyan - moderate
+            } else if (speed < 30) {
+                return { r: 100, g: 255, b: 100, opacity: 0.7 }; // Green - fresh
+            } else if (speed < 40) {
+                return { r: 255, g: 255, b: 0, opacity: 0.8 }; // Yellow - strong
+            } else if (speed < 50) {
+                return { r: 255, g: 200, b: 0, opacity: 0.85 }; // Orange - very strong
+            } else {
+                return { r: 255, g: 50, b: 50, opacity: 0.9 }; // Red - extreme
+            }
+        }
+        
+        // Create wind particles from marker data - small particles version
         function createWindParticles() {
             windParticles = [];
             if (!markers || markers.length === 0) return;
@@ -1299,10 +1334,9 @@ $pageTitle = 'Weather Monitoring';
             const bounds = map.getBounds();
             const zoom = map.getZoom();
             
-            // Create dense particles for better visualization (like Zoom Earth)
-            // More particles for better coverage
-            const particleCount = Math.min(800, Math.max(300, zoom * 40));
-            const gridSpacing = Math.max(0.03, 0.25 / zoom); // Adaptive spacing based on zoom
+            // Create more particles for better coverage (small particles)
+            const particleCount = Math.min(1200, Math.max(500, zoom * 60));
+            const gridSpacing = Math.max(0.02, 0.2 / zoom); // Closer spacing for small particles
             
             // Create grid-based particles for consistent coverage
             const latStep = (bounds.getNorth() - bounds.getSouth()) / Math.sqrt(particleCount);
@@ -1311,8 +1345,8 @@ $pageTitle = 'Weather Monitoring';
             for (let lat = bounds.getSouth(); lat < bounds.getNorth(); lat += latStep) {
                 for (let lon = bounds.getWest(); lon < bounds.getEast(); lon += lonStep) {
                     // Add some randomness
-                    const finalLat = lat + (Math.random() - 0.5) * latStep * 0.5;
-                    const finalLon = lon + (Math.random() - 0.5) * lonStep * 0.5;
+                    const finalLat = lat + (Math.random() - 0.5) * latStep * 0.6;
+                    const finalLon = lon + (Math.random() - 0.5) * lonStep * 0.6;
                     
                     // Find nearest marker for wind data
                     let nearestMarker = markers[0];
@@ -1333,15 +1367,16 @@ $pageTitle = 'Weather Monitoring';
                         
                         // Wind speed is already in km/h
                         const speed = nearestMarker.windSpeed || 0;
+                        const color = getWindSpeedColor(speed);
                         
                         windParticles.push({
                             x: finalLon,
                             y: finalLat,
-                            vx: Math.sin(radians) * speed * 0.00005, // Wind going TO direction (adjusted for km/h)
-                            vy: -Math.cos(radians) * speed * 0.00005,
+                            vx: Math.sin(radians) * speed * 0.00008, // Adjusted for small particles
+                            vy: -Math.cos(radians) * speed * 0.00008,
                             speed: speed,
                             direction: windDirection,
-                            opacity: Math.min(0.6 + (speed / 25) * 0.4, 1), // Higher base opacity for better visibility (0.6-1.0)
+                            color: color,
                             age: Math.random() * 100 // Random age for animation offset
                         });
                     }
@@ -1349,96 +1384,59 @@ $pageTitle = 'Weather Monitoring';
             }
         }
         
-        // Draw wind flow - Zoom Earth style
+        // Draw wind flow - Small particles with color coding
         function drawWindFlow() {
             if (!windFlowEnabled || !windFlowCtx || !windFlowCanvas || windParticles.length === 0) return;
             
             const canvas = windFlowCanvas._canvas;
             if (!canvas) return;
             
-            // Clear with slight fade for trailing effect (lighter for better visibility)
-            windFlowCtx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-            windFlowCtx.fillRect(0, 0, canvas.width, canvas.height);
+            // Clear with transparent background (no black background)
+            windFlowCtx.clearRect(0, 0, canvas.width, canvas.height);
             
             const currentTime = Date.now() * 0.001; // Time in seconds
             
             windParticles.forEach(particle => {
                 const point = map.latLngToContainerPoint([particle.y, particle.x]);
                 
-                if (point.x >= -50 && point.x <= canvas.width + 50 && 
-                    point.y >= -50 && point.y <= canvas.height + 50) {
+                if (point.x >= -10 && point.x <= canvas.width + 10 && 
+                    point.y >= -10 && point.y <= canvas.height + 10) {
                     
-                    // Calculate streak length based on wind speed (like Zoom Earth)
-                    const baseLength = Math.min(particle.speed * 2, 50);
-                    const length = Math.max(baseLength, 10); // Minimum length
-                    
-                    // Animated offset for flowing effect
-                    const animationSpeed = particle.speed * 0.15;
-                    const animationOffset = (currentTime * animationSpeed + particle.age) % (length * 2.5);
+                    // Small particle size based on wind speed
+                    const particleSize = Math.max(1.5, Math.min(particle.speed / 8, 4));
                     
                     // Calculate direction in radians
                     const angle = particle.direction * Math.PI / 180;
-                    const cosAngle = Math.cos(angle);
-                    const sinAngle = Math.sin(angle);
                     
-                    // Calculate end point
-                    const endX = point.x + sinAngle * length;
-                    const endY = point.y - cosAngle * length;
+                    // Animated position for flowing effect
+                    const animationSpeed = particle.speed * 0.2;
+                    const moveDistance = (currentTime * animationSpeed + particle.age) % 20;
                     
-                    // Start point with animation offset (creates flowing effect)
-                    const startX = point.x - sinAngle * animationOffset;
-                    const startY = point.y + cosAngle * animationOffset;
+                    // Calculate particle position (small movement)
+                    const particleX = point.x + Math.sin(angle) * moveDistance * 0.5;
+                    const particleY = point.y - Math.cos(angle) * moveDistance * 0.5;
                     
-                    // Enhanced visibility - brighter white with glow effect
-                    const baseOpacity = Math.min(particle.opacity * 1.5, 1);
-                    const lineWidth = Math.max(2, Math.min(particle.speed / 3, 4));
+                    // Use color based on wind speed
+                    const color = particle.color || getWindSpeedColor(particle.speed);
                     
-                    // Draw glow/shadow for better visibility
-                    windFlowCtx.shadowBlur = 3;
-                    windFlowCtx.shadowColor = 'rgba(255, 255, 255, 0.5)';
-                    
-                    // Main stroke - bright white
-                    windFlowCtx.strokeStyle = `rgba(255, 255, 255, ${baseOpacity})`;
-                    windFlowCtx.lineWidth = lineWidth;
-                    windFlowCtx.lineCap = 'round';
-                    windFlowCtx.lineJoin = 'round';
-                    
-                    // Draw the streak with gradient for better visibility
-                    const gradient = windFlowCtx.createLinearGradient(startX, startY, endX, endY);
-                    gradient.addColorStop(0, `rgba(255, 255, 255, ${baseOpacity * 0.6})`);
-                    gradient.addColorStop(0.5, `rgba(255, 255, 255, ${baseOpacity})`);
-                    gradient.addColorStop(1, `rgba(255, 255, 255, ${baseOpacity * 0.8})`);
-                    
-                    windFlowCtx.strokeStyle = gradient;
-                    
-                    // Draw the streak
+                    // Draw small circular particle
                     windFlowCtx.beginPath();
-                    windFlowCtx.moveTo(startX, startY);
-                    windFlowCtx.lineTo(endX, endY);
-                    windFlowCtx.stroke();
+                    windFlowCtx.arc(particleX, particleY, particleSize, 0, Math.PI * 2);
+                    windFlowCtx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.opacity})`;
+                    windFlowCtx.fill();
                     
-                    // Reset shadow
-                    windFlowCtx.shadowBlur = 0;
-                    
-                    // Add arrowhead for stronger winds (more visible)
-                    if (particle.speed > 3) {
-                        const arrowLength = Math.min(8, particle.speed / 2.5);
-                        const arrowAngle = Math.PI / 4.5; // Wider arrow angle
-                        
-                        windFlowCtx.strokeStyle = `rgba(255, 255, 255, ${baseOpacity})`;
-                        windFlowCtx.lineWidth = lineWidth * 1.2;
+                    // Add small tail for direction indication (very subtle)
+                    if (particle.speed > 5) {
+                        const tailLength = Math.min(particle.speed / 3, 8);
+                        const tailX = particleX - Math.sin(angle) * tailLength;
+                        const tailY = particleY + Math.cos(angle) * tailLength;
                         
                         windFlowCtx.beginPath();
-                        windFlowCtx.moveTo(endX, endY);
-                        windFlowCtx.lineTo(
-                            endX - arrowLength * Math.cos(angle - arrowAngle),
-                            endY - arrowLength * Math.sin(angle - arrowAngle)
-                        );
-                        windFlowCtx.moveTo(endX, endY);
-                        windFlowCtx.lineTo(
-                            endX - arrowLength * Math.cos(angle + arrowAngle),
-                            endY - arrowLength * Math.sin(angle + arrowAngle)
-                        );
+                        windFlowCtx.moveTo(particleX, particleY);
+                        windFlowCtx.lineTo(tailX, tailY);
+                        windFlowCtx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.opacity * 0.6})`;
+                        windFlowCtx.lineWidth = particleSize * 0.8;
+                        windFlowCtx.lineCap = 'round';
                         windFlowCtx.stroke();
                     }
                 }
