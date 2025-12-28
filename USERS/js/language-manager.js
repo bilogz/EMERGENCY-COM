@@ -248,13 +248,23 @@ class LanguageManager {
         document.documentElement.setAttribute('lang', this.currentLanguage);
         document.documentElement.setAttribute('data-lang', this.currentLanguage);
         
+        // Save to localStorage
+        localStorage.setItem('preferredLanguage', this.currentLanguage);
+        
         // Apply translations if available
         if (typeof setLanguage === 'function') {
             setLanguage(this.currentLanguage);
         } else if (typeof applyTranslations === 'function') {
-            localStorage.setItem('preferredLanguage', this.currentLanguage);
             applyTranslations();
         }
+        
+        // Trigger language change event to ensure all listeners are notified
+        document.dispatchEvent(new CustomEvent('languageChanged', {
+            detail: {
+                language: this.currentLanguage,
+                languageInfo: this.getLanguageInfo(this.currentLanguage)
+            }
+        }));
     }
     
     getLanguageDisplay(langCode) {

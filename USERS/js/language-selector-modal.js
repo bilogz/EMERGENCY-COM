@@ -313,6 +313,11 @@ class LanguageSelectorModal {
                 }
             }
             
+            // Apply translations immediately
+            if (typeof applyTranslations === 'function') {
+                applyTranslations();
+            }
+            
             // Trigger language change event
             document.dispatchEvent(new CustomEvent('languageChanged', {
                 detail: {language: this.selectedLanguage}

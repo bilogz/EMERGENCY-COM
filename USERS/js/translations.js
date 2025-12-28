@@ -277,3 +277,20 @@ document.addEventListener('DOMContentLoaded', function() {
     applyTranslations();
 });
 
+// Listen for language changes and apply translations
+document.addEventListener('languageChanged', function(event) {
+    const lang = event.detail?.language || getCurrentLanguage();
+    localStorage.setItem('preferredLanguage', lang);
+    applyTranslations();
+    
+    // Also update HTML lang attribute
+    document.documentElement.setAttribute('lang', lang);
+    document.documentElement.setAttribute('data-lang', lang);
+});
+
+// Also listen for languagesUpdated event
+document.addEventListener('languagesUpdated', function() {
+    // Refresh translations if needed
+    applyTranslations();
+});
+

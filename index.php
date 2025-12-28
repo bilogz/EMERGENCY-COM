@@ -21,7 +21,6 @@ $assetBase = 'ADMIN/header/';
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script src="USERS/js/translations.js"></script>
     <script src="USERS/js/language-manager.js"></script>
-    <script src="USERS/js/language-selector-enhanced.js"></script>
     <script src="USERS/js/language-selector-modal.js"></script>
     <script src="USERS/js/language-sync.js"></script>
     <script>
