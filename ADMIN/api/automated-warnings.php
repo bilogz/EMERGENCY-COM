@@ -103,6 +103,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         error_log("Get Warnings Error: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
     }
+} elseif ($action === 'getSettings') {
+    try {
+        $stmt = $pdo->query("SELECT * FROM warning_settings ORDER BY id DESC LIMIT 1");
+        $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$settings) {
+            // Return default settings
+            echo json_encode([
+                'success' => true,
+                'settings' => [
+                    'sync_interval' => 15,
+                    'auto_publish' => 0,
+                    'notification_channels' => 'sms,email'
+                ]
+            ]);
+        } else {
+            echo json_encode(['success' => true, 'settings' => $settings]);
+        }
+    } catch (PDOException $e) {
+        error_log("Get Settings Error: " . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
+    }
 } else {
     echo json_encode(['success' => false, 'message' => 'Invalid action.']);
 }
