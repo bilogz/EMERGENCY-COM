@@ -85,12 +85,29 @@ if (!ensureTablesExist($pdo)) {
 try {
     switch ($action) {
         case 'profile':
+            // Check if admin_user table exists
+            $useAdminUserTable = false;
+            try {
+                $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
+                $useAdminUserTable = true;
+            } catch (PDOException $e) {
+                // admin_user table doesn't exist, use users table (backward compatibility)
+            }
+            
             // Get admin profile data
-            $stmt = $pdo->prepare("
-                SELECT id, name, email, user_type, status, created_at
-                FROM users 
-                WHERE id = ? AND user_type = 'admin'
-            ");
+            if ($useAdminUserTable) {
+                $stmt = $pdo->prepare("
+                    SELECT id, user_id, name, username, email, phone, role, status, created_at, updated_at, last_login
+                    FROM admin_user 
+                    WHERE id = ?
+                ");
+            } else {
+                $stmt = $pdo->prepare("
+                    SELECT id, name, email, user_type, status, created_at
+                    FROM users 
+                    WHERE id = ? AND user_type = 'admin'
+                ");
+            }
             $stmt->execute([$adminId]);
             $profile = $stmt->fetch(PDO::FETCH_ASSOC);
             

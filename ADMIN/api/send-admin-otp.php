@@ -171,21 +171,37 @@ try {
         throw new Exception('Invalid email address format');
     }
     
-    // For login, check if user exists
+    // For login, check if admin exists in admin_user table
     if ($purpose === 'login') {
-        $stmt = $pdo->prepare("SELECT id, name, email, user_type, status FROM users WHERE email = ? AND user_type = 'admin' LIMIT 1");
-        $stmt->execute([$email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        // Check if admin_user table exists
+        $useAdminUserTable = false;
+        try {
+            $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
+            $useAdminUserTable = true;
+        } catch (PDOException $e) {
+            // admin_user table doesn't exist, use users table (backward compatibility)
+        }
         
-        if (!$user) {
+        if ($useAdminUserTable) {
+            // Query from admin_user table
+            $stmt = $pdo->prepare("SELECT id, name, email, role, status FROM admin_user WHERE email = ? LIMIT 1");
+        } else {
+            // Fallback to users table
+            $stmt = $pdo->prepare("SELECT id, name, email, user_type, status FROM users WHERE email = ? AND user_type = 'admin' LIMIT 1");
+        }
+        
+        $stmt->execute([$email]);
+        $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$admin) {
             throw new Exception('No admin account found with this email address');
         }
         
-        if ($user['status'] !== 'active') {
+        if ($admin['status'] !== 'active') {
             throw new Exception('Account is not active. Please contact administrator.');
         }
         
-        $name = $user['name']; // Use name from database
+        $name = $admin['name']; // Use name from database
     }
     
     // Generate 6-digit OTP

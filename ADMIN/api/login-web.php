@@ -85,8 +85,22 @@ if (!$recaptchaValid && !$otpVerified) {
 }
 
 try {
-    // Query user from database - check for admin user_type
-    $stmt = $pdo->prepare("SELECT id, name, email, password, user_type, status FROM users WHERE email = ?");
+    // Check if admin_user table exists, otherwise fall back to users table
+    $useAdminUserTable = false;
+    try {
+        $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
+        $useAdminUserTable = true;
+    } catch (PDOException $e) {
+        // admin_user table doesn't exist, use users table (backward compatibility)
+    }
+    
+    if ($useAdminUserTable) {
+        // Query from admin_user table
+        $stmt = $pdo->prepare("SELECT id, user_id, name, email, password, role, status FROM admin_user WHERE email = ?");
+    } else {
+        // Fallback to users table for backward compatibility
+        $stmt = $pdo->prepare("SELECT id, name, email, password, user_type, status FROM users WHERE email = ? AND user_type = 'admin'");
+    }
     
     if (!$stmt) {
         $errorInfo = $pdo->errorInfo();
@@ -99,18 +113,12 @@ try {
     }
 
     $stmt->execute([$email]);
-    $user = $stmt->fetch();
+    $admin = $stmt->fetch();
 
     // Verify password
-    if ($user && password_verify($plainPassword, $user['password'])) {
-        // Check if user is admin
-        if ($user['user_type'] !== 'admin') {
-            echo json_encode(["success" => false, "message" => "Access denied. Admin account required."]);
-            exit();
-        }
-        
+    if ($admin && password_verify($plainPassword, $admin['password'])) {
         // Check account status
-        if ($user['status'] === 'pending_approval') {
+        if ($admin['status'] === 'pending_approval') {
             echo json_encode([
                 "success" => false, 
                 "message" => "Your account is pending approval from an administrator. You will be able to log in once your account has been approved.",
@@ -119,7 +127,7 @@ try {
             exit();
         }
         
-        if ($user['status'] !== 'active') {
+        if ($admin['status'] !== 'active') {
             echo json_encode(["success" => false, "message" => "Account is not active. Please contact administrator."]);
             exit();
         }
@@ -140,27 +148,40 @@ try {
                 "message" => "Email verification required. Please verify your email with the OTP code.",
                 "requires_otp" => true,
                 "email" => $email,
-                "username" => $user['name']
+                "username" => $admin['name']
             ]);
             exit();
         }
         
+        // Update last_login timestamp in admin_user table
+        if ($useAdminUserTable) {
+            try {
+                $updateStmt = $pdo->prepare("UPDATE admin_user SET last_login = NOW() WHERE id = ?");
+                $updateStmt->execute([$admin['id']]);
+            } catch (PDOException $e) {
+                error_log('Failed to update last_login: ' . $e->getMessage());
+            }
+        }
+        
         // OTP verified (or skipped if not required), complete login
-        // Set session variables
+        // Set session variables - use admin_user.id (not user_id)
         $_SESSION['admin_logged_in'] = true;
-        $_SESSION['admin_user_id'] = $user['id'];
-        $_SESSION['admin_username'] = $user['name'];
-        $_SESSION['admin_email'] = $user['email'];
+        $_SESSION['admin_user_id'] = $useAdminUserTable ? $admin['id'] : $admin['id']; // admin_user.id
+        $_SESSION['admin_user_table_id'] = $useAdminUserTable ? $admin['id'] : null; // Store admin_user.id separately
+        $_SESSION['admin_username'] = $admin['name'];
+        $_SESSION['admin_email'] = $admin['email'];
+        $_SESSION['admin_role'] = $useAdminUserTable ? ($admin['role'] ?? 'admin') : 'admin';
         $_SESSION['admin_token'] = bin2hex(random_bytes(16));
         
-        // Log successful login
-        $loginLogId = logAdminLogin($user['id'], $email, 'success');
+        // Log successful login - use admin_user.id for admin_user table, otherwise use user id
+        $adminIdForLog = $useAdminUserTable ? $admin['id'] : ($admin['id'] ?? 0);
+        $loginLogId = logAdminLogin($adminIdForLog, $email, 'success');
         if ($loginLogId) {
             $_SESSION['admin_login_log_id'] = $loginLogId;
         }
         
         // Log activity
-        logAdminActivity($user['id'], 'login', 'Admin logged in successfully');
+        logAdminActivity($adminIdForLog, 'login', 'Admin logged in successfully');
         
         // Clear OTP session after successful login
         unset($_SESSION['admin_login_otp_verified']);
@@ -171,17 +192,19 @@ try {
         echo json_encode([
             "success" => true,
             "message" => "Login successful!",
-            "user_id" => $user['id'],
-            "username" => $user['name'],
-            "email" => $user['email']
+            "user_id" => $admin['id'],
+            "username" => $admin['name'],
+            "email" => $admin['email'],
+            "role" => $useAdminUserTable ? ($admin['role'] ?? 'admin') : 'admin'
         ]);
     } else {
         // Log failed login attempt
-        if (isset($user) && $user) {
-            logAdminLogin($user['id'], $email, 'failed');
-            logAdminActivity($user['id'], 'login_failed', 'Failed login attempt - invalid password');
+        if (isset($admin) && $admin) {
+            $adminIdForLog = $useAdminUserTable ? $admin['id'] : ($admin['id'] ?? 0);
+            logAdminLogin($adminIdForLog, $email, 'failed');
+            logAdminActivity($adminIdForLog, 'login_failed', 'Failed login attempt - invalid password');
         } else {
-            // User not found - log with email only (admin_id will be 0 or NULL)
+            // Admin not found - log with email only (admin_id will be 0)
             try {
                 $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
                 $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;

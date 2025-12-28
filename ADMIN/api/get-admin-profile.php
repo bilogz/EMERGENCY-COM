@@ -18,12 +18,31 @@ require_once 'db_connect.php';
 try {
     $adminId = $_SESSION['admin_user_id'];
     
-    // Get admin details
-    $stmt = $pdo->prepare("
-        SELECT id, name, email, phone, status, user_type, created_at, updated_at
-        FROM users
-        WHERE id = ? AND user_type = 'admin'
-    ");
+    // Check if admin_user table exists
+    $useAdminUserTable = false;
+    try {
+        $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
+        $useAdminUserTable = true;
+    } catch (PDOException $e) {
+        // admin_user table doesn't exist, use users table (backward compatibility)
+    }
+    
+    if ($useAdminUserTable) {
+        // Get admin details from admin_user table
+        $stmt = $pdo->prepare("
+            SELECT id, user_id, name, username, email, phone, role, status, created_at, updated_at, last_login
+            FROM admin_user
+            WHERE id = ?
+        ");
+    } else {
+        // Fallback to users table
+        $stmt = $pdo->prepare("
+            SELECT id, name, email, phone, status, user_type, created_at, updated_at
+            FROM users
+            WHERE id = ? AND user_type = 'admin'
+        ");
+    }
+    
     $stmt->execute([$adminId]);
     $admin = $stmt->fetch();
     
@@ -57,9 +76,23 @@ try {
     $stmt->execute([$adminId]);
     $lastLogin = $stmt->fetch();
     
-    echo json_encode([
-        "success" => true,
-        "profile" => [
+    // Prepare profile data based on table used
+    if ($useAdminUserTable) {
+        $profileData = [
+            "id" => $admin['id'],
+            "user_id" => $admin['user_id'],
+            "name" => $admin['name'],
+            "username" => $admin['username'],
+            "email" => $admin['email'],
+            "phone" => $admin['phone'],
+            "role" => $admin['role'],
+            "status" => $admin['status'],
+            "created_at" => $admin['created_at'],
+            "updated_at" => $admin['updated_at'],
+            "last_login" => $admin['last_login']
+        ];
+    } else {
+        $profileData = [
             "id" => $admin['id'],
             "name" => $admin['name'],
             "email" => $admin['email'],
@@ -68,7 +101,12 @@ try {
             "user_type" => $admin['user_type'],
             "created_at" => $admin['created_at'],
             "updated_at" => $admin['updated_at']
-        ],
+        ];
+    }
+    
+    echo json_encode([
+        "success" => true,
+        "profile" => $profileData,
         "current_login" => $currentLoginInfo ? [
             "login_at" => $currentLoginInfo['login_at'],
             "ip_address" => $currentLoginInfo['ip_address'],
