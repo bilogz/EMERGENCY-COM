@@ -108,6 +108,18 @@ $current = 'profile.php';
     <script src="js/translations.js"></script>
     <script src="js/language-manager.js"></script>
     <script src="js/language-selector-enhanced.js"></script>
+    <script src="js/language-selector-modal.js"></script>
+    <script>
+        // Connect language selector button to modal
+        document.addEventListener('DOMContentLoaded', function() {
+            const langBtn = document.getElementById('languageSelectorBtn');
+            if (langBtn && window.languageSelectorModal) {
+                langBtn.addEventListener('click', function() {
+                    window.languageSelectorModal.open();
+                });
+            }
+        });
+    </script>
     <script>
         document.addEventListener('DOMContentLoaded', async function () {
             const selectDropdown = document.getElementById('preferredLanguageSelect');

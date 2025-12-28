@@ -22,6 +22,17 @@ $assetBase = '../ADMIN/header/';
     <script src="js/translations.js"></script>
     <script src="js/language-manager.js"></script>
     <script src="js/language-selector-enhanced.js"></script>
+    <script src="js/language-selector-modal.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const langBtn = document.getElementById('languageSelectorBtn');
+            if (langBtn && window.languageSelectorModal) {
+                langBtn.addEventListener('click', function() {
+                    window.languageSelectorModal.open();
+                });
+            }
+        });
+    </script>
 </head>
 <body>
     <?php include 'includes/sidebar.php'; ?>

@@ -22,6 +22,18 @@ $assetBase = 'ADMIN/header/';
     <script src="USERS/js/translations.js"></script>
     <script src="USERS/js/language-manager.js"></script>
     <script src="USERS/js/language-selector-enhanced.js"></script>
+    <script src="USERS/js/language-selector-modal.js"></script>
+    <script>
+        // Connect language selector button to modal
+        document.addEventListener('DOMContentLoaded', function() {
+            const langBtn = document.getElementById('languageSelectorBtn');
+            if (langBtn && window.languageSelectorModal) {
+                langBtn.addEventListener('click', function() {
+                    window.languageSelectorModal.open();
+                });
+            }
+        });
+    </script>
 </head>
 <body>
     <?php 

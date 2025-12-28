@@ -79,6 +79,9 @@ include __DIR__ . '/guest-monitoring-notice.php';
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
 <div class="auth-icons">
+    <button class="auth-icon-link" id="languageSelectorBtn" title="Change Language" aria-label="Select Language">
+        <i class="fas fa-globe"></i>
+    </button>
     <a href="<?= $basePath ?><?= $linkPrefix ?>login.php" class="auth-icon-link" title="Login / Sign Up">
         <i class="fas fa-user-circle"></i>
     </a>

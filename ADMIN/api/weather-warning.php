@@ -93,8 +93,36 @@ try {
     // Log the warning
     error_log("Weather Warning Created: {$title} - {$message} (Alert ID: {$alertId})");
     
-    // Optionally send notifications to subscribed users
-    // This would integrate with your notification system
+    // Auto-translate alert for subscribed users
+    require_once 'alert-translation-helper.php';
+    $translationHelper = new AlertTranslationHelper($pdo);
+    
+    // Get subscribed users for this location/category
+    try {
+        $stmt = $pdo->prepare("
+            SELECT DISTINCT cs.user_id 
+            FROM citizen_subscriptions cs
+            WHERE cs.status = 'active' 
+            AND (cs.categories LIKE ? OR cs.categories = 'all')
+        ");
+        $categoryPattern = "%{$category}%";
+        $stmt->execute([$categoryPattern]);
+        $subscribedUsers = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        if (!empty($subscribedUsers)) {
+            // Translate alert for each user's preferred language
+            $translatedAlerts = $translationHelper->translateAlertForUsers($alertId, $subscribedUsers);
+            
+            // Log translation activity
+            error_log("Auto-translated alert #{$alertId} for " . count($translatedAlerts) . " users");
+            
+            // Here you would send notifications to users with translated content
+            // Example: sendSMS($userPhone, $translatedAlert['message']);
+        }
+    } catch (PDOException $e) {
+        error_log("Error auto-translating alert: " . $e->getMessage());
+        // Continue even if translation fails
+    }
     
     echo json_encode([
         'success' => true,
