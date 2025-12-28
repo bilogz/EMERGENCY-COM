@@ -23,6 +23,155 @@ $pageTitle = 'Language Management';
     <link rel="stylesheet" href="css/hero.css">
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
+    <style>
+        /* Modal Styles */
+        .modal-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 9998;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .modal-backdrop.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-dialog {
+            background: var(--card-bg, #ffffff);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow: hidden;
+            animation: slideUp 0.3s ease;
+            position: relative;
+            z-index: 9999;
+        }
+        
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color, #e5e7eb);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(135deg, #4c8a89 0%, #5ba3a2 100%);
+            color: white;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .modal-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(90deg);
+        }
+        
+        .modal-body {
+            padding: 1.5rem;
+            max-height: calc(90vh - 140px);
+            overflow-y: auto;
+        }
+        
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border-color, #e5e7eb);
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Dark mode support */
+        [data-theme="dark"] .modal-dialog {
+            background: #1a1d24;
+            border: 1px solid #2d3139;
+        }
+        
+        [data-theme="dark"] .modal-header,
+        [data-theme="dark"] .modal-footer {
+            border-color: #2d3139;
+        }
+        
+        /* Compact form in modal */
+        .modal-body .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .modal-body .form-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        /* Add language button styling */
+        .add-language-btn {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4c8a89 0%, #5ba3a2 100%);
+            color: white;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(76, 138, 137, 0.4);
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+        
+        .add-language-btn:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 6px 30px rgba(76, 138, 137, 0.6);
+        }
+        
+        .add-language-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
 </head>
 <body>
     <!-- Include Sidebar Component -->
@@ -64,63 +213,6 @@ $pageTitle = 'Language Management';
             
             <div class="sub-container">
                 <div class="page-content">
-                    <!-- Add New Language -->
-                    <div class="module-card">
-                        <div class="module-card-header">
-                            <h2><i class="fas fa-plus-circle"></i> Add New Language</h2>
-                        </div>
-                        <div>
-                            <form id="addLanguageForm">
-                                <div class="form-group">
-                                    <label for="languageCode">Language Code *</label>
-                                    <input type="text" id="languageCode" name="language_code" class="form-control" 
-                                           placeholder="e.g., en, es, fr" required pattern="[a-z]{2}(-[A-Z]{2})?" 
-                                           title="ISO 639-1 code (e.g., en, es, fr)">
-                                    <small class="form-text">ISO 639-1 language code (e.g., en, es, fr, zh)</small>
-                                </div>
-                                <div class="form-group">
-                                    <label for="languageName">Language Name *</label>
-                                    <input type="text" id="languageName" name="language_name" class="form-control" 
-                                           placeholder="e.g., English, Spanish" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="nativeName">Native Name</label>
-                                    <input type="text" id="nativeName" name="native_name" class="form-control" 
-                                           placeholder="e.g., English, Español">
-                                </div>
-                                <div class="form-group">
-                                    <label for="flagEmoji">Flag Emoji</label>
-                                    <input type="text" id="flagEmoji" name="flag_emoji" class="form-control" 
-                                           placeholder="🇺🇸" maxlength="10">
-                                    <small class="form-text">Flag emoji for display (optional)</small>
-                                </div>
-                                <div class="form-group">
-                                    <label for="priority">Priority</label>
-                                    <input type="number" id="priority" name="priority" class="form-control" 
-                                           value="0" min="0" max="100">
-                                    <small class="form-text">Higher priority = shown first (0-100)</small>
-                                </div>
-                                <div class="form-group">
-                                    <label>
-                                        <input type="checkbox" id="isActive" name="is_active" checked>
-                                        Active (available to users)
-                                    </label>
-                                </div>
-                                <div class="form-group">
-                                    <label>
-                                        <input type="checkbox" id="isAISupported" name="is_ai_supported" checked>
-                                        AI Translation Supported
-                                    </label>
-                                </div>
-                                <div class="form-actions">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-plus"></i> Add Language
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-
                     <!-- Languages List -->
                     <div class="module-card">
                         <div class="module-card-header">
@@ -157,6 +249,107 @@ $pageTitle = 'Language Management';
             </div>
         </div>
     </div>
+    
+    <!-- Floating Action Button to Add Language -->
+    <button class="add-language-btn" onclick="openAddLanguageModal()" title="Add New Language">
+        <i class="fas fa-plus"></i>
+    </button>
+    
+    <!-- Add Language Modal -->
+    <div class="modal-backdrop" id="addLanguageModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h2><i class="fas fa-plus-circle"></i> Add New Language</h2>
+                <button class="modal-close" onclick="closeAddLanguageModal()" aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="addLanguageForm">
+                    <div class="form-group">
+                        <label for="languageCode">Language Code *</label>
+                        <input type="text" id="languageCode" name="language_code" class="form-control" 
+                               placeholder="e.g., en, es, fr" required pattern="[a-z]{2}(-[A-Z]{2})?" 
+                               title="ISO 639-1 code (e.g., en, es, fr)">
+                        <small class="form-text">ISO 639-1 language code (e.g., en, es, fr, zh)</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="languageName">Language Name *</label>
+                        <input type="text" id="languageName" name="language_name" class="form-control" 
+                               placeholder="e.g., English, Spanish" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="nativeName">Native Name</label>
+                        <input type="text" id="nativeName" name="native_name" class="form-control" 
+                               placeholder="e.g., English, Español">
+                    </div>
+                    <div class="form-group">
+                        <label for="flagEmoji">Flag Emoji</label>
+                        <input type="text" id="flagEmoji" name="flag_emoji" class="form-control" 
+                               placeholder="🇺🇸" maxlength="10">
+                        <small class="form-text">Flag emoji for display (optional)</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="priority">Priority</label>
+                        <input type="number" id="priority" name="priority" class="form-control" 
+                               value="0" min="0" max="100">
+                        <small class="form-text">Higher priority = shown first (0-100)</small>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="isActive" name="is_active" checked>
+                            Active (available to users)
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="isAISupported" name="is_ai_supported" checked>
+                            AI Translation Supported
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeAddLanguageModal()">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button type="submit" form="addLanguageForm" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Add Language
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Modal functions
+        function openAddLanguageModal() {
+            document.getElementById('addLanguageModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeAddLanguageModal() {
+            document.getElementById('addLanguageModal').classList.remove('show');
+            document.body.style.overflow = '';
+            document.getElementById('addLanguageForm').reset();
+        }
+        
+        // Close modal on backdrop click
+        document.getElementById('addLanguageModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddLanguageModal();
+            }
+        });
+        
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('addLanguageModal');
+                if (modal.classList.contains('show')) {
+                    closeAddLanguageModal();
+                }
+            }
+        });
+    </script>
 
     <script>
         function loadLanguages() {
@@ -229,6 +422,12 @@ $pageTitle = 'Language Management';
                 priority: parseInt(document.getElementById('priority').value) || 0
             };
             
+            // Disable submit button to prevent double submission
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            
             try {
                 const response = await fetch('../api/language-management.php?action=add', {
                     method: 'POST',
@@ -243,6 +442,7 @@ $pageTitle = 'Language Management';
                 if (result.success) {
                     alert('Language added successfully! Users will see it in real-time.');
                     this.reset();
+                    closeAddLanguageModal();
                     loadLanguages();
                 } else {
                     alert('Error: ' + result.message);
@@ -250,6 +450,9 @@ $pageTitle = 'Language Management';
             } catch (error) {
                 console.error('Error:', error);
                 alert('An error occurred while adding the language.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
             }
         });
         
