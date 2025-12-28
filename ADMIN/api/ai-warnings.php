@@ -54,30 +54,39 @@ try {
 function getAISettings() {
     global $pdo;
     
+    // Check secure config first
+    $secureApiKey = getGeminiApiKey();
+    
     $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
     $settings = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if (!$settings) {
-        // Return default settings
-        echo json_encode([
-            'success' => true,
-            'settings' => [
-                'gemini_api_key' => '',
-                'ai_enabled' => false,
-                'ai_check_interval' => 30,
-                'wind_threshold' => 60,
-                'rain_threshold' => 20,
-                'earthquake_threshold' => 5.0,
-                'warning_types' => 'heavy_rain,flooding,earthquake,strong_winds,tsunami,landslide,thunderstorm,ash_fall,fire_incident,typhoon',
-                'monitored_areas' => 'Quezon City\nManila\nMakati',
-                'ai_channels' => 'sms,email,pa'
-            ]
-        ]);
+        // Return default settings, but check if secure config has API key
+        $defaultSettings = [
+            'gemini_api_key' => $secureApiKey ? (str_repeat('*', max(0, strlen($secureApiKey) - 4)) . substr($secureApiKey, -4)) : '',
+            'ai_enabled' => false,
+            'ai_check_interval' => 30,
+            'wind_threshold' => 60,
+            'rain_threshold' => 20,
+            'earthquake_threshold' => 5.0,
+            'warning_types' => 'heavy_rain,flooding,earthquake,strong_winds,tsunami,landslide,thunderstorm,ash_fall,fire_incident,typhoon',
+            'monitored_areas' => 'Quezon City\nManila\nMakati',
+            'ai_channels' => 'sms,email,pa',
+            'api_key_source' => $secureApiKey ? 'secure_config' : 'none'
+        ];
+        echo json_encode(['success' => true, 'settings' => $defaultSettings]);
     } else {
-        // Mask API key for security (only show last 4 characters)
-        if (!empty($settings['gemini_api_key'])) {
+        // If secure config has API key and database doesn't, use secure config
+        if (!empty($secureApiKey) && empty($settings['gemini_api_key'])) {
+            $settings['gemini_api_key'] = str_repeat('*', max(0, strlen($secureApiKey) - 4)) . substr($secureApiKey, -4);
+            $settings['api_key_source'] = 'secure_config';
+        } elseif (!empty($settings['gemini_api_key'])) {
+            // Mask API key for security (only show last 4 characters)
             $apiKey = $settings['gemini_api_key'];
             $settings['gemini_api_key'] = str_repeat('*', max(0, strlen($apiKey) - 4)) . substr($apiKey, -4);
+            $settings['api_key_source'] = 'database';
+        } else {
+            $settings['api_key_source'] = 'none';
         }
         echo json_encode(['success' => true, 'settings' => $settings]);
     }
@@ -117,12 +126,24 @@ function saveAISettings() {
     $stmt = $pdo->query("SELECT id, gemini_api_key FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
     $existing = $stmt->fetch();
     
+    // Check secure config for API key if not provided
+    $secureApiKey = getGeminiApiKey();
+    
     if ($existing) {
         // Only update API key if a new one is provided (not masked)
         $updateApiKey = $geminiApiKey;
         if (empty($geminiApiKey) || (strlen($geminiApiKey) <= 4 && strpos($geminiApiKey, '*') !== false)) {
-            // API key is masked or empty, keep existing one
-            $updateApiKey = $existing['gemini_api_key'];
+            // API key is masked or empty, check secure config or keep existing
+            if (!empty($secureApiKey)) {
+                $updateApiKey = $secureApiKey; // Use secure config API key
+            } else {
+                $updateApiKey = $existing['gemini_api_key']; // Keep existing
+            }
+        }
+        
+        // If secure config has API key and database doesn't, use secure config
+        if (empty($updateApiKey) && !empty($secureApiKey)) {
+            $updateApiKey = $secureApiKey;
         }
         
         $stmt = $pdo->prepare("UPDATE ai_warning_settings SET 
@@ -142,12 +163,18 @@ function saveAISettings() {
             $existing['id']
         ]);
     } else {
+        // Use secure config API key if available and no key provided
+        $insertApiKey = $geminiApiKey;
+        if (empty($insertApiKey) && !empty($secureApiKey)) {
+            $insertApiKey = $secureApiKey;
+        }
+        
         $stmt = $pdo->prepare("INSERT INTO ai_warning_settings 
             (gemini_api_key, ai_enabled, ai_check_interval, wind_threshold, rain_threshold, 
              earthquake_threshold, warning_types, monitored_areas, ai_channels) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
-            $geminiApiKey, $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
+            $insertApiKey, $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
             $earthquakeThreshold, $warningTypes, $monitoredAreas, $aiChannels
         ]);
     }

@@ -93,13 +93,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $secureApiKey = getGeminiApiKey();
             
             // Check AI warning settings table
-            $aiStmt = $pdo->query("SELECT ai_enabled, gemini_api_key FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
-            $aiSettings = $aiStmt->fetch(PDO::FETCH_ASSOC);
+            try {
+                $aiStmt = $pdo->query("SELECT ai_enabled, gemini_api_key FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+                $aiSettings = $aiStmt->fetch(PDO::FETCH_ASSOC);
+            } catch (PDOException $e) {
+                // Table might not exist yet
+                $aiSettings = null;
+            }
             
             if ($aiSettings) {
                 $geminiEnabled = $aiSettings['ai_enabled'] == 1;
                 // Check if API key is set in either table or secure config
-                $geminiApiKeySet = !empty($aiSettings['gemini_api_key']) || !empty($secureApiKey);
+                $dbApiKey = !empty($aiSettings['gemini_api_key']) ? $aiSettings['gemini_api_key'] : null;
+                $geminiApiKeySet = !empty($dbApiKey) || !empty($secureApiKey);
                 
                 if ($geminiApiKeySet && $geminiEnabled) {
                     $geminiStatusMessage = 'AI Active and Monitoring';
@@ -113,10 +119,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($secureApiKey)) {
                     $geminiApiKeySet = true;
                     $geminiStatusMessage = 'API Key Found - Configure Settings';
+                } else {
+                    $geminiStatusMessage = 'API Key Required';
                 }
             }
-        } catch (PDOException $e) {
-            // Table might not exist yet, check secure config
+        } catch (Exception $e) {
+            // Fallback: check secure config only
             if (file_exists(__DIR__ . '/secure-api-config.php')) {
                 require_once 'secure-api-config.php';
                 $secureApiKey = getGeminiApiKey();

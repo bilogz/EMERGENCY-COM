@@ -2099,13 +2099,29 @@ $pageTitle = 'Weather Monitoring';
                 console.error('AI Error:', error);
                 statusBadge.textContent = 'Error';
                 statusBadge.className = 'ai-status error';
+                
+                // Parse error message for better display
+                let errorMessage = error.message;
+                let errorDetails = '';
+                
+                // Check if it's an API key error
+                if (errorMessage.includes('expired') || errorMessage.includes('invalid') || errorMessage.includes('400')) {
+                    errorMessage = 'API key expired or invalid';
+                    errorDetails = 'Please update your Gemini API key in Automated Warnings → AI Warning Settings';
+                }
+                
                 container.innerHTML = `
                     <div style="color: #e74c3c; padding: 1rem;">
-                        <i class="fas fa-exclamation-triangle"></i> Error: ${error.message}
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>Error:</strong> ${errorMessage}
+                        ${errorDetails ? `<br><small style="color: rgba(255,255,255,0.7); margin-top: 0.5rem; display: block;">${errorDetails}</small>` : ''}
                     </div>
                     <button onclick="getAIWeatherAnalysis()" class="ai-analyze-btn" style="margin-top: 1rem;">
                         <i class="fas fa-redo"></i> Retry
                     </button>
+                    <a href="automated-warnings.php" class="ai-analyze-btn" style="margin-top: 0.5rem; display: inline-block; text-decoration: none; background: #8e44ad;">
+                        <i class="fas fa-cog"></i> Configure API Key
+                    </a>
                 `;
             }
         }

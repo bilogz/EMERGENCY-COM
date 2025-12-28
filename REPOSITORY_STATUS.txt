@@ -35,7 +35,7 @@ DELETED (Not Needed):
 These files are in .gitignore and will NOT be committed:
 
 ❌ USERS/api/config.local.php
-   → Your actual API key (AIzaSyCzV580ZvO68sD_ourRSXiQ_8mHdg_vX-I)
+   → Your actual API key (stored securely, not shown here)
    → Protected ✅
 
 ❌ emer_comm_test.sql

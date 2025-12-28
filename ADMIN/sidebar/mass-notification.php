@@ -4,6 +4,15 @@
  * Manage SMS, Email, and PA (Public Address) Systems for broad communication
  */
 
+// Start session and check authentication
+session_start();
+
+// Check if user is logged in
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: ../login.php');
+    exit();
+}
+
 $pageTitle = 'Mass Notification System';
 ?>
 <!DOCTYPE html>

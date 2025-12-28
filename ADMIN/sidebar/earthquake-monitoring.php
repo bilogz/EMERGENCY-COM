@@ -4,6 +4,15 @@
  * Monitor earthquakes in the Philippines region using USGS data
  */
 
+// Start session and check authentication
+session_start();
+
+// Check if user is logged in
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: ../login.php');
+    exit();
+}
+
 $pageTitle = 'PHIVOLCS Earthquake Monitoring';
 ?>
 <!DOCTYPE html>

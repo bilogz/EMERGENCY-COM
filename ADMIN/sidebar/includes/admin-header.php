@@ -10,6 +10,64 @@
  * - Dark mode support
  * - Clean, modern design
  */
+
+// Ensure session is started
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Fetch admin info from database if session variables are missing
+if (!isset($_SESSION['admin_username']) || !isset($_SESSION['admin_email'])) {
+    if (isset($_SESSION['admin_user_id']) && isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
+        try {
+            // Use relative path to db_connect.php
+            $dbPath = __DIR__ . '/../../api/db_connect.php';
+            if (!file_exists($dbPath)) {
+                // Try alternative path
+                $dbPath = __DIR__ . '/../api/db_connect.php';
+            }
+            
+            if (file_exists($dbPath)) {
+                require_once $dbPath;
+                
+                // Check if $pdo is available (it's set in db_connect.php)
+                global $pdo;
+                if (isset($pdo) && $pdo) {
+                    $adminId = $_SESSION['admin_user_id'];
+                    
+                    // Check if admin_user table exists
+                    $useAdminUserTable = false;
+                    try {
+                        $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
+                        $useAdminUserTable = true;
+                    } catch (PDOException $e) {
+                        // admin_user table doesn't exist, use users table
+                    }
+                    
+                    if ($useAdminUserTable) {
+                        $stmt = $pdo->prepare("SELECT name, email FROM admin_user WHERE id = ?");
+                    } else {
+                        $stmt = $pdo->prepare("SELECT name, email FROM users WHERE id = ? AND user_type = 'admin'");
+                    }
+                    
+                    $stmt->execute([$adminId]);
+                    $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($admin) {
+                        $_SESSION['admin_username'] = $admin['name'];
+                        $_SESSION['admin_email'] = $admin['email'];
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Error loading admin info in header: " . $e->getMessage());
+        }
+    }
+}
+
+// Set defaults if still not set
+$adminUsername = $_SESSION['admin_username'] ?? 'Admin User';
+$adminEmail = $_SESSION['admin_email'] ?? 'admin@example.com';
 ?>
 
 <link rel="stylesheet" href="css/notification-modal.css">;
@@ -61,11 +119,11 @@
         
         <div class="user-profile" id="userProfileBtn">
             <div class="user-info">
-                <div class="user-name" id="adminDisplayName"><?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'Admin User'); ?></div>
+                <div class="user-name" id="adminDisplayName"><?php echo htmlspecialchars($adminUsername); ?></div>
                 <div class="user-role">Administrator</div>
             </div>
             <div class="user-avatar">
-                <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($_SESSION['admin_username'] ?? 'Admin User'); ?>&background=4c8a89&color=fff&size=128" alt="<?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'Admin User'); ?>" class="avatar-img" id="adminAvatarImg">
+                <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($adminUsername); ?>&background=4c8a89&color=fff&size=128" alt="<?php echo htmlspecialchars($adminUsername); ?>" class="avatar-img" id="adminAvatarImg">
             </div>
             <i class="fas fa-chevron-down dropdown-icon"></i>
         </div>
@@ -77,11 +135,11 @@
     <div class="dropdown-header">
         <div class="dropdown-user-info">
             <div class="dropdown-user-avatar">
-                <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($_SESSION['admin_username'] ?? 'Admin User'); ?>&background=4c8a89&color=fff&size=128" alt="<?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'Admin User'); ?>" id="dropdownAdminAvatar">
+                <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($adminUsername); ?>&background=4c8a89&color=fff&size=128" alt="<?php echo htmlspecialchars($adminUsername); ?>" id="dropdownAdminAvatar">
             </div>
             <div class="dropdown-user-details">
-                <div class="dropdown-user-name" id="dropdownAdminName"><?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'Admin User'); ?></div>
-                <div class="dropdown-user-email" id="dropdownAdminEmail"><?php echo htmlspecialchars($_SESSION['admin_email'] ?? 'admin@example.com'); ?></div>
+                <div class="dropdown-user-name" id="dropdownAdminName"><?php echo htmlspecialchars($adminUsername); ?></div>
+                <div class="dropdown-user-email" id="dropdownAdminEmail"><?php echo htmlspecialchars($adminEmail); ?></div>
             </div>
         </div>
     </div>
@@ -641,5 +699,43 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Make logout handler globally accessible
     window.handleLogout = handleLogout;
+    
+    // Load admin profile info dynamically if not set
+    function loadAdminProfile() {
+        const adminName = document.getElementById('adminDisplayName');
+        const adminEmail = document.getElementById('dropdownAdminEmail');
+        const adminNameDropdown = document.getElementById('dropdownAdminName');
+        const adminAvatar = document.getElementById('adminAvatarImg');
+        const dropdownAvatar = document.getElementById('dropdownAdminAvatar');
+        
+        // Check if admin info is missing or default
+        if (adminName && (adminName.textContent === 'Admin User' || !adminName.textContent.trim())) {
+            fetch('../api/get-admin-profile.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.profile) {
+                        const profile = data.profile;
+                        const name = profile.name || profile.username || 'Admin User';
+                        const email = profile.email || 'admin@example.com';
+                        
+                        // Update header
+                        if (adminName) adminName.textContent = name;
+                        if (adminNameDropdown) adminNameDropdown.textContent = name;
+                        if (adminEmail) adminEmail.textContent = email;
+                        
+                        // Update avatars
+                        const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4c8a89&color=fff&size=128`;
+                        if (adminAvatar) adminAvatar.src = avatarUrl;
+                        if (dropdownAvatar) dropdownAvatar.src = avatarUrl;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading admin profile:', error);
+                });
+        }
+    }
+    
+    // Load admin profile on page load
+    loadAdminProfile();
 });
 </script>

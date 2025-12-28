@@ -4,6 +4,15 @@
  * Manage alert translations and multilingual content
  */
 
+// Start session and check authentication
+session_start();
+
+// Check if user is logged in
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: ../login.php');
+    exit();
+}
+
 $pageTitle = 'Multilingual Support for Alerts';
 ?>
 <!DOCTYPE html>

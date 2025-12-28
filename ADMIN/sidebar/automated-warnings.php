@@ -4,6 +4,15 @@
  * Integrate with external warning feeds like PAGASA and PHIVOLCS
  */
 
+// Start session and check authentication
+session_start();
+
+// Check if user is logged in
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: ../login.php');
+    exit();
+}
+
 $pageTitle = 'Automated Warning Integration';
 ?>
 <!DOCTYPE html>
@@ -501,6 +510,7 @@ $pageTitle = 'Automated Warning Integration';
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
+                        console.log('Integration Status:', data); // Debug log
                         // PAGASA Status
                         if (data.pagasa) {
                             const isConnected = data.pagasa.enabled;
@@ -528,9 +538,22 @@ $pageTitle = 'Automated Warning Integration';
                         // Gemini Status
                         if (data.gemini) {
                             const isConnected = data.gemini.enabled && data.gemini.api_key_set;
-                            document.getElementById('geminiStatus').textContent = isConnected ? 'CONNECTED' : 'DISCONNECTED';
-                            document.getElementById('geminiStatus').className = 'badge ' + (isConnected ? 'success' : 'secondary');
-                            document.getElementById('geminiStatusText').textContent = data.gemini.status_message || (isConnected ? 'AI Active' : (data.gemini.api_key_set ? 'API Key Set - Enable AI' : 'API Key Required'));
+                            const statusBadge = document.getElementById('geminiStatus');
+                            const statusText = document.getElementById('geminiStatusText');
+                            
+                            if (isConnected) {
+                                statusBadge.textContent = 'CONNECTED';
+                                statusBadge.className = 'badge success';
+                                statusText.textContent = data.gemini.status_message || 'AI Active and Monitoring';
+                            } else if (data.gemini.api_key_set) {
+                                statusBadge.textContent = 'READY';
+                                statusBadge.className = 'badge warning';
+                                statusText.textContent = data.gemini.status_message || 'API Key Set - Enable AI';
+                            } else {
+                                statusBadge.textContent = 'DISCONNECTED';
+                                statusBadge.className = 'badge secondary';
+                                statusText.textContent = data.gemini.status_message || 'API Key Required';
+                            }
                         } else {
                             document.getElementById('geminiStatus').textContent = 'DISCONNECTED';
                             document.getElementById('geminiStatus').className = 'badge secondary';
@@ -671,11 +694,18 @@ $pageTitle = 'Automated Warning Integration';
                 if (data.success) {
                     alert('AI Warning Settings saved successfully!');
                     loadAISettings();
-                    loadIntegrationStatus(); // Reload integration status to update Gemini status
+                    // Reload integration status to update Gemini status
+                    setTimeout(() => {
+                        loadIntegrationStatus();
+                    }, 500);
                     closeAISettingsModal();
                 } else {
                     alert('Error: ' + data.message);
                 }
+            })
+            .catch(error => {
+                console.error('Error saving AI settings:', error);
+                alert('Error saving settings: ' + error.message);
             });
         });
 

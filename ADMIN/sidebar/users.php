@@ -1,10 +1,19 @@
 <?php
 /**
- * Buttons Page with Sidebar Integration Only
- * Sample page demonstrating buttons with sidebar navigation (no header)
+ * Users Management Page
+ * Manage system users
  */
 
-$pageTitle = 'Buttons - Sidebar Demo';
+// Start session and check authentication
+session_start();
+
+// Check if user is logged in
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: ../login.php');
+    exit();
+}
+
+$pageTitle = 'Users';
 ?>
 <!DOCTYPE html>
 <html lang="en">

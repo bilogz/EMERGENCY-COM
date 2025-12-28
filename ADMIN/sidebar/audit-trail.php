@@ -4,6 +4,15 @@
  * Track and audit all sent notifications for accountability and compliance
  */
 
+// Start session and check authentication
+session_start();
+
+// Check if user is logged in
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: ../login.php');
+    exit();
+}
+
 $pageTitle = 'Log and Audit Trail';
 ?>
 <!DOCTYPE html>

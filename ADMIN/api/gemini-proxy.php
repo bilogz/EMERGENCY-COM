@@ -72,7 +72,18 @@ if ($httpCode !== 200) {
     http_response_code($httpCode);
     $errorData = json_decode($response, true);
     $errorMsg = $errorData['error']['message'] ?? 'Unknown error';
-    echo json_encode(['success' => false, 'message' => 'API Error: ' . $errorMsg]);
+    
+    // Check for specific error types
+    if (strpos(strtolower($errorMsg), 'expired') !== false || strpos(strtolower($errorMsg), 'invalid') !== false) {
+        $errorMsg = 'API key expired or invalid. Please renew the API key in AI Warning Settings.';
+    }
+    
+    echo json_encode([
+        'success' => false, 
+        'message' => 'API Error: ' . $errorMsg,
+        'error_code' => $httpCode,
+        'error_details' => $errorData
+    ]);
     exit();
 }
 
