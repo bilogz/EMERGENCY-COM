@@ -2074,25 +2074,38 @@ $pageTitle = 'Weather Monitoring';
                     })
                 });
                 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`API Error: ${response.status} - ${errorText}`);
+                // Get response text first to check if it's valid JSON
+                const responseText = await response.text();
+                let data;
+                
+                try {
+                    data = JSON.parse(responseText);
+                } catch (e) {
+                    // If not JSON, it's a real error
+                    throw new Error(`API Error: ${response.status} - ${responseText}`);
                 }
                 
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error(data.message || 'AI analysis failed');
+                // Check if the response indicates success (even if HTTP status isn't 200)
+                if (data.success === true && data.response) {
+                    // Success! Display the analysis
+                    displayAIAnalysis(data.response);
+                    statusBadge.textContent = 'Complete';
+                    statusBadge.className = 'ai-status';
+                    return; // Exit successfully
                 }
                 
-                const aiResponse = data.response;
+                // If we get here, there was an error
+                if (!response.ok && !data.success) {
+                    throw new Error(data.message || `API Error: ${response.status}`);
+                }
                 
-                if (aiResponse) {
-                    displayAIAnalysis(aiResponse);
+                // Check for response even if success flag is missing
+                if (data.response) {
+                    displayAIAnalysis(data.response);
                     statusBadge.textContent = 'Complete';
                     statusBadge.className = 'ai-status';
                 } else {
-                    throw new Error('No response from AI');
+                    throw new Error(data.message || 'No response from AI');
                 }
             } catch (error) {
                 console.error('AI Error:', error);
@@ -2103,10 +2116,43 @@ $pageTitle = 'Weather Monitoring';
                 let errorMessage = error.message;
                 let errorDetails = '';
                 
+                // Try to extract JSON from error message if it contains a successful response
+                try {
+                    const jsonMatch = errorMessage.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        const parsedData = JSON.parse(jsonMatch[0]);
+                        if (parsedData.success === true && parsedData.response) {
+                            // Actually a success! Display it
+                            displayAIAnalysis(parsedData.response);
+                            statusBadge.textContent = 'Complete';
+                            statusBadge.className = 'ai-status';
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    // Not JSON, continue with error handling
+                }
+                
                 // Check if it's an API key error
                 if (errorMessage.includes('expired') || errorMessage.includes('invalid') || errorMessage.includes('400')) {
                     errorMessage = 'API key expired or invalid';
                     errorDetails = 'Please update your Gemini API key in Automated Warnings → AI Warning Settings';
+                } else if (errorMessage.includes('404')) {
+                    // Check if 404 error contains successful JSON response
+                    const jsonMatch = errorMessage.match(/\{[\s\S]*"success":true[\s\S]*\}/);
+                    if (jsonMatch) {
+                        try {
+                            const parsedData = JSON.parse(jsonMatch[0]);
+                            if (parsedData.response) {
+                                displayAIAnalysis(parsedData.response);
+                                statusBadge.textContent = 'Complete';
+                                statusBadge.className = 'ai-status';
+                                return;
+                            }
+                        } catch (e) {
+                            // Continue with error display
+                        }
+                    }
                 }
                 
                 container.innerHTML = `

@@ -129,6 +129,7 @@ if ($httpCode !== 200) {
                 if (isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
                     $aiResponse = $responseData['candidates'][0]['content']['parts'][0]['text'];
                     error_log("Successfully used API version: $version with model: $model");
+                    http_response_code(200);
                     echo json_encode([
                         'success' => true,
                         'response' => $aiResponse,
@@ -172,6 +173,7 @@ if ($httpCode !== 200) {
                     if (isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
                         $aiResponse = $responseData['candidates'][0]['content']['parts'][0]['text'];
                         error_log("Successfully used fallback model: $fallbackModel with API version: $version");
+                        http_response_code(200);
                         echo json_encode([
                             'success' => true,
                             'response' => $aiResponse,
@@ -214,9 +216,12 @@ $responseData = json_decode($response, true);
 
 if (isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
     $aiResponse = $responseData['candidates'][0]['content']['parts'][0]['text'];
+    http_response_code(200);
     echo json_encode([
         'success' => true,
-        'response' => $aiResponse
+        'response' => $aiResponse,
+        'model_used' => $model,
+        'api_version' => $usedVersion
     ]);
 } else {
     http_response_code(500);
