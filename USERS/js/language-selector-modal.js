@@ -26,13 +26,26 @@ class LanguageSelectorModal {
                 ? 'api/languages.php?action=list&_=' + Date.now()
                 : 'api/languages.php?action=list';
             
-            const response = await fetch(url, {
+            const apiPath = this.getApiPath(url);
+            const response = await fetch(apiPath, {
                 cache: 'no-cache',
                 headers: {
                     'Cache-Control': 'no-cache',
                     'Pragma': 'no-cache'
                 }
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('API returned non-JSON:', text.substring(0, 200));
+                throw new Error('Response is not JSON');
+            }
+            
             const data = await response.json();
             
             if (data.success && data.languages) {
@@ -289,7 +302,8 @@ class LanguageSelectorModal {
                 
                 // Save to server
                 try {
-                    await fetch('api/user-language-preference.php', {
+                    const apiPath = this.getApiPath('api/user-language-preference.php');
+                    await fetch(apiPath, {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({language: this.selectedLanguage})
@@ -388,6 +402,23 @@ class LanguageSelectorModal {
             {language_code: 'fil', language_name: 'Filipino', native_name: 'Filipino', flag_emoji: '🇵🇭', is_active: 1, is_ai_supported: 1},
             {language_code: 'es', language_name: 'Spanish', native_name: 'Español', flag_emoji: '🇪🇸', is_active: 1, is_ai_supported: 1}
         ];
+    }
+    
+    /**
+     * Get correct API path based on current page context
+     */
+    getApiPath(relativePath) {
+        // Check if we're in root context (index.php) or USERS folder
+        const currentPath = window.location.pathname;
+        const isRootContext = !currentPath.includes('/USERS/') && currentPath.includes('/index.php');
+        
+        if (isRootContext) {
+            // From root, API is at USERS/api/
+            return relativePath.replace('api/', 'USERS/api/');
+        } else {
+            // From USERS folder, API is at api/
+            return relativePath;
+        }
     }
     
     addStyles() {

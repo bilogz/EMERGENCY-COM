@@ -32,7 +32,19 @@ class LanguageManager {
     
     async detectDeviceLanguage() {
         try {
-            const response = await fetch('api/languages.php?action=detect');
+            // Determine correct API path based on context
+            const apiPath = this.getApiPath('languages.php?action=detect');
+            const response = await fetch(apiPath);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Response is not JSON');
+            }
+            
             const data = await response.json();
             
             if (data.success && data.detected_language) {
@@ -83,13 +95,26 @@ class LanguageManager {
                 ? 'api/languages.php?action=list&_=' + Date.now()
                 : `api/languages.php?action=list${this.lastUpdate ? '&last_update=' + encodeURIComponent(this.lastUpdate) : ''}`;
             
-            const response = await fetch(url, {
+            const apiPath = this.getApiPath(url);
+            const response = await fetch(apiPath, {
                 cache: 'no-cache',
                 headers: {
                     'Cache-Control': 'no-cache',
                     'Pragma': 'no-cache'
                 }
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('API returned non-JSON:', text.substring(0, 200));
+                throw new Error('Response is not JSON');
+            }
+            
             const data = await response.json();
             
             if (data.success && data.languages) {
@@ -131,7 +156,18 @@ class LanguageManager {
                 return;
             }
             
-            const response = await fetch(`api/languages.php?action=check-updates&last_update=${encodeURIComponent(this.lastUpdate)}`);
+            const apiPath = this.getApiPath(`api/languages.php?action=check-updates&last_update=${encodeURIComponent(this.lastUpdate)}`);
+            const response = await fetch(apiPath);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Response is not JSON');
+            }
+            
             const data = await response.json();
             
             if (data.success && data.updated) {
@@ -279,6 +315,23 @@ class LanguageManager {
             {language_code: 'fil', language_name: 'Filipino', native_name: 'Filipino', flag_emoji: '🇵🇭', is_active: 1, is_ai_supported: 1},
             {language_code: 'es', language_name: 'Spanish', native_name: 'Español', flag_emoji: '🇪🇸', is_active: 1, is_ai_supported: 1}
         ];
+    }
+    
+    /**
+     * Get correct API path based on current page context
+     */
+    getApiPath(relativePath) {
+        // Check if we're in root context (index.php) or USERS folder
+        const currentPath = window.location.pathname;
+        const isRootContext = !currentPath.includes('/USERS/') && currentPath.includes('/index.php');
+        
+        if (isRootContext) {
+            // From root, API is at USERS/api/
+            return relativePath.replace('api/', 'USERS/api/');
+        } else {
+            // From USERS folder, API is at api/
+            return relativePath;
+        }
     }
 }
 

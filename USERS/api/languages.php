@@ -4,12 +4,49 @@
  * Provides language list with real-time updates
  */
 
+// Suppress any output before headers
+ob_start();
+
+// Set error handler to return JSON instead of HTML
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    if (error_reporting() === 0) return false;
+    
+    ob_clean();
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'success' => false,
+        'message' => 'Server error occurred',
+        'error' => $errstr
+    ]);
+    exit;
+}, E_ALL);
+
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate, max-age=0');
 header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
 header('Pragma: no-cache');
 
-require_once '../../ADMIN/api/db_connect.php';
+// Determine correct database path
+$dbPath = __DIR__ . '/../../ADMIN/api/db_connect.php';
+if (!file_exists($dbPath)) {
+    // Try alternative path
+    $dbPath = __DIR__ . '/../../../ADMIN/api/db_connect.php';
+}
+
+if (!file_exists($dbPath)) {
+    ob_clean();
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Database configuration not found',
+        'languages' => []
+    ]);
+    exit;
+}
+
+require_once $dbPath;
+ob_end_clean();
 
 $action = $_GET['action'] ?? 'list';
 $lastUpdate = $_GET['last_update'] ?? null;
@@ -141,26 +178,27 @@ try {
     
 } catch (PDOException $e) {
     error_log("Languages API Error: " . $e->getMessage());
-    // Fallback to basic languages
-    $fallbackLanguages = [
-        ['language_code' => 'en', 'language_name' => 'English', 'native_name' => 'English', 'flag_emoji' => '🇺🇸', 'is_active' => 1, 'is_ai_supported' => 1],
-        ['language_code' => 'fil', 'language_name' => 'Filipino', 'native_name' => 'Filipino', 'flag_emoji' => '🇵🇭', 'is_active' => 1, 'is_ai_supported' => 1],
-        ['language_code' => 'es', 'language_name' => 'Spanish', 'native_name' => 'Español', 'flag_emoji' => '🇪🇸', 'is_active' => 1, 'is_ai_supported' => 1],
-        ['language_code' => 'fr', 'language_name' => 'French', 'native_name' => 'Français', 'flag_emoji' => '🇫🇷', 'is_active' => 1, 'is_ai_supported' => 1],
-        ['language_code' => 'de', 'language_name' => 'German', 'native_name' => 'Deutsch', 'flag_emoji' => '🇩🇪', 'is_active' => 1, 'is_ai_supported' => 1],
-        ['language_code' => 'zh', 'language_name' => 'Chinese', 'native_name' => '中文', 'flag_emoji' => '🇨🇳', 'is_active' => 1, 'is_ai_supported' => 1],
-        ['language_code' => 'ja', 'language_name' => 'Japanese', 'native_name' => '日本語', 'flag_emoji' => '🇯🇵', 'is_active' => 1, 'is_ai_supported' => 1],
-        ['language_code' => 'ko', 'language_name' => 'Korean', 'native_name' => '한국어', 'flag_emoji' => '🇰🇷', 'is_active' => 1, 'is_ai_supported' => 1],
-        ['language_code' => 'ar', 'language_name' => 'Arabic', 'native_name' => 'العربية', 'flag_emoji' => '🇸🇦', 'is_active' => 1, 'is_ai_supported' => 1],
-        ['language_code' => 'hi', 'language_name' => 'Hindi', 'native_name' => 'हिन्दी', 'flag_emoji' => '🇮🇳', 'is_active' => 1, 'is_ai_supported' => 1]
-    ];
     
+    // Return JSON error instead of HTML
+    http_response_code(500);
     echo json_encode([
-        'success' => true,
-        'languages' => $fallbackLanguages,
-        'last_update' => date('Y-m-d H:i:s'),
-        'count' => count($fallbackLanguages),
-        'fallback' => true
+        'success' => false,
+        'message' => 'Database error occurred',
+        'error' => $e->getMessage(),
+        'languages' => []
     ]);
+    exit;
+} catch (Exception $e) {
+    error_log("Languages API Error: " . $e->getMessage());
+    
+    // Return JSON error instead of HTML
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Server error occurred',
+        'error' => $e->getMessage(),
+        'languages' => []
+    ]);
+    exit;
 }
 

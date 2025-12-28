@@ -45,13 +45,25 @@ class LanguageSync {
     async syncLanguages() {
         try {
             // Check for updates from admin-managed database
-            const response = await fetch(`api/languages.php?action=check-updates${this.lastSyncTime ? '&last_update=' + encodeURIComponent(this.lastSyncTime) : ''}`, {
+            const url = `api/languages.php?action=check-updates${this.lastSyncTime ? '&last_update=' + encodeURIComponent(this.lastSyncTime) : ''}`;
+            const apiPath = this.getApiPath(url);
+            
+            const response = await fetch(apiPath, {
                 cache: 'no-cache',
                 headers: {
                     'Cache-Control': 'no-cache',
                     'Pragma': 'no-cache'
                 }
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Response is not JSON');
+            }
             
             const data = await response.json();
             
@@ -130,6 +142,23 @@ class LanguageSync {
         if (this.syncInterval) {
             clearInterval(this.syncInterval);
             this.syncInterval = null;
+        }
+    }
+    
+    /**
+     * Get correct API path based on current page context
+     */
+    getApiPath(relativePath) {
+        // Check if we're in root context (index.php) or USERS folder
+        const currentPath = window.location.pathname;
+        const isRootContext = !currentPath.includes('/USERS/') && currentPath.includes('/index.php');
+        
+        if (isRootContext) {
+            // From root, API is at USERS/api/
+            return relativePath.replace('api/', 'USERS/api/');
+        } else {
+            // From USERS folder, API is at api/
+            return relativePath;
         }
     }
 }
