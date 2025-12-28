@@ -409,7 +409,13 @@ function analyzeWithAI($settings) {
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
         curl_close($ch);
+        
+        if ($curlError) {
+            error_log("CURL Error in AI analysis: " . $curlError);
+            return $warnings;
+        }
         
         if ($httpCode === 200 && $response) {
             $responseData = json_decode($response, true);
@@ -441,7 +447,28 @@ function analyzeWithAI($settings) {
                 }
             }
         } else {
-            error_log("Gemini AI analysis failed: HTTP $httpCode");
+            // Handle API errors properly
+            $errorData = json_decode($response, true);
+            $errorMsg = $errorData['error']['message'] ?? "HTTP $httpCode";
+            
+            // Check for API key errors
+            if ($httpCode === 401 || $httpCode === 403 || 
+                strpos(strtolower($errorMsg), 'expired') !== false || 
+                strpos(strtolower($errorMsg), 'invalid') !== false ||
+                strpos(strtolower($errorMsg), 'api key') !== false) {
+                error_log("Gemini API key error: $errorMsg (HTTP $httpCode)");
+                // Return error in warnings array so it can be displayed
+                $warnings[] = [
+                    'type' => 'error',
+                    'title' => 'API Key Error',
+                    'content' => 'API key expired or invalid. Please update your Gemini API key in Automated Warnings → AI Warning Settings.',
+                    'severity' => 'error',
+                    'location' => 'System',
+                    'is_error' => true
+                ];
+            } else {
+                error_log("Gemini AI analysis failed: HTTP $httpCode - $errorMsg");
+            }
         }
     } catch (Exception $e) {
         error_log("AI Analysis Error: " . $e->getMessage());
