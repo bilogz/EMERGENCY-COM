@@ -49,9 +49,13 @@ if (!isset($input['prompt'])) {
 
 $prompt = $input['prompt'];
 
-// Get model from config (defaults to gemini-1.5-flash)
+// Get model from config (defaults to gemini-2.5-flash)
 $model = getGeminiModel();
-$url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . urlencode($apiKey);
+
+// Try v1 API first for newer models like 2.5, fallback to v1beta
+$apiVersions = ['v1', 'v1beta'];
+$usedVersion = 'v1'; // Start with v1 for Gemini 2.5
+$url = "https://generativelanguage.googleapis.com/{$usedVersion}/models/{$model}:generateContent?key=" . urlencode($apiKey);
 
 $data = [
     'contents' => [
@@ -99,38 +103,84 @@ if ($httpCode !== 200) {
     error_log("API Key used: " . substr($apiKey, 0, 20) . "...");
     error_log("Model used: $model");
     
-    // If model not found error, try alternative models
+    // If model not found error, try different API versions and alternative models
     if ($httpCode === 404 || strpos(strtolower($errorMsg), 'model') !== false || strpos(strtolower($errorReason), 'not_found') !== false) {
-        // Try alternative models as fallback
-        $fallbackModels = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
-        
-        foreach ($fallbackModels as $fallbackModel) {
-            if ($fallbackModel === $model) continue; // Skip if already tried
+        // First, try different API versions with the same model
+        $apiVersions = ['v1', 'v1beta'];
+        foreach ($apiVersions as $version) {
+            if ($version === $usedVersion) continue; // Skip if already tried
             
-            $fallbackUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$fallbackModel}:generateContent?key=" . urlencode($apiKey);
+            error_log("Trying API version: $version with model: $model");
+            $versionUrl = "https://generativelanguage.googleapis.com/{$version}/models/{$model}:generateContent?key=" . urlencode($apiKey);
             
-            $ch2 = curl_init($fallbackUrl);
+            $ch2 = curl_init($versionUrl);
             curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch2, CURLOPT_POST, true);
             curl_setopt($ch2, CURLOPT_POSTFIELDS, json_encode($data));
             curl_setopt($ch2, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
             curl_setopt($ch2, CURLOPT_TIMEOUT, 10);
             
-            $fallbackResponse = curl_exec($ch2);
-            $fallbackHttpCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+            $versionResponse = curl_exec($ch2);
+            $versionHttpCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
             curl_close($ch2);
             
-            if ($fallbackHttpCode === 200) {
-                $responseData = json_decode($fallbackResponse, true);
+            if ($versionHttpCode === 200) {
+                $responseData = json_decode($versionResponse, true);
                 if (isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
                     $aiResponse = $responseData['candidates'][0]['content']['parts'][0]['text'];
-                    error_log("Successfully used fallback model: $fallbackModel");
+                    error_log("Successfully used API version: $version with model: $model");
                     echo json_encode([
                         'success' => true,
                         'response' => $aiResponse,
-                        'model_used' => $fallbackModel
+                        'model_used' => $model,
+                        'api_version' => $version
                     ]);
                     exit();
+                }
+            }
+        }
+        
+        // Then try alternative models with both API versions
+        $fallbackModels = [
+            'gemini-2.5-flash',      // Try 2.5 directly
+            'gemini-2.0-flash-exp',  // Experimental 2.0
+            'gemini-1.5-flash',      // Standard 1.5 flash
+            'gemini-1.5-pro',        // Pro version
+            'gemini-pro'             // Legacy pro
+        ];
+        
+        foreach ($fallbackModels as $fallbackModel) {
+            if ($fallbackModel === $model) continue; // Skip if already tried
+            
+            foreach ($apiVersions as $version) {
+                error_log("Trying fallback model: $fallbackModel with API version: $version");
+                $fallbackUrl = "https://generativelanguage.googleapis.com/{$version}/models/{$fallbackModel}:generateContent?key=" . urlencode($apiKey);
+                
+                $ch2 = curl_init($fallbackUrl);
+                curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch2, CURLOPT_POST, true);
+                curl_setopt($ch2, CURLOPT_POSTFIELDS, json_encode($data));
+                curl_setopt($ch2, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+                curl_setopt($ch2, CURLOPT_TIMEOUT, 10);
+                
+                $fallbackResponse = curl_exec($ch2);
+                $fallbackHttpCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+                curl_close($ch2);
+                
+                if ($fallbackHttpCode === 200) {
+                    $responseData = json_decode($fallbackResponse, true);
+                    if (isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
+                        $aiResponse = $responseData['candidates'][0]['content']['parts'][0]['text'];
+                        error_log("Successfully used fallback model: $fallbackModel with API version: $version");
+                        echo json_encode([
+                            'success' => true,
+                            'response' => $aiResponse,
+                            'model_used' => $fallbackModel,
+                            'api_version' => $version,
+                            'original_model' => $model
+                        ]);
+                        exit();
+                    }
                 }
             }
         }
