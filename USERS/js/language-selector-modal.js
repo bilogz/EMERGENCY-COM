@@ -19,17 +19,41 @@ class LanguageSelectorModal {
         this.attachEventListeners();
     }
     
-    async loadLanguages() {
+    async loadLanguages(forceRefresh = false) {
         try {
-            const response = await fetch('api/languages.php?action=list');
+            // Always fetch fresh from admin-managed database
+            const url = forceRefresh 
+                ? 'api/languages.php?action=list&_=' + Date.now()
+                : 'api/languages.php?action=list';
+            
+            const response = await fetch(url, {
+                cache: 'no-cache',
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
             const data = await response.json();
             
             if (data.success && data.languages) {
+                // Update languages from admin-managed database
                 this.languages = data.languages;
                 this.filteredLanguages = [...this.languages];
+                
+                // Trigger update event
+                document.dispatchEvent(new CustomEvent('languagesLoaded', {
+                    detail: {
+                        languages: this.languages,
+                        count: data.count,
+                        lastUpdate: data.last_update
+                    }
+                }));
+            } else {
+                throw new Error(data.message || 'Failed to load languages');
             }
         } catch (error) {
             console.error('Error loading languages:', error);
+            // Use fallback only if API completely fails
             this.languages = this.getFallbackLanguages();
             this.filteredLanguages = [...this.languages];
         }
@@ -330,19 +354,20 @@ class LanguageSelectorModal {
         });
     }
     
-    open() {
+    async open() {
         if (!this.modal) {
             this.createModal();
             this.attachEventListeners();
         }
         
+        // Always refresh languages from admin-managed database when opening
+        await this.loadLanguages(true);
+        
         this.modal.classList.add('show');
         document.body.style.overflow = 'hidden';
         
-        // Refresh languages
-        this.loadLanguages().then(() => {
-            this.filterLanguages();
-        });
+        // Update the language list display
+        this.filterLanguages();
     }
     
     close() {

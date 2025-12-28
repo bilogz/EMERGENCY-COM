@@ -23,6 +23,7 @@ $current = 'support.php';
     <script src="js/language-manager.js"></script>
     <script src="js/language-selector-enhanced.js"></script>
     <script src="js/language-selector-modal.js"></script>
+    <script src="js/language-sync.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const langBtn = document.getElementById('languageSelectorBtn');

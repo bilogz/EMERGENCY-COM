@@ -78,17 +78,26 @@ class LanguageManager {
     
     async loadLanguages(forceUpdate = false) {
         try {
+            // Always fetch from admin-managed database
             const url = forceUpdate 
-                ? 'api/languages.php?action=list'
+                ? 'api/languages.php?action=list&_=' + Date.now()
                 : `api/languages.php?action=list${this.lastUpdate ? '&last_update=' + encodeURIComponent(this.lastUpdate) : ''}`;
             
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                cache: 'no-cache',
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
             const data = await response.json();
             
             if (data.success && data.languages) {
                 const wasUpdated = this.supportedLanguages.length !== data.languages.length || 
-                                  this.lastUpdate !== data.last_update;
+                                  this.lastUpdate !== data.last_update ||
+                                  JSON.stringify(this.supportedLanguages) !== JSON.stringify(data.languages);
                 
+                // Update from admin-managed database
                 this.supportedLanguages = data.languages;
                 this.lastUpdate = data.last_update;
                 
@@ -98,7 +107,8 @@ class LanguageManager {
                         detail: {
                             languages: this.supportedLanguages,
                             count: data.count,
-                            lastUpdate: this.lastUpdate
+                            lastUpdate: this.lastUpdate,
+                            source: 'admin_database'
                         }
                     }));
                 }
@@ -107,7 +117,7 @@ class LanguageManager {
             }
         } catch (error) {
             console.error('Error loading languages:', error);
-            // Use fallback languages
+            // Use fallback languages only if API completely fails
             this.supportedLanguages = this.getFallbackLanguages();
         }
         
@@ -137,17 +147,20 @@ class LanguageManager {
     }
     
     startRealTimeUpdates() {
-        // Check for updates every 30 seconds
+        // Check for updates every 30 seconds to reflect admin changes
         this.updateInterval = setInterval(() => {
             this.checkForUpdates();
         }, 30000); // 30 seconds
         
-        // Also check when page becomes visible
+        // Also check when page becomes visible (admin may have added languages)
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
                 this.checkForUpdates();
             }
         });
+        
+        // Listen for admin language changes (if using websockets or events)
+        // For now, periodic checks handle this
     }
     
     stopRealTimeUpdates() {

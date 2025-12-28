@@ -5,8 +5,9 @@
  */
 
 header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-cache, must-revalidate');
+header('Cache-Control: no-cache, must-revalidate, max-age=0');
 header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
+header('Pragma: no-cache');
 
 require_once '../../ADMIN/api/db_connect.php';
 
@@ -39,7 +40,8 @@ try {
             exit;
         }
         
-        // Get all active languages
+        // Get all active languages from admin-managed database
+        // This ensures users/guests see languages that admins have added/configured
         $stmt = $pdo->query("
             SELECT 
                 language_code, 
@@ -55,6 +57,9 @@ try {
             ORDER BY priority DESC, language_name ASC
         ");
         $languages = $stmt->fetchAll();
+        
+        // Log for debugging (remove in production if needed)
+        // error_log("Languages API: Serving " . count($languages) . " active languages to user/guest");
         
         echo json_encode([
             'success' => true,
