@@ -16,6 +16,6 @@ return [
     'host' => 'smtp.gmail.com',
     'port' => 587,
     'secure' => 'tls',  // Use TLS for Gmail
-    'password' => '',  // ⚠️ REPLACE THIS with the Gmail App Password for alertaraqc.notification@gmail.com
+    'password' => 'gatbylpxrgmcolqm',  // Gmail App Password for alertaraqc.notification@gmail.com
 ];
 

@@ -87,7 +87,37 @@ function sendAdminOTPEmail($to, $subject, $body, $fromEmail, $fromName, &$error 
                     $mail->send();
                     return true;
                 } else {
-                    $error = 'Admin OTP mail config password not set. Please configure admin_otp_mail_config.php';
+                    // Password not set in admin config - try using existing mail config as fallback
+                    // but note: Gmail will send FROM the authenticated account, not from alertaraqc.notification@gmail.com
+                    $mailLibPath = __DIR__ . '/../../USERS/lib/mail.php';
+                    if (file_exists($mailLibPath)) {
+                        require_once $mailLibPath;
+                        $cfg = load_mail_config();
+                        
+                        if (!empty($cfg['host']) && !empty($cfg['password'])) {
+                            $mail->isSMTP();
+                            $mail->Host = $cfg['host'];
+                            $mail->Port = $cfg['port'] ?? 587;
+                            $mail->SMTPAuth = true;
+                            $mail->Username = $cfg['username'];
+                            $mail->Password = $cfg['password'];
+                            $mail->SMTPSecure = $cfg['secure'] ?? 'tls';
+                            
+                            // WARNING: From address will be overridden by Gmail to match authenticated account
+                            // To fix: Add password for alertaraqc.notification@gmail.com to admin_otp_mail_config.php
+                            $mail->setFrom($fromEmail, $fromName);
+                            $mail->addAddress($to);
+                            $mail->Subject = $subject;
+                            $mail->Body = $body;
+                            $mail->isHTML(false);
+                            
+                            $mail->send();
+                            error_log("WARNING: Admin OTP sent using fallback mail config. Email will be FROM: {$cfg['username']} instead of {$fromEmail}. Please configure admin_otp_mail_config.php");
+                            return true;
+                        }
+                    }
+                    
+                    $error = 'Admin OTP mail config password not set. Please add Gmail App Password for alertaraqc.notification@gmail.com to admin_otp_mail_config.php';
                     error_log("Admin OTP email error: " . $error);
                 }
             } else {
