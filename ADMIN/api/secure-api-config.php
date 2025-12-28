@@ -71,7 +71,7 @@ function getGeminiModel() {
             error_log("Fatal error loading secure config file for model: " . $e->getMessage());
         }
     }
-    return 'gemini-2.5-flash';
+    return 'gemini-1.5-flash';
 }
 
 /**

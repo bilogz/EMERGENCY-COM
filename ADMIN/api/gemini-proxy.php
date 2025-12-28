@@ -30,7 +30,11 @@ if (empty($apiKey)) {
     http_response_code(500);
     echo json_encode([
         'success' => false, 
-        'message' => 'API key expired or invalid. Please update your Gemini API key in Automated Warnings → AI Warning Settings.'
+        'message' => 'API key not found. Please update your Gemini API key in Automated Warnings → AI Warning Settings.',
+        'debug' => [
+            'config_file_exists' => file_exists(__DIR__ . '/../../USERS/api/config.local.php'),
+            'config_path' => __DIR__ . '/../../USERS/api/config.local.php'
+        ]
     ]);
     exit();
 }
@@ -45,7 +49,7 @@ if (!isset($input['prompt'])) {
 
 $prompt = $input['prompt'];
 
-// Get model from config (defaults to gemini-2.5-flash)
+// Get model from config (defaults to gemini-1.5-flash)
 $model = getGeminiModel();
 $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . urlencode($apiKey);
 
@@ -88,17 +92,64 @@ if ($httpCode !== 200) {
     http_response_code($httpCode);
     $errorData = json_decode($response, true);
     $errorMsg = $errorData['error']['message'] ?? 'Unknown error';
+    $errorReason = $errorData['error']['reason'] ?? '';
+    
+    // Log the full error for debugging
+    error_log("Gemini API Error - HTTP $httpCode: " . json_encode($errorData));
+    error_log("API Key used: " . substr($apiKey, 0, 20) . "...");
+    error_log("Model used: $model");
+    
+    // If model not found error, try alternative models
+    if (($httpCode === 404 || strpos(strtolower($errorMsg), 'model') !== false || strpos(strtolower($errorReason), 'not_found') !== false) && 
+        $model === 'gemini-2.5-flash') {
+        // Try gemini-1.5-flash as fallback
+        $fallbackModel = 'gemini-1.5-flash';
+        $fallbackUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$fallbackModel}:generateContent?key=" . urlencode($apiKey);
+        
+        $ch2 = curl_init($fallbackUrl);
+        curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch2, CURLOPT_POST, true);
+        curl_setopt($ch2, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch2, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        
+        $fallbackResponse = curl_exec($ch2);
+        $fallbackHttpCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+        curl_close($ch2);
+        
+        if ($fallbackHttpCode === 200) {
+            $responseData = json_decode($fallbackResponse, true);
+            if (isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
+                $aiResponse = $responseData['candidates'][0]['content']['parts'][0]['text'];
+                echo json_encode([
+                    'success' => true,
+                    'response' => $aiResponse,
+                    'model_used' => $fallbackModel
+                ]);
+                exit();
+            }
+        }
+    }
     
     // Check for specific error types
-    if (strpos(strtolower($errorMsg), 'expired') !== false || strpos(strtolower($errorMsg), 'invalid') !== false) {
-        $errorMsg = 'API key expired or invalid. Please renew the API key in AI Warning Settings.';
+    if (strpos(strtolower($errorMsg), 'expired') !== false || 
+        strpos(strtolower($errorMsg), 'invalid') !== false ||
+        strpos(strtolower($errorReason), 'api_key') !== false ||
+        $httpCode === 400 || $httpCode === 401 || $httpCode === 403) {
+        $errorMsg = 'API key expired or invalid. Please update your Gemini API key in Automated Warnings → AI Warning Settings.';
+    } elseif (strpos(strtolower($errorMsg), 'model') !== false || $httpCode === 404) {
+        $errorMsg = 'Model not found. Please check your model name in config. Tried: ' . $model;
     }
     
     echo json_encode([
         'success' => false, 
         'message' => 'API Error: ' . $errorMsg,
         'error_code' => $httpCode,
-        'error_details' => $errorData
+        'error_reason' => $errorReason,
+        'error_details' => $errorData,
+        'debug_info' => [
+            'model' => $model,
+            'api_key_prefix' => substr($apiKey, 0, 10) . '...'
+        ]
     ]);
     exit();
 }
