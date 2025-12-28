@@ -64,7 +64,7 @@ $pageTitle = 'Automated Warning Integration';
                 <p>Integrate with external warning feeds from PAGASA (weather) and PHIVOLCS (earthquake) for automated alert distribution.</p>
                 <div class="info-box" style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 1rem; border-radius: 4px; margin-top: 1rem;">
                     <i class="fas fa-info-circle" style="color: #2196f3;"></i>
-                    <strong>How to use:</strong> Toggle the switches to enable/disable automatic warnings from PAGASA (weather) and PHIVOLCS (earthquake). When enabled, warnings will automatically sync and can be sent to subscribers.
+                    <strong>How to use:</strong> Monitor the integration status for PAGASA (weather) and PHIVOLCS (earthquake). Configure AI-powered warnings by entering your Gemini 2.5 API key and selecting the disaster types you want to monitor. Warnings will automatically sync and can be sent to subscribers.
                 </div>
             </div>
             
@@ -84,12 +84,8 @@ $pageTitle = 'Automated Warning Integration';
                                             <span class="badge" id="pagasaStatus">Connecting...</span>
                                         </div>
                                         <p>Philippine Atmospheric, Geophysical and Astronomical Services Administration</p>
-                                        <div style="margin-top: 1rem;">
-                                            <label class="switch">
-                                                <input type="checkbox" id="pagasaToggle" onchange="toggleIntegration('pagasa', this.checked)">
-                                                <span class="slider"></span>
-                                            </label>
-                                            <span style="margin-left: 0.5rem;">Enable Integration</span>
+                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                                            <small style="color: var(--text-secondary-1);">Status: <span id="pagasaStatusText">Checking...</span></small>
                                         </div>
                                     </div>
                                 </div>
@@ -100,12 +96,20 @@ $pageTitle = 'Automated Warning Integration';
                                             <span class="badge" id="phivolcsStatus">Connecting...</span>
                                         </div>
                                         <p>Philippine Institute of Volcanology and Seismology</p>
-                                        <div style="margin-top: 1rem;">
-                                            <label class="switch">
-                                                <input type="checkbox" id="phivolcsToggle" onchange="toggleIntegration('phivolcs', this.checked)">
-                                                <span class="slider"></span>
-                                            </label>
-                                            <span style="margin-left: 0.5rem;">Enable Integration</span>
+                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                                            <small style="color: var(--text-secondary-1);">Status: <span id="phivolcsStatusText">Checking...</span></small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="channel-card" id="geminiCard">
+                                    <div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                            <h3><i class="fas fa-robot" style="color: #4c8a89;"></i> AI Powered (Gemini 2.5)</h3>
+                                            <span class="badge" id="geminiStatus">Checking...</span>
+                                        </div>
+                                        <p>Google Gemini 2.5 AI Integration for Advanced Warning Analysis</p>
+                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                                            <small style="color: var(--text-secondary-1);">Status: <span id="geminiStatusText">API Key Required</span></small>
                                         </div>
                                     </div>
                                 </div>
@@ -153,10 +157,16 @@ $pageTitle = 'Automated Warning Integration';
                     <!-- AI Warning Settings -->
                     <div class="module-card">
                         <div class="module-card-header">
-                            <h2><i class="fas fa-robot"></i> AI-Powered Auto Warning System</h2>
+                            <h2><i class="fas fa-robot"></i> AI-Powered Auto Warning System (Gemini 2.5)</h2>
                         </div>
                         <div>
                             <form id="aiWarningSettingsForm">
+                                <div class="form-group">
+                                    <label for="geminiApiKey">Gemini 2.5 API Key</label>
+                                    <input type="password" id="geminiApiKey" name="gemini_api_key" placeholder="Enter your Gemini 2.5 API key" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
+                                    <small>Enter your Google Gemini 2.5 API key to enable AI-powered warning analysis</small>
+                                </div>
+                                
                                 <div class="form-group">
                                     <label for="aiEnabled">Enable AI Auto Warnings</label>
                                     <label class="switch">
@@ -194,23 +204,47 @@ $pageTitle = 'Automated Warning Integration';
                                 </div>
                                 
                                 <div class="form-group">
-                                    <label>Auto Warning Types</label>
-                                    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem;">
+                                    <label>Possible Disaster Alert Types</label>
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;">
+                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" name="warning_types[]" value="heavy_rain" checked>
+                                            <span><i class="fas fa-cloud-rain" style="color: #2196F3;"></i> Heavy Raining</span>
+                                        </label>
                                         <label style="display: flex; align-items: center; gap: 0.5rem;">
                                             <input type="checkbox" name="warning_types[]" value="flooding" checked>
-                                            <span><i class="fas fa-water" style="color: #2196F3;"></i> Flooding Warnings</span>
-                                        </label>
-                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <input type="checkbox" name="warning_types[]" value="landslide" checked>
-                                            <span><i class="fas fa-mountain" style="color: #FF9800;"></i> Landslide Warnings</span>
-                                        </label>
-                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <input type="checkbox" name="warning_types[]" value="typhoon" checked>
-                                            <span><i class="fas fa-hurricane" style="color: #F44336;"></i> Typhoon/Storm Warnings</span>
+                                            <span><i class="fas fa-water" style="color: #2196F3;"></i> Flooding</span>
                                         </label>
                                         <label style="display: flex; align-items: center; gap: 0.5rem;">
                                             <input type="checkbox" name="warning_types[]" value="earthquake" checked>
-                                            <span><i class="fas fa-mountain" style="color: #E91E63;"></i> Earthquake Warnings</span>
+                                            <span><i class="fas fa-mountain" style="color: #E91E63;"></i> Earthquake</span>
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" name="warning_types[]" value="strong_winds" checked>
+                                            <span><i class="fas fa-wind" style="color: #9C27B0;"></i> Strong Winds</span>
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" name="warning_types[]" value="tsunami" checked>
+                                            <span><i class="fas fa-water" style="color: #00BCD4;"></i> Tsunami</span>
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" name="warning_types[]" value="landslide" checked>
+                                            <span><i class="fas fa-mountain" style="color: #FF9800;"></i> Landslide</span>
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" name="warning_types[]" value="thunderstorm" checked>
+                                            <span><i class="fas fa-bolt" style="color: #FFC107;"></i> Thunder Storm</span>
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" name="warning_types[]" value="ash_fall" checked>
+                                            <span><i class="fas fa-volcano" style="color: #795548;"></i> Ash Fall</span>
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" name="warning_types[]" value="fire_incident" checked>
+                                            <span><i class="fas fa-fire" style="color: #F44336;"></i> Fire Incident</span>
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="checkbox" name="warning_types[]" value="typhoon" checked>
+                                            <span><i class="fas fa-hurricane" style="color: #F44336;"></i> Typhoon/Storm</span>
                                         </label>
                                     </div>
                                 </div>
@@ -279,46 +313,50 @@ $pageTitle = 'Automated Warning Integration';
 
 
     <script>
-        function toggleIntegration(source, enabled) {
-            fetch('../api/automated-warnings.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    action: 'toggle',
-                    source: source,
-                    enabled: enabled
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const statusElement = document.getElementById(source + 'Status');
-                    statusElement.textContent = enabled ? 'Connected' : 'Disabled';
-                    statusElement.className = 'badge ' + (enabled ? 'success' : 'secondary');
-                } else {
-                    alert('Error: ' + data.message);
-                }
-            });
-        }
-
         function loadIntegrationStatus() {
             fetch('../api/automated-warnings.php?action=status')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
+                        // PAGASA Status
                         if (data.pagasa) {
-                            document.getElementById('pagasaToggle').checked = data.pagasa.enabled;
-                            document.getElementById('pagasaStatus').textContent = data.pagasa.enabled ? 'Connected' : 'Disabled';
-                            document.getElementById('pagasaStatus').className = 'badge ' + (data.pagasa.enabled ? 'success' : 'secondary');
+                            const isConnected = data.pagasa.enabled;
+                            document.getElementById('pagasaStatus').textContent = isConnected ? 'CONNECTED' : 'DISCONNECTED';
+                            document.getElementById('pagasaStatus').className = 'badge ' + (isConnected ? 'success' : 'secondary');
+                            document.getElementById('pagasaStatusText').textContent = isConnected ? 'Active and Syncing' : 'Not Connected';
+                        } else {
+                            document.getElementById('pagasaStatus').textContent = 'DISCONNECTED';
+                            document.getElementById('pagasaStatus').className = 'badge secondary';
+                            document.getElementById('pagasaStatusText').textContent = 'Not Configured';
                         }
+                        
+                        // PHIVOLCS Status
                         if (data.phivolcs) {
-                            document.getElementById('phivolcsToggle').checked = data.phivolcs.enabled;
-                            document.getElementById('phivolcsStatus').textContent = data.phivolcs.enabled ? 'Connected' : 'Disabled';
-                            document.getElementById('phivolcsStatus').className = 'badge ' + (data.phivolcs.enabled ? 'success' : 'secondary');
+                            const isConnected = data.phivolcs.enabled;
+                            document.getElementById('phivolcsStatus').textContent = isConnected ? 'CONNECTED' : 'DISCONNECTED';
+                            document.getElementById('phivolcsStatus').className = 'badge ' + (isConnected ? 'success' : 'secondary');
+                            document.getElementById('phivolcsStatusText').textContent = isConnected ? 'Active and Syncing' : 'Not Connected';
+                        } else {
+                            document.getElementById('phivolcsStatus').textContent = 'DISCONNECTED';
+                            document.getElementById('phivolcsStatus').className = 'badge secondary';
+                            document.getElementById('phivolcsStatusText').textContent = 'Not Configured';
+                        }
+                        
+                        // Gemini Status
+                        if (data.gemini) {
+                            const isConnected = data.gemini.enabled && data.gemini.api_key_set;
+                            document.getElementById('geminiStatus').textContent = isConnected ? 'CONNECTED' : 'DISCONNECTED';
+                            document.getElementById('geminiStatus').className = 'badge ' + (isConnected ? 'success' : 'secondary');
+                            document.getElementById('geminiStatusText').textContent = isConnected ? 'AI Active' : (data.gemini.api_key_set ? 'API Key Set - Enable AI' : 'API Key Required');
+                        } else {
+                            document.getElementById('geminiStatus').textContent = 'DISCONNECTED';
+                            document.getElementById('geminiStatus').className = 'badge secondary';
+                            document.getElementById('geminiStatusText').textContent = 'API Key Required';
                         }
                     }
+                })
+                .catch(error => {
+                    console.error('Error loading integration status:', error);
                 });
         }
 
@@ -378,6 +416,14 @@ $pageTitle = 'Automated Warning Integration';
             e.preventDefault();
             const formData = new FormData(this);
             
+            // Check if API key is masked (contains asterisks), if so, don't send it
+            const apiKeyInput = document.getElementById('geminiApiKey');
+            const apiKeyValue = apiKeyInput.value;
+            if (apiKeyValue.includes('*') || apiKeyValue.length <= 4) {
+                // API key is masked, remove it from form data
+                formData.delete('gemini_api_key');
+            }
+            
             fetch('../api/ai-warnings.php', {
                 method: 'POST',
                 body: formData
@@ -387,6 +433,7 @@ $pageTitle = 'Automated Warning Integration';
                 if (data.success) {
                     alert('AI Warning Settings saved successfully!');
                     loadAISettings();
+                    loadIntegrationStatus(); // Reload integration status to update Gemini status
                 } else {
                     alert('Error: ' + data.message);
                 }
@@ -400,6 +447,16 @@ $pageTitle = 'Automated Warning Integration';
                 .then(data => {
                     if (data.success && data.settings) {
                         const settings = data.settings;
+                        // Only set API key if it's not masked (contains asterisks)
+                        const apiKeyInput = document.getElementById('geminiApiKey');
+                        if (settings.gemini_api_key && !settings.gemini_api_key.includes('*')) {
+                            apiKeyInput.value = settings.gemini_api_key;
+                        } else if (settings.gemini_api_key) {
+                            // Keep masked value or empty
+                            apiKeyInput.value = settings.gemini_api_key;
+                        } else {
+                            apiKeyInput.value = '';
+                        }
                         document.getElementById('aiEnabled').checked = settings.ai_enabled || false;
                         document.getElementById('aiCheckInterval').value = settings.ai_check_interval || 30;
                         document.getElementById('windThreshold').value = settings.wind_threshold || 60;
