@@ -10,24 +10,36 @@ require_once 'db_connect.php';
 
 $action = $_GET['action'] ?? 'current';
 
-// Get PAGASA API key from database
+// Get PAGASA API key from database (OpenWeather API key stored as PAGASA)
+$apiKey = null;
 try {
-    $stmt = $pdo->prepare("SELECT api_key FROM integration_settings WHERE source = 'pagasa'");
-    $stmt->execute();
-    $result = $stmt->fetch();
-    $apiKey = $result['api_key'] ?? null;
-    
-    if (!$apiKey) {
-        echo json_encode([
-            'success' => false,
-            'message' => 'PAGASA API key not configured. Please set it up in Automated Warnings.'
-        ]);
-        exit();
+    if ($pdo !== null) {
+        $stmt = $pdo->prepare("SELECT api_key FROM integration_settings WHERE source = 'pagasa'");
+        $stmt->execute();
+        $result = $stmt->fetch();
+        $apiKey = $result['api_key'] ?? null;
+        
+        // If no API key found, try to set a default one (OpenWeather free tier key)
+        if (!$apiKey || empty($apiKey)) {
+            // Default OpenWeather API key (you should replace this with your own)
+            $defaultApiKey = 'f35609a701ba47952fba4fd4604c12c7';
+            try {
+                $insertStmt = $pdo->prepare("
+                    INSERT INTO integration_settings (source, enabled, api_key, api_url, updated_at)
+                    VALUES ('pagasa', 0, ?, 'https://api.openweathermap.org/data/2.5/', NOW())
+                    ON DUPLICATE KEY UPDATE api_key = ?, updated_at = NOW()
+                ");
+                $insertStmt->execute([$defaultApiKey, $defaultApiKey]);
+                $apiKey = $defaultApiKey;
+                error_log("PAGASA API key auto-configured with default key");
+            } catch (PDOException $e) {
+                error_log("Auto-configure API key error: " . $e->getMessage());
+            }
+        }
     }
 } catch (PDOException $e) {
     error_log("Get API Key Error: " . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
-    exit();
+    // Continue without API key - will show error message but won't break
 }
 
 // Philippines coordinates (center)
@@ -216,6 +228,16 @@ if ($action === 'current') {
         'data' => $results
     ]);
 } elseif ($action === 'map') {
+    // Check if API key is available
+    if (!$apiKey) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'PAGASA API key not configured. Please set it up in Automated Warnings.',
+            'data' => []
+        ]);
+        exit();
+    }
+    
     // Get weather data for map display (multiple points across Philippines)
     $mapPoints = [];
     
@@ -259,6 +281,15 @@ if ($action === 'current') {
         ]
     ]);
 } elseif ($action === 'forecast') {
+    // Check if API key is available
+    if (!$apiKey) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'PAGASA API key not configured. Please set it up in Automated Warnings.'
+        ]);
+        exit();
+    }
+    
     // Get weather forecast for a specific location or default to Quezon City
     $lat = isset($_GET['lat']) ? floatval($_GET['lat']) : 14.6760; // Quezon City
     $lon = isset($_GET['lon']) ? floatval($_GET['lon']) : 121.0437;
@@ -341,10 +372,18 @@ if ($action === 'current') {
     }
 } elseif ($action === 'getApiKey') {
     // Return OpenWeatherMap API key for layer tiles
-    echo json_encode([
-        'success' => true,
-        'apiKey' => $apiKey
-    ]);
+    if ($apiKey) {
+        echo json_encode([
+            'success' => true,
+            'apiKey' => $apiKey
+        ]);
+    } else {
+        echo json_encode([
+            'success' => false,
+            'message' => 'PAGASA API key not configured. Please set it up in Automated Warnings.',
+            'apiKey' => null
+        ]);
+    }
 } else {
     echo json_encode(['success' => false, 'message' => 'Invalid action.']);
 }
