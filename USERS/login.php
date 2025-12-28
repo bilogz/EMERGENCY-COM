@@ -33,6 +33,37 @@ $assetBase = '../ADMIN/header/';
                     <h2>User Login</h2>
                     <p>Log in using your registered contact number. Verify you are not a bot using CAPTCHA.</p>
                     
+                    <!-- Phone OTP Login Form (Hidden by default) -->
+                    <form class="auth-form" id="phoneOtpForm" style="display: none;">
+                        <div class="form-group">
+                            <label for="otp_phone">
+                                <i class="fas fa-phone"></i> Mobile Number
+                            </label>
+                            <div class="input-with-prefix">
+                                <span class="prefix">+63</span>
+                                <input type="tel" id="otp_phone" name="otp_phone" pattern="[0-9]{10}" maxlength="10" placeholder="9XXXXXXXXX" required autocomplete="tel">
+                            </div>
+                            <small class="form-hint">We'll send you a verification code via SMS</small>
+                        </div>
+                        
+                        <div class="error-message" id="otpErrorMessage" style="display: none;">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span id="otpErrorText"></span>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" id="sendOtpButton">
+                            <i class="fas fa-paper-plane"></i>
+                            <span class="btn-text">Send OTP</span>
+                            <span class="btn-spinner" style="display: none;">
+                                <i class="fas fa-spinner fa-spin"></i>
+                            </span>
+                        </button>
+                        
+                        <button type="button" class="btn btn-secondary" id="backToRegularLogin" style="margin-top: 0.5rem;">
+                            <i class="fas fa-arrow-left"></i> Back to Regular Login
+                        </button>
+                    </form>
+
                     <!-- Login Form with CAPTCHA -->
                     <form class="auth-form" id="loginForm" style="display: block;">
                         <div class="form-group">
@@ -77,8 +108,26 @@ $assetBase = '../ADMIN/header/';
                         <span>OR</span>
                     </div>
                     <button type="button" id="googleLoginBtn" class="btn btn-google">
-                        <i class="fab fa-google"></i>
-                        <span>Continue with Google</span>
+                        <span class="google-logo-wrapper">
+                            <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg">
+                                <g fill="#000" fill-rule="evenodd">
+                                    <path d="M9 3.48c1.69 0 2.83.73 3.48 1.34l2.54-2.48C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l2.91 2.26C4.6 5.05 6.62 3.48 9 3.48z" fill="#EA4335"/>
+                                    <path d="M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.96c-.21 1.18-.84 2.18-1.79 2.87l2.75 2.13c1.66-1.52 2.72-3.76 2.72-6.5z" fill="#4285F4"/>
+                                    <path d="M3.88 10.78A5.54 5.54 0 0 1 3.58 9c0-.62.11-1.22.29-1.78L.96 4.96A9.008 9.008 0 0 0 0 9c0 1.45.35 2.82.96 4.04l2.92-2.26z" fill="#FBBC05"/>
+                                    <path d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.75-2.13c-.76.53-1.78.9-3.21.9-2.38 0-4.4-1.57-5.12-3.74L.96 13.04C2.45 15.98 5.48 18 9 18z" fill="#34A853"/>
+                                </g>
+                            </svg>
+                        </span>
+                        <span class="google-text">Sign in with Google</span>
+                    </button>
+
+                    <!-- Phone OTP Login -->
+                    <div class="auth-divider">
+                        <span>OR</span>
+                    </div>
+                    <button type="button" id="phoneOtpLoginBtn" class="btn btn-phone-otp">
+                        <i class="fas fa-mobile-alt"></i>
+                        <span>Login with Phone Number (OTP)</span>
                     </button>
 
                     <!-- Guest Login Option -->
@@ -204,6 +253,114 @@ $assetBase = '../ADMIN/header/';
                 });
             }
         }
+
+        // Phone OTP Login Handler
+        document.addEventListener('DOMContentLoaded', function() {
+            const phoneOtpBtn = document.getElementById('phoneOtpLoginBtn');
+            const phoneOtpForm = document.getElementById('phoneOtpForm');
+            const loginForm = document.getElementById('loginForm');
+            const backToRegularBtn = document.getElementById('backToRegularLogin');
+            const sendOtpBtn = document.getElementById('sendOtpButton');
+            const otpPhoneInput = document.getElementById('otp_phone');
+            const otpErrorMessage = document.getElementById('otpErrorMessage');
+            const otpErrorText = document.getElementById('otpErrorText');
+
+            // Show phone OTP form
+            if (phoneOtpBtn) {
+                phoneOtpBtn.addEventListener('click', function() {
+                    loginForm.style.display = 'none';
+                    phoneOtpForm.style.display = 'block';
+                    otpPhoneInput.focus();
+                });
+            }
+
+            // Back to regular login
+            if (backToRegularBtn) {
+                backToRegularBtn.addEventListener('click', function() {
+                    phoneOtpForm.style.display = 'none';
+                    loginForm.style.display = 'block';
+                    otpErrorMessage.style.display = 'none';
+                });
+            }
+
+            // Phone input validation
+            if (otpPhoneInput) {
+                otpPhoneInput.addEventListener('input', function () {
+                    this.value = this.value.replace(/\D/g, '');
+                    if (this.value.length === 1 && this.value === '0') {
+                        this.value = '';
+                    }
+                    otpErrorMessage.style.display = 'none';
+                });
+            }
+
+            // Send OTP handler
+            if (phoneOtpForm) {
+                phoneOtpForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    otpErrorMessage.style.display = 'none';
+
+                    const phone = otpPhoneInput.value.trim();
+                    
+                    if (!phone || phone.length !== 10) {
+                        otpErrorText.textContent = 'Please enter a valid 10-digit mobile number.';
+                        otpErrorMessage.style.display = 'flex';
+                        return;
+                    }
+
+                    // Disable button and show loading
+                    sendOtpBtn.disabled = true;
+                    sendOtpBtn.querySelector('.btn-text').style.display = 'none';
+                    sendOtpBtn.querySelector('.btn-spinner').style.display = 'inline-block';
+
+                    try {
+                        const phoneWithPrefix = '+63' + phone;
+                        const response = await fetch('api/send-otp.php', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ phone: phoneWithPrefix })
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'OTP Sent!',
+                                text: 'A verification code has been sent to your phone. Please check your SMS.',
+                                showConfirmButton: false,
+                                timer: 2000
+                            }).then(() => {
+                                // TODO: Show OTP verification modal/input
+                                // For now, redirect to regular login
+                                Swal.fire({
+                                    icon: 'info',
+                                    title: 'OTP Feature',
+                                    text: 'OTP verification will be implemented soon. Please use regular login for now.',
+                                    confirmButtonText: 'OK'
+                                }).then(() => {
+                                    phoneOtpForm.style.display = 'none';
+                                    loginForm.style.display = 'block';
+                                });
+                            });
+                        } else {
+                            otpErrorText.textContent = data.message || 'Failed to send OTP. Please try again.';
+                            otpErrorMessage.style.display = 'flex';
+                        }
+                    } catch (error) {
+                        console.error('Send OTP error:', error);
+                        otpErrorText.textContent = 'Connection error. Please check your internet connection.';
+                        otpErrorMessage.style.display = 'flex';
+                    } finally {
+                        sendOtpBtn.disabled = false;
+                        sendOtpBtn.querySelector('.btn-text').style.display = 'inline';
+                        sendOtpBtn.querySelector('.btn-spinner').style.display = 'none';
+                    }
+                });
+            }
+        });
 
         // Guest Login Handler
         document.addEventListener('DOMContentLoaded', function() {

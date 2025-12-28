@@ -1536,38 +1536,103 @@
     }
 }
 
-/* Google OAuth Button */
+/* Google OAuth Button - Matching Google's Design */
 .btn-google {
     background: #ffffff;
-    color: #4285f4;
+    color: #ffffff;
     border: 1px solid #dadce0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding: 0;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    overflow: hidden;
+    position: relative;
+    height: 42px;
+}
+
+.btn-google .google-logo-wrapper {
+    background: #ffffff;
+    border-right: 1px solid #dadce0;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    flex-shrink: 0;
+}
+
+.btn-google .google-text {
+    background: #4285f4;
+    color: #ffffff;
+    padding: 0 20px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.btn-google:hover {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.btn-google:hover .google-logo-wrapper {
+    background: #f8f9fa;
+}
+
+.btn-google:hover .google-text {
+    background: #357ae8;
+}
+
+[data-theme="dark"] .btn-google {
+    border-color: #5f6368;
+}
+
+[data-theme="dark"] .btn-google .google-logo-wrapper {
+    background: #2d2d2d;
+    border-color: #5f6368;
+}
+
+[data-theme="dark"] .btn-google .google-text {
+    background: #4285f4;
+}
+
+[data-theme="dark"] .btn-google:hover .google-logo-wrapper {
+    background: #3d3d3d;
+}
+
+/* Phone OTP Login Button */
+.btn-phone-otp {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff;
+    border: none;
     width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
     font-weight: 500;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
-.btn-google:hover {
-    background: #f8f9fa;
-    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.2);
-    transform: translateY(-1px);
+.btn-phone-otp:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    color: #ffffff;
 }
 
-.btn-google i {
+.btn-phone-otp i {
     font-size: 1.2rem;
 }
 
-[data-theme="dark"] .btn-google {
-    background: #2d2d2d;
-    color: #8ab4f8;
-    border-color: #5f6368;
-}
-
-[data-theme="dark"] .btn-google:hover {
-    background: #3d3d3d;
+[data-theme="dark"] .btn-phone-otp {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 /* Auth Divider */
@@ -1660,43 +1725,113 @@
     text-decoration: underline;
 }
 
-/* Barangay and Street Suggestions Dropdown */
+/* Barangay and Street Suggestions Dropdown - Modern Style */
 .suggestions-dropdown {
     position: absolute;
     z-index: 1000;
     background: var(--card-bg, #ffffff);
     border: 1px solid var(--card-border, #e5e7eb);
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    max-height: 250px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+    max-height: 280px;
     overflow-y: auto;
-    margin-top: 0.25rem;
+    margin-top: 0.5rem;
     width: 100%;
     top: 100%;
     left: 0;
+    backdrop-filter: blur(10px);
+    animation: dropdownFadeIn 0.2s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 [data-theme="dark"] .suggestions-dropdown {
-    background: #2d2d2d;
+    background: rgba(45, 45, 45, 0.95);
     border-color: #5f6368;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.suggestions-dropdown::-webkit-scrollbar {
+    width: 8px;
+}
+
+.suggestions-dropdown::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 12px;
+}
+
+.suggestions-dropdown::-webkit-scrollbar-thumb {
+    background: rgba(142, 68, 173, 0.3);
+    border-radius: 4px;
+}
+
+.suggestions-dropdown::-webkit-scrollbar-thumb:hover {
+    background: rgba(142, 68, 173, 0.5);
 }
 
 .suggestion-item {
-    padding: 0.75rem 1rem;
+    padding: 0.875rem 1.25rem;
     cursor: pointer;
-    border-bottom: 1px solid var(--card-border, #e5e7eb);
-    transition: all 0.2s ease;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     font-size: 0.95rem;
+    color: var(--text-color, #171717);
+    position: relative;
+    display: flex;
+    align-items: center;
 }
 
-.suggestion-item:hover {
-    background: var(--primary-color, #8e44ad);
-    color: #ffffff;
-    transform: translateX(4px);
+.suggestion-item:first-child {
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
 }
 
 .suggestion-item:last-child {
     border-bottom: none;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+
+.suggestion-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--primary-color, #8e44ad);
+    transform: scaleY(0);
+    transition: transform 0.2s ease;
+}
+
+.suggestion-item:hover {
+    background: linear-gradient(90deg, rgba(142, 68, 173, 0.1) 0%, rgba(142, 68, 173, 0.05) 100%);
+    color: var(--primary-color, #8e44ad);
+    padding-left: 1.5rem;
+    transform: translateX(4px);
+}
+
+.suggestion-item:hover::before {
+    transform: scaleY(1);
+}
+
+[data-theme="dark"] .suggestion-item {
+    border-color: rgba(95, 99, 104, 0.3);
+    color: #e8eaed;
+}
+
+[data-theme="dark"] .suggestion-item:hover {
+    background: linear-gradient(90deg, rgba(142, 68, 173, 0.2) 0%, rgba(142, 68, 173, 0.1) 100%);
+    color: #bb86fc;
 }
 
 .form-group {
@@ -1710,6 +1845,30 @@
     font-size: 0.85rem;
     color: var(--text-muted, #6b7280);
     font-style: italic;
+}
+
+/* Error Message Styling */
+.error-message {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: rgba(220, 53, 69, 0.1);
+    border: 1px solid rgba(220, 53, 69, 0.3);
+    border-radius: 8px;
+    color: #dc3545;
+    font-size: 0.9rem;
+    margin: 1rem 0;
+}
+
+.error-message i {
+    font-size: 1rem;
+}
+
+[data-theme="dark"] .error-message {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.4);
+    color: #ff6b7a;
 }
 
 /* APK Download Button */
