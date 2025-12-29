@@ -309,6 +309,7 @@ $pageTitle = 'User Management';
             align-items: center;
             justify-content: center;
             pointer-events: auto;
+            cursor: pointer;
         }
 
         .modal-overlay.show {
@@ -325,6 +326,7 @@ $pageTitle = 'User Management';
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
             position: relative;
             pointer-events: auto;
+            cursor: default;
         }
 
         .modal-header {
@@ -365,6 +367,11 @@ $pageTitle = 'User Management';
             touch-action: manipulation;
             position: relative;
             z-index: 10;
+        }
+
+        .modal-close:focus {
+            outline: 2px solid var(--primary-color-1);
+            outline-offset: 2px;
         }
 
         .modal-close:hover {
@@ -443,6 +450,11 @@ $pageTitle = 'User Management';
             pointer-events: auto;
             position: relative;
             z-index: 10;
+        }
+
+        .btn:focus {
+            outline: 2px solid var(--primary-color-1);
+            outline-offset: 2px;
         }
 
         .btn:active {
@@ -763,7 +775,15 @@ $pageTitle = 'User Management';
                     e.preventDefault();
                     e.stopPropagation();
                     closeModal();
+                    return false;
                 });
+                // Fallback onclick handler
+                closeBtn.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeModal();
+                    return false;
+                };
             }
 
             // Modal cancel button handler
@@ -773,7 +793,15 @@ $pageTitle = 'User Management';
                     e.preventDefault();
                     e.stopPropagation();
                     closeModal();
+                    return false;
                 });
+                // Fallback onclick handler
+                cancelBtn.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeModal();
+                    return false;
+                };
             }
 
             // Prevent modal content clicks from closing the modal
@@ -782,6 +810,10 @@ $pageTitle = 'User Management';
                 modalContent.addEventListener('click', function(e) {
                     e.stopPropagation();
                 });
+                // Also prevent clicks on modal content from bubbling
+                modalContent.onclick = function(e) {
+                    e.stopPropagation();
+                };
             }
 
             // Set up overlay click handler
@@ -789,10 +821,16 @@ $pageTitle = 'User Management';
             if (modalOverlay) {
                 modalOverlay.addEventListener('click', function(e) {
                     // Only close if clicking directly on the overlay background, not on modal content
-                    if (e.target === this) {
+                    if (e.target === this || e.target.classList.contains('modal-overlay')) {
                         closeModal();
                     }
                 });
+                // Fallback onclick handler for overlay
+                modalOverlay.onclick = function(e) {
+                    if (e.target === this || e.target.classList.contains('modal-overlay')) {
+                        closeModal();
+                    }
+                };
             }
         });
         
