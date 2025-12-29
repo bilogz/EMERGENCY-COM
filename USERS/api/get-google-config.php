@@ -17,6 +17,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 $configFile = __DIR__ . '/config.local.php';
 
+// Debug: Show the actual path being used
+$debugPath = realpath(__DIR__) . '/config.local.php';
+
 try {
     // Check if config file exists
     if (!file_exists($configFile)) {
@@ -25,6 +28,8 @@ try {
             "message" => "Config file not found.",
             "debug" => [
                 "config_file_path" => $configFile,
+                "real_path" => $debugPath,
+                "__DIR__" => __DIR__,
                 "file_exists" => false
             ]
         ]);
@@ -40,7 +45,8 @@ try {
             "success" => false,
             "message" => "Config file did not return an array.",
             "debug" => [
-                "config_type" => gettype($config)
+                "config_type" => gettype($config),
+                "config_value" => var_export($config, true)
             ]
         ]);
         exit();
@@ -60,13 +66,22 @@ try {
             "message" => "Google OAuth is not configured. GOOGLE_CLIENT_ID not found or empty.",
             "debug" => [
                 "config_keys" => array_keys($config),
-                "has_google_client_id" => isset($config['GOOGLE_CLIENT_ID'])
+                "has_google_client_id" => isset($config['GOOGLE_CLIENT_ID']),
+                "config_file_path" => $configFile,
+                "file_exists" => file_exists($configFile),
+                "file_readable" => is_readable($configFile),
+                "config_dump" => $config
             ]
         ]);
     }
 } catch (Exception $e) {
     echo json_encode([
         "success" => false,
-        "message" => "Error loading configuration: " . $e->getMessage()
+        "message" => "Error loading configuration: " . $e->getMessage(),
+        "debug" => [
+            "exception" => $e->getMessage(),
+            "file" => $e->getFile(),
+            "line" => $e->getLine()
+        ]
     ]);
 }
