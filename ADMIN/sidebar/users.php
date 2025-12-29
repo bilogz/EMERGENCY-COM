@@ -818,22 +818,7 @@ $pageTitle = 'User Management';
                 console.error('Cancel button not found!');
             }
 
-            // Prevent modal content clicks from closing the modal
-            const modalContent = document.querySelector('.modal-content');
-            console.log('Modal content element:', modalContent);
-            if (modalContent) {
-                modalContent.addEventListener('click', function(e) {
-                    console.log('Modal content clicked, stopping propagation');
-                    e.stopPropagation();
-                });
-                // Also prevent clicks on modal content from bubbling
-                modalContent.onclick = function(e) {
-                    console.log('Modal content clicked via onclick, stopping propagation');
-                    e.stopPropagation();
-                };
-            }
-
-            // Set up overlay click handler - simplified for reliability
+            // Set up overlay click handler - simplified and more reliable
             const modalOverlay = document.getElementById('userModal');
             console.log('Modal overlay element:', modalOverlay);
             if (modalOverlay) {
@@ -843,11 +828,10 @@ $pageTitle = 'User Management';
 
                 // Create and assign the handler
                 modalOverlay._modalOverlayHandler = function(e) {
-                    console.log('Overlay clicked, target:', e.target, 'target id:', e.target.id, 'target class:', e.target.className);
-                    // Check if click is outside the modal content
-                    const modalContent = document.querySelector('.modal-content');
-                    if (modalContent && !modalContent.contains(e.target)) {
-                        console.log('Closing modal via overlay click (outside modal content)');
+                    console.log('Overlay clicked, target:', e.target, 'currentTarget:', e.currentTarget);
+                    // Check if click is directly on the overlay (not on modal content)
+                    if (e.target === e.currentTarget) {
+                        console.log('Closing modal via overlay click (directly on overlay)');
                         e.preventDefault();
                         e.stopPropagation();
                         closeModal();
@@ -855,10 +839,20 @@ $pageTitle = 'User Management';
                     }
                 };
 
-                modalOverlay.addEventListener('click', modalOverlay._modalOverlayHandler, true); // Use capture phase
+                modalOverlay.addEventListener('click', modalOverlay._modalOverlayHandler);
                 modalOverlay.onclick = modalOverlay._modalOverlayHandler;
             } else {
                 console.error('Modal overlay not found!');
+            }
+
+            // Prevent modal content clicks from closing the modal
+            const modalContent = document.querySelector('.modal-content');
+            console.log('Modal content element:', modalContent);
+            if (modalContent) {
+                modalContent.addEventListener('click', function(e) {
+                    console.log('Modal content clicked, stopping propagation');
+                    e.stopPropagation();
+                });
             }
         });
         
