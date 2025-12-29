@@ -308,7 +308,6 @@ $pageTitle = 'User Management';
             z-index: 10000;
             align-items: center;
             justify-content: center;
-            pointer-events: none;
         }
 
         .modal-overlay.show {
@@ -324,6 +323,7 @@ $pageTitle = 'User Management';
             overflow-y: auto;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
             z-index: 10001;
+            position: relative;
             pointer-events: auto;
         }
         
@@ -381,6 +381,9 @@ $pageTitle = 'User Management';
         
         .modal-body {
             padding: 1.5rem;
+            pointer-events: auto;
+            position: relative;
+            z-index: 10002;
         }
         
         .form-group {
@@ -425,6 +428,9 @@ $pageTitle = 'User Management';
             display: flex;
             justify-content: flex-end;
             gap: 0.75rem;
+            pointer-events: auto;
+            position: relative;
+            z-index: 10005;
         }
         
         .btn {
@@ -439,6 +445,9 @@ $pageTitle = 'User Management';
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
+            pointer-events: auto !important;
+            position: relative;
+            z-index: 10006;
         }
         
         .btn:active {
@@ -448,6 +457,9 @@ $pageTitle = 'User Management';
         .btn-primary {
             background: var(--primary-color-1);
             color: white;
+            pointer-events: auto !important;
+            position: relative;
+            z-index: 10007;
         }
         
         .btn-primary:hover {
@@ -465,6 +477,9 @@ $pageTitle = 'User Management';
             background: var(--bg-color-1);
             color: var(--text-color-1);
             border: 1px solid var(--border-color-1);
+            pointer-events: auto !important;
+            position: relative;
+            z-index: 10007;
         }
         
         .btn-secondary:hover {
@@ -721,7 +736,7 @@ $pageTitle = 'User Management';
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="button" class="btn btn-secondary" onclick="event.stopPropagation(); closeModal(); return false;">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="saveUser()">
                     <i class="fas fa-save"></i> Save User
                 </button>
@@ -759,32 +774,29 @@ $pageTitle = 'User Management';
                     e.stopPropagation();
                 });
             }
+
+            // Set up overlay click handler
+            const modalOverlay = document.getElementById('userModal');
+            if (modalOverlay) {
+                modalOverlay.addEventListener('click', function(e) {
+                    // Only close if clicking directly on the overlay background, not on modal content
+                    if (e.target === this) {
+                        closeModal();
+                    }
+                });
+            }
         });
 
-        // Use event delegation for close button (works even if modal is dynamically created)
-        // Handle clicks on the button or its children (like the X symbol)
+        // Simplified close button handler - the onclick in HTML should work, but this is backup
         document.addEventListener('click', function(e) {
-            const closeBtn = e.target.closest('.modal-close');
-            if (closeBtn || e.target.classList.contains('modal-close') || e.target.id === 'modalCloseBtn') {
-                e.preventDefault();
+            // Handle close button clicks
+            if (e.target.closest('.modal-close') || e.target.classList.contains('modal-close')) {
                 e.stopPropagation();
-                e.stopImmediatePropagation();
+                e.preventDefault();
                 closeModal();
                 return false;
             }
-        }, true); // Use capture phase to run before other handlers
-
-        // Also handle mousedown for extra reliability
-        document.addEventListener('mousedown', function(e) {
-            const closeBtn = e.target.closest('.modal-close');
-            if (closeBtn || e.target.classList.contains('modal-close') || e.target.id === 'modalCloseBtn') {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                closeModal();
-                return false;
-            }
-        }, true);
+        });
         
         function loadUsers() {
             fetch('../api/user-management.php?action=list')
@@ -1052,14 +1064,6 @@ $pageTitle = 'User Management';
         // Close modal on escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') closeModal();
-        });
-
-        // Close modal when clicking overlay (now handled differently due to pointer-events)
-        document.addEventListener('click', function(e) {
-            const modal = document.getElementById('userModal');
-            if (modal.classList.contains('show') && e.target === modal) {
-                closeModal();
-            }
         });
         <?php endif; ?>
     </script>
