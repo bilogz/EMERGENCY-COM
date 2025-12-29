@@ -21,6 +21,111 @@ try {
     $adminUserTableExists = false;
 }
 
+// If database connection failed, show error
+if ($pdo === null) {
+    die('
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Database Connection Error - Create Admin Account</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+        <style>
+            body {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 1rem;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            }
+            .error-container {
+                background: white;
+                border-radius: 16px;
+                padding: 3rem 2.5rem;
+                max-width: 600px;
+                width: 100%;
+                text-align: center;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            }
+            .error-icon {
+                width: 90px;
+                height: 90px;
+                margin: 0 auto 1.5rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #fee;
+                border-radius: 20px;
+            }
+            .error-icon i {
+                font-size: 2.5rem;
+                color: #dc3545;
+            }
+            .error-title {
+                font-size: 1.75rem;
+                font-weight: 700;
+                color: #222;
+                margin-bottom: 1rem;
+            }
+            .error-message {
+                color: #666;
+                margin-bottom: 2rem;
+                line-height: 1.6;
+                text-align: left;
+            }
+            .error-details {
+                background: #f8f9fa;
+                padding: 1rem;
+                border-radius: 8px;
+                margin: 1rem 0;
+                text-align: left;
+                font-family: monospace;
+                font-size: 0.85rem;
+                color: #dc3545;
+                word-break: break-word;
+            }
+            .btn-setup {
+                display: inline-block;
+                padding: 1rem 2rem;
+                background: linear-gradient(135deg, #3a7675 0%, #4ca8a6 100%);
+                color: white;
+                text-decoration: none;
+                border-radius: 10px;
+                font-weight: 600;
+                transition: all 0.3s ease;
+                margin: 0.5rem;
+            }
+            .btn-setup:hover {
+                transform: translateY(-2px);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="error-container">
+            <div class="error-icon">
+                <i class="fas fa-database"></i>
+            </div>
+            <h1 class="error-title">Database Connection Failed</h1>
+            <p class="error-message">
+                Unable to connect to the database. Please check your database configuration.
+            </p>
+            <div class="error-details">' . htmlspecialchars($dbError ?? 'Unknown error') . '</div>
+            <div style="margin-top: 2rem;">
+                <a href="api/setup_remote_database.php" class="btn-setup">
+                    <i class="fas fa-cog"></i> Run Database Setup
+                </a>
+                <a href="login.php" class="btn-setup" style="background: #6c757d;">
+                    <i class="fas fa-arrow-left"></i> Back to Login
+                </a>
+            </div>
+        </div>
+    </body>
+    </html>');
+}
+
 // If table doesn't exist, show setup message
 if (!$adminUserTableExists) {
     die('
@@ -255,26 +360,6 @@ if (!$isAuthorized && $authReason !== 'initial_setup') {
                 <i class="fas fa-arrow-left"></i> Back to Login
             </a>
         </div>
-    </body>
-    </html>');
-}
-
-// Check database connection
-if ($pdo === null) {
-    die('
-    <!DOCTYPE html>
-    <html>
-    <head><title>Database Error</title></head>
-    <body style="font-family: Arial; padding: 2rem;">
-        <h1>Database Connection Error</h1>
-        <p>The database connection failed. Please ensure:</p>
-        <ul>
-            <li>The database server is accessible</li>
-            <li>You have run <a href="api/setup_remote_database.php">setup_remote_database.php</a> to create the database</li>
-            <li>The database credentials are correct</li>
-        </ul>
-        <p><strong>Error:</strong> ' . htmlspecialchars($dbError ?? 'Unknown error') . '</p>
-        <p><a href="api/setup_remote_database.php">Click here to set up the database</a></p>
     </body>
     </html>');
 }

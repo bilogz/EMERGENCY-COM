@@ -125,15 +125,27 @@ function checkAdminAuthorization($pdo) {
  * @return bool True if table exists or was created successfully
  */
 function ensureAdminUserTable($pdo) {
+    if ($pdo === null) {
+        return false;
+    }
+    
     try {
         $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
         return true; // Table exists
     } catch (PDOException $e) {
         // Table doesn't exist, create it
         try {
-            $sql = file_get_contents(__DIR__ . '/create_admin_user_table.sql');
-            if ($sql) {
-                // Execute only the CREATE TABLE statement
+            // Check if users table exists for foreign key
+            $usersTableExists = false;
+            try {
+                $pdo->query("SELECT 1 FROM users LIMIT 1");
+                $usersTableExists = true;
+            } catch (PDOException $e3) {
+                // users table doesn't exist
+            }
+            
+            // Create admin_user table WITHOUT foreign keys if users table doesn't exist
+            if ($usersTableExists) {
                 $createTableSQL = "CREATE TABLE IF NOT EXISTS admin_user (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     user_id INT DEFAULT NULL COMMENT 'Optional reference to users table (NULL for standalone admin accounts)',
@@ -155,13 +167,36 @@ function ensureAdminUserTable($pdo) {
                     INDEX idx_status (status),
                     INDEX idx_created_by (created_by),
                     INDEX idx_created_at (created_at),
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
-                    FOREIGN KEY (created_by) REFERENCES admin_user(id) ON DELETE SET NULL
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-                
-                $pdo->exec($createTableSQL);
-                return true;
+            } else {
+                // Create without foreign keys
+                $createTableSQL = "CREATE TABLE IF NOT EXISTS admin_user (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT DEFAULT NULL COMMENT 'Optional reference to users table (NULL for standalone admin accounts)',
+                    name VARCHAR(255) NOT NULL COMMENT 'Full name of the admin',
+                    username VARCHAR(100) DEFAULT NULL COMMENT 'Username for login',
+                    email VARCHAR(255) NOT NULL COMMENT 'Email address (unique)',
+                    password VARCHAR(255) NOT NULL COMMENT 'Hashed password',
+                    role VARCHAR(20) DEFAULT 'admin' COMMENT 'super_admin, admin, staff',
+                    status VARCHAR(20) DEFAULT 'pending_approval' COMMENT 'active, inactive, suspended, pending_approval',
+                    phone VARCHAR(20) DEFAULT NULL COMMENT 'Phone number',
+                    created_by INT DEFAULT NULL COMMENT 'ID of admin who created this account',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    last_login DATETIME DEFAULT NULL,
+                    UNIQUE KEY unique_email (email),
+                    UNIQUE KEY unique_username (username),
+                    INDEX idx_user_id (user_id),
+                    INDEX idx_role (role),
+                    INDEX idx_status (status),
+                    INDEX idx_created_by (created_by),
+                    INDEX idx_created_at (created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
             }
+            
+            $pdo->exec($createTableSQL);
+            return true;
         } catch (PDOException $e2) {
             error_log('Failed to create admin_user table: ' . $e2->getMessage());
             return false;
