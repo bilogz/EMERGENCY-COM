@@ -579,30 +579,22 @@ document.addEventListener('languagesUpdated', function() {
  * Get correct API path based on current page context
  */
 function getApiPath(relativePath) {
-    const currentPath = window.location.pathname;
-    const currentUrl = window.location.href;
-    
-    // Check if we're in USERS folder or at root
-    const isInUsersFolder = currentPath.includes('/USERS/');
-    const isAtRoot = currentPath === '/' || 
-                     currentPath === '/index.php' || 
-                     currentPath.endsWith('/index.php') && !isInUsersFolder;
-    
-    // If path already starts with USERS/, don't double it
-    if (relativePath.startsWith('USERS/')) {
-        if (isInUsersFolder) {
-            // We're in USERS folder, remove USERS/ prefix
-            return relativePath.replace('USERS/', '');
+    // Use global config if available
+    if (window.API_BASE_PATH && window.IS_ROOT_CONTEXT) {
+        if (relativePath.startsWith('api/')) {
+            return window.API_BASE_PATH + relativePath.substring(4);
         }
-        return relativePath;
+        return window.API_BASE_PATH + relativePath;
     }
     
-    // If path starts with api/, we need to add USERS/ when at root
+    // Fallback to path detection
+    const currentPath = window.location.pathname;
+    const isInUsersFolder = currentPath.includes('/USERS/');
+    
     if (relativePath.startsWith('api/')) {
-        if (isAtRoot || !isInUsersFolder) {
+        if (!isInUsersFolder) {
             return 'USERS/' + relativePath;
         }
-        return relativePath;
     }
     
     return relativePath;

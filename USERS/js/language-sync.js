@@ -149,27 +149,25 @@ class LanguageSync {
      * Get correct API path based on current page context
      */
     getApiPath(relativePath) {
+        // Use global config if available
+        if (window.API_BASE_PATH && window.IS_ROOT_CONTEXT) {
+            if (relativePath.startsWith('api/')) {
+                return window.API_BASE_PATH + relativePath.substring(4);
+            }
+            return window.API_BASE_PATH + relativePath;
+        }
+        
+        // Fallback to path detection
         const currentPath = window.location.pathname;
         const isInUsersFolder = currentPath.includes('/USERS/');
-        const isAtRoot = currentPath === '/' || 
-                         currentPath === '/index.php' || 
-                         (currentPath.endsWith('/index.php') && !isInUsersFolder);
         
-        // If path already starts with USERS/, don't double it
-        if (relativePath.startsWith('USERS/')) {
-            if (isInUsersFolder) {
-                return relativePath.replace('USERS/', '');
-            }
-            return relativePath;
-        }
-        
-        // If path starts with api/, we need to add USERS/ when at root
         if (relativePath.startsWith('api/')) {
-            if (isAtRoot || !isInUsersFolder) {
+            if (!isInUsersFolder) {
                 return 'USERS/' + relativePath;
             }
-            return relativePath;
         }
+        
+        return relativePath;
     }
 }
 

@@ -20,12 +20,16 @@ $aiProvider = $secureConfig['AI_PROVIDER'] ?? $_ENV['AI_PROVIDER'] ?? 'gemini';
 $aiApiKey = $secureConfig['AI_API_KEY'] ?? $_ENV['AI_API_KEY'] ?? '';
 $aiApiKeyTranslation = $secureConfig['AI_API_KEY_TRANSLATION'] ?? $aiApiKey; // Use specific key for translation
 $geminiModel = $secureConfig['GEMINI_MODEL'] ?? $_ENV['GEMINI_MODEL'] ?? 'gemini-2.5-flash';
+$libreTranslateUrl = $secureConfig['LIBRETRANSLATE_URL'] ?? 'https://libretranslate.de/translate';
+$libreTranslateKey = $secureConfig['LIBRETRANSLATE_API_KEY'] ?? '';
 
 // Define constants
 define('AI_PROVIDER', $aiProvider);
 define('AI_API_KEY', $aiApiKey);
 define('AI_API_KEY_TRANSLATION', $aiApiKeyTranslation);
 define('GEMINI_MODEL', $geminiModel);
+define('LIBRETRANSLATE_URL', $libreTranslateUrl);
+define('LIBRETRANSLATE_API_KEY', $libreTranslateKey);
 
 // API Endpoints
 define('OPENAI_API_URL', 'https://api.openai.com/v1/chat/completions');
@@ -303,6 +307,10 @@ $textList";
             return translateBatchWithGemini($textsArray, $keys, $prompt, $targetName, $apiKey);
         case 'openai':
             return translateBatchWithOpenAI($textsArray, $keys, $prompt, $targetName, $apiKey);
+        case 'libretranslate':
+            return translateBatchWithLibreTranslate($textsArray, $sourceLang, $targetLang);
+        case 'mymemory':
+            return translateBatchWithMyMemory($textsArray, $sourceLang, $targetLang);
         default:
             return translateBatchWithGemini($textsArray, $keys, $prompt, $targetName, $apiKey);
     }
@@ -429,6 +437,220 @@ function parseBatchTranslations($responseText, $originalTexts) {
     }
     
     return $translations;
+}
+
+// ============================================
+// FAST TRANSLATION ALTERNATIVES (No AI)
+// ============================================
+
+/**
+ * MyMemory API - FREE, no API key needed
+ * Limit: 5000 chars/day (good for caching)
+ */
+function translateWithMyMemory($text, $sourceLang, $targetLang) {
+    $url = 'https://api.mymemory.translated.net/get?' . http_build_query([
+        'q' => $text,
+        'langpair' => $sourceLang . '|' . $targetLang
+    ]);
+    
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 10
+    ]);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 200 && $response) {
+        $result = json_decode($response, true);
+        if (isset($result['responseData']['translatedText'])) {
+            return $result['responseData']['translatedText'];
+        }
+    }
+    
+    return $text;
+}
+
+/**
+ * Batch translation using MyMemory (parallel requests)
+ */
+function translateBatchWithMyMemory($textsArray, $sourceLang, $targetLang) {
+    $translations = [];
+    $mh = curl_multi_init();
+    $handles = [];
+    
+    foreach ($textsArray as $key => $text) {
+        $url = 'https://api.mymemory.translated.net/get?' . http_build_query([
+            'q' => $text,
+            'langpair' => $sourceLang . '|' . $targetLang
+        ]);
+        
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 15
+        ]);
+        
+        curl_multi_add_handle($mh, $ch);
+        $handles[$key] = $ch;
+    }
+    
+    // Execute all requests in parallel
+    $running = null;
+    do {
+        curl_multi_exec($mh, $running);
+        curl_multi_select($mh);
+    } while ($running > 0);
+    
+    // Get results
+    foreach ($handles as $key => $ch) {
+        $response = curl_multi_getcontent($ch);
+        $result = json_decode($response, true);
+        
+        if (isset($result['responseData']['translatedText'])) {
+            $translations[$key] = $result['responseData']['translatedText'];
+        } else {
+            $translations[$key] = $textsArray[$key]; // Fallback to original
+        }
+        
+        curl_multi_remove_handle($mh, $ch);
+    }
+    
+    curl_multi_close($mh);
+    
+    return $translations;
+}
+
+/**
+ * LibreTranslate API (self-hosted or public)
+ * FREE - No API key needed for public servers!
+ * 
+ * Public servers:
+ * - https://libretranslate.de (Germany, fast)
+ * - https://libretranslate.com (official)
+ */
+function translateWithLibreTranslate($text, $sourceLang, $targetLang) {
+    $apiUrl = defined('LIBRETRANSLATE_URL') ? LIBRETRANSLATE_URL : 'https://libretranslate.de/translate';
+    $apiKey = defined('LIBRETRANSLATE_API_KEY') ? LIBRETRANSLATE_API_KEY : '';
+    
+    $data = [
+        'q' => $text,
+        'source' => $sourceLang,
+        'target' => $targetLang,
+        'format' => 'text'
+    ];
+    
+    // Add API key if provided
+    if (!empty($apiKey)) {
+        $data['api_key'] = $apiKey;
+    }
+    
+    $ch = curl_init($apiUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($data),
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_TIMEOUT => 15
+    ]);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 200 && $response) {
+        $result = json_decode($response, true);
+        if (isset($result['translatedText'])) {
+            return $result['translatedText'];
+        }
+    }
+    
+    return $text;
+}
+
+/**
+ * Batch translation using LibreTranslate (parallel requests)
+ * FREE - Works with public servers
+ */
+function translateBatchWithLibreTranslate($textsArray, $sourceLang, $targetLang) {
+    $apiUrl = defined('LIBRETRANSLATE_URL') ? LIBRETRANSLATE_URL : 'https://libretranslate.de/translate';
+    $apiKey = defined('LIBRETRANSLATE_API_KEY') ? LIBRETRANSLATE_API_KEY : '';
+    
+    $translations = [];
+    $mh = curl_multi_init();
+    $handles = [];
+    
+    foreach ($textsArray as $key => $text) {
+        $data = [
+            'q' => $text,
+            'source' => $sourceLang,
+            'target' => $targetLang,
+            'format' => 'text'
+        ];
+        
+        if (!empty($apiKey)) {
+            $data['api_key'] = $apiKey;
+        }
+        
+        $ch = curl_init($apiUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($data),
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+            CURLOPT_TIMEOUT => 20
+        ]);
+        
+        curl_multi_add_handle($mh, $ch);
+        $handles[$key] = $ch;
+    }
+    
+    // Execute all requests in parallel
+    $running = null;
+    do {
+        curl_multi_exec($mh, $running);
+        curl_multi_select($mh);
+    } while ($running > 0);
+    
+    // Get results
+    foreach ($handles as $key => $ch) {
+        $response = curl_multi_getcontent($ch);
+        $result = json_decode($response, true);
+        
+        if (isset($result['translatedText'])) {
+            $translations[$key] = $result['translatedText'];
+        } else {
+            $translations[$key] = $textsArray[$key]; // Fallback to original
+        }
+        
+        curl_multi_remove_handle($mh, $ch);
+    }
+    
+    curl_multi_close($mh);
+    
+    return $translations;
+}
+
+/**
+ * Smart translation - tries multiple providers
+ * Falls back to next provider if one fails
+ */
+function translateSmart($text, $sourceLang, $targetLang) {
+    // Try AI first (best quality)
+    $translated = translateWithAI($text, $sourceLang, $targetLang);
+    if ($translated !== $text) {
+        return $translated;
+    }
+    
+    // Fall back to MyMemory (free, no key)
+    $translated = translateWithMyMemory($text, $sourceLang, $targetLang);
+    if ($translated !== $text) {
+        return $translated;
+    }
+    
+    return $text;
 }
 ?>
 

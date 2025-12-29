@@ -221,9 +221,28 @@ try {
             }
         }
         
-        // If there are uncached translations, do BATCH translation (single API call)
+        // If there are uncached translations, do BATCH translation
         if (!empty($uncachedTexts)) {
+            $translationMethod = 'ai_batch';
+            
+            // Try AI batch translation first
             $batchTranslations = translateBatchWithAI($uncachedTexts, 'en', $languageCode);
+            
+            // Check if AI translation worked (translations should be different from originals)
+            $aiWorked = false;
+            foreach ($batchTranslations as $key => $translated) {
+                if ($translated !== $uncachedTexts[$key]) {
+                    $aiWorked = true;
+                    break;
+                }
+            }
+            
+            // If AI failed, fall back to MyMemory (free, no API key needed)
+            if (!$aiWorked) {
+                error_log("AI translation failed, falling back to MyMemory");
+                $batchTranslations = translateBatchWithMyMemory($uncachedTexts, 'en', $languageCode);
+                $translationMethod = 'mymemory';
+            }
             
             foreach ($batchTranslations as $key => $translatedText) {
                 $translations[$key] = $translatedText;
@@ -241,7 +260,7 @@ try {
                         translated_text = VALUES(translated_text),
                         updated_at = NOW()
                     ");
-                    $stmt->execute([$cacheKey, $englishText, $languageCode, $translatedText, AI_PROVIDER . '_batch']);
+                    $stmt->execute([$cacheKey, $englishText, $languageCode, $translatedText, $translationMethod]);
                 }
             }
         }

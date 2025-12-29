@@ -19,6 +19,11 @@ $assetBase = 'ADMIN/header/';
     <link rel="stylesheet" href="USERS/css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script>
+        // Set global API base path for all JS files
+        window.API_BASE_PATH = 'USERS/api/';
+        window.IS_ROOT_CONTEXT = true;
+    </script>
     <script src="USERS/js/translations.js"></script>
     <script src="USERS/js/language-manager.js"></script>
     <script src="USERS/js/language-selector-modal.js"></script>
