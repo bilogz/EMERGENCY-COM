@@ -118,13 +118,24 @@ $pageTitle = 'User Management';
             cursor: pointer;
             font-size: 0.85rem;
             color: var(--text-color-1);
-            transition: all 0.2s;
+            transition: all 0.15s ease;
         }
         
-        .filter-btn:hover, .filter-btn.active {
+        .filter-btn:hover {
             background: var(--primary-color-1);
             border-color: var(--primary-color-1);
             color: white;
+            transform: translateY(-1px);
+        }
+        
+        .filter-btn.active {
+            background: var(--primary-color-1);
+            border-color: var(--primary-color-1);
+            color: white;
+        }
+        
+        .filter-btn:active {
+            transform: translateY(0) scale(0.98);
         }
         
         .users-table-container {
@@ -244,15 +255,15 @@ $pageTitle = 'User Management';
         }
         
         .action-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
             border: none;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s;
+            transition: all 0.15s ease;
         }
         
         .action-btn.edit {
@@ -267,6 +278,12 @@ $pageTitle = 'User Management';
         
         .action-btn:hover {
             transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .action-btn:active {
+            transform: scale(0.95);
+            box-shadow: none;
         }
         
         .action-btn.edit:hover {
@@ -322,17 +339,29 @@ $pageTitle = 'User Management';
         }
         
         .modal-close {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
+            width: 36px;
+            height: 36px;
+            background: var(--bg-color-1);
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            font-size: 1.25rem;
             cursor: pointer;
             color: var(--text-secondary-1);
-            padding: 0.5rem;
-            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
         }
         
         .modal-close:hover {
-            color: var(--text-color-1);
+            background: #e74c3c;
+            border-color: #e74c3c;
+            color: white;
+            transform: scale(1.05);
+        }
+        
+        .modal-close:active {
+            transform: scale(0.95);
         }
         
         .modal-body {
@@ -390,7 +419,15 @@ $pageTitle = 'User Management';
             font-weight: 500;
             cursor: pointer;
             border: none;
-            transition: all 0.2s;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .btn:active {
+            transform: scale(0.95);
         }
         
         .btn-primary {
@@ -400,6 +437,13 @@ $pageTitle = 'User Management';
         
         .btn-primary:hover {
             background: #3d7a79;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(76, 138, 137, 0.3);
+        }
+        
+        .btn-primary:active {
+            transform: translateY(0) scale(0.98);
+            box-shadow: none;
         }
         
         .btn-secondary {
@@ -410,6 +454,11 @@ $pageTitle = 'User Management';
         
         .btn-secondary:hover {
             background: var(--border-color-1);
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary:active {
+            transform: translateY(0) scale(0.98);
         }
         
         .btn-add {
