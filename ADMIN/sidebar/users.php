@@ -330,6 +330,7 @@ $pageTitle = 'User Management';
             position: relative;
             pointer-events: auto;
             cursor: default;
+            z-index: 10001;
         }
 
         .modal-header {
@@ -369,7 +370,7 @@ $pageTitle = 'User Management';
             -ms-user-select: none;
             touch-action: manipulation;
             position: relative;
-            z-index: 10;
+            z-index: 10002;
         }
 
         .modal-close:focus {
@@ -452,7 +453,7 @@ $pageTitle = 'User Management';
             gap: 0.5rem;
             pointer-events: auto;
             position: relative;
-            z-index: 10;
+            z-index: 10002;
         }
 
         .btn:focus {
@@ -754,6 +755,59 @@ $pageTitle = 'User Management';
         let users = [];
         let currentFilter = 'all';
         
+        // Function to setup modal button handlers (must be accessible globally)
+        function setupModalButtons() {
+                // Modal close button handler
+                const closeBtn = document.getElementById('modalCloseBtn');
+                if (closeBtn) {
+                    // Remove any existing handlers first
+                    closeBtn.onclick = null;
+                    if (closeBtn._modalCloseHandler) {
+                        closeBtn.removeEventListener('click', closeBtn._modalCloseHandler);
+                    }
+
+                    // Create and assign the handler
+                    closeBtn._modalCloseHandler = function(e) {
+                        console.log('Close button clicked');
+                        if (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                        }
+                        closeModal();
+                        return false;
+                    };
+
+                    closeBtn.addEventListener('click', closeBtn._modalCloseHandler);
+                    closeBtn.onclick = closeBtn._modalCloseHandler;
+                }
+
+                // Modal cancel button handler
+                const cancelBtn = document.getElementById('cancelBtn');
+                if (cancelBtn) {
+                    // Remove any existing handlers first
+                    cancelBtn.onclick = null;
+                    if (cancelBtn._modalCancelHandler) {
+                        cancelBtn.removeEventListener('click', cancelBtn._modalCancelHandler);
+                    }
+
+                    // Create and assign the handler
+                    cancelBtn._modalCancelHandler = function(e) {
+                        console.log('Cancel button clicked');
+                        if (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                        }
+                        closeModal();
+                        return false;
+                    };
+
+                    cancelBtn.addEventListener('click', cancelBtn._modalCancelHandler);
+                    cancelBtn.onclick = cancelBtn._modalCancelHandler;
+                }
+            }
+        
         // Load users on page load
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM loaded, initializing user management...');
@@ -772,51 +826,8 @@ $pageTitle = 'User Management';
                 });
             });
 
-            // Modal close button handler - using direct assignment for reliability
-            const closeBtn = document.getElementById('modalCloseBtn');
-            console.log('Close button element:', closeBtn);
-            if (closeBtn) {
-                // Remove any existing handlers first
-                closeBtn.onclick = null;
-                closeBtn.removeEventListener('click', closeBtn._modalCloseHandler);
-
-                // Create and assign the handler
-                closeBtn._modalCloseHandler = function(e) {
-                    console.log('Close button clicked');
-                    e.preventDefault();
-                    e.stopPropagation();
-                    closeModal();
-                    return false;
-                };
-
-                closeBtn.addEventListener('click', closeBtn._modalCloseHandler);
-                closeBtn.onclick = closeBtn._modalCloseHandler;
-            } else {
-                console.error('Close button not found!');
-            }
-
-            // Modal cancel button handler - using direct assignment for reliability
-            const cancelBtn = document.getElementById('cancelBtn');
-            console.log('Cancel button element:', cancelBtn);
-            if (cancelBtn) {
-                // Remove any existing handlers first
-                cancelBtn.onclick = null;
-                cancelBtn.removeEventListener('click', cancelBtn._modalCancelHandler);
-
-                // Create and assign the handler
-                cancelBtn._modalCancelHandler = function(e) {
-                    console.log('Cancel button clicked');
-                    e.preventDefault();
-                    e.stopPropagation();
-                    closeModal();
-                    return false;
-                };
-
-                cancelBtn.addEventListener('click', cancelBtn._modalCancelHandler);
-                cancelBtn.onclick = cancelBtn._modalCancelHandler;
-            } else {
-                console.error('Cancel button not found!');
-            }
+            // Setup modal buttons on page load
+            setupModalButtons();
 
             // Set up overlay click handler - simplified and more reliable
             const modalOverlay = document.getElementById('userModal');
@@ -824,13 +835,16 @@ $pageTitle = 'User Management';
             if (modalOverlay) {
                 // Remove any existing handlers first
                 modalOverlay.onclick = null;
-                modalOverlay.removeEventListener('click', modalOverlay._modalOverlayHandler);
+                if (modalOverlay._modalOverlayHandler) {
+                    modalOverlay.removeEventListener('click', modalOverlay._modalOverlayHandler);
+                }
 
                 // Create and assign the handler
                 modalOverlay._modalOverlayHandler = function(e) {
                     console.log('Overlay clicked, target:', e.target, 'currentTarget:', e.currentTarget);
-                    // Check if click is directly on the overlay (not on modal content)
-                    if (e.target === e.currentTarget) {
+                    // Check if click is directly on the overlay (not on modal content or buttons)
+                    const isButton = e.target.closest('button') || e.target.closest('.btn') || e.target.closest('.modal-close');
+                    if (e.target === e.currentTarget && !isButton) {
                         console.log('Closing modal via overlay click (directly on overlay)');
                         e.preventDefault();
                         e.stopPropagation();
@@ -845,16 +859,24 @@ $pageTitle = 'User Management';
                 console.error('Modal overlay not found!');
             }
 
-            // Prevent modal content clicks from closing the modal
+            // Prevent modal content clicks from closing the modal, but allow button clicks
             const modalContent = document.querySelector('.modal-content');
             console.log('Modal content element:', modalContent);
             if (modalContent) {
                 modalContent.addEventListener('click', function(e) {
-                    console.log('Modal content clicked, stopping propagation');
-                    e.stopPropagation();
+                    // Only stop propagation if the click is not on a button or interactive element
+                    const target = e.target;
+                    const isButton = target.closest('button') || target.closest('.btn') || target.closest('.modal-close');
+                    if (!isButton) {
+                        console.log('Modal content clicked (not on button), stopping propagation');
+                        e.stopPropagation();
+                    }
                 });
             }
         });
+        
+        // Make setupModalButtons globally accessible
+        window.setupModalButtons = setupModalButtons;
         
         function loadUsers() {
             fetch('../api/user-management.php?action=list')
@@ -948,6 +970,8 @@ $pageTitle = 'User Management';
             document.getElementById('userId').value = '';
             document.getElementById('userPassword').required = true;
             document.getElementById('userModal').classList.add('show');
+            // Re-setup button handlers to ensure they work
+            setupModalButtons();
         }
         
         function editUser(id) {
@@ -963,6 +987,8 @@ $pageTitle = 'User Management';
             document.getElementById('userRole').value = user.role;
             document.getElementById('userStatus').value = user.status;
             document.getElementById('userModal').classList.add('show');
+            // Re-setup button handlers to ensure they work
+            setupModalButtons();
         }
         
         function closeModal() {
