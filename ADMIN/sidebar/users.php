@@ -308,6 +308,7 @@ $pageTitle = 'User Management';
             z-index: 10000;
             align-items: center;
             justify-content: center;
+            cursor: pointer;
         }
 
         .modal-overlay.show {
@@ -325,6 +326,7 @@ $pageTitle = 'User Management';
             z-index: 10001;
             position: relative;
             pointer-events: auto;
+            cursor: default;
         }
         
         .modal-header {
@@ -359,7 +361,7 @@ $pageTitle = 'User Management';
             transition: all 0.2s ease;
             pointer-events: auto !important;
             position: relative;
-            z-index: 10003 !important;
+            z-index: 10010 !important;
             flex-shrink: 0;
             user-select: none;
             -webkit-user-select: none;
@@ -447,7 +449,7 @@ $pageTitle = 'User Management';
             gap: 0.5rem;
             pointer-events: auto !important;
             position: relative;
-            z-index: 10006;
+            z-index: 10010;
         }
         
         .btn:active {
@@ -787,14 +789,11 @@ $pageTitle = 'User Management';
             }
         });
 
-        // Simplified close button handler - the onclick in HTML should work, but this is backup
+        // Close modal when clicking on the overlay background
         document.addEventListener('click', function(e) {
-            // Handle close button clicks
-            if (e.target.closest('.modal-close') || e.target.classList.contains('modal-close')) {
-                e.stopPropagation();
-                e.preventDefault();
+            const modalOverlay = document.getElementById('userModal');
+            if (e.target === modalOverlay) {
                 closeModal();
-                return false;
             }
         });
         
