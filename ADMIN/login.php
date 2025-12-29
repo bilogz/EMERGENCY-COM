@@ -593,7 +593,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
 
             <!-- Google reCAPTCHA v2 (visible checkbox) -->
             <div class="captcha-container" id="captchaContainer">
-                <div class="g-recaptcha" data-sitekey="6LeXXjcsAAAAALkrHEDevFsVzUsW_fjRnYKItbLE" data-theme="light"></div>
+                <div class="g-recaptcha" data-sitekey="6LdoYzosAAAAABJuXOiC8OyO_T1bkQHjoS2rZ8o3" data-theme="light"></div>
             </div>
 
             <div class="form-options">

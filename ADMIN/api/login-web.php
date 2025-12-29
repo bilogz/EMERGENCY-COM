@@ -78,7 +78,9 @@ if ($otpVerified) {
     // If OTP is verified, we can skip reCAPTCHA verification as additional security is already provided
     $recaptchaValid = true;
 } else if (!empty($recaptchaResponse)) {
-    $recaptchaSecretKey = '6LeXXjcsAAAAAMchkaNgXKDH32lXqc8-yDvPbzIN'; // Secret key for server-side verification
+    // Load reCAPTCHA secret key from config (safe to commit)
+    $localConfig = @include(__DIR__ . '/config.local.php');
+    $recaptchaSecretKey = $localConfig['RECAPTCHA_SECRET_KEY'] ?? '6LdoYzosAAAAAOhQndnAyMB8ZdiSbnrZo4qfLV21';
     $recaptchaUrl = 'https://www.google.com/recaptcha/api/siteverify';
     $recaptchaData = [
         'secret' => $recaptchaSecretKey,

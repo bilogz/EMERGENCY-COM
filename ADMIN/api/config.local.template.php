@@ -66,5 +66,12 @@ return [
     'SMTP_PASS' => '',                  // App password (not regular password)
     'SMTP_FROM' => '',                  // From email address
     'SMTP_FROM_NAME' => 'Emergency Alert System',
+    
+    // ===========================================
+    // RECAPTCHA CONFIGURATION
+    // ===========================================
+    // Get keys from: https://www.google.com/recaptcha/admin
+    'RECAPTCHA_SITE_KEY' => '',         // reCAPTCHA v2 site key (public)
+    'RECAPTCHA_SECRET_KEY' => '',       // reCAPTCHA v2 secret key (private)
 ];
 
