@@ -41,6 +41,20 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script src="https://www.google.com/recaptcha/api.js?render=6LdoYzosAAAAABJuXOiC8OyO_T1bkQHjoS2rZ8o3"></script>
+    <script>
+        // Immediate reset check (runs before page loads)
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('reset') === 'attempts') {
+                localStorage.removeItem('admin_login_attempts');
+                localStorage.removeItem('admin_account_locked');
+                localStorage.removeItem('admin_lockout_time');
+                console.log('Login attempts reset immediately');
+                // Remove the parameter from URL and reload
+                window.location.href = window.location.pathname;
+            }
+        })();
+    </script>
     <style>
         /* Login Page Specific Styles */
         body {
