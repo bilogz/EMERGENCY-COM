@@ -11,11 +11,21 @@ header('X-XSS-Protection: 1; mode=block');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
 
-// Load secure configuration for keys
-require_once __DIR__ . '/api/config.env.php';
-$recaptchaSiteKey = getSecureConfig('RECAPTCHA_SITE_KEY', '');
-$adminApiKey = getSecureConfig('ADMIN_API_KEY', '');
-$requireOtp = filter_var(getSecureConfig('ADMIN_REQUIRE_OTP', true), FILTER_VALIDATE_BOOLEAN);
+// Load secure configuration for keys (fail-safe to avoid 500s if missing)
+$recaptchaSiteKey = '';
+$adminApiKey = '';
+$requireOtp = true;
+$configPath = __DIR__ . '/api/config.env.php';
+if (file_exists($configPath)) {
+    require_once $configPath;
+    if (function_exists('getSecureConfig')) {
+        $recaptchaSiteKey = getSecureConfig('RECAPTCHA_SITE_KEY', '');
+        $adminApiKey = getSecureConfig('ADMIN_API_KEY', '');
+        $requireOtp = filter_var(getSecureConfig('ADMIN_REQUIRE_OTP', true), FILTER_VALIDATE_BOOLEAN);
+    }
+} else {
+    error_log('LOGIN: config.env.php not found at ' . $configPath);
+}
 
 // Check if user is already logged in
 session_start();
