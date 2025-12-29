@@ -5,9 +5,25 @@
  * Accounts are stored in admin_user table
  */
 
+// Enable error display for debugging (remove in production)
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 session_start();
-require_once __DIR__ . '/api/db_connect.php';
-require_once __DIR__ . '/api/security-helpers.php';
+
+// Wrap requires in try-catch to catch any fatal errors
+try {
+    require_once __DIR__ . '/api/db_connect.php';
+} catch (Throwable $e) {
+    die('Database connection error: ' . htmlspecialchars($e->getMessage()));
+}
+
+try {
+    require_once __DIR__ . '/api/security-helpers.php';
+} catch (Throwable $e) {
+    die('Security helpers error: ' . htmlspecialchars($e->getMessage()));
+}
 
 // Check if admin_user table exists
 $adminUserTableExists = false;
