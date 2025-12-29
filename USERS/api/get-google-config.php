@@ -26,19 +26,37 @@ try {
         exit();
     }
 
-    // Load config file
-    // Use include which returns the value from the file's return statement
-    $config = include $configFile;
+    // Load config file - suppress warnings and capture return value
+    $config = @include $configFile;
     
-    // If include returns 1, it means the file was included but didn't return anything
-    // If it returns false, there was an error
-    if ($config === false || $config === 1) {
+    // Check what include returned
+    // If it returns 1, the file executed but didn't return a value
+    // If it returns false, there was an error including the file
+    if ($config === false) {
         ob_end_clean();
         echo json_encode([
             "success" => false,
-            "message" => "Error loading config file.",
+            "message" => "Error: Could not include config file.",
             "debug" => [
-                "include_returned" => $config,
+                "include_returned" => "false",
+                "file_readable" => is_readable($configFile),
+                "file_size" => filesize($configFile),
+                "file_exists" => file_exists($configFile),
+                "config_file_path" => $configFile
+            ]
+        ]);
+        exit();
+    }
+    
+    // If include returns 1, it means the file was executed but didn't return anything
+    // This usually means there's output before the return statement
+    if ($config === 1 || $config === true) {
+        ob_end_clean();
+        echo json_encode([
+            "success" => false,
+            "message" => "Config file executed but did not return an array. Check for output before return statement.",
+            "debug" => [
+                "include_returned" => $config === 1 ? "1 (no return)" : "true",
                 "file_readable" => is_readable($configFile),
                 "file_size" => filesize($configFile)
             ]
@@ -89,11 +107,19 @@ try {
             "client_id" => trim($clientId)
         ]);
     } else {
+        // More detailed error for debugging
+        $errorMessage = "Google OAuth is not configured.";
+        if (!isset($config['GOOGLE_CLIENT_ID'])) {
+            $errorMessage .= " GOOGLE_CLIENT_ID key not found in config.";
+        } elseif (empty($config['GOOGLE_CLIENT_ID'])) {
+            $errorMessage .= " GOOGLE_CLIENT_ID is empty.";
+        }
+        
         echo json_encode([
             "success" => false,
-            "message" => "Google OAuth is not configured.",
+            "message" => $errorMessage,
             "debug" => $debugInfo
-        ]);
+        ], JSON_PRETTY_PRINT);
     }
 } catch (Exception $e) {
     ob_end_clean();
