@@ -334,6 +334,8 @@ $pageTitle = 'User Management';
             justify-content: space-between;
             align-items: center;
             pointer-events: auto;
+            position: relative;
+            z-index: 10004;
         }
         
         .modal-header h2 {
@@ -355,9 +357,15 @@ $pageTitle = 'User Management';
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
-            pointer-events: auto;
+            pointer-events: auto !important;
             position: relative;
-            z-index: 10002;
+            z-index: 10003 !important;
+            flex-shrink: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            touch-action: manipulation;
         }
         
         .modal-close:hover {
@@ -671,7 +679,7 @@ $pageTitle = 'User Management';
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalTitle"><i class="fas fa-user-plus"></i> Create New User</h2>
-                <button type="button" class="modal-close" onclick="closeModal()">&times;</button>
+                <button type="button" class="modal-close" id="modalCloseBtn" onclick="event.stopPropagation(); closeModal(); return false;">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="userForm">
@@ -744,16 +752,6 @@ $pageTitle = 'User Management';
                 });
             });
 
-            // Ensure close button works properly
-            const closeBtn = document.querySelector('.modal-close');
-            if (closeBtn) {
-                closeBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    closeModal();
-                });
-            }
-
             // Prevent modal content clicks from closing the modal
             const modalContent = document.querySelector('.modal-content');
             if (modalContent) {
@@ -762,6 +760,31 @@ $pageTitle = 'User Management';
                 });
             }
         });
+
+        // Use event delegation for close button (works even if modal is dynamically created)
+        // Handle clicks on the button or its children (like the X symbol)
+        document.addEventListener('click', function(e) {
+            const closeBtn = e.target.closest('.modal-close');
+            if (closeBtn || e.target.classList.contains('modal-close') || e.target.id === 'modalCloseBtn') {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                closeModal();
+                return false;
+            }
+        }, true); // Use capture phase to run before other handlers
+
+        // Also handle mousedown for extra reliability
+        document.addEventListener('mousedown', function(e) {
+            const closeBtn = e.target.closest('.modal-close');
+            if (closeBtn || e.target.classList.contains('modal-close') || e.target.id === 'modalCloseBtn') {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                closeModal();
+                return false;
+            }
+        }, true);
         
         function loadUsers() {
             fetch('../api/user-management.php?action=list')
