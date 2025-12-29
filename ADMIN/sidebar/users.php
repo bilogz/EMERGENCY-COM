@@ -892,9 +892,22 @@ $pageTitle = 'User Management';
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    Swal.fire('Success', result.message, 'success');
-                    closeModal();
+                    // Show success notification and reload users
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: result.message,
+                        timer: 2000,
+                        showConfirmButton: false,
+                        toast: true,
+                        position: 'top-end'
+                    });
                     loadUsers();
+
+                    // Close modal after a brief delay to show the success message
+                    setTimeout(() => {
+                        closeModal();
+                    }, 500);
                 } else {
                     Swal.fire('Error', result.message, 'error');
                 }
