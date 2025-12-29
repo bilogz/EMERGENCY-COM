@@ -333,6 +333,7 @@ $pageTitle = 'User Management';
             display: flex;
             justify-content: space-between;
             align-items: center;
+            pointer-events: auto;
         }
         
         .modal-header h2 {
@@ -354,6 +355,9 @@ $pageTitle = 'User Management';
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
+            pointer-events: auto;
+            position: relative;
+            z-index: 10002;
         }
         
         .modal-close:hover {
@@ -667,7 +671,7 @@ $pageTitle = 'User Management';
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalTitle"><i class="fas fa-user-plus"></i> Create New User</h2>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
+                <button type="button" class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="userForm">
@@ -739,6 +743,24 @@ $pageTitle = 'User Management';
                     filterUsers();
                 });
             });
+
+            // Ensure close button works properly
+            const closeBtn = document.querySelector('.modal-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeModal();
+                });
+            }
+
+            // Prevent modal content clicks from closing the modal
+            const modalContent = document.querySelector('.modal-content');
+            if (modalContent) {
+                modalContent.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
         });
         
         function loadUsers() {
