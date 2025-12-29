@@ -192,8 +192,11 @@ try {
         // AI translate (user has it enabled)
         $autoTranslated = true;
         
+        // First, check which translations are already cached
+        $uncachedKeys = [];
+        $uncachedTexts = [];
+        
         foreach ($baseTranslations as $key => $englishText) {
-            // Check cache first
             $cacheKey = md5($englishText . 'en' . $languageCode);
             $cached = null;
             
@@ -212,11 +215,23 @@ try {
                 // Use cached translation
                 $translations[$key] = $cached['translated_text'];
             } else {
-                // Translate using AI
-                $translatedText = translateWithAI($englishText, 'en', $languageCode);
+                // Need to translate this one
+                $uncachedKeys[] = $key;
+                $uncachedTexts[$key] = $englishText;
+            }
+        }
+        
+        // If there are uncached translations, do BATCH translation (single API call)
+        if (!empty($uncachedTexts)) {
+            $batchTranslations = translateBatchWithAI($uncachedTexts, 'en', $languageCode);
+            
+            foreach ($batchTranslations as $key => $translatedText) {
                 $translations[$key] = $translatedText;
                 
                 // Cache the result
+                $englishText = $uncachedTexts[$key];
+                $cacheKey = md5($englishText . 'en' . $languageCode);
+                
                 if ($pdo && $translatedText !== $englishText) {
                     $stmt = $pdo->prepare("
                         INSERT INTO translation_cache 
@@ -226,7 +241,7 @@ try {
                         translated_text = VALUES(translated_text),
                         updated_at = NOW()
                     ");
-                    $stmt->execute([$cacheKey, $englishText, $languageCode, $translatedText, AI_PROVIDER . '_ai']);
+                    $stmt->execute([$cacheKey, $englishText, $languageCode, $translatedText, AI_PROVIDER . '_batch']);
                 }
             }
         }

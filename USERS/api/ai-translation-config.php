@@ -18,11 +18,13 @@ if (file_exists($configFile)) {
 // Fallback to environment variables or defaults
 $aiProvider = $secureConfig['AI_PROVIDER'] ?? $_ENV['AI_PROVIDER'] ?? 'gemini';
 $aiApiKey = $secureConfig['AI_API_KEY'] ?? $_ENV['AI_API_KEY'] ?? '';
-$geminiModel = $secureConfig['GEMINI_MODEL'] ?? $_ENV['GEMINI_MODEL'] ?? 'gemini-2.0-flash-exp';
+$aiApiKeyTranslation = $secureConfig['AI_API_KEY_TRANSLATION'] ?? $aiApiKey; // Use specific key for translation
+$geminiModel = $secureConfig['GEMINI_MODEL'] ?? $_ENV['GEMINI_MODEL'] ?? 'gemini-2.5-flash';
 
 // Define constants
 define('AI_PROVIDER', $aiProvider);
 define('AI_API_KEY', $aiApiKey);
+define('AI_API_KEY_TRANSLATION', $aiApiKeyTranslation);
 define('GEMINI_MODEL', $geminiModel);
 
 // API Endpoints
@@ -266,6 +268,167 @@ function translateWithGroq($text, $targetLang, $apiKey) {
     }
     
     return $text;
+}
+
+/**
+ * BATCH Translation - Translate multiple texts in ONE API call
+ * This is MUCH faster than translating one by one!
+ */
+function translateBatchWithAI($textsArray, $sourceLang, $targetLang) {
+    $targetName = getLanguageName($targetLang);
+    $apiKey = defined('AI_API_KEY_TRANSLATION') ? AI_API_KEY_TRANSLATION : AI_API_KEY;
+    
+    if (empty($apiKey) || $apiKey === 'your-api-key-here') {
+        error_log('AI API key not configured for batch translation');
+        return $textsArray; // Return original texts
+    }
+    
+    // Build the prompt with all texts
+    $textList = "";
+    $keys = array_keys($textsArray);
+    foreach ($textsArray as $key => $text) {
+        $textList .= "[$key]: $text\n";
+    }
+    
+    $prompt = "Translate ALL the following texts to $targetName. 
+Keep the exact same format with [key]: translation.
+Return ONLY the translations, no explanations.
+
+$textList";
+
+    $provider = AI_PROVIDER;
+    
+    switch ($provider) {
+        case 'gemini':
+            return translateBatchWithGemini($textsArray, $keys, $prompt, $targetName, $apiKey);
+        case 'openai':
+            return translateBatchWithOpenAI($textsArray, $keys, $prompt, $targetName, $apiKey);
+        default:
+            return translateBatchWithGemini($textsArray, $keys, $prompt, $targetName, $apiKey);
+    }
+}
+
+/**
+ * Batch translation with Gemini
+ */
+function translateBatchWithGemini($textsArray, $keys, $prompt, $targetLang, $apiKey) {
+    $model = defined('GEMINI_MODEL') ? GEMINI_MODEL : 'gemini-2.5-flash';
+    
+    $data = [
+        'contents' => [
+            ['parts' => [['text' => $prompt]]]
+        ],
+        'generationConfig' => [
+            'temperature' => 0.2,
+            'topK' => 40,
+            'topP' => 0.95,
+            'maxOutputTokens' => 8000, // Increased for batch
+        ]
+    ];
+    
+    $url = GEMINI_API_BASE . $model . ':generateContent?key=' . $apiKey;
+    
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($data),
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_TIMEOUT => 60 // Longer timeout for batch
+    ]);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+    
+    if ($curlError) {
+        error_log("Gemini batch translation CURL error: $curlError");
+        return $textsArray;
+    }
+    
+    if ($httpCode === 200 && $response) {
+        $result = json_decode($response, true);
+        if (isset($result['candidates'][0]['content']['parts'][0]['text'])) {
+            $translatedText = $result['candidates'][0]['content']['parts'][0]['text'];
+            return parseBatchTranslations($translatedText, $textsArray);
+        }
+    }
+    
+    error_log("Gemini batch translation failed. HTTP: $httpCode, Response: " . substr($response, 0, 500));
+    return $textsArray; // Return original on failure
+}
+
+/**
+ * Batch translation with OpenAI
+ */
+function translateBatchWithOpenAI($textsArray, $keys, $prompt, $targetLang, $apiKey) {
+    $data = [
+        'model' => 'gpt-3.5-turbo',
+        'messages' => [
+            ['role' => 'system', 'content' => 'You are a professional translator. Translate accurately and naturally. Keep the [key]: format exactly.'],
+            ['role' => 'user', 'content' => $prompt]
+        ],
+        'temperature' => 0.2,
+        'max_tokens' => 4000
+    ];
+    
+    $ch = curl_init(OPENAI_API_URL);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($data),
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $apiKey
+        ],
+        CURLOPT_TIMEOUT => 60
+    ]);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 200 && $response) {
+        $result = json_decode($response, true);
+        if (isset($result['choices'][0]['message']['content'])) {
+            $translatedText = $result['choices'][0]['message']['content'];
+            return parseBatchTranslations($translatedText, $textsArray);
+        }
+    }
+    
+    return $textsArray;
+}
+
+/**
+ * Parse batch translation response
+ */
+function parseBatchTranslations($responseText, $originalTexts) {
+    $translations = [];
+    $lines = explode("\n", $responseText);
+    
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        
+        // Match [key]: translation format
+        if (preg_match('/^\[([^\]]+)\]:\s*(.+)$/', $line, $matches)) {
+            $key = $matches[1];
+            $translation = trim($matches[2]);
+            if (isset($originalTexts[$key])) {
+                $translations[$key] = $translation;
+            }
+        }
+    }
+    
+    // Fill in any missing translations with originals
+    foreach ($originalTexts as $key => $original) {
+        if (!isset($translations[$key])) {
+            $translations[$key] = $original;
+        }
+    }
+    
+    return $translations;
 }
 ?>
 
