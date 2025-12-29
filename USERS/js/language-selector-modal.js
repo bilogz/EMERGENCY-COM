@@ -413,31 +413,29 @@ class LanguageSelectorModal {
      * Get correct API path based on current page context
      */
     getApiPath(relativePath) {
-        // Check if we're in root context (index.php) or USERS folder
         const currentPath = window.location.pathname;
-        const currentUrl = window.location.href;
+        const isInUsersFolder = currentPath.includes('/USERS/');
+        const isAtRoot = currentPath === '/' || 
+                         currentPath === '/index.php' || 
+                         (currentPath.endsWith('/index.php') && !isInUsersFolder);
         
-        // Check if we're accessing from root (index.php) or from USERS folder
-        const isRootContext = currentPath === '/index.php' || 
-                              currentPath === '/EMERGENCY-COM/index.php' ||
-                              currentPath.endsWith('/index.php') && !currentPath.includes('/USERS/');
-        
-        // Also check if URL contains /USERS/ in path
-        const isUsersContext = currentPath.includes('/USERS/') || currentUrl.includes('/USERS/');
-        
-        if (isRootContext && !isUsersContext) {
-            // From root, API is at USERS/api/
-            if (relativePath.startsWith('api/')) {
-                return 'USERS/' + relativePath;
-            }
-            return relativePath;
-        } else {
-            // From USERS folder, API is at api/ (relative)
-            if (relativePath.startsWith('USERS/api/')) {
+        // If path already starts with USERS/, don't double it
+        if (relativePath.startsWith('USERS/')) {
+            if (isInUsersFolder) {
                 return relativePath.replace('USERS/', '');
             }
             return relativePath;
         }
+        
+        // If path starts with api/, we need to add USERS/ when at root
+        if (relativePath.startsWith('api/')) {
+            if (isAtRoot || !isInUsersFolder) {
+                return 'USERS/' + relativePath;
+            }
+            return relativePath;
+        }
+        
+        return relativePath;
     }
     
     addStyles() {

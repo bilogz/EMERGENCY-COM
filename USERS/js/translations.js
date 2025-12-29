@@ -580,22 +580,32 @@ document.addEventListener('languagesUpdated', function() {
  */
 function getApiPath(relativePath) {
     const currentPath = window.location.pathname;
-    const isRootContext = currentPath === '/index.php' || 
-                          currentPath === '/EMERGENCY-COM/index.php' ||
-                          (currentPath.endsWith('/index.php') && !currentPath.includes('/USERS/'));
-    const isUsersContext = currentPath.includes('/USERS/');
+    const currentUrl = window.location.href;
     
-    if (isRootContext && !isUsersContext) {
-        if (relativePath.startsWith('api/')) {
-            return 'USERS/' + relativePath;
-        }
-        return relativePath;
-    } else {
-        if (relativePath.startsWith('USERS/api/')) {
+    // Check if we're in USERS folder or at root
+    const isInUsersFolder = currentPath.includes('/USERS/');
+    const isAtRoot = currentPath === '/' || 
+                     currentPath === '/index.php' || 
+                     currentPath.endsWith('/index.php') && !isInUsersFolder;
+    
+    // If path already starts with USERS/, don't double it
+    if (relativePath.startsWith('USERS/')) {
+        if (isInUsersFolder) {
+            // We're in USERS folder, remove USERS/ prefix
             return relativePath.replace('USERS/', '');
         }
         return relativePath;
     }
+    
+    // If path starts with api/, we need to add USERS/ when at root
+    if (relativePath.startsWith('api/')) {
+        if (isAtRoot || !isInUsersFolder) {
+            return 'USERS/' + relativePath;
+        }
+        return relativePath;
+    }
+    
+    return relativePath;
 }
 
 /**

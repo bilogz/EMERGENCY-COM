@@ -351,17 +351,29 @@ class LanguageManager {
      * Get correct API path based on current page context
      */
     getApiPath(relativePath) {
-        // Check if we're in root context (index.php) or USERS folder
         const currentPath = window.location.pathname;
-        const isRootContext = !currentPath.includes('/USERS/') && currentPath.includes('/index.php');
+        const isInUsersFolder = currentPath.includes('/USERS/');
+        const isAtRoot = currentPath === '/' || 
+                         currentPath === '/index.php' || 
+                         (currentPath.endsWith('/index.php') && !isInUsersFolder);
         
-        if (isRootContext) {
-            // From root, API is at USERS/api/
-            return relativePath.replace('api/', 'USERS/api/');
-        } else {
-            // From USERS folder, API is at api/
+        // If path already starts with USERS/, don't double it
+        if (relativePath.startsWith('USERS/')) {
+            if (isInUsersFolder) {
+                return relativePath.replace('USERS/', '');
+            }
             return relativePath;
         }
+        
+        // If path starts with api/, we need to add USERS/ when at root
+        if (relativePath.startsWith('api/')) {
+            if (isAtRoot || !isInUsersFolder) {
+                return 'USERS/' + relativePath;
+            }
+            return relativePath;
+        }
+        
+        return relativePath;
     }
 }
 
