@@ -95,7 +95,8 @@ class LanguageManager {
             }
             
             // Try to get from server if logged in
-            const response = await fetch('api/user-language.php?action=get');
+            const apiPath = this.getApiPath('api/user-language.php?action=get');
+            const response = await fetch(apiPath);
             const data = await response.json();
             if (data.success && data.language) {
                 this.currentLanguage = data.language;
@@ -238,7 +239,8 @@ class LanguageManager {
         
         // Save to server if logged in
         try {
-            await fetch('api/user-language.php?action=set', {
+            const apiPath = this.getApiPath('api/user-language.php?action=set');
+            await fetch(apiPath, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

@@ -77,7 +77,7 @@ $assetBase = 'ADMIN/header/';
                         <i class="fas fa-mobile-alt"></i>
                         <div class="app-btn-text">
                             <span class="app-btn-large" data-translate="home.download.download">Download APK</span>
-                            <span class="app-btn-small" data-translate="home.download.desc">Get the Android app now</span>
+                            <span class="app-btn-small" data-translate="home.download.apk.desc">Get the Android app now</span>
                         </div>
                         <i class="fas fa-download"></i>
                     </a>
