@@ -1,20 +1,20 @@
 <?php
-// db_connect.php
-// Creates a PDO instance in $pdo. Adjust credentials as needed for your XAMPP setup.
+/**
+ * SECURE DATABASE CONNECTION
+ * 
+ * Loads credentials from secure config (environment variables or config.local.php)
+ * SAFE TO COMMIT - Contains no actual credentials
+ */
 
 // Report all errors to the log, but do NOT display them to the client
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
-// Database connection configuration
-// Try localhost first (if PHP and MySQL are on same server), then remote
-$host = 'localhost'; // Changed from 'alertaraqc.com' - use localhost if PHP and MySQL are on same server
-$port = 3306; // Default MySQL port
-$db   = 'emer_comm_test';
-$user = 'root';
-// Try empty password first (XAMPP default), then custom password
-$passAttempts = ['', 'YsqnXk6q#145'];
-$charset = 'utf8mb4';
+// Load secure configuration
+require_once __DIR__ . '/config.env.php';
+
+// Get database configuration
+$dbConfig = getDatabaseConfig();
 
 $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -26,25 +26,40 @@ $options = [
 $pdo = null;
 $dbError = null;
 
-// Try multiple connection methods
+// Build connection attempts from config
 $connectionAttempts = [
-    ['host' => 'localhost', 'port' => 3306],
-    ['host' => '127.0.0.1', 'port' => 3306],
-    ['host' => 'alertaraqc.com', 'port' => 3306],
+    $dbConfig['primary'],
+    $dbConfig['fallback'],
 ];
 
 foreach ($connectionAttempts as $attempt) {
-    foreach ($passAttempts as $pass) {
-        try {
-            $dsn = "mysql:host={$attempt['host']};port={$attempt['port']};dbname=$db;charset=$charset";
-            $pdo = new PDO($dsn, $user, $pass, $options);
-            // Connection successful, break out of loops
-            break 2;
-        } catch (PDOException $e) {
-            $dbError = $e->getMessage();
-            // Continue to next attempt
-            $pdo = null;
+    try {
+        // Connect without database first to check/create it
+        $dsn = "mysql:host={$attempt['host']};port={$attempt['port']};charset={$dbConfig['charset']}";
+        $tempPdo = new PDO($dsn, $attempt['user'], $attempt['pass'], $options);
+        
+        // Check if database exists
+        $dbName = $attempt['name'];
+        $stmt = $tempPdo->query("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '$dbName'");
+        $dbExists = $stmt->fetch();
+        
+        if (!$dbExists) {
+            // Create the database if it doesn't exist
+            $tempPdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            error_log("ADMIN: Created database '$dbName' on {$attempt['host']}");
         }
+        
+        // Now connect to the actual database
+        $dsn = "mysql:host={$attempt['host']};port={$attempt['port']};dbname=$dbName;charset={$dbConfig['charset']}";
+        $pdo = new PDO($dsn, $attempt['user'], $attempt['pass'], $options);
+        
+        // Connection successful, break out of loop
+        break;
+    } catch (PDOException $e) {
+        $dbError = $e->getMessage();
+        error_log("ADMIN: Failed to connect to {$attempt['host']}: " . $dbError);
+        $pdo = null;
+        // Continue to next attempt
     }
 }
 
@@ -61,5 +76,3 @@ if ($pdo === null) {
     }
     // For non-API pages, $pdo will be null and pages can check for it
 }
-
-?>

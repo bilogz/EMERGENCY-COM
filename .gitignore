@@ -1,13 +1,27 @@
-# Translation API Keys (Sensitive)
-USERS/api/.env.translation
+# ===========================================
+# SENSITIVE CONFIGURATION FILES
+# ===========================================
+
+# Local config files (contain actual credentials)
+**/config.local.php
+config.local.php
+ADMIN/api/config.local.php
 USERS/api/config.local.php
 
 # Environment files
 .env
 .env.local
 .env.*.local
+*.env
 
-# API Keys - Protect all API keys
+# Translation API configs
+USERS/api/.env.translation
+
+# ===========================================
+# API KEYS AND SECRETS
+# ===========================================
+
+# Generic patterns for API keys
 *api-key*
 *apikey*
 *secret*
@@ -15,18 +29,83 @@ USERS/api/config.local.php
 *key*.php
 setup-*-key.php
 
-# Test files that might contain keys
-emer_comm_test.sql
-*test*.sql
+# Specific API key patterns
+AIzaSy*
 
-# Documentation with keys (if any)
+# ===========================================
+# DATABASE FILES
+# ===========================================
+
+# SQL dumps (may contain sensitive data)
+*.sql
+!**/create_*.sql
+!**/schema*.sql
+!**/migration*.sql
+!**/*_schema.sql
+
+# ===========================================
+# SECURITY DOCUMENTATION
+# ===========================================
+
+# Files that may contain security info
 SECURE_SETUP_COMPLETE.txt
 NEW_KEY_SETUP_COMPLETE.md
 FINAL_SECURITY_SUMMARY.txt
 SECURITY_CHECKLIST.txt
 URGENT_SECURITY_FIX.md
 DO_NOT_COMMIT.txt
+SAFE_TO_COMMIT.txt
+QUICK_REFERENCE.txt
 
-# Google API Keys (common patterns)
-AIzaSy*
+# ===========================================
+# IDE AND SYSTEM FILES
+# ===========================================
 
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===========================================
+# LOGS AND CACHE
+# ===========================================
+
+# Logs
+*.log
+logs/
+error_log
+
+# Cache
+cache/
+tmp/
+temp/
+
+# ===========================================
+# VENDOR AND DEPENDENCIES
+# ===========================================
+
+# Composer (if using)
+# vendor/  # Uncomment if you want to exclude vendor
+composer.lock
+
+# Node (if using)
+node_modules/
+package-lock.json
+yarn.lock
+
+# ===========================================
+# BUILD AND OUTPUT
+# ===========================================
+
+# Build outputs
+dist/
+build/
+*.min.js
+*.min.css
