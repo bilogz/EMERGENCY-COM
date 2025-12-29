@@ -310,10 +310,13 @@ $pageTitle = 'User Management';
             justify-content: center;
             pointer-events: auto;
             cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s ease;
         }
 
         .modal-overlay.show {
             display: flex;
+            opacity: 1;
         }
 
         .modal-content {
@@ -840,15 +843,19 @@ $pageTitle = 'User Management';
 
                 // Create and assign the handler
                 modalOverlay._modalOverlayHandler = function(e) {
-                    console.log('Overlay clicked, target:', e.target, 'target id:', e.target.id);
-                    // Only close if clicking directly on the overlay, not on modal content
-                    if (e.target === this) {
-                        console.log('Closing modal via overlay click');
+                    console.log('Overlay clicked, target:', e.target, 'target id:', e.target.id, 'target class:', e.target.className);
+                    // Check if click is outside the modal content
+                    const modalContent = document.querySelector('.modal-content');
+                    if (modalContent && !modalContent.contains(e.target)) {
+                        console.log('Closing modal via overlay click (outside modal content)');
+                        e.preventDefault();
+                        e.stopPropagation();
                         closeModal();
+                        return false;
                     }
                 };
 
-                modalOverlay.addEventListener('click', modalOverlay._modalOverlayHandler);
+                modalOverlay.addEventListener('click', modalOverlay._modalOverlayHandler, true); // Use capture phase
                 modalOverlay.onclick = modalOverlay._modalOverlayHandler;
             } else {
                 console.error('Modal overlay not found!');
@@ -968,7 +975,11 @@ $pageTitle = 'User Management';
             console.log('closeModal() called');
             const modal = document.getElementById('userModal');
             if (modal) {
+                console.log('Modal before close:', modal.className, 'has show class:', modal.classList.contains('show'));
                 modal.classList.remove('show');
+                console.log('Modal after close:', modal.className, 'has show class:', modal.classList.contains('show'));
+                // Force a reflow to ensure CSS updates
+                modal.offsetHeight;
                 console.log('Modal closed successfully');
             } else {
                 console.error('Modal element not found!');
