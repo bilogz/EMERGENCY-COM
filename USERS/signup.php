@@ -189,45 +189,150 @@ $assetBase = '../ADMIN/header/';
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
         // Google OAuth Sign Up
-        let googleClientId = null;
-        fetch('api/get-google-config.php')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.client_id) {
-                    googleClientId = data.client_id;
-                    initializeGoogleSignUp();
+        (function() {
+            let googleClientId = null;
+            let googleApiLoaded = false;
+            let initializationAttempts = 0;
+            const maxInitializationAttempts = 50; // 5 seconds max wait time
+            let clickHandlerAttached = false;
+
+            // Wait for DOM to be ready
+            function init() {
+                const googleSignupBtn = document.getElementById('googleSignupBtn');
+                if (!googleSignupBtn) {
+                    console.error('Google sign-up button not found');
+                    return;
                 }
-            })
-            .catch(err => console.error('Failed to load Google config:', err));
 
-        function initializeGoogleSignUp() {
-            if (!googleClientId) {
-                console.error('Google Client ID not loaded');
-                return;
-            }
-
-            // Wait for Google Identity Services to load
-            if (typeof google === 'undefined' || !google.accounts) {
-                setTimeout(initializeGoogleSignUp, 100);
-                return;
-            }
-
-            const googleSignupBtn = document.getElementById('googleSignupBtn');
-            if (googleSignupBtn) {
-                googleSignupBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    
-                    // Use Google Identity Services OAuth 2.0
-                    const tokenClient = google.accounts.oauth2.initTokenClient({
-                        client_id: googleClientId,
-                        scope: 'email profile',
-                        callback: handleGoogleTokenResponse,
+                // Load Google Client ID
+                fetch('api/get-google-config.php')
+                    .then(res => {
+                        if (!res.ok) {
+                            throw new Error('Failed to fetch Google config');
+                        }
+                        return res.json();
+                    })
+                    .then(data => {
+                        if (data.success && data.client_id) {
+                            googleClientId = data.client_id;
+                            console.log('Google Client ID loaded successfully');
+                            initializeGoogleSignUp();
+                        } else {
+                            console.error('Google Client ID not found in config');
+                            showGoogleButtonError('Google sign-up is not configured. Please use the regular sign-up form.');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Failed to load Google config:', err);
+                        showGoogleButtonError('Unable to load Google sign-up. Please use the regular sign-up form.');
                     });
-                    
-                    tokenClient.requestAccessToken({ prompt: 'consent' });
-                });
             }
-        }
+
+            // Check if Google API is loaded
+            function checkGoogleApiLoaded() {
+                if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+                    googleApiLoaded = true;
+                    return true;
+                }
+                return false;
+            }
+
+            function initializeGoogleSignUp() {
+                if (!googleClientId) {
+                    console.error('Google Client ID not loaded');
+                    return;
+                }
+
+                const googleSignupBtn = document.getElementById('googleSignupBtn');
+                if (!googleSignupBtn) {
+                    console.error('Google sign-up button not found');
+                    return;
+                }
+
+                // Attach click handler only once
+                if (!clickHandlerAttached) {
+                    googleSignupBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        if (!googleClientId) {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Configuration Error',
+                                text: 'Google sign-up is not properly configured. Please use the regular sign-up form.'
+                            });
+                            return;
+                        }
+
+                        if (!checkGoogleApiLoaded()) {
+                            Swal.fire({
+                                icon: 'info',
+                                title: 'Loading...',
+                                text: 'Google sign-up service is still loading. Please wait a moment and try again.',
+                                timer: 2000
+                            });
+                            // Retry initialization
+                            setTimeout(initializeGoogleSignUp, 500);
+                            return;
+                        }
+                        
+                        try {
+                            // Use Google Identity Services OAuth 2.0
+                            const tokenClient = google.accounts.oauth2.initTokenClient({
+                                client_id: googleClientId,
+                                scope: 'email profile',
+                                callback: handleGoogleTokenResponse,
+                            });
+                            
+                            tokenClient.requestAccessToken({ prompt: 'consent' });
+                        } catch (error) {
+                            console.error('Error initializing Google OAuth:', error);
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Authentication Error',
+                                text: 'Failed to start Google sign-up. Please try again.'
+                            });
+                        }
+                    });
+                    clickHandlerAttached = true;
+                }
+
+                // Wait for Google Identity Services to load
+                if (!checkGoogleApiLoaded()) {
+                    initializationAttempts++;
+                    if (initializationAttempts < maxInitializationAttempts) {
+                        setTimeout(initializeGoogleSignUp, 100);
+                    } else {
+                        console.error('Google Identity Services failed to load after maximum attempts');
+                        showGoogleButtonError('Google sign-up service is taking too long to load. Please refresh the page or use the regular sign-up form.');
+                    }
+                    return;
+                }
+
+                // Remove any error styling
+                googleSignupBtn.style.opacity = '1';
+                googleSignupBtn.style.cursor = 'pointer';
+                googleSignupBtn.disabled = false;
+                console.log('Google sign-up button initialized successfully');
+            }
+
+            function showGoogleButtonError(message) {
+                const googleSignupBtn = document.getElementById('googleSignupBtn');
+                if (googleSignupBtn) {
+                    googleSignupBtn.style.opacity = '0.6';
+                    googleSignupBtn.style.cursor = 'not-allowed';
+                    googleSignupBtn.disabled = true;
+                    googleSignupBtn.title = message;
+                }
+            }
+
+            // Initialize when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
 
         function handleGoogleTokenResponse(tokenResponse) {
             if (tokenResponse.error) {
