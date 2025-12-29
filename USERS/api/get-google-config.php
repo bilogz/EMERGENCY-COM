@@ -9,25 +9,41 @@ ob_start();
 
 header('Content-Type: application/json');
 
+$envFile = __DIR__ . '/.env';
 $configFile = __DIR__ . '/config.local.php';
 
 try {
-    // Check if config file exists
-    if (!file_exists($configFile)) {
-        ob_end_clean();
-        echo json_encode([
-            "success" => false,
-            "message" => "Config file not found.",
-            "debug" => [
-                "config_file" => $configFile,
-                "file_exists" => false
-            ]
-        ]);
-        exit();
+    $clientId = null;
+    $config = [];
+    
+    // First, try to load from .env file (preferred method)
+    if (file_exists($envFile)) {
+        $envContent = file_get_contents($envFile);
+        $lines = explode("\n", $envContent);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            // Skip empty lines and comments
+            if (empty($line) || strpos($line, '#') === 0) {
+                continue;
+            }
+            // Parse KEY=VALUE format
+            if (strpos($line, '=') !== false) {
+                list($key, $value) = explode('=', $line, 2);
+                $key = trim($key);
+                $value = trim($value);
+                // Remove quotes if present
+                $value = trim($value, '"\'');
+                if ($key === 'GOOGLE_CLIENT_ID') {
+                    $clientId = $value;
+                }
+            }
+        }
     }
-
-    // Load config file - suppress warnings and capture return value
-    $config = @include $configFile;
+    
+    // If not found in .env, try config.local.php
+    if (empty($clientId) && file_exists($configFile)) {
+        // Load config file - suppress warnings and capture return value
+        $config = @include $configFile;
     
     // Check what include returned
     // If it returns 1, the file executed but didn't return a value
@@ -85,9 +101,8 @@ try {
         error_log("Output buffer had content: " . $output);
     }
 
-    // Check for GOOGLE_CLIENT_ID in config
-    $clientId = null;
-    if (isset($config['GOOGLE_CLIENT_ID'])) {
+    // Check for GOOGLE_CLIENT_ID in config array (if loaded from config.local.php)
+    if (empty($clientId) && is_array($config) && isset($config['GOOGLE_CLIENT_ID'])) {
         $clientId = $config['GOOGLE_CLIENT_ID'];
     }
 

@@ -11,10 +11,48 @@ header('Content-Type: application/json');
 require_once '../../ADMIN/api/db_connect.php';
 
 // Load Google OAuth credentials
-$configFile = __DIR__ . '/config.local.php';
-$config = file_exists($configFile) ? require $configFile : [];
-$googleClientId = $config['GOOGLE_CLIENT_ID'] ?? null;
-$googleClientSecret = $config['GOOGLE_CLIENT_SECRET'] ?? null;
+// First try .env file (preferred), then fall back to config.local.php
+$googleClientId = null;
+$googleClientSecret = null;
+
+// Try .env file first
+$envFile = __DIR__ . '/.env';
+if (file_exists($envFile)) {
+    $envContent = file_get_contents($envFile);
+    $lines = explode("\n", $envContent);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        // Skip empty lines and comments
+        if (empty($line) || strpos($line, '#') === 0) {
+            continue;
+        }
+        // Parse KEY=VALUE format
+        if (strpos($line, '=') !== false) {
+            list($key, $value) = explode('=', $line, 2);
+            $key = trim($key);
+            $value = trim($value);
+            // Remove quotes if present
+            $value = trim($value, '"\'');
+            if ($key === 'GOOGLE_CLIENT_ID') {
+                $googleClientId = $value;
+            } elseif ($key === 'GOOGLE_CLIENT_SECRET') {
+                $googleClientSecret = $value;
+            }
+        }
+    }
+}
+
+// If not found in .env, try config.local.php
+if (empty($googleClientId) || empty($googleClientSecret)) {
+    $configFile = __DIR__ . '/config.local.php';
+    $config = file_exists($configFile) ? require $configFile : [];
+    if (empty($googleClientId)) {
+        $googleClientId = $config['GOOGLE_CLIENT_ID'] ?? null;
+    }
+    if (empty($googleClientSecret)) {
+        $googleClientSecret = $config['GOOGLE_CLIENT_SECRET'] ?? null;
+    }
+}
 
 if (!$googleClientId || !$googleClientSecret) {
     echo json_encode([

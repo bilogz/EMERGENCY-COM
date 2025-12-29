@@ -29,21 +29,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['client_id']) && isset
     if (empty($clientId) || empty($clientSecret)) {
         echo "<div class='error'>❌ Both Client ID and Client Secret are required!</div>";
     } else {
-        // Load existing config
-        $config = [];
-        if (file_exists($configPath)) {
-            $config = include $configPath;
-            if (!is_array($config)) {
-                $config = [];
+        // Ask user which method they prefer
+        $useEnv = isset($_POST['use_env']) && $_POST['use_env'] === '1';
+        
+        if ($useEnv) {
+            // Use .env file method
+            $envPath = __DIR__ . '/.env';
+            $envContent = "";
+            
+            // Read existing .env if it exists
+            if (file_exists($envPath)) {
+                $envContent = file_get_contents($envPath);
             }
-        }
-        
-        // Add/Update Google OAuth credentials
-        $config['GOOGLE_CLIENT_ID'] = $clientId;
-        $config['GOOGLE_CLIENT_SECRET'] = $clientSecret;
-        
-        // Build config file content
-        $configContent = "<?php
+            
+            // Add or update Google OAuth credentials
+            $lines = explode("\n", $envContent);
+            $updated = false;
+            $newLines = [];
+            
+            foreach ($lines as $line) {
+                $trimmed = trim($line);
+                if (strpos($trimmed, 'GOOGLE_CLIENT_ID=') === 0) {
+                    $newLines[] = "GOOGLE_CLIENT_ID=" . $clientId;
+                    $updated = true;
+                } elseif (strpos($trimmed, 'GOOGLE_CLIENT_SECRET=') === 0) {
+                    $newLines[] = "GOOGLE_CLIENT_SECRET=" . $clientSecret;
+                    $updated = true;
+                } else {
+                    $newLines[] = $line;
+                }
+            }
+            
+            // Add if not found
+            if (!$updated) {
+                $newLines[] = "";
+                $newLines[] = "# Google OAuth Credentials";
+                $newLines[] = "GOOGLE_CLIENT_ID=" . $clientId;
+                $newLines[] = "GOOGLE_CLIENT_SECRET=" . $clientSecret;
+            }
+            
+            $envContent = implode("\n", $newLines);
+            
+            if (file_put_contents($envPath, $envContent)) {
+                @chmod($envPath, 0600);
+                echo "<div class='success'>";
+                echo "✅ <strong>Google OAuth credentials added to .env file!</strong><br><br>";
+                echo "Client ID: <code>" . substr($clientId, 0, 30) . "...</code><br>";
+                echo ".env file updated: <code>$envPath</code><br><br>";
+                echo "<a href='test-config.php' style='color:#4285f4;'>→ Test the configuration</a><br>";
+                echo "<a href='get-google-config.php' style='color:#4285f4;'>→ Check API endpoint</a><br><br>";
+                echo "<strong style='color:#e74c3c;'>⚠️ IMPORTANT: Delete this add-google-oauth.php file for security!</strong>";
+                echo "</div>";
+            } else {
+                echo "<div class='error'>";
+                echo "❌ <strong>Failed to write .env file!</strong><br>";
+                echo "Error: " . (error_get_last()['message'] ?? 'Unknown error') . "<br>";
+                echo "Please check file permissions for: <code>$envPath</code>";
+                echo "</div>";
+            }
+        } else {
+            // Use config.local.php method
+            $config = [];
+            if (file_exists($configPath)) {
+                $config = include $configPath;
+                if (!is_array($config)) {
+                    $config = [];
+                }
+            }
+            
+            // Add/Update Google OAuth credentials
+            $config['GOOGLE_CLIENT_ID'] = $clientId;
+            $config['GOOGLE_CLIENT_SECRET'] = $clientSecret;
+            
+            // Build config file content
+            $configContent = "<?php
 /**
  * SECURE API CONFIGURATION
  * This file contains your actual API keys
@@ -52,32 +111,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['client_id']) && isset
 
 return [
 ";
-        
-        // Add all config values
-        foreach ($config as $key => $value) {
-            $configContent .= "    '" . addslashes($key) . "' => '" . addslashes($value) . "',\n";
-        }
-        
-        $configContent .= "];
+            
+            // Add all config values
+            foreach ($config as $key => $value) {
+                $configContent .= "    '" . addslashes($key) . "' => '" . addslashes($value) . "',\n";
+            }
+            
+            $configContent .= "];
 ";
-        
-        // Write config file
-        if (file_put_contents($configPath, $configContent)) {
-            @chmod($configPath, 0600);
-            echo "<div class='success'>";
-            echo "✅ <strong>Google OAuth credentials added successfully!</strong><br><br>";
-            echo "Client ID: <code>" . substr($clientId, 0, 30) . "...</code><br>";
-            echo "Config file updated: <code>$configPath</code><br><br>";
-            echo "<a href='test-config.php' style='color:#4285f4;'>→ Test the configuration</a><br>";
-            echo "<a href='get-google-config.php' style='color:#4285f4;'>→ Check API endpoint</a><br><br>";
-            echo "<strong style='color:#e74c3c;'>⚠️ IMPORTANT: Delete this add-google-oauth.php file for security!</strong>";
-            echo "</div>";
-        } else {
-            echo "<div class='error'>";
-            echo "❌ <strong>Failed to write config file!</strong><br>";
-            echo "Error: " . (error_get_last()['message'] ?? 'Unknown error') . "<br>";
-            echo "Please check file permissions for: <code>$configPath</code>";
-            echo "</div>";
+            
+            // Write config file
+            if (file_put_contents($configPath, $configContent)) {
+                @chmod($configPath, 0600);
+                echo "<div class='success'>";
+                echo "✅ <strong>Google OAuth credentials added successfully!</strong><br><br>";
+                echo "Client ID: <code>" . substr($clientId, 0, 30) . "...</code><br>";
+                echo "Config file updated: <code>$configPath</code><br><br>";
+                echo "<a href='test-config.php' style='color:#4285f4;'>→ Test the configuration</a><br>";
+                echo "<a href='get-google-config.php' style='color:#4285f4;'>→ Check API endpoint</a><br><br>";
+                echo "<strong style='color:#e74c3c;'>⚠️ IMPORTANT: Delete this add-google-oauth.php file for security!</strong>";
+                echo "</div>";
+            } else {
+                echo "<div class='error'>";
+                echo "❌ <strong>Failed to write config file!</strong><br>";
+                echo "Error: " . (error_get_last()['message'] ?? 'Unknown error') . "<br>";
+                echo "Please check file permissions for: <code>$configPath</code>";
+                echo "</div>";
+            }
         }
     }
 } else {
@@ -101,12 +161,36 @@ return [
         echo "</div>";
     }
     
+    // Check .env file
+    $envPath = __DIR__ . '/.env';
+    $envClientId = '';
+    $envClientSecret = '';
+    if (file_exists($envPath)) {
+        $envContent = file_get_contents($envPath);
+        $lines = explode("\n", $envContent);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (strpos($line, 'GOOGLE_CLIENT_ID=') === 0) {
+                $envClientId = substr($line, strlen('GOOGLE_CLIENT_ID='));
+            } elseif (strpos($line, 'GOOGLE_CLIENT_SECRET=') === 0) {
+                $envClientSecret = substr($line, strlen('GOOGLE_CLIENT_SECRET='));
+            }
+        }
+    }
+    
     echo "<form method='POST'>";
     echo "<h2>Google OAuth Credentials</h2>";
+    echo "<label>Storage Method:</label>";
+    echo "<select name='use_env' style='width:100%;padding:10px;margin:5px 0;background:#333;color:#fff;border:1px solid #555;border-radius:5px;'>";
+    echo "<option value='1'" . (file_exists($envPath) && !empty($envClientId) ? ' selected' : '') . ">Use .env file (Recommended)</option>";
+    echo "<option value='0'" . (!file_exists($envPath) || empty($envClientId) ? ' selected' : '') . ">Use config.local.php</option>";
+    echo "</select><br>";
     echo "<label>Google Client ID:</label>";
-    echo "<input type='text' name='client_id' value='" . htmlspecialchars($existingConfig['GOOGLE_CLIENT_ID'] ?? '') . "' placeholder='1054819730704-xxxxx.apps.googleusercontent.com' required><br>";
+    $currentClientId = !empty($envClientId) ? $envClientId : ($existingConfig['GOOGLE_CLIENT_ID'] ?? '');
+    echo "<input type='text' name='client_id' value='" . htmlspecialchars($currentClientId) . "' placeholder='1054819730704-xxxxx.apps.googleusercontent.com' required><br>";
     echo "<label>Google Client Secret:</label>";
-    echo "<input type='text' name='client_secret' value='" . htmlspecialchars($existingConfig['GOOGLE_CLIENT_SECRET'] ?? '') . "' placeholder='GOCSPX-xxxxx' required><br>";
+    $currentClientSecret = !empty($envClientSecret) ? $envClientSecret : ($existingConfig['GOOGLE_CLIENT_SECRET'] ?? '');
+    echo "<input type='text' name='client_secret' value='" . htmlspecialchars($currentClientSecret) . "' placeholder='GOCSPX-xxxxx' required><br>";
     echo "<button type='submit'>Add/Update Credentials</button>";
     echo "</form>";
     
