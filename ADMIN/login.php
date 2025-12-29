@@ -40,7 +40,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
     <link rel="stylesheet" href="sidebar/css/forms.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
     <style>
         /* Login Page Specific Styles */
         body {
@@ -593,7 +593,10 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
 
             <!-- Google reCAPTCHA v2 (visible checkbox) -->
             <div class="captcha-container" id="captchaContainer">
-                <div class="g-recaptcha" data-sitekey="6LdoYzosAAAAABJuXOiC8OyO_T1bkQHjoS2rZ8o3" data-theme="light"></div>
+                <div id="recaptcha-widget"></div>
+                <div id="recaptcha-error" style="display: none; color: #dc3545; font-size: 13px; text-align: center; padding: 10px;">
+                    <i class="fas fa-exclamation-triangle"></i> reCAPTCHA failed to load. Please refresh the page or check your internet connection.
+                </div>
             </div>
 
             <div class="form-options">
@@ -803,9 +806,26 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
 
         // Reset reCAPTCHA v2
         function resetRecaptcha() {
-            if (typeof grecaptcha !== 'undefined') {
-                grecaptcha.reset();
+            if (typeof grecaptcha !== 'undefined' && recaptchaWidgetId !== null) {
+                try {
+                    grecaptcha.reset(recaptchaWidgetId);
+                } catch (e) {
+                    console.warn('Failed to reset reCAPTCHA:', e);
+                }
             }
+        }
+        
+        // Get reCAPTCHA response
+        function getRecaptchaResponse() {
+            if (typeof grecaptcha !== 'undefined' && recaptchaWidgetId !== null) {
+                try {
+                    return grecaptcha.getResponse(recaptchaWidgetId);
+                } catch (e) {
+                    console.warn('Failed to get reCAPTCHA response:', e);
+                    return '';
+                }
+            }
+            return '';
         }
 
         // OTP Modal functions
@@ -890,6 +910,27 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             setInterval(updateLockoutTimer, 1000);
         }
         
+        // reCAPTCHA widget ID
+        let recaptchaWidgetId = null;
+        let recaptchaLoaded = false;
+
+        // Callback when reCAPTCHA script loads
+        function onRecaptchaLoad() {
+            console.log('reCAPTCHA script loaded successfully');
+            recaptchaLoaded = true;
+            try {
+                recaptchaWidgetId = grecaptcha.render('recaptcha-widget', {
+                    'sitekey': '6LdoYzosAAAAABJuXOiC8OyO_T1bkQHjoS2rZ8o3',
+                    'theme': 'light'
+                });
+                document.getElementById('recaptcha-error').style.display = 'none';
+                console.log('reCAPTCHA widget rendered successfully');
+            } catch (error) {
+                console.error('reCAPTCHA render error:', error);
+                document.getElementById('recaptcha-error').style.display = 'block';
+            }
+        }
+
         // Ensure CAPTCHA container is visible on page load
         document.addEventListener('DOMContentLoaded', function() {
             // Make sure CAPTCHA container is visible
@@ -903,14 +944,13 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             // Initialize security warnings
             updateSecurityWarnings();
             
-            // Verify reCAPTCHA is loaded
-            if (typeof grecaptcha === 'undefined') {
-                console.warn('reCAPTCHA script not loaded. Check if the script tag is present and network connection.');
-            } else {
-                grecaptcha.ready(function() {
-                    console.log('reCAPTCHA v2 ready');
-                });
-            }
+            // Check if reCAPTCHA loaded after a delay
+            setTimeout(function() {
+                if (!recaptchaLoaded) {
+                    console.warn('reCAPTCHA script not loaded after timeout. Check network connection and domain whitelist.');
+                    document.getElementById('recaptcha-error').style.display = 'block';
+                }
+            }, 5000);
         });
 
         // Update lockout timer every second if locked
@@ -943,9 +983,10 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             }
 
             // reCAPTCHA v2 validation
-            let recaptchaResponse = '';
-            if (typeof grecaptcha !== 'undefined') {
-                recaptchaResponse = grecaptcha.getResponse();
+            let recaptchaResponse = getRecaptchaResponse();
+            if (!recaptchaLoaded) {
+                showError('reCAPTCHA is not loaded. Please refresh the page and try again.');
+                return;
             }
             if (!recaptchaResponse) {
                 showError('Please complete the "I am not a robot" verification.');
@@ -965,7 +1006,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                     body: JSON.stringify({
                         email: email,
                         password: password,
-                        recaptcha_response: (typeof grecaptcha !== 'undefined') ? grecaptcha.getResponse() : ''
+                        recaptcha_response: recaptchaResponse
                     })
                 });
 
