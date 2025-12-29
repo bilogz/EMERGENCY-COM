@@ -41,6 +41,29 @@ try {
     }
 }
 
+// Helper: fetch a specific header value (works across PHP SAPIs)
+function getHeaderValue($name) {
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    foreach ($headers as $key => $value) {
+        if (strtolower($key) === strtolower($name)) {
+            return $value;
+        }
+    }
+    $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+    return $_SERVER[$serverKey] ?? '';
+}
+
+// Enforce shared admin API key when configured
+$expectedApiKey = getSecureConfig('ADMIN_API_KEY', '');
+if (!empty($expectedApiKey)) {
+    $providedKey = getHeaderValue('X-Admin-Api-Key');
+    if (empty($providedKey) || !hash_equals($expectedApiKey, $providedKey)) {
+        http_response_code(401);
+        echo json_encode(["success" => false, "message" => "Unauthorized request."]);
+        exit();
+    }
+}
+
 // Get POST data (can be JSON or form data)
 $input = file_get_contents('php://input');
 $data = json_decode($input, true);
@@ -60,6 +83,7 @@ $email = trim($data['email']);
 $plainPassword = $data['password'];
 $recaptchaResponse = $data['recaptcha_response'] ?? '';
 $otpVerified = $data['otp_verified'] ?? false;
+$requireOtp = filter_var(getSecureConfig('ADMIN_REQUIRE_OTP', true), FILTER_VALIDATE_BOOLEAN);
 
 if (empty($email) || empty($plainPassword)) {
     echo json_encode(["success" => false, "message" => "Email and password are required."]);
@@ -80,8 +104,11 @@ if ($otpVerified) {
     $recaptchaValid = true;
 } else if (!empty($recaptchaResponse)) {
     // Load reCAPTCHA secret key from config
-    $localConfig = @include(__DIR__ . '/config.local.php');
-    $recaptchaSecretKey = $localConfig['RECAPTCHA_SECRET_KEY'] ?? '6LdoYzosAAAAAOhQndnAyMB8ZdiSbnrZo4qfLV21';
+    $recaptchaSecretKey = getSecureConfig('RECAPTCHA_SECRET_KEY', '');
+    if (empty($recaptchaSecretKey)) {
+        echo json_encode(["success" => false, "message" => "Security verification is not configured. Please contact an administrator."]);
+        exit();
+    }
     $recaptchaUrl = 'https://www.google.com/recaptcha/api/siteverify';
     $recaptchaData = [
         'secret' => $recaptchaSecretKey,
@@ -179,10 +206,6 @@ try {
             echo json_encode(["success" => false, "message" => "Account is not active. Please contact administrator."]);
             exit();
         }
-        
-        // OTP verification for admin login
-        // TEMPORARY: Skip OTP for testing (set to true to require OTP)
-        $requireOtp = false; // Set to true in production!
         
         if ($requireOtp) {
             // Check if OTP verification flag is passed or exists in session

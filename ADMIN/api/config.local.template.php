@@ -71,7 +71,17 @@ return [
     // RECAPTCHA CONFIGURATION
     // ===========================================
     // Get keys from: https://www.google.com/recaptcha/admin
-    'RECAPTCHA_SITE_KEY' => '',         // reCAPTCHA v2 site key (public)
-    'RECAPTCHA_SECRET_KEY' => '',       // reCAPTCHA v2 secret key (private)
+    // Use the Enterprise/v3 keys for invisible captcha on the login form
+    'RECAPTCHA_SITE_KEY' => '',         // reCAPTCHA v3/Enterprise site key (public)
+    'RECAPTCHA_SECRET_KEY' => '',       // reCAPTCHA v3/Enterprise secret key (private)
+
+    // ===========================================
+    // ADMIN SECURITY
+    // ===========================================
+    // Shared API key for admin-only endpoints (login + OTP).
+    // Leave empty to disable the check.
+    'ADMIN_API_KEY' => '',
+    // Enforce OTP on admin login (recommended in production)
+    'ADMIN_REQUIRE_OTP' => true,
 ];
 

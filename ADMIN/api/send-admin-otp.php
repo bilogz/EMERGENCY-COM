@@ -30,6 +30,29 @@ if (file_exists($mailLibPath)) {
 
 session_start();
 
+// Helper: fetch a specific header value (works across PHP SAPIs)
+function getHeaderValue($name) {
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    foreach ($headers as $key => $value) {
+        if (strtolower($key) === strtolower($name)) {
+            return $value;
+        }
+    }
+    $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+    return $_SERVER[$serverKey] ?? '';
+}
+
+// Enforce shared admin API key when configured
+$expectedApiKey = getSecureConfig('ADMIN_API_KEY', '');
+if (!empty($expectedApiKey)) {
+    $providedKey = getHeaderValue('X-Admin-Api-Key');
+    if (empty($providedKey) || !hash_equals($expectedApiKey, $providedKey)) {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'message' => 'Unauthorized request.']);
+        exit();
+    }
+}
+
 // Custom function to send email with specific sender
 function sendAdminOTPEmail($to, $subject, $body, $fromEmail, $fromName, &$error = null) {
     $error = null;
@@ -270,9 +293,11 @@ try {
         : "Verification code generated (email not sent - use debug OTP)";
     $response['otp_sent'] = $otp_sent;
     
-    // ALWAYS include debug OTP for testing (remove in production)
-    $response['debug_otp'] = $otp_code;
-    $response['debug_message'] = 'If email not received, use this OTP code: ' . $otp_code;
+    // Include debug OTP only in non-production environments
+    if (!isProduction()) {
+        $response['debug_otp'] = $otp_code;
+        $response['debug_message'] = 'If email not received, use this OTP code: ' . $otp_code;
+    }
     
     // Log the attempt
     error_log("Admin OTP attempt for {$email} (purpose: {$purpose}). Sent from {$senderEmail}: " . ($otp_sent ? 'YES' : 'NO') . ". Debug OTP: {$otp_code}");

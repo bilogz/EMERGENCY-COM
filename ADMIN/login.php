@@ -11,6 +11,12 @@ header('X-XSS-Protection: 1; mode=block');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
 
+// Load secure configuration for keys
+require_once __DIR__ . '/api/config.env.php';
+$recaptchaSiteKey = getSecureConfig('RECAPTCHA_SITE_KEY', '');
+$adminApiKey = getSecureConfig('ADMIN_API_KEY', '');
+$requireOtp = filter_var(getSecureConfig('ADMIN_REQUIRE_OTP', true), FILTER_VALIDATE_BOOLEAN);
+
 // Check if user is already logged in
 session_start();
 
@@ -40,7 +46,9 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
     <link rel="stylesheet" href="sidebar/css/forms.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <script src="https://www.google.com/recaptcha/api.js?render=6LdoYzosAAAAABJuXOiC8OyO_T1bkQHjoS2rZ8o3"></script>
+    <?php if (!empty($recaptchaSiteKey)): ?>
+        <script src="https://www.google.com/recaptcha/api.js?render=<?php echo htmlspecialchars($recaptchaSiteKey, ENT_QUOTES, 'UTF-8'); ?>"></script>
+    <?php endif; ?>
     <script>
         // Immediate reset check (runs before page loads)
         (function() {
@@ -707,6 +715,11 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        // Runtime configuration injected from server
+        const RECAPTCHA_SITE_KEY = '<?php echo htmlspecialchars($recaptchaSiteKey, ENT_QUOTES, 'UTF-8'); ?>';
+        const ADMIN_API_KEY = '<?php echo htmlspecialchars($adminApiKey, ENT_QUOTES, 'UTF-8'); ?>';
+        const REQUIRE_OTP = <?php echo $requireOtp ? 'true' : 'false'; ?>;
+
         // Security Configuration
         const SECURITY_CONFIG = {
             MAX_ATTEMPTS: 5,
@@ -819,6 +832,15 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             console.log('reCAPTCHA v3 - new token will be generated on next submit');
         }
 
+        // Build authenticated headers for admin APIs
+        function buildApiHeaders() {
+            const headers = { 'Content-Type': 'application/json' };
+            if (ADMIN_API_KEY) {
+                headers['X-Admin-Api-Key'] = ADMIN_API_KEY;
+            }
+            return headers;
+        }
+
         // OTP Modal functions
         let pendingLoginData = null;
         let otpResendTimer = null;
@@ -902,13 +924,23 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
         }
         
         // reCAPTCHA v3 configuration
-        const RECAPTCHA_SITE_KEY = '6LdoYzosAAAAABJuXOiC8OyO_T1bkQHjoS2rZ8o3';
         let recaptchaLoaded = false;
 
         // Ensure reCAPTCHA is ready on page load
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize security warnings
             updateSecurityWarnings();
+            
+            // Block login if captcha keys are not configured
+            if (!RECAPTCHA_SITE_KEY) {
+                const recaptchaError = document.getElementById('recaptcha-error');
+                if (recaptchaError) {
+                    recaptchaError.style.display = 'block';
+                    recaptchaError.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Security verification is not configured. Please contact the administrator.';
+                }
+                loginButton.disabled = true;
+                return;
+            }
             
             // Check if reCAPTCHA loaded
             if (typeof grecaptcha !== 'undefined') {
@@ -976,6 +1008,11 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 return;
             }
 
+            if (!RECAPTCHA_SITE_KEY) {
+                showError('Security verification is not configured. Please contact your administrator.');
+                return;
+            }
+
             // reCAPTCHA v3 validation - get token
             if (!recaptchaLoaded) {
                 showError('Security verification is loading. Please wait a moment and try again.');
@@ -1002,9 +1039,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             try {
                 const response = await fetch('api/login-web.php', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: buildApiHeaders(),
                     body: JSON.stringify({
                         email: email,
                         password: password,
@@ -1052,7 +1087,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                     try {
                         const otpResponse = await fetch('api/send-admin-otp.php', {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: buildApiHeaders(),
                             body: JSON.stringify({
                                 email: email,
                                 name: data.username || 'Admin',
@@ -1172,7 +1207,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 // Verify OTP
                 const verifyResponse = await fetch('api/verify-admin-otp.php', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: buildApiHeaders(),
                     body: JSON.stringify({
                         otp: otp,
                         email: pendingLoginData.email,
@@ -1194,7 +1229,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 // Note: Server will skip reCAPTCHA verification since OTP is already verified
                 const loginResponse = await fetch('api/login-web.php', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: buildApiHeaders(),
                     body: JSON.stringify({
                         email: pendingLoginData.email,
                         password: pendingLoginData.password,
@@ -1260,7 +1295,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             try {
                 const response = await fetch('api/send-admin-otp.php', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: buildApiHeaders(),
                     body: JSON.stringify({
                         email: pendingLoginData.email,
                         name: 'Admin',

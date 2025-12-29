@@ -9,6 +9,29 @@ require_once __DIR__ . '/db_connect.php';
 
 session_start();
 
+// Helper: fetch a specific header value (works across PHP SAPIs)
+function getHeaderValue($name) {
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    foreach ($headers as $key => $value) {
+        if (strtolower($key) === strtolower($name)) {
+            return $value;
+        }
+    }
+    $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+    return $_SERVER[$serverKey] ?? '';
+}
+
+// Enforce shared admin API key when configured
+$expectedApiKey = getSecureConfig('ADMIN_API_KEY', '');
+if (!empty($expectedApiKey)) {
+    $providedKey = getHeaderValue('X-Admin-Api-Key');
+    if (empty($providedKey) || !hash_equals($expectedApiKey, $providedKey)) {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'message' => 'Unauthorized request.']);
+        exit();
+    }
+}
+
 $response = ['success' => false, 'message' => ''];
 
 try {
