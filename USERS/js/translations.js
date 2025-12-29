@@ -242,6 +242,91 @@ function setLanguage(code) {
 // Export for global access
 window.setLanguage = setLanguage;
 
+// Show notice when auto-translate is disabled
+function showAutoTranslateDisabledNotice(lang) {
+    // Check if we've already shown this notice in this session
+    const noticeShown = sessionStorage.getItem(`auto_translate_notice_${lang}`);
+    if (noticeShown) return;
+    
+    // Mark as shown for this session
+    sessionStorage.setItem(`auto_translate_notice_${lang}`, 'true');
+    
+    // Create notice element
+    const notice = document.createElement('div');
+    notice.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        max-width: 400px;
+        animation: slideInRight 0.3s ease-out;
+    `;
+    
+    const langName = languageNames[lang] || lang.toUpperCase();
+    
+    notice.innerHTML = `
+        <div style="display: flex; align-items: start; gap: 0.75rem;">
+            <i class="fas fa-info-circle" style="font-size: 1.25rem; margin-top: 2px;"></i>
+            <div style="flex: 1;">
+                <strong style="display: block; margin-bottom: 0.25rem;">AI Translation Disabled</strong>
+                <p style="margin: 0; font-size: 0.875rem; opacity: 0.95;">
+                    You've disabled auto-translation. Showing content in English.
+                    To view in ${langName}, enable AI translation in your 
+                    <a href="profile.php" style="color: white; text-decoration: underline;">profile settings</a>.
+                </p>
+            </div>
+            <button onclick="this.parentElement.parentElement.remove()" 
+                    style="background: none; border: none; color: white; cursor: pointer; font-size: 1.25rem; padding: 0; margin-left: 0.5rem;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(notice);
+    
+    // Auto-remove after 8 seconds
+    setTimeout(() => {
+        if (notice.parentElement) {
+            notice.style.animation = 'slideOutRight 0.3s ease-out';
+            setTimeout(() => notice.remove(), 300);
+        }
+    }, 8000);
+}
+
+// Add CSS animation for notice
+if (!document.getElementById('translation-notice-styles')) {
+    const style = document.createElement('style');
+    style.id = 'translation-notice-styles';
+    style.textContent = `
+        @keyframes slideInRight {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 // Apply translations to the page
 async function applyTranslations() {
     const lang = getCurrentLanguage();
@@ -250,41 +335,58 @@ async function applyTranslations() {
     // If language is not in static translations, fetch from API
     if (!translation && lang !== 'en') {
         console.log(`🔄 Language ${lang} not in static translations, fetching from API...`);
-        showTranslationLoading(true);
         
-        try {
-            const apiPath = getApiPath(`api/get-translations.php?lang=${encodeURIComponent(lang)}`);
-            const response = await fetch(apiPath, {
-                cache: 'no-cache',
-                headers: {
-                    'Cache-Control': 'no-cache'
-                }
-            });
+        // Check if auto-translate is enabled
+        const autoTranslateEnabled = localStorage.getItem('auto_translate_enabled') !== 'false';
+        
+        if (!autoTranslateEnabled && lang !== 'fil' && lang !== 'tl') {
+            console.log(`⚠️ Auto-translation disabled by user. Using English for ${lang}`);
+            translation = translations.en;
             
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success && data.translations) {
-                    // Store fetched translations
-                    translations[lang] = data.translations;
-                    translation = data.translations;
-                    console.log(`✓ Loaded ${Object.keys(translation).length} translations for ${lang}`);
-                    
-                    if (data.auto_translated) {
-                        console.log(`ℹ️ Translations were auto-generated using AI`);
+            // Show notification to user
+            showAutoTranslateDisabledNotice(lang);
+        } else {
+            showTranslationLoading(true);
+            
+            try {
+                const apiPath = getApiPath(`api/get-translations.php?lang=${encodeURIComponent(lang)}`);
+                const response = await fetch(apiPath, {
+                    cache: 'no-cache',
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.translations) {
+                        // Store fetched translations
+                        translations[lang] = data.translations;
+                        translation = data.translations;
+                        console.log(`✓ Loaded ${Object.keys(translation).length} translations for ${lang}`);
+                        
+                        if (data.auto_translated) {
+                            console.log(`ℹ️ Translations were auto-generated using AI`);
+                        }
+                        
+                        if (data.user_preference === 'auto_translate_disabled') {
+                            console.log(`ℹ️ User has disabled auto-translation, showing English`);
+                            showAutoTranslateDisabledNotice(lang);
+                        }
+                    } else {
+                        console.warn(`⚠️ API returned no translations for ${lang}, using English`);
+                        translation = translations.en;
                     }
                 } else {
-                    console.warn(`⚠️ API returned no translations for ${lang}, using English`);
+                    console.error(`✗ Failed to fetch translations: ${response.status}`);
                     translation = translations.en;
                 }
-            } else {
-                console.error(`✗ Failed to fetch translations: ${response.status}`);
+            } catch (error) {
+                console.error(`✗ Error fetching translations:`, error);
                 translation = translations.en;
+            } finally {
+                showTranslationLoading(false);
             }
-        } catch (error) {
-            console.error(`✗ Error fetching translations:`, error);
-            translation = translations.en;
-        } finally {
-            showTranslationLoading(false);
         }
     }
     

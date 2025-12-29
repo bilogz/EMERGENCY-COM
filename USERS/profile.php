@@ -84,6 +84,20 @@ $current = 'profile.php';
                                 Automatically use your device's language when available
                             </small>
                         </div>
+                        <div class="form-group" style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 4px; margin-top: 1rem;">
+                            <label style="display: flex; align-items: center; margin-bottom: 0.5rem; font-weight: 600;">
+                                <input type="checkbox" id="autoTranslateEnabled" checked style="margin-right: 0.5rem;">
+                                <span><i class="fas fa-robot"></i> Enable AI Auto-Translation</span>
+                            </label>
+                            <small class="form-text" style="display: block; color: #666; margin-left: 1.5rem;">
+                                <i class="fas fa-info-circle"></i> When enabled, content will be automatically translated to your preferred language using AI. 
+                                Disable this if you prefer to view content in its original language (English/Filipino only).
+                            </small>
+                            <div style="margin-top: 0.75rem; margin-left: 1.5rem; padding: 0.5rem; background: white; border-radius: 4px; font-size: 12px;">
+                                <strong>Note:</strong> English and Filipino content is always available without AI translation. 
+                                Other languages use AI for natural, context-aware translations.
+                            </div>
+                        </div>
                         <button type="button" class="btn btn-primary" id="saveLanguageBtn" data-translate="profile.language.save">
                             <i class="fas fa-save"></i> Save Language Settings
                         </button>
@@ -125,6 +139,7 @@ $current = 'profile.php';
             const selectDropdown = document.getElementById('preferredLanguageSelect');
             const saveBtn = document.getElementById('saveLanguageBtn');
             const autoDetectCheckbox = document.getElementById('autoDetectLanguage');
+            const autoTranslateCheckbox = document.getElementById('autoTranslateEnabled');
             const languageInfo = document.getElementById('currentLanguageInfo');
             
             // Wait for language manager to initialize
@@ -188,6 +203,31 @@ $current = 'profile.php';
             await loadLanguagesIntoDropdown();
             updateLanguageInfo();
             
+            // Load user preferences from API
+            async function loadUserPreferences() {
+                try {
+                    const response = await fetch('api/user-language-preference.php?action=get');
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success) {
+                            // Set auto-translate checkbox
+                            if (autoTranslateCheckbox && data.auto_translate_enabled !== undefined) {
+                                autoTranslateCheckbox.checked = data.auto_translate_enabled;
+                                // Also save to localStorage for guest users
+                                localStorage.setItem('auto_translate_enabled', data.auto_translate_enabled ? 'true' : 'false');
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error loading user preferences:', error);
+                    // Fallback to localStorage
+                    if (autoTranslateCheckbox) {
+                        const autoTranslateEnabled = localStorage.getItem('auto_translate_enabled') !== 'false';
+                        autoTranslateCheckbox.checked = autoTranslateEnabled;
+                    }
+                }
+            }
+            
             // Set auto-detect checkbox
             if (autoDetectCheckbox) {
                 const autoDetectEnabled = localStorage.getItem('auto_detect_language') !== 'false';
@@ -197,6 +237,9 @@ $current = 'profile.php';
                     localStorage.setItem('auto_detect_language', this.checked ? 'true' : 'false');
                 });
             }
+            
+            // Load preferences
+            await loadUserPreferences();
             
             // Listen for language updates
             document.addEventListener('languagesUpdated', async () => {
@@ -220,6 +263,7 @@ $current = 'profile.php';
                     }
                     
                     try {
+                        // Save language preference
                         await langManager.setLanguage(lang);
                         
                         // Update auto-detect setting
@@ -227,21 +271,46 @@ $current = 'profile.php';
                             localStorage.setItem('auto_detect_language', autoDetectCheckbox.checked ? 'true' : 'false');
                         }
                         
+                        // Save auto-translate preference
+                        if (autoTranslateCheckbox) {
+                            const autoTranslateEnabled = autoTranslateCheckbox.checked;
+                            localStorage.setItem('auto_translate_enabled', autoTranslateEnabled ? 'true' : 'false');
+                            
+                            // Save to server
+                            try {
+                                await fetch('api/user-language-preference.php?action=set', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        language: lang,
+                                        auto_translate_enabled: autoTranslateEnabled
+                                    })
+                                });
+                            } catch (error) {
+                                console.error('Error saving auto-translate preference:', error);
+                            }
+                        }
+                        
                         updateLanguageInfo();
                         
                         Swal.fire({
                             icon: 'success',
-                            title: 'Language updated',
-                            text: `Your preferred language has been set to ${langManager.getLanguageDisplay(lang)}.`,
-                            timer: 2000,
+                            title: 'Settings Saved',
+                            html: `
+                                <div style="text-align: left;">
+                                    <p><strong>Language:</strong> ${langManager.getLanguageDisplay(lang)}</p>
+                                    <p><strong>AI Auto-Translation:</strong> ${autoTranslateCheckbox.checked ? 'Enabled' : 'Disabled'}</p>
+                                </div>
+                            `,
+                            timer: 3000,
                             showConfirmButton: false
                         });
                     } catch (error) {
-                        console.error('Error saving language:', error);
+                        console.error('Error saving preferences:', error);
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
-                            text: 'Failed to save language preference. Please try again.'
+                            text: 'Failed to save preferences. Please try again.'
                         });
                     }
                 });

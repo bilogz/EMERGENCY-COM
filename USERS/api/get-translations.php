@@ -10,6 +10,8 @@ header('Cache-Control: no-cache, must-revalidate, max-age=0');
 require_once '../../ADMIN/api/db_connect.php';
 require_once 'ai-translation-config.php';
 
+session_start();
+
 $languageCode = $_GET['lang'] ?? 'en';
 
 // Base English translations
@@ -94,6 +96,25 @@ try {
         }
     }
     
+    // Check user's auto-translate preference
+    $autoTranslateEnabled = true; // Default enabled
+    $userId = $_SESSION['user_id'] ?? null;
+    
+    if ($userId && $pdo) {
+        try {
+            $stmt = $pdo->prepare("SELECT auto_translate_enabled FROM user_preferences WHERE user_id = ?");
+            $stmt->execute([$userId]);
+            $prefs = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($prefs && isset($prefs['auto_translate_enabled'])) {
+                $autoTranslateEnabled = (bool)$prefs['auto_translate_enabled'];
+            }
+        } catch (PDOException $e) {
+            // Column might not exist yet, default to enabled
+            error_log("Auto-translate preference check failed: " . $e->getMessage());
+        }
+    }
+    
     // Select translations based on language
     $translations = [];
     $autoTranslated = false;
@@ -105,7 +126,24 @@ try {
         // Filipino - use pre-translated
         $translations = $filipinoTranslations;
     } else {
-        // Other languages - AI translate
+        // Other languages - Check if AI translation is enabled
+        if (!$autoTranslateEnabled) {
+            // User disabled auto-translation, return English
+            echo json_encode([
+                'success' => true,
+                'language_code' => $languageCode,
+                'language_name' => $language['language_name'] ?? ucfirst($languageCode),
+                'native_name' => $language['native_name'] ?? '',
+                'translations' => $baseTranslations,
+                'auto_translated' => false,
+                'ai_provider' => null,
+                'note' => 'Auto-translation disabled by user. Showing English content.',
+                'user_preference' => 'auto_translate_disabled'
+            ]);
+            exit;
+        }
+        
+        // AI translate (user has it enabled)
         $autoTranslated = true;
         
         foreach ($baseTranslations as $key => $englishText) {
