@@ -208,17 +208,25 @@ $assetBase = '../ADMIN/header/';
                 fetch('api/get-google-config.php')
                     .then(res => {
                         if (!res.ok) {
-                            throw new Error('Failed to fetch Google config');
+                            throw new Error('Failed to fetch Google config: HTTP ' + res.status);
                         }
-                        return res.json();
+                        return res.text().then(text => {
+                            try {
+                                return JSON.parse(text);
+                            } catch (e) {
+                                console.error('Invalid JSON response:', text);
+                                throw new Error('Invalid JSON response from server');
+                            }
+                        });
                     })
                     .then(data => {
-                        if (data.success && data.client_id) {
+                        console.log('Google config response:', data);
+                        if (data && data.success && data.client_id) {
                             googleClientId = data.client_id;
-                            console.log('Google Client ID loaded successfully');
+                            console.log('Google Client ID loaded successfully:', googleClientId);
                             initializeGoogleSignUp();
                         } else {
-                            console.error('Google Client ID not found in config');
+                            console.error('Google Client ID not found in config. Response:', data);
                             showGoogleButtonError('Google sign-up is not configured. Please use the regular sign-up form.');
                         }
                     })
