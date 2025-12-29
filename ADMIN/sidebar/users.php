@@ -699,7 +699,7 @@ $pageTitle = 'User Management';
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalTitle"><i class="fas fa-user-plus"></i> Create New User</h2>
-                <button type="button" class="modal-close" id="modalCloseBtn">&times;</button>
+                <button type="button" class="modal-close" id="modalCloseBtn" onclick="closeModal(); return false;">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="userForm">
@@ -741,7 +741,7 @@ $pageTitle = 'User Management';
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                <button type="button" class="btn btn-secondary" id="cancelBtn" onclick="closeModal(); return false;">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="saveUser()">
                     <i class="fas fa-save"></i> Save User
                 </button>
@@ -756,57 +756,11 @@ $pageTitle = 'User Management';
         let currentFilter = 'all';
         
         // Function to setup modal button handlers (must be accessible globally)
+        // Note: Buttons now use inline onclick handlers for reliability
         function setupModalButtons() {
-                // Modal close button handler
-                const closeBtn = document.getElementById('modalCloseBtn');
-                if (closeBtn) {
-                    // Remove any existing handlers first
-                    closeBtn.onclick = null;
-                    if (closeBtn._modalCloseHandler) {
-                        closeBtn.removeEventListener('click', closeBtn._modalCloseHandler);
-                    }
-
-                    // Create and assign the handler
-                    closeBtn._modalCloseHandler = function(e) {
-                        console.log('Close button clicked');
-                        if (e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.stopImmediatePropagation();
-                        }
-                        closeModal();
-                        return false;
-                    };
-
-                    closeBtn.addEventListener('click', closeBtn._modalCloseHandler);
-                    closeBtn.onclick = closeBtn._modalCloseHandler;
-                }
-
-                // Modal cancel button handler
-                const cancelBtn = document.getElementById('cancelBtn');
-                if (cancelBtn) {
-                    // Remove any existing handlers first
-                    cancelBtn.onclick = null;
-                    if (cancelBtn._modalCancelHandler) {
-                        cancelBtn.removeEventListener('click', cancelBtn._modalCancelHandler);
-                    }
-
-                    // Create and assign the handler
-                    cancelBtn._modalCancelHandler = function(e) {
-                        console.log('Cancel button clicked');
-                        if (e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.stopImmediatePropagation();
-                        }
-                        closeModal();
-                        return false;
-                    };
-
-                    cancelBtn.addEventListener('click', cancelBtn._modalCancelHandler);
-                    cancelBtn.onclick = cancelBtn._modalCancelHandler;
-                }
-            }
+            // Additional event listeners can be added here if needed
+            // But inline onclick handlers are primary
+        }
         
         // Load users on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -829,48 +783,24 @@ $pageTitle = 'User Management';
             // Setup modal buttons on page load
             setupModalButtons();
 
-            // Set up overlay click handler - simplified and more reliable
+            // Set up overlay click handler - close modal when clicking on overlay (not on content)
             const modalOverlay = document.getElementById('userModal');
-            console.log('Modal overlay element:', modalOverlay);
             if (modalOverlay) {
-                // Remove any existing handlers first
-                modalOverlay.onclick = null;
-                if (modalOverlay._modalOverlayHandler) {
-                    modalOverlay.removeEventListener('click', modalOverlay._modalOverlayHandler);
-                }
-
-                // Create and assign the handler
-                modalOverlay._modalOverlayHandler = function(e) {
-                    console.log('Overlay clicked, target:', e.target, 'currentTarget:', e.currentTarget);
-                    // Check if click is directly on the overlay (not on modal content or buttons)
-                    const isButton = e.target.closest('button') || e.target.closest('.btn') || e.target.closest('.modal-close');
-                    if (e.target === e.currentTarget && !isButton) {
-                        console.log('Closing modal via overlay click (directly on overlay)');
-                        e.preventDefault();
-                        e.stopPropagation();
+                modalOverlay.addEventListener('click', function(e) {
+                    // Only close if clicking directly on the overlay, not on modal content
+                    if (e.target === modalOverlay) {
                         closeModal();
-                        return false;
                     }
-                };
-
-                modalOverlay.addEventListener('click', modalOverlay._modalOverlayHandler);
-                modalOverlay.onclick = modalOverlay._modalOverlayHandler;
-            } else {
-                console.error('Modal overlay not found!');
+                });
             }
 
-            // Prevent modal content clicks from closing the modal, but allow button clicks
-            const modalContent = document.querySelector('.modal-content');
+            // Prevent modal content clicks from closing the modal
+            const modalContent = document.querySelector('#userModal .modal-content');
             console.log('Modal content element:', modalContent);
             if (modalContent) {
                 modalContent.addEventListener('click', function(e) {
-                    // Only stop propagation if the click is not on a button or interactive element
-                    const target = e.target;
-                    const isButton = target.closest('button') || target.closest('.btn') || target.closest('.modal-close');
-                    if (!isButton) {
-                        console.log('Modal content clicked (not on button), stopping propagation');
-                        e.stopPropagation();
-                    }
+                    // Stop propagation to prevent overlay click from closing modal
+                    e.stopPropagation();
                 });
             }
         });
@@ -970,8 +900,6 @@ $pageTitle = 'User Management';
             document.getElementById('userId').value = '';
             document.getElementById('userPassword').required = true;
             document.getElementById('userModal').classList.add('show');
-            // Re-setup button handlers to ensure they work
-            setupModalButtons();
         }
         
         function editUser(id) {
@@ -987,20 +915,24 @@ $pageTitle = 'User Management';
             document.getElementById('userRole').value = user.role;
             document.getElementById('userStatus').value = user.status;
             document.getElementById('userModal').classList.add('show');
-            // Re-setup button handlers to ensure they work
-            setupModalButtons();
         }
         
         function closeModal() {
             console.log('closeModal() called');
             const modal = document.getElementById('userModal');
             if (modal) {
-                console.log('Modal before close:', modal.className, 'has show class:', modal.classList.contains('show'));
                 modal.classList.remove('show');
-                console.log('Modal after close:', modal.className, 'has show class:', modal.classList.contains('show'));
-                // Force a reflow to ensure CSS updates
-                modal.offsetHeight;
-                console.log('Modal closed successfully');
+                // Reset the form
+                const form = document.getElementById('userForm');
+                if (form) {
+                    form.reset();
+                }
+                // Clear hidden userId field
+                const userIdField = document.getElementById('userId');
+                if (userIdField) {
+                    userIdField.value = '';
+                }
+                console.log('Modal closed and form reset');
             } else {
                 console.error('Modal element not found!');
             }
@@ -1172,11 +1104,14 @@ $pageTitle = 'User Management';
             `;
         }
         
-        // Close modal on escape key
+        // Close modal on escape key (only when modal is open)
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' || e.keyCode === 27) {
-                console.log('Escape key pressed, closing modal');
-                closeModal();
+                const modal = document.getElementById('userModal');
+                if (modal && modal.classList.contains('show')) {
+                    console.log('Escape key pressed, closing modal');
+                    closeModal();
+                }
             }
         });
         <?php endif; ?>
