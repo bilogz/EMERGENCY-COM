@@ -66,19 +66,20 @@ if (empty($email) || empty($plainPassword)) {
     exit();
 }
 
-// Verify reCAPTCHA (skip if OTP is already verified, as we've done additional verification)
+// Verify reCAPTCHA v3 (skip if OTP is already verified, as we've done additional verification)
 if (!$otpVerified && empty($recaptchaResponse)) {
-    echo json_encode(["success" => false, "message" => "Please complete the reCAPTCHA verification."]);
+    echo json_encode(["success" => false, "message" => "Security verification failed. Please refresh the page and try again."]);
     exit();
 }
 
-// Validate reCAPTCHA with Google (skip if OTP already verified)
+// Validate reCAPTCHA v3 with Google (skip if OTP already verified)
 $recaptchaValid = false;
+$recaptchaScore = 0;
 if ($otpVerified) {
     // If OTP is verified, we can skip reCAPTCHA verification as additional security is already provided
     $recaptchaValid = true;
 } else if (!empty($recaptchaResponse)) {
-    // Load reCAPTCHA secret key from config (safe to commit)
+    // Load reCAPTCHA secret key from config
     $localConfig = @include(__DIR__ . '/config.local.php');
     $recaptchaSecretKey = $localConfig['RECAPTCHA_SECRET_KEY'] ?? '6LdoYzosAAAAAOhQndnAyMB8ZdiSbnrZo4qfLV21';
     $recaptchaUrl = 'https://www.google.com/recaptcha/api/siteverify';
@@ -92,7 +93,8 @@ if ($otpVerified) {
         'http' => [
             'method' => 'POST',
             'header' => 'Content-Type: application/x-www-form-urlencoded',
-            'content' => http_build_query($recaptchaData)
+            'content' => http_build_query($recaptchaData),
+            'timeout' => 10
         ]
     ];
 
@@ -100,19 +102,33 @@ if ($otpVerified) {
     $recaptchaResult = @file_get_contents($recaptchaUrl, false, $recaptchaContext);
     $recaptchaJson = json_decode($recaptchaResult, true);
 
-    // Validate reCAPTCHA v2 response
+    // Validate reCAPTCHA v3 response
+    // v3 returns a score from 0.0 to 1.0 (1.0 = very likely human, 0.0 = very likely bot)
     if (isset($recaptchaJson['success']) && $recaptchaJson['success']) {
-        $recaptchaValid = true;
+        $recaptchaScore = $recaptchaJson['score'] ?? 0;
+        $recaptchaAction = $recaptchaJson['action'] ?? '';
+        
+        // Minimum score threshold (0.5 is recommended, lower = more permissive)
+        $minScore = 0.3;
+        
+        if ($recaptchaScore >= $minScore) {
+            $recaptchaValid = true;
+            error_log("reCAPTCHA v3 passed - Score: {$recaptchaScore}, Action: {$recaptchaAction}");
+        } else {
+            error_log("reCAPTCHA v3 score too low - Score: {$recaptchaScore}, Action: {$recaptchaAction}");
+            echo json_encode(["success" => false, "message" => "Security verification failed. Please try again or contact support."]);
+            exit();
+        }
     } else {
         $errorCodes = $recaptchaJson['error-codes'] ?? [];
-        error_log('reCAPTCHA verification failed. Errors: ' . implode(', ', $errorCodes));
-        echo json_encode(["success" => false, "message" => "reCAPTCHA verification failed. Please try again."]);
+        error_log('reCAPTCHA v3 verification failed. Errors: ' . implode(', ', $errorCodes));
+        echo json_encode(["success" => false, "message" => "Security verification failed. Please refresh and try again."]);
         exit();
     }
 }
 
 if (!$recaptchaValid && !$otpVerified) {
-    echo json_encode(["success" => false, "message" => "reCAPTCHA verification failed. Please try again."]);
+    echo json_encode(["success" => false, "message" => "Security verification failed. Please try again."]);
     exit();
 }
 
