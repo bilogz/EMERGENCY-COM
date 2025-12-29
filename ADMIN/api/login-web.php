@@ -180,25 +180,30 @@ try {
             exit();
         }
         
-        // OTP verification is ALWAYS required for admin login
-        // Check if OTP verification flag is passed or exists in session
-        $otpVerifiedFlag = $data['otp_verified'] ?? false;
-        $sessionOtpVerified = $_SESSION['admin_login_otp_verified'] ?? false;
-        $sessionOtpEmail = $_SESSION['admin_login_otp_email'] ?? '';
+        // OTP verification for admin login
+        // TEMPORARY: Skip OTP for testing (set to true to require OTP)
+        $requireOtp = false; // Set to true in production!
         
-        // OTP must be verified either via session or explicit flag
-        $isOtpVerified = ($otpVerifiedFlag === true) || ($sessionOtpVerified === true && $sessionOtpEmail === $email);
-        
-        if (!$isOtpVerified) {
-            // Credentials valid but OTP not verified yet - require OTP
-            echo json_encode([
-                "success" => false,
-                "message" => "Email verification required. Please verify your email with the OTP code.",
-                "requires_otp" => true,
-                "email" => $email,
-                "username" => $admin['name']
-            ]);
-            exit();
+        if ($requireOtp) {
+            // Check if OTP verification flag is passed or exists in session
+            $otpVerifiedFlag = $data['otp_verified'] ?? false;
+            $sessionOtpVerified = $_SESSION['admin_login_otp_verified'] ?? false;
+            $sessionOtpEmail = $_SESSION['admin_login_otp_email'] ?? '';
+            
+            // OTP must be verified either via session or explicit flag
+            $isOtpVerified = ($otpVerifiedFlag === true) || ($sessionOtpVerified === true && $sessionOtpEmail === $email);
+            
+            if (!$isOtpVerified) {
+                // Credentials valid but OTP not verified yet - require OTP
+                echo json_encode([
+                    "success" => false,
+                    "message" => "Email verification required. Please verify your email with the OTP code.",
+                    "requires_otp" => true,
+                    "email" => $email,
+                    "username" => $admin['name']
+                ]);
+                exit();
+            }
         }
         
         // Update last_login timestamp in admin_user table

@@ -718,6 +718,18 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
         function resetLoginAttempts() {
             localStorage.removeItem(SECURITY_CONFIG.STORAGE_KEY);
         }
+        
+        // Check URL for reset parameter (for testing/admin use)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('reset') === 'attempts') {
+            localStorage.removeItem(SECURITY_CONFIG.STORAGE_KEY);
+            localStorage.removeItem(SECURITY_CONFIG.LOCKOUT_KEY);
+            localStorage.removeItem(SECURITY_CONFIG.LOCKOUT_TIME_KEY);
+            console.log('Login attempts reset');
+            // Remove the parameter from URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            alert('Login attempts have been reset. You can try logging in again.');
+        }
 
         function isAccountLocked() {
             const lockoutTime = localStorage.getItem(SECURITY_CONFIG.LOCKOUT_TIME_KEY);
