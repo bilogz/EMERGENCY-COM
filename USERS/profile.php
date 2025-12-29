@@ -20,6 +20,20 @@ $current = 'profile.php';
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="js/translations.js"></script>
+    <script src="js/language-manager.js"></script>
+    <script src="js/language-selector-modal.js"></script>
+    <script src="js/language-sync.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const langBtn = document.getElementById('languageSelectorBtn');
+            if (langBtn && window.languageSelectorModal) {
+                langBtn.addEventListener('click', function() {
+                    window.languageSelectorModal.open();
+                });
+            }
+        });
+    </script>
 </head>
 <body>
     <?php include 'includes/sidebar.php'; ?>
@@ -32,8 +46,8 @@ $current = 'profile.php';
         <div class="hero-section" id="profile">
             <div class="main-container">
                 <div class="sub-container">
-                    <h1>Profile & Preferences</h1>
-                    <p>Manage your contact methods, preferred languages, and alert categories.</p>
+                    <h1 data-translate="profile.title">Profile & Preferences</h1>
+                    <p data-translate="profile.subtitle">Manage your contact methods, preferred languages, and alert categories.</p>
                 </div>
             </div>
         </div>
@@ -41,17 +55,17 @@ $current = 'profile.php';
         <div class="main-container">
             <div class="sub-container content-main">
                 <section class="page-content">
-                    <h2>Your Settings</h2>
+                    <h2 data-translate="profile.settings.title">Your Settings</h2>
                     <div class="cards-grid">
                         <div class="card">
-                            <h4>Contact Channels</h4>
-                            <p>Update phone, email, and notification channels.</p>
-                            <button class="btn btn-primary">Manage Channels</button>
+                            <h4 data-translate="profile.contact.title">Contact Channels</h4>
+                            <p data-translate="profile.contact.desc">Update phone, email, and notification channels.</p>
+                            <button class="btn btn-primary" data-translate="profile.contact.btn">Manage Channels</button>
                         </div>
                         <div class="card">
-                            <h4>Alert Preferences</h4>
-                            <p>Choose categories: Weather, Earthquake, Bomb Threat, Health, and more.</p>
-                            <button class="btn btn-secondary">Edit Preferences</button>
+                            <h4 data-translate="profile.alerts.title">Alert Preferences</h4>
+                            <p data-translate="profile.alerts.desc">Choose categories: Weather, Earthquake, Bomb Threat, Health, and more.</p>
+                            <button class="btn btn-secondary" data-translate="profile.alerts.btn">Edit Preferences</button>
                         </div>
                     </div>
                 </section>

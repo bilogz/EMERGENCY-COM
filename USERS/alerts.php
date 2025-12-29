@@ -45,8 +45,8 @@ $current = 'alerts.php';
         <div class="hero-section" id="alerts">
             <div class="main-container">
                 <div class="sub-container">
-                    <h1>Live & Recent Alerts</h1>
-                    <p>View and respond to critical alerts with clear categories and actions.</p>
+                    <h1 data-translate="alerts.title">Live & Recent Alerts</h1>
+                    <p data-translate="alerts.subtitle">View and respond to critical alerts with clear categories and actions.</p>
                 </div>
             </div>
         </div>
@@ -54,17 +54,17 @@ $current = 'alerts.php';
         <div class="main-container">
             <div class="sub-container content-main">
                 <section class="page-content">
-                    <h2>Active Alerts</h2>
+                    <h2 data-translate="alerts.active.title">Active Alerts</h2>
                     <div class="cards-grid">
                         <div class="card">
-                            <h4>Weather Advisory</h4>
-                            <p>Rainfall alert from PAGASA. Stay indoors if possible.</p>
-                            <button class="btn btn-primary">Acknowledge</button>
+                            <h4 data-translate="alerts.weather.title">Weather Advisory</h4>
+                            <p data-translate="alerts.weather.desc">Rainfall alert from PAGASA. Stay indoors if possible.</p>
+                            <button class="btn btn-primary" data-translate="alerts.acknowledge">Acknowledge</button>
                         </div>
                         <div class="card">
-                            <h4>Earthquake Update</h4>
-                            <p>Aftershock notice from PHIVOLCS. Expect minor tremors.</p>
-                            <button class="btn btn-secondary">View Details</button>
+                            <h4 data-translate="alerts.earthquake.title">Earthquake Update</h4>
+                            <p data-translate="alerts.earthquake.desc">Aftershock notice from PHIVOLCS. Expect minor tremors.</p>
+                            <button class="btn btn-secondary" data-translate="alerts.viewDetails">View Details</button>
                         </div>
                     </div>
                 </section>

@@ -45,11 +45,11 @@ $assetBase = '../ADMIN/header/';
         <div class="hero-section" id="call-now">
             <div class="main-container">
                 <div class="sub-container">
-                    <h1>Call for Emergency</h1>
-                    <p>Choose the best way to reach responders—via SIM (voice/SMS) or over Internet/WiFi (VoIP/chat).</p>
+                    <h1 data-translate="emergency.title">Call for Emergency</h1>
+                    <p data-translate="emergency.subtitle">Choose the best way to reach responders—via SIM (voice/SMS) or over Internet/WiFi (VoIP/chat).</p>
                     <div class="hero-buttons action-buttons">
-                        <a href="tel:911" class="btn btn-primary"><i class="fas fa-phone"></i> Call via SIM (911)</a>
-                        <a href="#internet-call" class="btn btn-secondary"><i class="fas fa-wifi"></i> Call via Internet/WiFi</a>
+                        <a href="tel:911" class="btn btn-primary"><i class="fas fa-phone"></i> <span data-translate="emergency.callSim">Call via SIM (911)</span></a>
+                        <a href="#internet-call" class="btn btn-secondary"><i class="fas fa-wifi"></i> <span data-translate="emergency.callInternet">Call via Internet/WiFi</span></a>
                     </div>
                 </div>
             </div>
@@ -58,52 +58,52 @@ $assetBase = '../ADMIN/header/';
         <div class="main-container">
             <div class="sub-container content-main">
                 <section id="sim-call" class="page-content">
-                    <h2>Call Using SIM (Voice/SMS)</h2>
-                    <p>Use your mobile network for the fastest connection to responders.</p>
+                    <h2 data-translate="emergency.sim.title">Call Using SIM (Voice/SMS)</h2>
+                    <p data-translate="emergency.sim.desc">Use your mobile network for the fastest connection to responders.</p>
                     <div class="cards-grid">
                         <div class="card">
-                            <h3>Voice Call (SIM)</h3>
-                            <p>Dial national emergency 911 or your LGU hotline.</p>
+                            <h3 data-translate="emergency.voice.title">Voice Call (SIM)</h3>
+                            <p data-translate="emergency.voice.desc">Dial national emergency 911 or your LGU hotline.</p>
                             <div class="action-buttons">
-                                <a href="tel:911" class="btn btn-primary"><i class="fas fa-phone"></i> Call 911</a>
-                                <a href="tel:+63123456789" class="btn btn-secondary"><i class="fas fa-phone-volume"></i> Call LGU Hotline</a>
+                                <a href="tel:911" class="btn btn-primary"><i class="fas fa-phone"></i> <span data-translate="emergency.call911">Call 911</span></a>
+                                <a href="tel:+63123456789" class="btn btn-secondary"><i class="fas fa-phone-volume"></i> <span data-translate="emergency.callLGU">Call LGU Hotline</span></a>
                             </div>
                         </div>
                         <div class="card">
-                            <h3>SMS (SIM)</h3>
-                            <p>Text key details (location, incident type, injuries). Keep messages short and clear.</p>
+                            <h3 data-translate="emergency.sms.title">SMS (SIM)</h3>
+                            <p data-translate="emergency.sms.desc">Text key details (location, incident type, injuries). Keep messages short and clear.</p>
                             <div class="action-buttons">
-                                <a href="sms:+63123456789?body=Emergency%20at%20[location]%20-%20[type]%20-%20[injuries]" class="btn btn-primary"><i class="fas fa-comment-dots"></i> Text LGU</a>
-                                <a href="sms:911?body=Emergency%20at%20[location]%20-%20[type]" class="btn btn-secondary"><i class="fas fa-exclamation-circle"></i> Text 911</a>
+                                <a href="sms:+63123456789?body=Emergency%20at%20[location]%20-%20[type]%20-%20[injuries]" class="btn btn-primary"><i class="fas fa-comment-dots"></i> <span data-translate="emergency.textLGU">Text LGU</span></a>
+                                <a href="sms:911?body=Emergency%20at%20[location]%20-%20[type]" class="btn btn-secondary"><i class="fas fa-exclamation-circle"></i> <span data-translate="emergency.text911">Text 911</span></a>
                             </div>
                         </div>
                     </div>
                 </section>
 
                 <section id="internet-call" class="page-content">
-                    <h2>Call Using Internet/WiFi</h2>
-                    <p>Use data or WiFi when cellular signal is weak. A VoIP/web-call endpoint can be integrated here.</p>
+                    <h2 data-translate="emergency.internet.title">Call Using Internet/WiFi</h2>
+                    <p data-translate="emergency.internet.desc">Use data or WiFi when cellular signal is weak. A VoIP/web-call endpoint can be integrated here.</p>
                     <div class="cards-grid">
                         <div class="card">
-                            <h3>Web/VoIP Call</h3>
-                            <p>Start a voice call over WiFi. (Hook this button to your VoIP/web-call service.)</p>
+                            <h3 data-translate="emergency.voip.title">Web/VoIP Call</h3>
+                            <p data-translate="emergency.voip.desc">Start a voice call over WiFi. (Hook this button to your VoIP/web-call service.)</p>
                             <button class="btn btn-primary" onclick="alert('Connect this to your VoIP/web-call flow');">
-                                <i class="fas fa-headset"></i> Start Internet Call
+                                <i class="fas fa-headset"></i> <span data-translate="emergency.startCall">Start Internet Call</span>
                             </button>
                         </div>
                         <div class="card">
-                            <h3>Two-Way Chat</h3>
-                            <p>Send incident details and get dispatcher replies over data. (Integrate with your chat/two-way API.)</p>
+                            <h3 data-translate="emergency.chat.title">Two-Way Chat</h3>
+                            <p data-translate="emergency.chat.desc">Send incident details and get dispatcher replies over data. (Integrate with your chat/two-way API.)</p>
                             <button class="btn btn-secondary" onclick="alert('Connect this to your chat/two-way comms flow');">
-                                <i class="fas fa-comments"></i> Open Chat
+                                <i class="fas fa-comments"></i> <span data-translate="emergency.openChat">Open Chat</span>
                             </button>
                         </div>
                     </div>
                 </section>
 
                 <section id="contacts" class="page-content emergency-hotlines-section">
-                    <h2>Quezon City Emergency Hotlines</h2>
-                    <p style="font-size: 1.1rem; margin-bottom: 2rem;">Official QCDRRMO and Quezon City emergency numbers. Save these for quick access.</p>
+                    <h2 data-translate="emergency.hotlines.title">Quezon City Emergency Hotlines</h2>
+                    <p style="font-size: 1.1rem; margin-bottom: 2rem;" data-translate="emergency.hotlines.desc">Official QCDRRMO and Quezon City emergency numbers. Save these for quick access.</p>
                     <div class="cards-grid">
                         <div class="card emergency-card">
                             <div class="emergency-card-header">

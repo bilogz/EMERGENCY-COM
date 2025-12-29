@@ -18,6 +18,20 @@ $assetBase = '../ADMIN/header/';
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="js/translations.js"></script>
+    <script src="js/language-manager.js"></script>
+    <script src="js/language-selector-modal.js"></script>
+    <script src="js/language-sync.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const langBtn = document.getElementById('languageSelectorBtn');
+            if (langBtn && window.languageSelectorModal) {
+                langBtn.addEventListener('click', function() {
+                    window.languageSelectorModal.open();
+                });
+            }
+        });
+    </script>
 </head>
 <body>
     <?php include 'includes/sidebar.php'; ?>
@@ -30,21 +44,21 @@ $assetBase = '../ADMIN/header/';
         <div class="main-container">
             <div class="sub-container content-main">
                 <section class="page-content">
-                    <h2>Create an Account</h2>
-                    <p>Sign up to receive alerts, manage your preferences, and access emergency tools.</p>
+                    <h2 data-translate="signup.title">Create an Account</h2>
+                    <p data-translate="signup.subtitle">Sign up to receive alerts, manage your preferences, and access emergency tools.</p>
                     
                     <!-- Step 1: Basic Info + Email Verification -->
                     <form class="auth-form" id="signupForm" style="display: block;">
                         <div class="form-group">
-                            <label for="full_name">Full Name</label>
+                            <label for="full_name" data-translate="signup.fullName">Full Name</label>
                             <input type="text" id="full_name" name="full_name" placeholder="Juan Dela Cruz" required>
                         </div>
                         <div class="form-group">
-                            <label for="email">Email Address</label>
+                            <label for="email" data-translate="signup.email">Email Address</label>
                             <input type="email" id="email" name="email" placeholder="juan@example.com" required>
                         </div>
                         <div class="form-group">
-                            <label for="nationality">Nationality</label>
+                            <label for="nationality" data-translate="signup.nationality">Nationality</label>
                             <input list="nationalityList" id="nationality" name="nationality" placeholder="Select nationality" required>
                             <datalist id="nationalityList">
                                 <option value="Filipino"></option>
@@ -60,7 +74,7 @@ $assetBase = '../ADMIN/header/';
                             </datalist>
                         </div>
                         <div class="form-group">
-                            <label for="phone">Mobile Number</label>
+                            <label for="phone" data-translate="signup.mobileNumber">Mobile Number</label>
                             <div class="input-with-prefix">
                                 <span class="prefix">+63</span>
                                 <input type="tel" id="phone" name="phone" pattern="[0-9]{10}" maxlength="10" placeholder="9XXXXXXXXX" title="Enter 10 digits without spaces" required autocomplete="tel">
@@ -68,7 +82,7 @@ $assetBase = '../ADMIN/header/';
                         </div>
                         <div class="form-group">
                             <label for="barangay">
-                                <i class="fas fa-map-marker-alt"></i> Barangay (Quezon City)
+                                <i class="fas fa-map-marker-alt"></i> <span data-translate="signup.barangay">Barangay (Quezon City)</span>
                             </label>
                             <input type="text" id="barangay" name="barangay" placeholder="Type to search barangay..." required autocomplete="off">
                             <div id="barangaySuggestions" class="suggestions-dropdown" style="display: none;"></div>

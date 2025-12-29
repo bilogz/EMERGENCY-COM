@@ -18,6 +18,20 @@ $assetBase = '../ADMIN/header/';
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="js/translations.js"></script>
+    <script src="js/language-manager.js"></script>
+    <script src="js/language-selector-modal.js"></script>
+    <script src="js/language-sync.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const langBtn = document.getElementById('languageSelectorBtn');
+            if (langBtn && window.languageSelectorModal) {
+                langBtn.addEventListener('click', function() {
+                    window.languageSelectorModal.open();
+                });
+            }
+        });
+    </script>
 </head>
 <body>
     <?php include 'includes/sidebar.php'; ?>
@@ -30,20 +44,20 @@ $assetBase = '../ADMIN/header/';
         <div class="main-container">
             <div class="sub-container content-main">
                 <section class="page-content">
-                    <h2>User Login</h2>
-                    <p class="login-instruction">Log in using your registered contact number and full name.</p>
+                    <h2 data-translate="login.title">User Login</h2>
+                    <p class="login-instruction" data-translate="login.instruction">Log in using your registered contact number and full name.</p>
                     
                     <!-- Phone OTP Login Form (Hidden by default) -->
                     <form class="auth-form" id="phoneOtpForm" style="display: none;">
                         <div class="form-group">
                             <label for="otp_phone">
-                                <i class="fas fa-phone"></i> Mobile Number
+                                <i class="fas fa-phone"></i> <span data-translate="login.mobileNumber">Mobile Number</span>
                             </label>
                             <div class="input-with-prefix">
                                 <span class="prefix">+63</span>
                                 <input type="tel" id="otp_phone" name="otp_phone" pattern="[0-9]{10}" maxlength="10" placeholder="9XXXXXXXXX" required autocomplete="tel">
                             </div>
-                            <small class="form-hint">We'll send you a verification code via SMS</small>
+                            <small class="form-hint" data-translate="login.smsHint">We'll send you a verification code via SMS</small>
                         </div>
                         
                         <div class="error-message" id="otpErrorMessage" style="display: none;">
@@ -53,14 +67,14 @@ $assetBase = '../ADMIN/header/';
                         
                         <button type="submit" class="btn btn-primary" id="sendOtpButton">
                             <i class="fas fa-paper-plane"></i>
-                            <span class="btn-text">Send OTP</span>
+                            <span class="btn-text" data-translate="login.sendOTP">Send OTP</span>
                             <span class="btn-spinner" style="display: none;">
                                 <i class="fas fa-spinner fa-spin"></i>
                             </span>
                         </button>
                         
                         <button type="button" class="btn btn-secondary" id="backToRegularLogin" style="margin-top: 0.5rem;">
-                            <i class="fas fa-arrow-left"></i> Back to Regular Login
+                            <i class="fas fa-arrow-left"></i> <span data-translate="login.backToLogin">Back to Regular Login</span>
                         </button>
                     </form>
 
@@ -68,20 +82,20 @@ $assetBase = '../ADMIN/header/';
                     <form class="auth-form" id="loginForm" style="display: block;">
                         <div class="form-group">
                             <label for="full_name">
-                                <i class="fas fa-user"></i> Full Name
+                                <i class="fas fa-user"></i> <span data-translate="login.fullName">Full Name</span>
                             </label>
                             <input type="text" id="full_name" name="full_name" placeholder="Juan Dela Cruz" required autocomplete="name">
                         </div>
 
                         <div class="form-group">
                             <label for="phone">
-                                <i class="fas fa-phone"></i> Mobile Number
+                                <i class="fas fa-phone"></i> <span data-translate="login.mobileNumber">Mobile Number</span>
                             </label>
                             <div class="input-with-prefix">
                                 <span class="prefix">+63</span>
                                 <input type="tel" id="phone" name="phone" pattern="[0-9]{10}" maxlength="10" placeholder="9XXXXXXXXX" title="Enter 10 digits without spaces" required autocomplete="tel">
                             </div>
-                            <small class="form-hint">Enter your 10-digit mobile number (without spaces)</small>
+                            <small class="form-hint" data-translate="login.mobileHint">Enter your 10-digit mobile number (without spaces)</small>
                         </div>
                         
                         <div class="error-message" id="errorMessage" style="display: none;">
