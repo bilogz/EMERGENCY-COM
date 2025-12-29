@@ -46,6 +46,27 @@ $baseTranslations = [
     'home.guide.3' => 'Prepare key details.',
     'home.guide.4' => 'Follow instructions.',
     'home.guide.5' => 'Keep lines open.',
+    
+    // Emergency Hotlines Section
+    'home.hotlines.title' => 'Quezon City Emergency Hotlines',
+    'home.hotlines.desc' => 'Save these numbers for quick access during emergencies',
+    'home.hotlines.helpline' => 'QC HELPLINE',
+    'home.hotlines.dial' => 'DIAL 122',
+    'home.hotlines.call122' => 'Call 122',
+    'home.hotlines.eoc' => 'Emergency Operations Center (EOC)',
+    'home.hotlines.callGlobe' => 'Call Globe',
+    'home.hotlines.callSmart' => 'Call Smart',
+    'home.hotlines.ems' => 'Emergency Medical Services / Urban Search and Rescue',
+    'home.hotlines.callEMS' => 'Call EMS',
+    'home.hotlines.landline' => 'QCDRRMO Landline',
+    
+    // Guest Section
+    'home.guest.button' => 'Continue as Guest (Emergency Only)',
+    'home.guest.notice' => 'Guest access is limited to emergency calls only.',
+    'home.guest.login' => 'Login',
+    'home.guest.or' => 'or',
+    'home.guest.signup' => 'Sign Up',
+    'home.guest.fullAccess' => 'for full access.',
 ];
 
 // Filipino translations (pre-translated for speed)
@@ -80,6 +101,27 @@ $filipinoTranslations = [
     'home.guide.3' => 'Maghanda ng mahahalagang detalye.',
     'home.guide.4' => 'Sundin ang mga tagubilin.',
     'home.guide.5' => 'Panatilihing bukas ang linya.',
+    
+    // Emergency Hotlines Section
+    'home.hotlines.title' => 'Mga Emergency Hotline ng Quezon City',
+    'home.hotlines.desc' => 'I-save ang mga numerong ito para mabilis na ma-access sa oras ng emergency',
+    'home.hotlines.helpline' => 'QC HELPLINE',
+    'home.hotlines.dial' => 'I-DIAL ANG 122',
+    'home.hotlines.call122' => 'Tumawag sa 122',
+    'home.hotlines.eoc' => 'Emergency Operations Center (EOC)',
+    'home.hotlines.callGlobe' => 'Tumawag sa Globe',
+    'home.hotlines.callSmart' => 'Tumawag sa Smart',
+    'home.hotlines.ems' => 'Emergency Medical Services / Urban Search and Rescue',
+    'home.hotlines.callEMS' => 'Tumawag sa EMS',
+    'home.hotlines.landline' => 'QCDRRMO Landline',
+    
+    // Guest Section
+    'home.guest.button' => 'Magpatuloy bilang Bisita (Emergency Lamang)',
+    'home.guest.notice' => 'Ang guest access ay limitado sa emergency calls lamang.',
+    'home.guest.login' => 'Mag-login',
+    'home.guest.or' => 'o',
+    'home.guest.signup' => 'Mag-sign Up',
+    'home.guest.fullAccess' => 'para sa buong access.',
 ];
 
 try {

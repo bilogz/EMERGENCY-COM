@@ -89,21 +89,21 @@ $assetBase = 'ADMIN/header/';
         <div class="main-container">
             <div class="sub-container">
                 <section class="page-content emergency-hotlines-section">
-                    <h2>Quezon City Emergency Hotlines</h2>
-                    <p>Save these numbers for quick access during emergencies</p>
+                    <h2 data-translate="home.hotlines.title">Quezon City Emergency Hotlines</h2>
+                    <p data-translate="home.hotlines.desc">Save these numbers for quick access during emergencies</p>
                     <div class="cards-grid">
                         <div class="card emergency-card">
                             <div class="emergency-card-header">
-                                <h3>QC HELPLINE</h3>
+                                <h3 data-translate="home.hotlines.helpline">QC HELPLINE</h3>
                             </div>
-                            <div class="emergency-number-large">DIAL 122</div>
+                            <div class="emergency-number-large" data-translate="home.hotlines.dial">DIAL 122</div>
                             <a href="tel:122" class="btn btn-primary">
-                                <i class="fas fa-phone"></i> Call 122
+                                <i class="fas fa-phone"></i> <span data-translate="home.hotlines.call122">Call 122</span>
                             </a>
                         </div>
                         <div class="card emergency-card">
                             <div class="emergency-card-header">
-                                <h3>Emergency Operations Center (EOC)</h3>
+                                <h3 data-translate="home.hotlines.eoc">Emergency Operations Center (EOC)</h3>
                             </div>
                             <div class="emergency-numbers">
                                 <p><strong>0977 031 2892</strong> (GLOBE)</p>
@@ -111,26 +111,26 @@ $assetBase = 'ADMIN/header/';
                                 <p><strong>8988 4242</strong> local 7245</p>
                             </div>
                             <div class="action-buttons">
-                                <a href="tel:+639770312892" class="btn btn-primary">Call Globe</a>
-                                <a href="tel:+639478859929" class="btn btn-secondary">Call Smart</a>
+                                <a href="tel:+639770312892" class="btn btn-primary" data-translate="home.hotlines.callGlobe">Call Globe</a>
+                                <a href="tel:+639478859929" class="btn btn-secondary" data-translate="home.hotlines.callSmart">Call Smart</a>
                             </div>
                         </div>
                         <div class="card emergency-card">
                             <div class="emergency-card-header">
-                                <h3>Emergency Medical Services / Urban Search and Rescue</h3>
+                                <h3 data-translate="home.hotlines.ems">Emergency Medical Services / Urban Search and Rescue</h3>
                             </div>
                             <div class="emergency-numbers">
                                 <p><strong>0947 884 7498</strong> (SMART)</p>
                                 <p><strong>8928 4396</strong></p>
                             </div>
                             <div class="action-buttons">
-                                <a href="tel:+639478847498" class="btn btn-primary">Call EMS</a>
+                                <a href="tel:+639478847498" class="btn btn-primary" data-translate="home.hotlines.callEMS">Call EMS</a>
                                 <a href="tel:0289284396" class="btn btn-secondary">Call 8928-4396</a>
                             </div>
                         </div>
                         <div class="card emergency-card">
                             <div class="emergency-card-header">
-                                <h3>QCDRRMO Landline</h3>
+                                <h3 data-translate="home.hotlines.landline">QCDRRMO Landline</h3>
                             </div>
                             <div class="emergency-numbers">
                                 <p><strong>8927-5914</strong></p>
@@ -155,12 +155,12 @@ $assetBase = 'ADMIN/header/';
                     </a>
                     <button id="guestLoginBtn" class="btn btn-secondary guest-login-btn">
                         <i class="fas fa-user-secret"></i>
-                        <span>Continue as Guest (Emergency Only)</span>
+                        <span data-translate="home.guest.button">Continue as Guest (Emergency Only)</span>
                     </button>
                 </div>
                 <p class="guest-notice" style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
-                    <i class="fas fa-info-circle"></i> Guest access is limited to emergency calls only. 
-                    <a href="USERS/login.php">Login</a> or <a href="USERS/signup.php">Sign Up</a> for full access.
+                    <i class="fas fa-info-circle"></i> <span data-translate="home.guest.notice">Guest access is limited to emergency calls only.</span> 
+                    <a href="USERS/login.php" data-translate="home.guest.login">Login</a> <span data-translate="home.guest.or">or</span> <a href="USERS/signup.php" data-translate="home.guest.signup">Sign Up</a> <span data-translate="home.guest.fullAccess">for full access.</span>
                 </p>
             </div>
         </div>
