@@ -308,7 +308,7 @@ $pageTitle = 'User Management';
             z-index: 10000;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
+            pointer-events: auto;
         }
 
         .modal-overlay.show {
@@ -323,12 +323,10 @@ $pageTitle = 'User Management';
             max-height: 90vh;
             overflow-y: auto;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-            z-index: 10001;
             position: relative;
             pointer-events: auto;
-            cursor: default;
         }
-        
+
         .modal-header {
             padding: 1.5rem;
             border-bottom: 1px solid var(--border-color-1);
@@ -337,15 +335,14 @@ $pageTitle = 'User Management';
             align-items: center;
             pointer-events: auto;
             position: relative;
-            z-index: 10004;
         }
-        
+
         .modal-header h2 {
             margin: 0;
             font-size: 1.25rem;
             color: var(--text-color-1);
         }
-        
+
         .modal-close {
             width: 36px;
             height: 36px;
@@ -359,46 +356,44 @@ $pageTitle = 'User Management';
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
-            pointer-events: auto !important;
-            position: relative;
-            z-index: 10010 !important;
+            pointer-events: auto;
             flex-shrink: 0;
             user-select: none;
             -webkit-user-select: none;
             -moz-user-select: none;
             -ms-user-select: none;
             touch-action: manipulation;
+            position: relative;
+            z-index: 10;
         }
-        
+
         .modal-close:hover {
             background: #e74c3c;
             border-color: #e74c3c;
             color: white;
             transform: scale(1.05);
         }
-        
+
         .modal-close:active {
             transform: scale(0.95);
         }
-        
+
         .modal-body {
             padding: 1.5rem;
             pointer-events: auto;
-            position: relative;
-            z-index: 10002;
         }
-        
+
         .form-group {
             margin-bottom: 1.25rem;
         }
-        
+
         .form-group label {
             display: block;
             margin-bottom: 0.5rem;
             font-weight: 500;
             color: var(--text-color-1);
         }
-        
+
         .form-group input,
         .form-group select {
             width: 100%;
@@ -410,20 +405,20 @@ $pageTitle = 'User Management';
             color: var(--text-color-1);
             transition: border-color 0.2s;
         }
-        
+
         .form-group input:focus,
         .form-group select:focus {
             outline: none;
             border-color: var(--primary-color-1);
         }
-        
+
         .form-group small {
             display: block;
             margin-top: 0.25rem;
             color: var(--text-secondary-1);
             font-size: 0.8rem;
         }
-        
+
         .modal-footer {
             padding: 1rem 1.5rem;
             border-top: 1px solid var(--border-color-1);
@@ -431,10 +426,8 @@ $pageTitle = 'User Management';
             justify-content: flex-end;
             gap: 0.75rem;
             pointer-events: auto;
-            position: relative;
-            z-index: 10005;
         }
-        
+
         .btn {
             padding: 0.75rem 1.5rem;
             border-radius: 8px;
@@ -447,48 +440,42 @@ $pageTitle = 'User Management';
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
-            pointer-events: auto !important;
+            pointer-events: auto;
             position: relative;
-            z-index: 10010;
+            z-index: 10;
         }
-        
+
         .btn:active {
             transform: scale(0.95);
         }
-        
+
         .btn-primary {
             background: var(--primary-color-1);
             color: white;
-            pointer-events: auto !important;
-            position: relative;
-            z-index: 10007;
         }
-        
+
         .btn-primary:hover {
             background: #3d7a79;
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(76, 138, 137, 0.3);
         }
-        
+
         .btn-primary:active {
             transform: translateY(0) scale(0.98);
             box-shadow: none;
         }
-        
+
         .btn-secondary {
             background: var(--bg-color-1);
             color: var(--text-color-1);
             border: 1px solid var(--border-color-1);
-            pointer-events: auto !important;
-            position: relative;
-            z-index: 10007;
         }
-        
+
         .btn-secondary:hover {
             background: var(--border-color-1);
             transform: translateY(-1px);
         }
-        
+
         .btn-secondary:active {
             transform: translateY(0) scale(0.98);
         }
@@ -696,7 +683,7 @@ $pageTitle = 'User Management';
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalTitle"><i class="fas fa-user-plus"></i> Create New User</h2>
-                <button type="button" class="modal-close" id="modalCloseBtn" onclick="event.stopPropagation(); closeModal(); return false;">&times;</button>
+                <button type="button" class="modal-close" id="modalCloseBtn">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="userForm">
@@ -738,7 +725,7 @@ $pageTitle = 'User Management';
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="event.stopPropagation(); closeModal(); return false;">Cancel</button>
+                <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="saveUser()">
                     <i class="fas fa-save"></i> Save User
                 </button>
@@ -755,10 +742,10 @@ $pageTitle = 'User Management';
         // Load users on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadUsers();
-            
+
             // Search functionality
             document.getElementById('searchInput').addEventListener('input', filterUsers);
-            
+
             // Filter buttons
             document.querySelectorAll('.filter-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
@@ -768,6 +755,26 @@ $pageTitle = 'User Management';
                     filterUsers();
                 });
             });
+
+            // Modal close button handler
+            const closeBtn = document.getElementById('modalCloseBtn');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeModal();
+                });
+            }
+
+            // Modal cancel button handler
+            const cancelBtn = document.getElementById('cancelBtn');
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeModal();
+                });
+            }
 
             // Prevent modal content clicks from closing the modal
             const modalContent = document.querySelector('.modal-content');
@@ -786,14 +793,6 @@ $pageTitle = 'User Management';
                         closeModal();
                     }
                 });
-            }
-        });
-
-        // Close modal when clicking on the overlay background
-        document.addEventListener('click', function(e) {
-            const modalOverlay = document.getElementById('userModal');
-            if (e.target === modalOverlay) {
-                closeModal();
             }
         });
         
