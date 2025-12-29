@@ -4,7 +4,10 @@
  * Logs admin activities and login attempts
  */
 
-require_once 'db_connect.php';
+// Only include db_connect if $pdo is not already set
+if (!isset($pdo) || $pdo === null) {
+    require_once 'db_connect.php';
+}
 
 // Auto-create tables if they don't exist
 function initializeActivityTables() {

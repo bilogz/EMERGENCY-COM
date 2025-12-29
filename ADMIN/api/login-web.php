@@ -4,12 +4,42 @@
  * Sets PHP sessions after successful authentication
  */
 
+// Enable error reporting for debugging
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
 session_start();
 header('Content-Type: application/json');
 
-// Include DB connection
-require_once 'db_connect.php';
-require_once 'activity_logger.php';
+// Include DB connection with error handling
+try {
+    require_once 'db_connect.php';
+} catch (Throwable $e) {
+    echo json_encode(["success" => false, "message" => "Database connection error: " . $e->getMessage()]);
+    exit();
+}
+
+// Check if $pdo is available
+if (!isset($pdo) || $pdo === null) {
+    echo json_encode(["success" => false, "message" => "Database connection failed. Please check server configuration."]);
+    exit();
+}
+
+// Include activity logger with error handling (non-critical)
+try {
+    require_once 'activity_logger.php';
+} catch (Throwable $e) {
+    // Activity logging is non-critical, continue without it
+    error_log('Activity logger failed to load: ' . $e->getMessage());
+    
+    // Define stub functions if activity_logger failed
+    if (!function_exists('logAdminLogin')) {
+        function logAdminLogin($adminId, $email, $status = 'success') { return false; }
+    }
+    if (!function_exists('logAdminActivity')) {
+        function logAdminActivity($adminId, $action, $description = null, $metadata = null) { return false; }
+    }
+}
 
 // Get POST data (can be JSON or form data)
 $input = file_get_contents('php://input');
