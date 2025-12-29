@@ -133,3 +133,4 @@ If you encounter issues:
 **Ready to set up?** Choose Option 1 (PHP script) for the easiest experience!
 
 
+
