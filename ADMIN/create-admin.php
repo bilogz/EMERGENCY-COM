@@ -1,387 +1,243 @@
 <?php
 /**
  * Create Admin Account Page
- * Only super_admin can access this page to create admin accounts
- * Accounts are stored in admin_user table
+ * SECURE: Only the super admin email can create accounts
+ * Super Admin: joecelgarcia1@gmail.com
  */
 
-// Enable error display for debugging (remove in production)
+// Enable error display for debugging
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 session_start();
 
-// Wrap requires in try-catch to catch any fatal errors
+// ============================================
+// SECURITY: SUPER ADMIN EMAIL (ONLY THIS EMAIL CAN CREATE ACCOUNTS)
+// ============================================
+define('SUPER_ADMIN_EMAIL', 'joecelgarcia1@gmail.com');
+
+// Auto-detect environment
+$isProduction = isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'alertaraqc.com') !== false;
+
+// Database credentials based on environment
+if ($isProduction) {
+    $dbHost = 'localhost';
+    $dbName = 'emer_comm_test';
+    $dbUser = 'root';
+    $dbPass = 'YsqnXk6q#145';
+} else {
+    $dbHost = 'localhost';
+    $dbName = 'emer_comm_test';
+    $dbUser = 'root';
+    $dbPass = '';
+}
+
+// Connect to database
+$pdo = null;
+$dbError = null;
+
 try {
-    require_once __DIR__ . '/api/db_connect.php';
-} catch (Throwable $e) {
-    die('Database connection error: ' . htmlspecialchars($e->getMessage()));
-}
-
-try {
-    require_once __DIR__ . '/api/security-helpers.php';
-} catch (Throwable $e) {
-    die('Security helpers error: ' . htmlspecialchars($e->getMessage()));
-}
-
-// Check if admin_user table exists
-$adminUserTableExists = false;
-try {
-    if ($pdo) {
-        $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
-        $adminUserTableExists = true;
-    }
-} catch (PDOException $e) {
-    // Table doesn't exist
-    $adminUserTableExists = false;
-}
-
-// If database connection failed, show error
-if ($pdo === null) {
-    die('
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Database Connection Error - Create Admin Account</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-        <style>
-            body {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                min-height: 100vh;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                padding: 1rem;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            }
-            .error-container {
-                background: white;
-                border-radius: 16px;
-                padding: 3rem 2.5rem;
-                max-width: 600px;
-                width: 100%;
-                text-align: center;
-                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            }
-            .error-icon {
-                width: 90px;
-                height: 90px;
-                margin: 0 auto 1.5rem;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background: #fee;
-                border-radius: 20px;
-            }
-            .error-icon i {
-                font-size: 2.5rem;
-                color: #dc3545;
-            }
-            .error-title {
-                font-size: 1.75rem;
-                font-weight: 700;
-                color: #222;
-                margin-bottom: 1rem;
-            }
-            .error-message {
-                color: #666;
-                margin-bottom: 2rem;
-                line-height: 1.6;
-                text-align: left;
-            }
-            .error-details {
-                background: #f8f9fa;
-                padding: 1rem;
-                border-radius: 8px;
-                margin: 1rem 0;
-                text-align: left;
-                font-family: monospace;
-                font-size: 0.85rem;
-                color: #dc3545;
-                word-break: break-word;
-            }
-            .btn-setup {
-                display: inline-block;
-                padding: 1rem 2rem;
-                background: linear-gradient(135deg, #3a7675 0%, #4ca8a6 100%);
-                color: white;
-                text-decoration: none;
-                border-radius: 10px;
-                font-weight: 600;
-                transition: all 0.3s ease;
-                margin: 0.5rem;
-            }
-            .btn-setup:hover {
-                transform: translateY(-2px);
-            }
-        </style>
-    </head>
-    <body>
-        <div class="error-container">
-            <div class="error-icon">
-                <i class="fas fa-database"></i>
-            </div>
-            <h1 class="error-title">Database Connection Failed</h1>
-            <p class="error-message">
-                Unable to connect to the database. Please check your database configuration.
-            </p>
-            <div class="error-details">' . htmlspecialchars($dbError ?? 'Unknown error') . '</div>
-            <div style="margin-top: 2rem;">
-                <a href="api/setup_remote_database.php" class="btn-setup">
-                    <i class="fas fa-cog"></i> Run Database Setup
-                </a>
-                <a href="login.php" class="btn-setup" style="background: #6c757d;">
-                    <i class="fas fa-arrow-left"></i> Back to Login
-                </a>
-            </div>
-        </div>
-    </body>
-    </html>');
-}
-
-// If table doesn't exist, show setup message
-if (!$adminUserTableExists) {
-    die('
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Database Setup Required - Create Admin Account</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-        <style>
-            body {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                min-height: 100vh;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                padding: 1rem;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            }
-            .setup-container {
-                background: white;
-                border-radius: 16px;
-                padding: 3rem 2.5rem;
-                max-width: 600px;
-                width: 100%;
-                text-align: center;
-                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            }
-            .setup-icon {
-                width: 90px;
-                height: 90px;
-                margin: 0 auto 1.5rem;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background: linear-gradient(135deg, #3a7675 0%, #4ca8a6 100%);
-                border-radius: 20px;
-                box-shadow: 0 8px 20px rgba(58,118,117,0.3);
-            }
-            .setup-icon i {
-                font-size: 2.5rem;
-                color: white;
-            }
-            .setup-title {
-                font-size: 1.75rem;
-                font-weight: 700;
-                color: #222;
-                margin-bottom: 1rem;
-            }
-            .setup-message {
-                color: #666;
-                margin-bottom: 2rem;
-                line-height: 1.6;
-                text-align: left;
-            }
-            .setup-steps {
-                background: #f8f9fa;
-                padding: 1.5rem;
-                border-radius: 10px;
-                margin: 1.5rem 0;
-                text-align: left;
-            }
-            .setup-steps ol {
-                margin: 0;
-                padding-left: 1.5rem;
-            }
-            .setup-steps li {
-                margin: 0.75rem 0;
-                color: #333;
-            }
-            .btn-setup {
-                display: inline-block;
-                padding: 1rem 2rem;
-                background: linear-gradient(135deg, #3a7675 0%, #4ca8a6 100%);
-                color: white;
-                text-decoration: none;
-                border-radius: 10px;
-                font-weight: 600;
-                transition: all 0.3s ease;
-                margin: 0.5rem;
-                box-shadow: 0 4px 15px rgba(58,118,117,0.3);
-            }
-            .btn-setup:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 6px 20px rgba(58,118,117,0.4);
-            }
-            .btn-secondary {
-                background: #6c757d;
-                box-shadow: 0 4px 15px rgba(108,117,125,0.3);
-            }
-            .btn-secondary:hover {
-                background: #5a6268;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="setup-container">
-            <div class="setup-icon">
-                <i class="fas fa-database"></i>
-            </div>
-            <h1 class="setup-title">Database Setup Required</h1>
-            <p class="setup-message">
-                The <strong>admin_user</strong> table needs to be created before you can create admin accounts. 
-                This table separates admin accounts from regular user accounts for better security.
-            </p>
-            
-            <div class="setup-steps">
-                <strong>Quick Setup:</strong>
-                <ol>
-                    <li>Click the button below to run the database setup script</li>
-                    <li>The script will create the admin_user table</li>
-                    <li>Existing admin accounts will be migrated automatically</li>
-                    <li>First admin will be set as super_admin</li>
-                    <li>You can then create new admin accounts</li>
-                </ol>
-            </div>
-            
-            <div style="margin-top: 2rem;">
-                <a href="api/setup_admin_user_database.php" class="btn-setup" target="_blank">
-                    <i class="fas fa-cog"></i> Run Database Setup
-                </a>
-                <a href="login.php" class="btn-setup btn-secondary">
-                    <i class="fas fa-arrow-left"></i> Back to Login
-                </a>
-            </div>
-            
-            <p style="margin-top: 2rem; font-size: 0.875rem; color: #888;">
-                <i class="fas fa-info-circle"></i> 
-                After running the setup, refresh this page to continue.
-            </p>
-        </div>
-    </body>
-    </html>');
-}
-
-// Ensure admin_user table exists (double check)
-ensureAdminUserTable($pdo);
-
-// Check authorization - only super_admin can create accounts
-$authCheck = checkAdminAuthorization($pdo);
-$isAuthorized = $authCheck['authorized'];
-$authReason = $authCheck['reason'] ?? '';
-
-// If not authorized, show error page
-if (!$isAuthorized && $authReason !== 'initial_setup') {
-    $errorMessages = [
-        'not_logged_in' => 'You must be logged in as a super administrator to create admin accounts.',
-        'invalid_session' => 'Invalid session. Please log in again.',
-        'not_admin' => 'Access denied. Super administrator privileges required.',
-        'not_super_admin' => 'Access denied. Only super administrators can create admin accounts.',
-        'database_error' => 'Database error occurred. Please contact system administrator.'
+    $dsn = "mysql:host=$dbHost;dbname=$dbName;charset=utf8mb4";
+    $options = [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false,
     ];
-    
-    $errorMessage = $errorMessages[$authReason] ?? 'Unauthorized access.';
-    
-    die('
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Access Denied - Create Admin Account</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-        <style>
-            body {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                min-height: 100vh;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                padding: 1rem;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            }
-            .error-container {
-                background: white;
-                border-radius: 16px;
-                padding: 3rem 2.5rem;
-                max-width: 500px;
-                width: 100%;
-                text-align: center;
-                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            }
-            .error-icon {
-                width: 80px;
-                height: 80px;
-                margin: 0 auto 1.5rem;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background: #fee;
-                border-radius: 50%;
-                color: #dc3545;
-                font-size: 2.5rem;
-            }
-            .error-title {
-                font-size: 1.75rem;
-                font-weight: 700;
-                color: #222;
-                margin-bottom: 1rem;
-            }
-            .error-message {
-                color: #666;
-                margin-bottom: 2rem;
-                line-height: 1.6;
-            }
-            .btn-back {
-                display: inline-block;
-                padding: 0.875rem 2rem;
-                background: #3a7675;
-                color: white;
-                text-decoration: none;
-                border-radius: 8px;
-                font-weight: 600;
-                transition: all 0.3s ease;
-            }
-            .btn-back:hover {
-                background: #4ca8a6;
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(58,118,117,0.3);
-            }
-        </style>
-    </head>
-    <body>
-        <div class="error-container">
-            <div class="error-icon">
-                <i class="fas fa-shield-alt"></i>
-            </div>
-            <h1 class="error-title">Access Denied</h1>
-            <p class="error-message">' . htmlspecialchars($errorMessage) . '</p>
-            <a href="login.php" class="btn-back">
-                <i class="fas fa-arrow-left"></i> Back to Login
-            </a>
-        </div>
-    </body>
-    </html>');
+    $pdo = new PDO($dsn, $dbUser, $dbPass, $options);
+} catch (PDOException $e) {
+    $dbError = $e->getMessage();
+}
+
+// Create admin_user table if it doesn't exist
+if ($pdo) {
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS admin_user (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            username VARCHAR(100) DEFAULT NULL,
+            email VARCHAR(255) NOT NULL UNIQUE,
+            password VARCHAR(255) NOT NULL,
+            role VARCHAR(20) DEFAULT 'admin',
+            status VARCHAR(20) DEFAULT 'active',
+            phone VARCHAR(20) DEFAULT NULL,
+            created_by INT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            last_login DATETIME DEFAULT NULL,
+            INDEX idx_email (email),
+            INDEX idx_username (username),
+            INDEX idx_role (role),
+            INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } catch (PDOException $e) {
+        // Table might already exist, ignore
+    }
 }
 
 // Generate CSRF token
-$csrfToken = generateCSRFToken();
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
+
+// Check if user is authorized (logged in as super admin)
+$isAuthorized = false;
+$currentUserEmail = null;
+
+if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
+    // Check if logged in user is the super admin
+    if (isset($_SESSION['admin_email'])) {
+        $currentUserEmail = $_SESSION['admin_email'];
+        if (strtolower($currentUserEmail) === strtolower(SUPER_ADMIN_EMAIL)) {
+            $isAuthorized = true;
+        }
+    }
+    
+    // Also check by admin_user_id if email not in session
+    if (!$isAuthorized && isset($_SESSION['admin_user_id']) && $pdo) {
+        try {
+            $stmt = $pdo->prepare("SELECT email FROM admin_user WHERE id = ?");
+            $stmt->execute([$_SESSION['admin_user_id']]);
+            $admin = $stmt->fetch();
+            if ($admin && strtolower($admin['email']) === strtolower(SUPER_ADMIN_EMAIL)) {
+                $isAuthorized = true;
+                $currentUserEmail = $admin['email'];
+            }
+        } catch (PDOException $e) {
+            // Ignore
+        }
+    }
+}
+
+// Check if this is initial setup (no admins exist yet)
+$isInitialSetup = false;
+if ($pdo) {
+    try {
+        $stmt = $pdo->query("SELECT COUNT(*) as count FROM admin_user");
+        $result = $stmt->fetch();
+        if ((int)$result['count'] === 0) {
+            $isInitialSetup = true;
+            $isAuthorized = true; // Allow first admin creation
+        }
+    } catch (PDOException $e) {
+        $isInitialSetup = true;
+        $isAuthorized = true;
+    }
+}
+
+// Handle form submission
+$message = '';
+$messageType = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Verify CSRF
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        $message = 'Invalid security token. Please refresh and try again.';
+        $messageType = 'error';
+    } elseif (!$isAuthorized) {
+        $message = 'Access denied. Only ' . SUPER_ADMIN_EMAIL . ' can create admin accounts.';
+        $messageType = 'error';
+    } elseif ($pdo === null) {
+        $message = 'Database connection failed.';
+        $messageType = 'error';
+    } else {
+        $name = trim($_POST['name'] ?? '');
+        $username = trim($_POST['username'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $phone = trim($_POST['phone'] ?? '');
+        $password = $_POST['password'] ?? '';
+        $confirmPassword = $_POST['confirm_password'] ?? '';
+        $role = $_POST['role'] ?? 'admin';
+        
+        // Validation
+        $errors = [];
+        
+        if (strlen($name) < 2) {
+            $errors[] = 'Name must be at least 2 characters.';
+        }
+        
+        if (strlen($username) < 3) {
+            $errors[] = 'Username must be at least 3 characters.';
+        } elseif (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
+            $errors[] = 'Username can only contain letters, numbers, and underscores.';
+        }
+        
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'Please enter a valid email address.';
+        }
+        
+        if (strlen($password) < 8) {
+            $errors[] = 'Password must be at least 8 characters.';
+        }
+        
+        if ($password !== $confirmPassword) {
+            $errors[] = 'Passwords do not match.';
+        }
+        
+        if (!in_array($role, ['super_admin', 'admin', 'staff'])) {
+            $errors[] = 'Invalid role selected.';
+        }
+        
+        // Check if email already exists
+        if (empty($errors)) {
+            try {
+                $stmt = $pdo->prepare("SELECT id FROM admin_user WHERE email = ?");
+                $stmt->execute([$email]);
+                if ($stmt->fetch()) {
+                    $errors[] = 'An account with this email already exists.';
+                }
+            } catch (PDOException $e) {
+                $errors[] = 'Database error checking email.';
+            }
+        }
+        
+        // Check if username already exists
+        if (empty($errors) && !empty($username)) {
+            try {
+                $stmt = $pdo->prepare("SELECT id FROM admin_user WHERE username = ?");
+                $stmt->execute([$username]);
+                if ($stmt->fetch()) {
+                    $errors[] = 'This username is already taken.';
+                }
+            } catch (PDOException $e) {
+                $errors[] = 'Database error checking username.';
+            }
+        }
+        
+        if (!empty($errors)) {
+            $message = implode('<br>', $errors);
+            $messageType = 'error';
+        } else {
+            // Create the account
+            try {
+                $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+                
+                // If this is initial setup and email matches super admin, make them super_admin
+                if ($isInitialSetup && strtolower($email) === strtolower(SUPER_ADMIN_EMAIL)) {
+                    $role = 'super_admin';
+                }
+                
+                $stmt = $pdo->prepare("INSERT INTO admin_user (name, username, email, password, role, status, phone, created_at) VALUES (?, ?, ?, ?, ?, 'active', ?, NOW())");
+                $stmt->execute([$name, $username ?: null, $email, $hashedPassword, $role, $phone ?: null]);
+                
+                $message = 'Admin account created successfully!';
+                $messageType = 'success';
+                
+                // Clear form
+                $_POST = [];
+                
+            } catch (PDOException $e) {
+                $message = 'Failed to create account: ' . $e->getMessage();
+                $messageType = 'error';
+            }
+        }
+    }
+    
+    // Regenerate CSRF token after form submission
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    $csrfToken = $_SESSION['csrf_token'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -389,536 +245,383 @@ $csrfToken = generateCSRFToken();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create Admin Account - Emergency Communication System</title>
-    <link rel="stylesheet" href="header/css/forms.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         * {
             box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
         body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 1rem;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            margin: 0;
-        }
-        .form-container {
-            width: 100%;
-            max-width: 550px;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            padding: 3rem 2.5rem;
-            animation: fadeInUp 0.5s ease;
-        }
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .form-header {
-            text-align: center;
-            margin-bottom: 2.5rem;
-        }
-        .form-logo {
-            width: 90px;
-            height: 90px;
-            margin: 0 auto 1.5rem;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #3a7675 0%, #4ca8a6 100%);
-            border-radius: 20px;
-            box-shadow: 0 8px 20px rgba(58,118,117,0.3);
+            padding: 2rem 1rem;
         }
-        .form-logo i {
-            font-size: 2.5rem;
+        .container {
+            width: 100%;
+            max-width: 480px;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #e94560 0%, #ff6b6b 100%);
+            padding: 2rem;
+            text-align: center;
             color: white;
         }
-        .form-title {
-            font-size: 2rem;
+        .card-header .icon {
+            width: 70px;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            font-size: 1.75rem;
+        }
+        .card-header h1 {
+            font-size: 1.5rem;
             font-weight: 700;
-            color: #222;
             margin-bottom: 0.5rem;
         }
-        .form-subtitle {
-            font-size: 0.95rem;
-            color: #666;
-            line-height: 1.6;
+        .card-header p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        .card-body {
+            padding: 2rem;
         }
         .alert {
-            padding: 1rem 1.25rem;
+            padding: 1rem;
             border-radius: 10px;
             margin-bottom: 1.5rem;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 0.75rem;
-            font-size: 14px;
-            animation: slideDown 0.3s ease;
-        }
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .alert-error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+            font-size: 0.9rem;
+            line-height: 1.5;
         }
         .alert i {
-            font-size: 1.25rem;
+            margin-top: 2px;
+        }
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #dc2626;
+        }
+        .alert-success {
+            background: #dcfce7;
+            color: #166534;
+            border-left: 4px solid #22c55e;
+        }
+        .alert-warning {
+            background: #fef3c7;
+            color: #92400e;
+            border-left: 4px solid #f59e0b;
+        }
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
         }
         .form-group {
-            margin-bottom: 1.5rem;
-            position: relative;
+            margin-bottom: 1.25rem;
         }
         .form-label {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.75rem;
+            display: block;
             font-weight: 600;
-            color: #222;
-            font-size: 14px;
-        }
-        .form-label i {
-            color: #3a7675;
-            font-size: 16px;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
         }
         .form-label .required {
-            color: #dc3545;
-            margin-left: 2px;
+            color: #dc2626;
         }
         .form-control {
             width: 100%;
-            padding: 0.875rem 1rem;
-            padding-left: 2.75rem;
-            border: 2px solid #e0e0e0;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e5e7eb;
             border-radius: 10px;
-            font-size: 14px;
-            font-family: inherit;
-            background-color: #f8f9fa;
-            color: #222;
-            transition: all 0.3s ease;
-            outline: none;
+            font-size: 1rem;
+            transition: all 0.2s;
+            background: #f9fafb;
         }
         .form-control:focus {
-            border-color: #3a7675;
-            background-color: white;
-            box-shadow: 0 0 0 4px rgba(58,118,117,0.1);
+            outline: none;
+            border-color: #e94560;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
         }
-        .form-control.error {
-            border-color: #dc3545;
+        select.form-control {
+            cursor: pointer;
         }
-        .form-control.success {
-            border-color: #28a745;
-        }
-        .input-icon {
-            position: absolute;
-            left: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #888;
-            font-size: 16px;
-            pointer-events: none;
-            transition: color 0.3s ease;
-        }
-        .form-control:focus ~ .input-icon,
-        .form-group:has(.form-control:focus) .input-icon {
-            color: #3a7675;
-        }
-        .password-strength {
-            margin-top: 0.5rem;
-            font-size: 12px;
-        }
-        .password-strength-bar {
-            height: 4px;
-            background: #e0e0e0;
-            border-radius: 2px;
-            margin-top: 0.5rem;
-            overflow: hidden;
-        }
-        .password-strength-fill {
-            height: 100%;
-            width: 0%;
-            transition: all 0.3s ease;
-            border-radius: 2px;
-        }
-        .password-strength-fill.weak { background: #dc3545; width: 33%; }
-        .password-strength-fill.medium { background: #ffc107; width: 66%; }
-        .password-strength-fill.strong { background: #28a745; width: 100%; }
-        .form-text {
-            display: block;
-            margin-top: 0.5rem;
-            font-size: 12px;
-            color: #666;
-        }
-        .form-text.error {
-            color: #dc3545;
-        }
-        .form-text.success {
-            color: #28a745;
-        }
-        .btn-submit {
+        .btn {
             width: 100%;
-            padding: 1rem 1.5rem;
-            background: linear-gradient(135deg, #3a7675 0%, #4ca8a6 100%);
-            color: white;
+            padding: 1rem;
             border: none;
             border-radius: 10px;
-            font-size: 15px;
+            font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
-            margin-top: 1.5rem;
-            box-shadow: 0 4px 15px rgba(58,118,117,0.3);
         }
-        .btn-submit:hover:not(:disabled) {
+        .btn-primary {
+            background: linear-gradient(135deg, #e94560 0%, #ff6b6b 100%);
+            color: white;
+        }
+        .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(58,118,117,0.4);
+            box-shadow: 0 10px 20px rgba(233, 69, 96, 0.3);
         }
-        .btn-submit:active:not(:disabled) {
-            transform: translateY(0);
-        }
-        .btn-submit:disabled {
+        .btn-primary:disabled {
             opacity: 0.6;
             cursor: not-allowed;
             transform: none;
         }
-        .btn-submit i {
-            font-size: 16px;
-        }
         .form-footer {
-            margin-top: 1.5rem;
             text-align: center;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e5e7eb;
         }
         .form-footer a {
-            color: #3a7675;
+            color: #e94560;
             text-decoration: none;
             font-weight: 500;
-            transition: color 0.3s ease;
         }
         .form-footer a:hover {
-            color: #4ca8a6;
             text-decoration: underline;
         }
-        .loading-spinner {
-            display: none;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-top-color: white;
+        .security-badge {
+            background: #fef3c7;
+            border: 1px solid #fcd34d;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.85rem;
+            color: #92400e;
+        }
+        .security-badge i {
+            margin-right: 0.5rem;
+        }
+        .db-error {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        .db-error i {
+            font-size: 2rem;
+            color: #dc2626;
+            margin-bottom: 1rem;
+        }
+        .db-error h3 {
+            color: #991b1b;
+            margin-bottom: 0.5rem;
+        }
+        .db-error p {
+            color: #7f1d1d;
+            font-size: 0.9rem;
+        }
+        .access-denied {
+            text-align: center;
+            padding: 2rem;
+        }
+        .access-denied .icon {
+            width: 80px;
+            height: 80px;
+            background: #fee2e2;
             border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            font-size: 2rem;
+            color: #dc2626;
         }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        .access-denied h2 {
+            color: #991b1b;
+            margin-bottom: 1rem;
         }
-        .btn-submit.loading .loading-spinner {
-            display: inline-block;
+        .access-denied p {
+            color: #666;
+            margin-bottom: 1.5rem;
         }
-        .btn-submit.loading .btn-text {
-            display: none;
-        }
-        @media (max-width: 480px) {
-            .form-container {
-                padding: 2rem 1.5rem;
-            }
-            .form-title {
-                font-size: 1.5rem;
-            }
-            .form-logo {
-                width: 70px;
-                height: 70px;
-            }
-            .form-logo i {
-                font-size: 2rem;
-            }
+        .password-hint {
+            font-size: 0.8rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
         }
     </style>
 </head>
 <body>
-    <div class="form-container">
-        <div class="form-header">
-            <div class="form-logo">
-                <i class="fas fa-user-shield"></i>
-            </div>
-            <h1 class="form-title">Create Admin Account</h1>
-            <p class="form-subtitle">Emergency Communication System<br>Administrative Panel</p>
-        </div>
-
-        <div id="alertContainer"></div>
-
-        <form id="createAdminForm" autocomplete="off">
-            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-            
-            <div class="form-group">
-                <label for="name" class="form-label">
-                    <i class="fas fa-user"></i> Full Name <span class="required">*</span>
-                </label>
-                <input type="text" name="name" id="name" class="form-control" required 
-                       placeholder="Enter full name" minlength="2">
-                <i class="fas fa-user input-icon"></i>
-                <span class="form-text" id="nameError"></span>
-            </div>
-
-            <div class="form-group">
-                <label for="username" class="form-label">
-                    <i class="fas fa-user-tag"></i> Username <span class="required">*</span>
-                </label>
-                <input type="text" name="username" id="username" class="form-control" required 
-                       placeholder="Enter username" minlength="3" pattern="[a-zA-Z0-9_]+">
-                <i class="fas fa-user-tag input-icon"></i>
-                <span class="form-text" id="usernameError"></span>
-                <small class="form-text">Only letters, numbers, and underscores allowed</small>
-            </div>
-
-            <div class="form-group">
-                <label for="email" class="form-label">
-                    <i class="fas fa-envelope"></i> Email Address <span class="required">*</span>
-                </label>
-                <input type="email" name="email" id="email" class="form-control" required 
-                       placeholder="admin@example.com">
-                <i class="fas fa-envelope input-icon"></i>
-                <span class="form-text" id="emailError"></span>
-            </div>
-
-            <div class="form-group">
-                <label for="phone" class="form-label">
-                    <i class="fas fa-phone"></i> Phone Number
-                </label>
-                <input type="tel" name="phone" id="phone" class="form-control" 
-                       placeholder="+63XXXXXXXXXX">
-                <i class="fas fa-phone input-icon"></i>
-                <span class="form-text" id="phoneError"></span>
-            </div>
-
-            <div class="form-group">
-                <label for="password" class="form-label">
-                    <i class="fas fa-lock"></i> Password <span class="required">*</span>
-                </label>
-                <input type="password" name="password" id="password" class="form-control" required 
-                       placeholder="Enter password" minlength="8">
-                <i class="fas fa-lock input-icon"></i>
-                <div class="password-strength">
-                    <div class="password-strength-bar">
-                        <div class="password-strength-fill" id="passwordStrength"></div>
-                    </div>
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <div class="icon">
+                    <i class="fas fa-user-shield"></i>
                 </div>
-                <span class="form-text" id="passwordError"></span>
-                <small class="form-text">Must be at least 8 characters with uppercase, lowercase, number, and special character</small>
+                <h1>Create Admin Account</h1>
+                <p>Emergency Communication System</p>
             </div>
-
-            <div class="form-group">
-                <label for="confirm_password" class="form-label">
-                    <i class="fas fa-lock"></i> Confirm Password <span class="required">*</span>
-                </label>
-                <input type="password" name="confirm_password" id="confirm_password" class="form-control" required 
-                       placeholder="Confirm password" minlength="8">
-                <i class="fas fa-lock input-icon"></i>
-                <span class="form-text" id="confirmPasswordError"></span>
+            
+            <div class="card-body">
+                <?php if ($pdo === null): ?>
+                    <!-- Database Error -->
+                    <div class="db-error">
+                        <i class="fas fa-database"></i>
+                        <h3>Database Connection Failed</h3>
+                        <p><?= htmlspecialchars($dbError ?? 'Unknown error') ?></p>
+                        <br>
+                        <a href="api/setup_remote_database.php" class="btn btn-primary" style="width: auto; display: inline-flex;">
+                            <i class="fas fa-cog"></i> Run Database Setup
+                        </a>
+                    </div>
+                    
+                <?php elseif (!$isAuthorized && !$isInitialSetup): ?>
+                    <!-- Access Denied -->
+                    <div class="access-denied">
+                        <div class="icon">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <h2>Access Denied</h2>
+                        <p>Only the super administrator can create admin accounts.</p>
+                        <p><strong>Authorized email:</strong><br><?= htmlspecialchars(SUPER_ADMIN_EMAIL) ?></p>
+                        <?php if ($currentUserEmail): ?>
+                            <p style="color: #dc2626; font-size: 0.9rem;">
+                                <i class="fas fa-info-circle"></i> You are logged in as: <?= htmlspecialchars($currentUserEmail) ?>
+                            </p>
+                        <?php endif; ?>
+                        <a href="login.php" class="btn btn-primary" style="margin-top: 1rem;">
+                            <i class="fas fa-sign-in-alt"></i> Login as Super Admin
+                        </a>
+                    </div>
+                    
+                <?php else: ?>
+                    <!-- Show Form -->
+                    
+                    <?php if ($isInitialSetup): ?>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <div>
+                                <strong>Initial Setup</strong><br>
+                                No admin accounts exist yet. Create the first admin account to get started.
+                                <?php if (strtolower($_POST['email'] ?? '') !== strtolower(SUPER_ADMIN_EMAIL)): ?>
+                                    <br><br><strong>Tip:</strong> Use <code><?= htmlspecialchars(SUPER_ADMIN_EMAIL) ?></code> as the email to become the super admin.
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="security-badge">
+                            <i class="fas fa-shield-alt"></i>
+                            <strong>Secure Mode:</strong> Only <?= htmlspecialchars(SUPER_ADMIN_EMAIL) ?> can create accounts.
+                        </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($message): ?>
+                        <div class="alert alert-<?= $messageType ?>">
+                            <i class="fas <?= $messageType === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle' ?>"></i>
+                            <div><?= $message ?></div>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <form method="POST" action="">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                Full Name <span class="required">*</span>
+                            </label>
+                            <input type="text" name="name" class="form-control" required 
+                                   value="<?= htmlspecialchars($_POST['name'] ?? '') ?>"
+                                   placeholder="Enter full name">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                Username <span class="required">*</span>
+                            </label>
+                            <input type="text" name="username" class="form-control" required 
+                                   value="<?= htmlspecialchars($_POST['username'] ?? '') ?>"
+                                   placeholder="Enter username" pattern="[a-zA-Z0-9_]+">
+                            <div class="password-hint">Only letters, numbers, and underscores</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                Email Address <span class="required">*</span>
+                            </label>
+                            <input type="email" name="email" class="form-control" required 
+                                   value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
+                                   placeholder="admin@example.com">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Phone Number</label>
+                            <input type="tel" name="phone" class="form-control" 
+                                   value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>"
+                                   placeholder="+63XXXXXXXXXX">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                Password <span class="required">*</span>
+                            </label>
+                            <input type="password" name="password" class="form-control" required 
+                                   placeholder="Enter password" minlength="8">
+                            <div class="password-hint">Minimum 8 characters</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                Confirm Password <span class="required">*</span>
+                            </label>
+                            <input type="password" name="confirm_password" class="form-control" required 
+                                   placeholder="Confirm password" minlength="8">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                Role <span class="required">*</span>
+                            </label>
+                            <select name="role" class="form-control" required>
+                                <option value="admin" <?= ($_POST['role'] ?? '') === 'admin' ? 'selected' : '' ?>>Administrator</option>
+                                <option value="staff" <?= ($_POST['role'] ?? '') === 'staff' ? 'selected' : '' ?>>Staff</option>
+                                <?php if ($isInitialSetup): ?>
+                                    <option value="super_admin" <?= ($_POST['role'] ?? '') === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
+                                <?php endif; ?>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-user-plus"></i> Create Admin Account
+                        </button>
+                    </form>
+                    
+                    <div class="form-footer">
+                        <a href="login.php"><i class="fas fa-arrow-left"></i> Back to Login</a>
+                        <?php if (!$isInitialSetup): ?>
+                            &nbsp;|&nbsp;
+                            <a href="sidebar/dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
             </div>
-
-            <div class="form-group">
-                <label for="role" class="form-label">
-                    <i class="fas fa-user-cog"></i> Role <span class="required">*</span>
-                </label>
-                <select name="role" id="role" class="form-control" required>
-                    <option value="">Select role</option>
-                    <option value="admin">Administrator</option>
-                    <option value="staff">Staff</option>
-                </select>
-                <i class="fas fa-user-cog input-icon"></i>
-                <span class="form-text" id="roleError"></span>
-            </div>
-
-            <button type="submit" class="btn-submit" id="submitBtn">
-                <span class="btn-text">
-                    <i class="fas fa-user-plus"></i> Create Admin Account
-                </span>
-                <div class="loading-spinner"></div>
-            </button>
-        </form>
-
-        <div class="form-footer">
-            <a href="sidebar/dashboard.php">
-                <i class="fas fa-arrow-left"></i> Back to Dashboard
-            </a>
         </div>
     </div>
-
-    <script>
-        // Password strength checker
-        const passwordInput = document.getElementById('password');
-        const passwordStrength = document.getElementById('passwordStrength');
-        
-        passwordInput.addEventListener('input', function() {
-            const password = this.value;
-            let strength = 0;
-            
-            if (password.length >= 8) strength++;
-            if (/[a-z]/.test(password)) strength++;
-            if (/[A-Z]/.test(password)) strength++;
-            if (/[0-9]/.test(password)) strength++;
-            if (/[^A-Za-z0-9]/.test(password)) strength++;
-            
-            passwordStrength.className = 'password-strength-fill';
-            if (strength <= 2) {
-                passwordStrength.classList.add('weak');
-            } else if (strength <= 4) {
-                passwordStrength.classList.add('medium');
-            } else {
-                passwordStrength.classList.add('strong');
-            }
-        });
-
-        // Form validation and submission
-        const form = document.getElementById('createAdminForm');
-        const submitBtn = document.getElementById('submitBtn');
-        const alertContainer = document.getElementById('alertContainer');
-
-        function showAlert(message, type = 'error') {
-            alertContainer.innerHTML = `
-                <div class="alert alert-${type}">
-                    <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
-                    <span>${message}</span>
-                </div>
-            `;
-            alertContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-
-        function clearErrors() {
-            document.querySelectorAll('.form-text.error').forEach(el => {
-                el.textContent = '';
-                el.className = 'form-text';
-            });
-            document.querySelectorAll('.form-control.error').forEach(el => {
-                el.classList.remove('error');
-            });
-        }
-
-        function showError(fieldId, message) {
-            const field = document.getElementById(fieldId);
-            const errorEl = document.getElementById(fieldId + 'Error');
-            field.classList.add('error');
-            if (errorEl) {
-                errorEl.textContent = message;
-                errorEl.className = 'form-text error';
-            }
-        }
-
-        function validateForm() {
-            clearErrors();
-            let isValid = true;
-
-            const name = document.getElementById('name').value.trim();
-            if (name.length < 2) {
-                showError('name', 'Name must be at least 2 characters');
-                isValid = false;
-            }
-
-            const username = document.getElementById('username').value.trim();
-            if (username.length < 3) {
-                showError('username', 'Username must be at least 3 characters');
-                isValid = false;
-            } else if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-                showError('username', 'Username can only contain letters, numbers, and underscores');
-                isValid = false;
-            }
-
-            const email = document.getElementById('email').value.trim();
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                showError('email', 'Please enter a valid email address');
-                isValid = false;
-            }
-
-            const password = document.getElementById('password').value;
-            if (password.length < 8) {
-                showError('password', 'Password must be at least 8 characters');
-                isValid = false;
-            } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9])/.test(password)) {
-                showError('password', 'Password must contain uppercase, lowercase, number, and special character');
-                isValid = false;
-            }
-
-            const confirmPassword = document.getElementById('confirm_password').value;
-            if (password !== confirmPassword) {
-                showError('confirm_password', 'Passwords do not match');
-                isValid = false;
-            }
-
-            const role = document.getElementById('role').value;
-            if (!role) {
-                showError('role', 'Please select a role');
-                isValid = false;
-            }
-
-            return isValid;
-        }
-
-        form.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            if (!validateForm()) {
-                showAlert('Please fix the errors in the form', 'error');
-                return;
-            }
-
-            submitBtn.disabled = true;
-            submitBtn.classList.add('loading');
-            clearErrors();
-
-            const formData = new FormData(form);
-            const data = Object.fromEntries(formData);
-
-            try {
-                const response = await fetch('api/create-admin-account.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    showAlert(result.message, 'success');
-                    form.reset();
-                    passwordStrength.className = 'password-strength-fill';
-                    
-                    // Redirect after 2 seconds
-                    setTimeout(() => {
-                        window.location.href = 'sidebar/dashboard.php';
-                    }, 2000);
-                } else {
-                    showAlert(result.message || 'Failed to create admin account', 'error');
-                }
-            } catch (error) {
-                showAlert('Network error. Please check your connection and try again.', 'error');
-                console.error('Error:', error);
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.classList.remove('loading');
-            }
-        });
-
-        // Real-time validation
-        ['name', 'username', 'email', 'password', 'confirm_password'].forEach(fieldId => {
-            const field = document.getElementById(fieldId);
-            field.addEventListener('blur', validateForm);
-        });
-    </script>
 </body>
 </html>
