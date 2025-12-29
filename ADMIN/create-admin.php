@@ -17,6 +17,27 @@ session_start();
 // ============================================
 define('SUPER_ADMIN_EMAIL', 'joecelgarcia1@gmail.com');
 
+// Function to mask email for display (e.g., joe***@gmail.com)
+function maskEmail($email) {
+    $parts = explode('@', $email);
+    if (count($parts) !== 2) return '***@***.***';
+    
+    $name = $parts[0];
+    $domain = $parts[1];
+    
+    // Show first 3 characters of name, mask the rest
+    $visibleChars = min(3, strlen($name));
+    $maskedName = substr($name, 0, $visibleChars) . str_repeat('*', max(0, strlen($name) - $visibleChars));
+    
+    // Mask domain partially
+    $domainParts = explode('.', $domain);
+    $maskedDomain = substr($domainParts[0], 0, 2) . '***.' . end($domainParts);
+    
+    return $maskedName . '@' . $maskedDomain;
+}
+
+define('SUPER_ADMIN_EMAIL_MASKED', maskEmail(SUPER_ADMIN_EMAIL));
+
 // Auto-detect environment
 $isProduction = isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'alertaraqc.com') !== false;
 
@@ -136,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = 'Invalid security token. Please refresh and try again.';
         $messageType = 'error';
     } elseif (!$isAuthorized) {
-        $message = 'Access denied. Only ' . SUPER_ADMIN_EMAIL . ' can create admin accounts.';
+        $message = 'Access denied. Only the authorized super admin can create admin accounts.';
         $messageType = 'error';
     } elseif ($pdo === null) {
         $message = 'Database connection failed.';
@@ -500,7 +521,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <h2>Access Denied</h2>
                         <p>Only the super administrator can create admin accounts.</p>
-                        <p><strong>Authorized email:</strong><br><?= htmlspecialchars(SUPER_ADMIN_EMAIL) ?></p>
+                        <p><strong>Authorized email:</strong><br><?= htmlspecialchars(SUPER_ADMIN_EMAIL_MASKED) ?></p>
                         <?php if ($currentUserEmail): ?>
                             <p style="color: #dc2626; font-size: 0.9rem;">
                                 <i class="fas fa-info-circle"></i> You are logged in as: <?= htmlspecialchars($currentUserEmail) ?>
@@ -521,14 +542,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <strong>Initial Setup</strong><br>
                                 No admin accounts exist yet. Create the first admin account to get started.
                                 <?php if (strtolower($_POST['email'] ?? '') !== strtolower(SUPER_ADMIN_EMAIL)): ?>
-                                    <br><br><strong>Tip:</strong> Use <code><?= htmlspecialchars(SUPER_ADMIN_EMAIL) ?></code> as the email to become the super admin.
+                                    <br><br><strong>Tip:</strong> Use the authorized super admin email to become the super admin.
                                 <?php endif; ?>
                             </div>
                         </div>
                     <?php else: ?>
                         <div class="security-badge">
                             <i class="fas fa-shield-alt"></i>
-                            <strong>Secure Mode:</strong> Only <?= htmlspecialchars(SUPER_ADMIN_EMAIL) ?> can create accounts.
+                            <strong>Secure Mode:</strong> Only authorized super admin can create accounts.
                         </div>
                     <?php endif; ?>
                     
