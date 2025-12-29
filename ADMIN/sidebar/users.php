@@ -308,12 +308,13 @@ $pageTitle = 'User Management';
             z-index: 10000;
             align-items: center;
             justify-content: center;
+            pointer-events: none;
         }
-        
+
         .modal-overlay.show {
             display: flex;
         }
-        
+
         .modal-content {
             background: var(--card-bg-1);
             border-radius: 16px;
@@ -322,6 +323,8 @@ $pageTitle = 'User Management';
             max-height: 90vh;
             overflow-y: auto;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            z-index: 10001;
+            pointer-events: auto;
         }
         
         .modal-header {
@@ -507,18 +510,40 @@ $pageTitle = 'User Management';
                 flex-direction: column;
                 align-items: stretch;
             }
-            
+
             .search-box {
                 max-width: none;
             }
-            
+
             .filter-buttons {
                 flex-wrap: wrap;
             }
-            
+
             .users-table {
                 display: block;
                 overflow-x: auto;
+            }
+
+            .modal-content {
+                width: 95%;
+                max-width: none;
+                margin: 1rem;
+                max-height: 95vh;
+            }
+
+            .modal-header,
+            .modal-body,
+            .modal-footer {
+                padding: 1rem;
+            }
+
+            .modal-footer {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+
+            .modal-footer .btn {
+                width: 100%;
             }
         }
     </style>
@@ -970,10 +995,13 @@ $pageTitle = 'User Management';
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') closeModal();
         });
-        
-        // Close modal when clicking overlay
-        document.getElementById('userModal').addEventListener('click', function(e) {
-            if (e.target === this) closeModal();
+
+        // Close modal when clicking overlay (now handled differently due to pointer-events)
+        document.addEventListener('click', function(e) {
+            const modal = document.getElementById('userModal');
+            if (modal.classList.contains('show') && e.target === modal) {
+                closeModal();
+            }
         });
         <?php endif; ?>
     </script>
