@@ -154,6 +154,10 @@ $pageTitle = 'User Management';
             transition: all 0.2s ease;
             font-weight: 500;
             white-space: nowrap;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            user-select: none;
+            pointer-events: auto;
         }
         
         .filter-btn:hover {
@@ -174,6 +178,10 @@ $pageTitle = 'User Management';
             align-items: center;
             gap: 0.5rem;
             white-space: nowrap;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            user-select: none;
+            pointer-events: auto;
         }
         
         /* Users Table - Desktop View */
@@ -372,6 +380,10 @@ $pageTitle = 'User Management';
             justify-content: center;
             transition: all 0.2s ease;
             font-size: 1rem;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            user-select: none;
+            pointer-events: auto;
         }
         
         .action-btn.edit {
@@ -484,6 +496,9 @@ $pageTitle = 'User Management';
             position: relative;
             z-index: 10001;
             pointer-events: auto;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            user-select: none;
         }
 
         .modal-close:hover {
@@ -548,6 +563,7 @@ $pageTitle = 'User Management';
             position: sticky;
             bottom: 0;
             background: var(--card-bg-1);
+            z-index: 10002;
         }
 
         .btn {
@@ -565,10 +581,18 @@ $pageTitle = 'User Management';
             position: relative;
             z-index: 10001;
             pointer-events: auto;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            user-select: none;
         }
 
         .btn:active {
             transform: scale(0.98);
+        }
+        
+        .btn:focus {
+            outline: 2px solid var(--primary-color-1);
+            outline-offset: 2px;
         }
 
         .btn-primary {
@@ -845,7 +869,7 @@ $pageTitle = 'User Management';
                                 </div>
                             </div>
                             
-                            <button class="btn btn-primary btn-add" onclick="openCreateModal()">
+                            <button class="btn btn-primary btn-add" id="addUserBtn">
                                 <i class="fas fa-plus"></i> Add User
                             </button>
                         </div>
@@ -892,7 +916,7 @@ $pageTitle = 'User Management';
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalTitle"><i class="fas fa-user-plus"></i> Create New User</h2>
-                <button type="button" class="modal-close" id="modalCloseBtn" onclick="closeModal(); return false;" aria-label="Close">&times;</button>
+                <button type="button" class="modal-close" id="modalCloseBtn" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="userForm">
@@ -934,8 +958,8 @@ $pageTitle = 'User Management';
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" id="cancelBtn" onclick="closeModal(); return false;">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveUser()">
+                <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveUserBtn">
                     <i class="fas fa-save"></i> Save User
                 </button>
             </div>
@@ -979,43 +1003,53 @@ $pageTitle = 'User Management';
             const modalContent = document.querySelector('#userModal .modal-content');
             if (modalContent) {
                 modalContent.addEventListener('click', function(e) {
-                    // Don't stop propagation for buttons
-                    const isButton = e.target.closest('button');
-                    if (!isButton) {
-                        e.stopPropagation();
+                    // Check if the click is on an interactive element
+                    const isInteractive = e.target.closest('button, a, input, select, textarea, [role="button"], .btn, .action-btn, .filter-btn, .modal-close');
+                    
+                    // Only stop propagation for non-interactive elements in the modal body
+                    // Never interfere with buttons in header or footer
+                    if (!isInteractive) {
+                        const clickedInBody = e.target.closest('.modal-body');
+                        if (clickedInBody) {
+                            e.stopPropagation();
+                        }
                     }
-                });
+                }, { passive: true });
             }
             
-            // Add direct event listeners to close and cancel buttons for reliability
+            // Add direct event listeners to all buttons for reliability
             const closeBtn = document.getElementById('modalCloseBtn');
             const cancelBtn = document.getElementById('cancelBtn');
+            const saveBtn = document.getElementById('saveUserBtn');
+            const addUserBtn = document.getElementById('addUserBtn');
             
-            if (closeBtn) {
-                closeBtn.addEventListener('click', function(e) {
+            // Helper function to add click and touch handlers
+            function addButtonHandlers(button, handler) {
+                if (!button) return;
+                
+                // Remove any existing onclick attributes
+                button.removeAttribute('onclick');
+                
+                // Add click handler
+                button.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (typeof closeModal === 'function') {
-                        closeModal();
-                    } else if (typeof window.closeModal === 'function') {
-                        window.closeModal();
-                    }
-                    return false;
+                    handler();
+                });
+                
+                // Add touch support for mobile
+                button.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handler();
                 });
             }
             
-            if (cancelBtn) {
-                cancelBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (typeof closeModal === 'function') {
-                        closeModal();
-                    } else if (typeof window.closeModal === 'function') {
-                        window.closeModal();
-                    }
-                    return false;
-                });
-            }
+            // Set up button handlers
+            addButtonHandlers(closeBtn, closeModal);
+            addButtonHandlers(cancelBtn, closeModal);
+            addButtonHandlers(saveBtn, saveUser);
+            addButtonHandlers(addUserBtn, openCreateModal);
         });
         
         function loadUsers() {
