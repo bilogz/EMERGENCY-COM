@@ -5,8 +5,22 @@
  */
 
 // Enable error reporting for debugging
-ini_set('display_errors', 0);
+ini_set('display_errors', 1);
+ini_set('log_errors', 1);
 error_reporting(E_ALL);
+
+// Set error handler to catch fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        header('Content-Type: application/json');
+        http_response_code(500);
+        echo json_encode([
+            "success" => false,
+            "message" => "Fatal error: " . $error['message'] . " in " . $error['file'] . " on line " . $error['line']
+        ]);
+    }
+});
 
 session_start();
 header('Content-Type: application/json');
