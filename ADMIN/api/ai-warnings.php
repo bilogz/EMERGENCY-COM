@@ -12,10 +12,31 @@
  */
 
 header('Content-Type: application/json; charset=utf-8');
-require_once 'db_connect.php';
-require_once 'secure-api-config.php';
-require_once 'alert-translation-helper.php';
-require_once 'activity_logger.php';
+
+// Error handler to ensure JSON is always returned
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Fatal error: ' . $error['message']]);
+        exit();
+    }
+});
+
+try {
+    require_once 'db_connect.php';
+    require_once 'secure-api-config.php';
+    require_once 'alert-translation-helper.php';
+    require_once 'activity_logger.php';
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Failed to load required files: ' . $e->getMessage()]);
+    exit();
+} catch (Error $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Fatal error loading files: ' . $e->getMessage()]);
+    exit();
+}
 
 session_start();
 
@@ -48,17 +69,45 @@ try {
     }
 } catch (Exception $e) {
     error_log("AI Warnings API Error: " . $e->getMessage());
+    error_log("AI Warnings API Stack Trace: " . $e->getTraceAsString());
+    http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    exit();
+} catch (Error $e) {
+    error_log("AI Warnings API Fatal Error: " . $e->getMessage());
+    error_log("AI Warnings API Stack Trace: " . $e->getTraceAsString());
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Fatal error: ' . $e->getMessage()]);
+    exit();
 }
 
 function getAISettings() {
     global $pdo;
     
-    // Check secure config first
-    $secureApiKey = getGeminiApiKey();
+    if ($pdo === null) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Database connection failed']);
+        exit();
+    }
     
-    $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
-    $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Check secure config first
+    $secureApiKey = null;
+    try {
+        $secureApiKey = getGeminiApiKey();
+    } catch (Exception $e) {
+        error_log("Error getting Gemini API key: " . $e->getMessage());
+    } catch (Error $e) {
+        error_log("Fatal error getting Gemini API key: " . $e->getMessage());
+    }
+    
+    try {
+        $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+        $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Database error in getAISettings: " . $e->getMessage());
+        // Table might not exist, return default settings
+        $settings = false;
+    }
     
     if (!$settings) {
         // Return default settings, but check if secure config has API key

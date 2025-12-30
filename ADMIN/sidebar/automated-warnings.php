@@ -689,7 +689,22 @@ $pageTitle = 'Automated Warning Integration';
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        try {
+                            const json = JSON.parse(text);
+                            throw new Error(json.message || `HTTP ${response.status}: ${response.statusText}`);
+                        } catch (e) {
+                            if (e instanceof Error && e.message.includes('HTTP')) {
+                                throw e;
+                            }
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     alert('AI Warning Settings saved successfully!');
@@ -712,26 +727,71 @@ $pageTitle = 'Automated Warning Integration';
         // Load AI Settings
         function loadAISettings() {
             fetch('../api/ai-warnings.php?action=getSettings')
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        // If response is not ok, try to get error message
+                        return response.text().then(text => {
+                            // Handle empty response
+                            if (!text || text.trim() === '') {
+                                throw new Error(`HTTP ${response.status}: ${response.statusText} - Empty response`);
+                            }
+                            try {
+                                const json = JSON.parse(text);
+                                throw new Error(json.message || `HTTP ${response.status}: ${response.statusText}`);
+                            } catch (e) {
+                                if (e instanceof Error && (e.message.includes('HTTP') || e.message.includes('Empty'))) {
+                                    throw e;
+                                }
+                                // If it's not JSON, return the text as error message
+                                throw new Error(`HTTP ${response.status}: ${response.statusText} - ${text.substring(0, 100)}`);
+                            }
+                        });
+                    }
+                    // Check if response has content before parsing
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        return response.text().then(text => {
+                            throw new Error(`Invalid response format. Expected JSON but got: ${contentType}`);
+                        });
+                    }
+                    return response.text().then(text => {
+                        if (!text || text.trim() === '') {
+                            throw new Error('Empty response from server');
+                        }
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+                        }
+                    });
+                })
                 .then(data => {
                     if (data.success && data.settings) {
                         const settings = data.settings;
                         // Only set API key if it's not masked (contains asterisks)
                         const apiKeyInput = document.getElementById('geminiApiKey');
-                        if (settings.gemini_api_key && !settings.gemini_api_key.includes('*')) {
-                            apiKeyInput.value = settings.gemini_api_key;
-                        } else if (settings.gemini_api_key) {
-                            // Keep masked value or empty
-                            apiKeyInput.value = settings.gemini_api_key;
-                        } else {
-                            apiKeyInput.value = '';
+                        if (apiKeyInput) {
+                            if (settings.gemini_api_key && !settings.gemini_api_key.includes('*')) {
+                                apiKeyInput.value = settings.gemini_api_key;
+                            } else if (settings.gemini_api_key) {
+                                // Keep masked value or empty
+                                apiKeyInput.value = settings.gemini_api_key;
+                            } else {
+                                apiKeyInput.value = '';
+                            }
                         }
-                        document.getElementById('aiEnabled').checked = settings.ai_enabled || false;
-                        document.getElementById('aiCheckInterval').value = settings.ai_check_interval || 30;
-                        document.getElementById('windThreshold').value = settings.wind_threshold || 60;
-                        document.getElementById('rainThreshold').value = settings.rain_threshold || 20;
-                        document.getElementById('earthquakeThreshold').value = settings.earthquake_threshold || 5.0;
-                        document.getElementById('monitoredAreas').value = settings.monitored_areas || '';
+                        const aiEnabled = document.getElementById('aiEnabled');
+                        if (aiEnabled) aiEnabled.checked = settings.ai_enabled || false;
+                        const aiCheckInterval = document.getElementById('aiCheckInterval');
+                        if (aiCheckInterval) aiCheckInterval.value = settings.ai_check_interval || 30;
+                        const windThreshold = document.getElementById('windThreshold');
+                        if (windThreshold) windThreshold.value = settings.wind_threshold || 60;
+                        const rainThreshold = document.getElementById('rainThreshold');
+                        if (rainThreshold) rainThreshold.value = settings.rain_threshold || 20;
+                        const earthquakeThreshold = document.getElementById('earthquakeThreshold');
+                        if (earthquakeThreshold) earthquakeThreshold.value = settings.earthquake_threshold || 5.0;
+                        const monitoredAreas = document.getElementById('monitoredAreas');
+                        if (monitoredAreas) monitoredAreas.value = settings.monitored_areas || '';
                         
                         // Set warning types
                         if (settings.warning_types) {
@@ -749,6 +809,11 @@ $pageTitle = 'Automated Warning Integration';
                             });
                         }
                     }
+                })
+                .catch(error => {
+                    console.error('Error loading AI settings:', error);
+                    // Don't show alert on page load, just log the error
+                    // The error is likely due to missing database table or API key, which is expected on first use
                 });
         }
 
@@ -764,7 +829,22 @@ $pageTitle = 'Automated Warning Integration';
                         action: 'test'
                     })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            try {
+                                const json = JSON.parse(text);
+                                throw new Error(json.message || `HTTP ${response.status}: ${response.statusText}`);
+                            } catch (e) {
+                                if (e instanceof Error && e.message.includes('HTTP')) {
+                                    throw e;
+                                }
+                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                            }
+                        });
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         alert('Test warning sent successfully! Check mass notifications.');
@@ -784,7 +864,42 @@ $pageTitle = 'Automated Warning Integration';
             btn.disabled = true;
             
             fetch('../api/ai-warnings.php?action=check')
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            // Handle empty response
+                            if (!text || text.trim() === '') {
+                                throw new Error(`HTTP ${response.status}: ${response.statusText} - Empty response`);
+                            }
+                            try {
+                                const json = JSON.parse(text);
+                                throw new Error(json.message || `HTTP ${response.status}: ${response.statusText}`);
+                            } catch (e) {
+                                if (e instanceof Error && (e.message.includes('HTTP') || e.message.includes('Empty'))) {
+                                    throw e;
+                                }
+                                throw new Error(`HTTP ${response.status}: ${response.statusText} - ${text.substring(0, 100)}`);
+                            }
+                        });
+                    }
+                    // Check if response has content before parsing
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        return response.text().then(text => {
+                            throw new Error(`Invalid response format. Expected JSON but got: ${contentType}`);
+                        });
+                    }
+                    return response.text().then(text => {
+                        if (!text || text.trim() === '') {
+                            throw new Error('Empty response from server');
+                        }
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+                        }
+                    });
+                })
                 .then(data => {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
@@ -817,4 +932,5 @@ $pageTitle = 'Automated Warning Integration';
     </script>
 </body>
 </html>
+
 
