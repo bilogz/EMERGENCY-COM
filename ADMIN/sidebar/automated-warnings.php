@@ -348,6 +348,34 @@ $pageTitle = 'Automated Warning Integration';
                         </div>
                     </div>
                     
+                    <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(142, 68, 173, 0.1); border-left: 4px solid #8e44ad; border-radius: 4px;">
+                        <h3 style="margin-top: 0; color: #8e44ad; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-cloud-sun"></i> AI Weather Analysis Auto-Send
+                        </h3>
+                        <p style="margin: 0.5rem 0 1rem 0; color: var(--text-secondary-1);">Automatically send AI-powered weather analysis to users via mass notifications</p>
+                        
+                        <div class="form-group">
+                            <label for="weatherAnalysisAutoSend">Enable AI Weather Analysis Auto-Send</label>
+                            <label class="switch">
+                                <input type="checkbox" id="weatherAnalysisAutoSend" name="weather_analysis_auto_send">
+                                <span class="slider"></span>
+                            </label>
+                            <small>Automatically send AI weather analysis to subscribed users via SMS, Email, and PA System</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="weatherAnalysisInterval">Weather Analysis Send Interval (minutes)</label>
+                            <input type="number" id="weatherAnalysisInterval" name="weather_analysis_interval" value="60" min="15" max="360">
+                            <small>How often to send weather analysis to users (minimum 15 minutes)</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="weatherAnalysisVerificationKey">Verification Key</label>
+                            <input type="text" id="weatherAnalysisVerificationKey" name="weather_analysis_verification_key" placeholder="Enter verification key (optional)" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
+                            <small>Key to verify weather analysis authenticity (included in notifications)</small>
+                        </div>
+                    </div>
+                    
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" onclick="closeAISettingsModal()">Cancel</button>
                         <button type="submit" class="btn btn-primary">
@@ -808,6 +836,14 @@ $pageTitle = 'Automated Warning Integration';
                                 checkbox.checked = channels.includes(checkbox.value);
                             });
                         }
+                        
+                        // Set weather analysis settings
+                        const weatherAnalysisAutoSend = document.getElementById('weatherAnalysisAutoSend');
+                        if (weatherAnalysisAutoSend) weatherAnalysisAutoSend.checked = settings.weather_analysis_auto_send || false;
+                        const weatherAnalysisInterval = document.getElementById('weatherAnalysisInterval');
+                        if (weatherAnalysisInterval) weatherAnalysisInterval.value = settings.weather_analysis_interval || 60;
+                        const weatherAnalysisVerificationKey = document.getElementById('weatherAnalysisVerificationKey');
+                        if (weatherAnalysisVerificationKey) weatherAnalysisVerificationKey.value = settings.weather_analysis_verification_key || '';
                     }
                 })
                 .catch(error => {

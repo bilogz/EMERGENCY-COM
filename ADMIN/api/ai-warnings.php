@@ -4,11 +4,15 @@
  * Analyzes weather and earthquake data using Gemini AI to automatically send warnings
  * Automatically sends SMS/Email/Push notifications to subscribed users
  * 
- * SETUP CRON JOB for automatic checking:
- * Add this to your crontab (crontab -e):
- * */30 * * * * curl -s "http://your-domain.com/EMERGENCY-COM/ADMIN/api/ai-warnings.php?action=check&cron=true" > /dev/null 2>&1
+ * SETUP CRON JOBS for automatic checking:
  * 
- * This will check for dangerous conditions every 30 minutes and automatically send alerts.
+ * 1. For dangerous conditions alerts (every 30 minutes):
+ * */30 * * * * curl -s "https://emergency-comm.alertaraqc.com//EMERGENCY-COM/ADMIN/api/ai-warnings.php?action=check&cron=true" > /dev/null 2>&1
+ * 
+ * 2. For weather analysis auto-send (every hour, or as configured):
+ * 0 * * * * curl -s "https://emergency-comm.alertaraqc.com//EMERGENCY-COM/ADMIN/api/ai-warnings.php?action=sendWeatherAnalysis&cron=true" > /dev/null 2>&1
+ * 
+ * This will check for dangerous conditions and send weather analysis automatically.
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -63,6 +67,10 @@ try {
             checkAndSendWarnings();
             break;
             
+        case 'sendWeatherAnalysis':
+            sendWeatherAnalysisAuto();
+            break;
+            
         default:
             saveAISettings();
             break;
@@ -108,6 +116,9 @@ function getAISettings() {
             'warning_types' => 'heavy_rain,flooding,earthquake,strong_winds,tsunami,landslide,thunderstorm,ash_fall,fire_incident,typhoon',
             'monitored_areas' => 'Quezon City\nManila\nMakati',
             'ai_channels' => 'sms,email,pa',
+            'weather_analysis_auto_send' => false,
+            'weather_analysis_interval' => 60,
+            'weather_analysis_verification_key' => '',
             'api_key_source' => $secureApiKey ? 'secure_config' : 'none'
         ];
         echo json_encode(['success' => true, 'settings' => $defaultSettings]);
@@ -142,6 +153,9 @@ function getAISettings() {
             'warning_types' => 'heavy_rain,flooding,earthquake,strong_winds,tsunami,landslide,thunderstorm,ash_fall,fire_incident,typhoon',
             'monitored_areas' => 'Quezon City\nManila\nMakati',
             'ai_channels' => 'sms,email,pa',
+            'weather_analysis_auto_send' => false,
+            'weather_analysis_interval' => 60,
+            'weather_analysis_verification_key' => '',
             'api_key_source' => $secureApiKey ? 'secure_config' : 'none'
         ];
         echo json_encode(['success' => true, 'settings' => $defaultSettings]);
@@ -179,8 +193,36 @@ function saveAISettings() {
         warning_types TEXT DEFAULT NULL,
         monitored_areas TEXT DEFAULT NULL,
         ai_channels TEXT DEFAULT NULL,
+        weather_analysis_auto_send TINYINT(1) DEFAULT 0,
+        weather_analysis_interval INT DEFAULT 60,
+        weather_analysis_verification_key VARCHAR(255) DEFAULT NULL,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    
+    // Add new columns if they don't exist (for existing tables)
+    $columnsToAdd = [
+        'weather_analysis_auto_send' => "TINYINT(1) DEFAULT 0 AFTER ai_channels",
+        'weather_analysis_interval' => "INT DEFAULT 60 AFTER weather_analysis_auto_send",
+        'weather_analysis_verification_key' => "VARCHAR(255) DEFAULT NULL AFTER weather_analysis_interval"
+    ];
+    
+    foreach ($columnsToAdd as $columnName => $definition) {
+        try {
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+                                   WHERE TABLE_SCHEMA = DATABASE() 
+                                   AND TABLE_NAME = 'ai_warning_settings' 
+                                   AND COLUMN_NAME = ?");
+            $stmt->execute([$columnName]);
+            $exists = $stmt->fetchColumn() > 0;
+            
+            if (!$exists) {
+                $pdo->exec("ALTER TABLE ai_warning_settings ADD COLUMN `{$columnName}` {$definition}");
+            }
+        } catch (PDOException $e) {
+            // Column might already exist or other error, continue
+            error_log("Could not add column {$columnName}: " . $e->getMessage());
+        }
+    }
     
     $geminiApiKey = $_POST['gemini_api_key'] ?? '';
     $aiEnabled = isset($_POST['ai_enabled']) ? 1 : 0;
@@ -191,6 +233,9 @@ function saveAISettings() {
     $warningTypes = implode(',', $_POST['warning_types'] ?? []);
     $monitoredAreas = $_POST['monitored_areas'] ?? '';
     $aiChannels = implode(',', $_POST['ai_channels'] ?? []);
+    $weatherAnalysisAutoSend = isset($_POST['weather_analysis_auto_send']) ? 1 : 0;
+    $weatherAnalysisInterval = intval($_POST['weather_analysis_interval'] ?? 60);
+    $weatherAnalysisVerificationKey = $_POST['weather_analysis_verification_key'] ?? '';
     
     // Check if settings exist
     $stmt = $pdo->query("SELECT id, gemini_api_key FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
@@ -225,11 +270,15 @@ function saveAISettings() {
             earthquake_threshold = ?, 
             warning_types = ?, 
             monitored_areas = ?, 
-            ai_channels = ?
+            ai_channels = ?,
+            weather_analysis_auto_send = ?,
+            weather_analysis_interval = ?,
+            weather_analysis_verification_key = ?
             WHERE id = ?");
         $stmt->execute([
             $updateApiKey, $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
             $earthquakeThreshold, $warningTypes, $monitoredAreas, $aiChannels,
+            $weatherAnalysisAutoSend, $weatherAnalysisInterval, $weatherAnalysisVerificationKey,
             $existing['id']
         ]);
     } else {
@@ -241,11 +290,13 @@ function saveAISettings() {
         
         $stmt = $pdo->prepare("INSERT INTO ai_warning_settings 
             (gemini_api_key, ai_enabled, ai_check_interval, wind_threshold, rain_threshold, 
-             earthquake_threshold, warning_types, monitored_areas, ai_channels) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+             earthquake_threshold, warning_types, monitored_areas, ai_channels,
+             weather_analysis_auto_send, weather_analysis_interval, weather_analysis_verification_key) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
             $insertApiKey, $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
-            $earthquakeThreshold, $warningTypes, $monitoredAreas, $aiChannels
+            $earthquakeThreshold, $warningTypes, $monitoredAreas, $aiChannels,
+            $weatherAnalysisAutoSend, $weatherAnalysisInterval, $weatherAnalysisVerificationKey
         ]);
     }
     
@@ -821,6 +872,233 @@ function checkWeatherConditions($settings) {
     }
     
     return $warnings;
+}
+
+/**
+ * Automatically send AI weather analysis to users via mass notifications
+ */
+function sendWeatherAnalysisAuto() {
+    global $pdo;
+    
+    $adminId = $_SESSION['admin_user_id'] ?? null;
+    $isCronJob = isset($_GET['cron']) && $_GET['cron'] === 'true';
+    
+    // Get AI settings
+    try {
+        $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+        $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+        return;
+    }
+    
+    if (!$settings || !$settings['weather_analysis_auto_send']) {
+        echo json_encode(['success' => false, 'message' => 'Weather analysis auto-send is disabled']);
+        return;
+    }
+    
+    // Get API key
+    $apiKey = getGeminiApiKey();
+    if (empty($apiKey)) {
+        $apiKey = $settings['gemini_api_key'] ?? '';
+    }
+    
+    if (empty($apiKey)) {
+        echo json_encode(['success' => false, 'message' => 'Gemini API key not configured']);
+        return;
+    }
+    
+    // Get weather data for primary location (Quezon City)
+    $weatherData = getWeatherData();
+    if (empty($weatherData)) {
+        echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data']);
+        return;
+    }
+    
+    // Use Quezon City as primary location
+    $locationName = 'Quezon City';
+    $weather = $weatherData[$locationName] ?? reset($weatherData);
+    
+    if (!$weather) {
+        echo json_encode(['success' => false, 'message' => 'No weather data available']);
+        return;
+    }
+    
+    // Build weather analysis prompt
+    $temp = $weather['main']['temp'] ?? 0;
+    $humidity = $weather['main']['humidity'] ?? 0;
+    $condition = $weather['weather'][0]['description'] ?? 'Unknown';
+    $windSpeed = isset($weather['wind']['speed']) ? round($weather['wind']['speed'] * 3.6, 1) : 0;
+    
+    $prompt = "You are an emergency weather analyst for {$locationName}, Philippines. Analyze:
+
+CURRENT: Temp {$temp}°C, Humidity {$humidity}%, {$condition}, Wind {$windSpeed} km/h
+
+Provide analysis in this format:
+
+**SUMMARY:**
+[1-2 sentence summary]
+
+**RECOMMENDATIONS:**
+[3-5 action items]
+
+**RISK LEVEL:**
+[LOW/MEDIUM/HIGH] - [Brief explanation]
+
+Keep concise and actionable for public communication.";
+
+    // Generate AI weather analysis
+    try {
+        $model = getGeminiModel();
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . urlencode($apiKey);
+        
+        $data = [
+            'contents' => [
+                [
+                    'parts' => [
+                        ['text' => $prompt]
+                    ]
+                ]
+            ],
+            'generationConfig' => [
+                'temperature' => 0.7,
+                'maxOutputTokens' => 2048,
+                'topP' => 0.95,
+                'topK' => 40
+            ]
+        ];
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json'
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+        
+        if ($curlError || $httpCode !== 200) {
+            echo json_encode(['success' => false, 'message' => 'Failed to generate weather analysis']);
+            return;
+        }
+        
+        $responseData = json_decode($response, true);
+        
+        if (!isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
+            echo json_encode(['success' => false, 'message' => 'Invalid response from AI']);
+            return;
+        }
+        
+        $analysis = trim($responseData['candidates'][0]['content']['parts'][0]['text']);
+        
+        // Add verification key if set
+        $verificationKey = $settings['weather_analysis_verification_key'] ?? '';
+        if (!empty($verificationKey)) {
+            $analysis .= "\n\nVerification Key: " . $verificationKey;
+        }
+        
+        // Create alert title and content
+        $alertTitle = "AI Weather Analysis - {$locationName}";
+        $alertContent = "Current Weather Status:\n" . $analysis;
+        
+        // Get or create Weather category
+        $stmt = $pdo->prepare("SELECT id FROM alert_categories WHERE name = 'Weather' LIMIT 1");
+        $stmt->execute();
+        $category = $stmt->fetch();
+        $categoryId = $category ? $category['id'] : null;
+        
+        // Insert alert
+        $stmt = $pdo->prepare("INSERT INTO alerts 
+            (title, message, content, category_id, status, created_at) 
+            VALUES (?, ?, ?, ?, 'active', NOW())");
+        $stmt->execute([
+            $alertTitle,
+            $alertContent,
+            $alertContent,
+            $categoryId
+        ]);
+        $alertId = $pdo->lastInsertId();
+        
+        // Send via mass notification channels
+        $channels = explode(',', $settings['ai_channels'] ?? 'sms,email');
+        $channels = array_map('trim', $channels);
+        
+        // Get all active subscribers for weather alerts
+        $stmt = $pdo->prepare("
+            SELECT DISTINCT s.user_id, s.channels, s.preferred_language,
+                   u.name, u.email, u.phone
+            FROM subscriptions s
+            LEFT JOIN users u ON u.id = s.user_id
+            WHERE s.status = 'active'
+            AND (s.categories LIKE '%Weather%' OR s.categories = 'all' OR s.categories LIKE '%general%')
+        ");
+        $stmt->execute();
+        $subscribers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $sentCount = 0;
+        $translationHelper = new AlertTranslationHelper($pdo);
+        
+        foreach ($subscribers as $subscriber) {
+            $userId = $subscriber['user_id'];
+            $userChannels = explode(',', $subscriber['channels'] ?? '');
+            $userChannels = array_map('trim', $userChannels);
+            
+            // Get translated alert for user's preferred language
+            $userLanguage = $subscriber['preferred_language'] ?? 'en';
+            $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $userLanguage, $userId);
+            
+            if (!$translatedAlert) {
+                $translatedAlert = [
+                    'title' => $alertTitle,
+                    'message' => $alertContent
+                ];
+            }
+            
+            $message = $translatedAlert['title'] . "\n\n" . $translatedAlert['message'];
+            
+            // Send via each enabled channel
+            foreach ($channels as $channel) {
+                if (!empty($userChannels) && !in_array($channel, $userChannels)) {
+                    continue;
+                }
+                
+                if ($channel === 'sms' && !empty($subscriber['phone'])) {
+                    sendSMSNotification($subscriber['phone'], $message, $alertId);
+                    $sentCount++;
+                } elseif ($channel === 'email' && !empty($subscriber['email'])) {
+                    sendEmailNotification($subscriber['email'], $subscriber['name'], $translatedAlert['title'], $translatedAlert['message'], $alertId);
+                    $sentCount++;
+                } elseif ($channel === 'pa') {
+                    logPANotification($message, $alertId);
+                    $sentCount++;
+                }
+            }
+        }
+        
+        // Log activity
+        if ($adminId) {
+            $source = $isCronJob ? 'cron' : 'manual';
+            logAdminActivity($adminId, 'weather_analysis_sent', 
+                "AI Weather Analysis sent to {$sentCount} recipients via {$source}");
+        }
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Weather analysis sent successfully',
+            'recipients' => count($subscribers),
+            'notifications_sent' => $sentCount,
+            'alert_id' => $alertId
+        ]);
+        
+    } catch (Exception $e) {
+        error_log("Error sending weather analysis: " . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+    }
 }
 
 function checkEarthquakeConditions($settings) {
