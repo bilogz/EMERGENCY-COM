@@ -6,6 +6,7 @@
 
 header('Content-Type: application/json');
 require_once __DIR__ . '/db_connect.php';
+require_once __DIR__ . '/config.env.php';
 
 // Include mail helper (try to use USERS lib, or create simple version)
 $mailLibPath = __DIR__ . '/../../USERS/lib/mail.php';

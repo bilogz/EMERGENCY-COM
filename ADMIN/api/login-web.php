@@ -4,8 +4,8 @@
  * Sets PHP sessions after successful authentication
  */
 
-// Enable error reporting for debugging
-ini_set('display_errors', 1);
+// Enable error reporting for debugging (disabled in production)
+ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 error_reporting(E_ALL);
 
@@ -105,7 +105,11 @@ if (empty($email) || empty($plainPassword)) {
 }
 
 // Verify reCAPTCHA v3 (skip if OTP is already verified, as we've done additional verification)
-if (!$otpVerified && empty($recaptchaResponse)) {
+// TEMPORARY: Skip reCAPTCHA for testing if using test keys
+$recaptchaSecretKey = getSecureConfig('RECAPTCHA_SECRET_KEY', '');
+$isTestKey = ($recaptchaSecretKey === '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe'); // Google test key
+
+if (!$otpVerified && empty($recaptchaResponse) && !$isTestKey) {
     echo json_encode(["success" => false, "message" => "Security verification failed. Please refresh the page and try again."]);
     exit();
 }
@@ -119,52 +123,59 @@ if ($otpVerified) {
 } else if (!empty($recaptchaResponse)) {
     // Load reCAPTCHA secret key from config
     $recaptchaSecretKey = getSecureConfig('RECAPTCHA_SECRET_KEY', '');
-    if (empty($recaptchaSecretKey)) {
+    $isTestKey = ($recaptchaSecretKey === '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe'); // Google test key
+    
+    // Skip verification for test keys (they always pass)
+    if ($isTestKey) {
+        $recaptchaValid = true;
+        error_log("reCAPTCHA test key detected - skipping verification");
+    } else if (empty($recaptchaSecretKey)) {
         echo json_encode(["success" => false, "message" => "Security verification is not configured. Please contact an administrator."]);
         exit();
-    }
-    $recaptchaUrl = 'https://www.google.com/recaptcha/api/siteverify';
-    $recaptchaData = [
-        'secret' => $recaptchaSecretKey,
-        'response' => $recaptchaResponse,
-        'remoteip' => $_SERVER['REMOTE_ADDR'] ?? ''
-    ];
+    } else {
+        $recaptchaUrl = 'https://www.google.com/recaptcha/api/siteverify';
+        $recaptchaData = [
+            'secret' => $recaptchaSecretKey,
+            'response' => $recaptchaResponse,
+            'remoteip' => $_SERVER['REMOTE_ADDR'] ?? ''
+        ];
 
-    $recaptchaOptions = [
-        'http' => [
-            'method' => 'POST',
-            'header' => 'Content-Type: application/x-www-form-urlencoded',
-            'content' => http_build_query($recaptchaData),
-            'timeout' => 10
-        ]
-    ];
+        $recaptchaOptions = [
+            'http' => [
+                'method' => 'POST',
+                'header' => 'Content-Type: application/x-www-form-urlencoded',
+                'content' => http_build_query($recaptchaData),
+                'timeout' => 10
+            ]
+        ];
 
-    $recaptchaContext = stream_context_create($recaptchaOptions);
-    $recaptchaResult = @file_get_contents($recaptchaUrl, false, $recaptchaContext);
-    $recaptchaJson = json_decode($recaptchaResult, true);
+        $recaptchaContext = stream_context_create($recaptchaOptions);
+        $recaptchaResult = @file_get_contents($recaptchaUrl, false, $recaptchaContext);
+        $recaptchaJson = json_decode($recaptchaResult, true);
 
-    // Validate reCAPTCHA v3 response
-    // v3 returns a score from 0.0 to 1.0 (1.0 = very likely human, 0.0 = very likely bot)
-    if (isset($recaptchaJson['success']) && $recaptchaJson['success']) {
-        $recaptchaScore = $recaptchaJson['score'] ?? 0;
-        $recaptchaAction = $recaptchaJson['action'] ?? '';
-        
-        // Minimum score threshold (0.5 is recommended, lower = more permissive)
-        $minScore = 0.3;
-        
-        if ($recaptchaScore >= $minScore) {
-            $recaptchaValid = true;
-            error_log("reCAPTCHA v3 passed - Score: {$recaptchaScore}, Action: {$recaptchaAction}");
+        // Validate reCAPTCHA v3 response
+        // v3 returns a score from 0.0 to 1.0 (1.0 = very likely human, 0.0 = very likely bot)
+        if (isset($recaptchaJson['success']) && $recaptchaJson['success']) {
+            $recaptchaScore = $recaptchaJson['score'] ?? 0;
+            $recaptchaAction = $recaptchaJson['action'] ?? '';
+            
+            // Minimum score threshold (0.5 is recommended, lower = more permissive)
+            $minScore = 0.3;
+            
+            if ($recaptchaScore >= $minScore) {
+                $recaptchaValid = true;
+                error_log("reCAPTCHA v3 passed - Score: {$recaptchaScore}, Action: {$recaptchaAction}");
+            } else {
+                error_log("reCAPTCHA v3 score too low - Score: {$recaptchaScore}, Action: {$recaptchaAction}");
+                echo json_encode(["success" => false, "message" => "Security verification failed. Please try again or contact support."]);
+                exit();
+            }
         } else {
-            error_log("reCAPTCHA v3 score too low - Score: {$recaptchaScore}, Action: {$recaptchaAction}");
-            echo json_encode(["success" => false, "message" => "Security verification failed. Please try again or contact support."]);
+            $errorCodes = $recaptchaJson['error-codes'] ?? [];
+            error_log('reCAPTCHA v3 verification failed. Errors: ' . implode(', ', $errorCodes));
+            echo json_encode(["success" => false, "message" => "Security verification failed. Please refresh and try again."]);
             exit();
         }
-    } else {
-        $errorCodes = $recaptchaJson['error-codes'] ?? [];
-        error_log('reCAPTCHA v3 verification failed. Errors: ' . implode(', ', $errorCodes));
-        echo json_encode(["success" => false, "message" => "Security verification failed. Please refresh and try again."]);
-        exit();
     }
 }
 
@@ -221,6 +232,9 @@ try {
             exit();
         }
         
+        // OTP is optional - if enabled, check if it's verified
+        // If OTP is required but not verified, return requires_otp flag
+        // If OTP is optional, allow login without it
         if ($requireOtp) {
             // Check if OTP verification flag is passed or exists in session
             $otpVerifiedFlag = $data['otp_verified'] ?? false;
@@ -240,6 +254,20 @@ try {
                     "username" => $admin['name']
                 ]);
                 exit();
+            }
+        } else {
+            // OTP is optional - if user provided OTP verification, use it
+            // Otherwise, allow login without OTP
+            $otpVerifiedFlag = $data['otp_verified'] ?? false;
+            $sessionOtpVerified = $_SESSION['admin_login_otp_verified'] ?? false;
+            $sessionOtpEmail = $_SESSION['admin_login_otp_email'] ?? '';
+            
+            // If OTP was provided and verified, clear the session
+            if (($otpVerifiedFlag === true) || ($sessionOtpVerified === true && $sessionOtpEmail === $email)) {
+                unset($_SESSION['admin_login_otp_verified']);
+                unset($_SESSION['admin_login_otp_email']);
+                unset($_SESSION['admin_login_otp_code']);
+                unset($_SESSION['admin_login_otp_expires']);
             }
         }
         
