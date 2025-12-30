@@ -88,7 +88,19 @@ try {
             break;
             
         case 'getWeatherAnalysis':
-            getWeatherAnalysis();
+            try {
+                getWeatherAnalysis();
+            } catch (Exception $e) {
+                error_log("Exception in getWeatherAnalysis: " . $e->getMessage());
+                error_log("Stack trace: " . $e->getTraceAsString());
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Error loading analysis: ' . $e->getMessage()]);
+            } catch (Error $e) {
+                error_log("Fatal error in getWeatherAnalysis: " . $e->getMessage());
+                error_log("Stack trace: " . $e->getTraceAsString());
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Fatal error loading analysis: ' . $e->getMessage()]);
+            }
             break;
             
         default:
@@ -1300,6 +1312,11 @@ Keep concise and actionable for public communication.";
 function getWeatherAnalysis() {
     global $pdo;
     
+    // Clear any previous output
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
     try {
         // Ensure we have a database connection
         if ($pdo === null) {
@@ -1308,49 +1325,60 @@ function getWeatherAnalysis() {
             return;
         }
     
-    // Get AI settings
-    $settings = null;
-    try {
-        // Check if table exists first
-        $tableCheck = $pdo->query("SHOW TABLES LIKE 'ai_warning_settings'");
-        if ($tableCheck->rowCount() > 0) {
-            $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
-            $settings = $stmt->fetch(PDO::FETCH_ASSOC);
-        }
-    } catch (PDOException $e) {
-        error_log("Error loading AI settings in getWeatherAnalysis: " . $e->getMessage());
-        // Continue with null settings - will use defaults
-    } catch (Exception $e) {
-        error_log("General error loading AI settings: " . $e->getMessage());
-        // Continue with null settings
-    }
-    
-    // Get API key - prefer analysis key for analysis functions
-    $apiKey = null;
-    try {
-        if (function_exists('getGeminiApiKey')) {
-            $apiKey = getGeminiApiKey('analysis');
-            // Fallback to default key if analysis key not available
-            if (empty($apiKey)) {
-                $apiKey = getGeminiApiKey('default');
+        // Get AI settings
+        $settings = null;
+        try {
+            // Check if table exists first
+            $tableCheck = $pdo->query("SHOW TABLES LIKE 'ai_warning_settings'");
+            if ($tableCheck->rowCount() > 0) {
+                $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+                $settings = $stmt->fetch(PDO::FETCH_ASSOC);
             }
+        } catch (PDOException $e) {
+            error_log("Error loading AI settings in getWeatherAnalysis: " . $e->getMessage());
+            // Continue with null settings - will use defaults
+        } catch (Exception $e) {
+            error_log("General error loading AI settings: " . $e->getMessage());
+            // Continue with null settings
         }
-    } catch (Exception $e) {
-        error_log("Error getting Gemini API key: " . $e->getMessage());
-    } catch (Error $e) {
-        error_log("Fatal error getting Gemini API key: " . $e->getMessage());
-    }
-    
-    // Fallback to database if secure config doesn't have it
-    if (empty($apiKey) && $settings && !empty($settings['gemini_api_key'])) {
-        $apiKey = $settings['gemini_api_key'];
-    }
-    
-    if (empty($apiKey)) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Gemini API key not configured. Please check your API key configuration in AI Warning Settings.']);
-        return;
-    }
+        
+        // Get API key - prefer analysis key for analysis functions
+        $apiKey = null;
+        try {
+            if (function_exists('getGeminiApiKey')) {
+                $apiKey = getGeminiApiKey('analysis');
+                if (!empty($apiKey)) {
+                    error_log("Found AI_API_KEY_ANALYSIS from config");
+                } else {
+                    // Fallback to default key if analysis key not available
+                    $apiKey = getGeminiApiKey('default');
+                    if (!empty($apiKey)) {
+                        error_log("Found AI_API_KEY from config (fallback)");
+                    }
+                }
+            } else {
+                error_log("getGeminiApiKey function not found!");
+            }
+        } catch (Exception $e) {
+            error_log("Error getting Gemini API key: " . $e->getMessage());
+        } catch (Error $e) {
+            error_log("Fatal error getting Gemini API key: " . $e->getMessage());
+        }
+        
+        // Fallback to database if secure config doesn't have it
+        if (empty($apiKey) && $settings && !empty($settings['gemini_api_key'])) {
+            $apiKey = $settings['gemini_api_key'];
+            error_log("Using API key from database");
+        }
+        
+        if (empty($apiKey)) {
+            error_log("No Gemini API key found in config or database");
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Gemini API key not configured. Please check your API key configuration in AI Warning Settings.']);
+            return;
+        }
+        
+        error_log("API key found, length: " . strlen($apiKey));
     
     // Get weather data for primary location (Quezon City)
     $weatherData = [];
