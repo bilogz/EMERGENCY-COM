@@ -71,6 +71,10 @@ try {
             }
             break;
             
+        case 'diagnostic':
+            diagnosticCheck();
+            break;
+            
         case 'test':
             sendTestWarning();
             break;
@@ -234,6 +238,107 @@ function getAISettings() {
             echo json_encode(['success' => false, 'message' => 'Error encoding settings: ' . $e->getMessage()]);
         }
     }
+}
+
+function diagnosticCheck() {
+    global $pdo;
+    
+    header('Content-Type: application/json; charset=utf-8');
+    
+    $result = [
+        'success' => true,
+        'checks' => []
+    ];
+    
+    try {
+        // Check database connection
+        if ($pdo === null) {
+            $result['checks']['database_connection'] = 'FAILED - PDO is null';
+            $result['success'] = false;
+        } else {
+            $result['checks']['database_connection'] = 'OK';
+            
+            // Check if table exists
+            try {
+                $stmt = $pdo->query("SHOW TABLES LIKE 'ai_warning_settings'");
+                if ($stmt->rowCount() > 0) {
+                    $result['checks']['table_exists'] = 'OK';
+                    
+                    // Get all columns
+                    $stmt = $pdo->query("DESCRIBE ai_warning_settings");
+                    $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                    $result['checks']['columns'] = $columns;
+                    
+                    // Check for required columns
+                    $requiredColumns = [
+                        'weather_analysis_auto_send',
+                        'weather_analysis_interval',
+                        'weather_analysis_verification_key'
+                    ];
+                    
+                    $missingColumns = [];
+                    foreach ($requiredColumns as $col) {
+                        if (!in_array($col, $columns)) {
+                            $missingColumns[] = $col;
+                        }
+                    }
+                    
+                    if (empty($missingColumns)) {
+                        $result['checks']['required_columns'] = 'OK - All columns exist';
+                    } else {
+                        $result['checks']['required_columns'] = 'MISSING: ' . implode(', ', $missingColumns);
+                        $result['success'] = false;
+                    }
+                    
+                    // Try to fetch settings
+                    try {
+                        $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+                        $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+                        if ($settings) {
+                            $result['checks']['query_test'] = 'OK';
+                            $result['checks']['has_data'] = 'YES';
+                            // Check if new columns exist in result
+                            foreach ($requiredColumns as $col) {
+                                $result['checks']['column_' . $col] = isset($settings[$col]) ? 'EXISTS (value: ' . var_export($settings[$col], true) . ')' : 'MISSING IN RESULT';
+                            }
+                        } else {
+                            $result['checks']['query_test'] = 'OK';
+                            $result['checks']['has_data'] = 'NO - Table is empty';
+                        }
+                    } catch (PDOException $e) {
+                        $result['checks']['query_test'] = 'FAILED: ' . $e->getMessage();
+                        $result['success'] = false;
+                    }
+                } else {
+                    $result['checks']['table_exists'] = 'FAILED - Table does not exist';
+                    $result['success'] = false;
+                }
+            } catch (PDOException $e) {
+                $result['checks']['table_check'] = 'FAILED: ' . $e->getMessage();
+                $result['success'] = false;
+            }
+        }
+        
+        // Check secure config
+        if (function_exists('getGeminiApiKey')) {
+            try {
+                $key = getGeminiApiKey();
+                $result['checks']['secure_config'] = $key ? 'OK (key found)' : 'OK (no key set)';
+            } catch (Exception $e) {
+                $result['checks']['secure_config'] = 'ERROR: ' . $e->getMessage();
+            }
+        } else {
+            $result['checks']['secure_config'] = 'getGeminiApiKey() function not found';
+        }
+        
+    } catch (Exception $e) {
+        $result['success'] = false;
+        $result['error'] = $e->getMessage();
+        $result['error_file'] = $e->getFile();
+        $result['error_line'] = $e->getLine();
+    }
+    
+    echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 }
 
 function saveAISettings() {
