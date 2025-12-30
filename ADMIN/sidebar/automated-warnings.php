@@ -161,17 +161,17 @@ $pageTitle = 'Automated Warning Integration';
                         </div>
                     </div>
 
-                    <!-- AI Weather Analysis Card -->
+                    <!-- AI Disaster Monitoring Analysis Card -->
                     <div class="module-card">
                         <div class="module-card-header">
-                            <h2><i class="fas fa-cloud-sun"></i> AI Weather Analysis</h2>
+                            <h2><i class="fas fa-shield-alt"></i> Disaster Monitoring Analysis</h2>
                         </div>
                         <div>
                             <div id="aiWeatherAnalysisCard" class="ai-analysis-display-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 2rem; color: white; position: relative; overflow: hidden;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                                     <div style="display: flex; align-items: center; gap: 0.75rem;">
                                         <i class="fas fa-robot" style="font-size: 1.5rem;"></i>
-                                        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">AI Weather Analysis</h3>
+                                        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Disaster Monitoring Analysis</h3>
                                     </div>
                                     <span id="analysisStatusBadge" class="badge" style="background: rgba(255,255,255,0.2); color: white; padding: 0.5rem 1rem; border-radius: 20px;">Loading...</span>
                                 </div>
@@ -179,7 +179,7 @@ $pageTitle = 'Automated Warning Integration';
                                 <div id="analysisContent" style="min-height: 200px;">
                                     <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.8);">
                                         <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-                                        <p>Loading weather analysis...</p>
+                                        <p>Loading disaster monitoring analysis...</p>
                                     </div>
                                 </div>
                                 
@@ -1018,7 +1018,7 @@ $pageTitle = 'Automated Warning Integration';
                 });
         }
 
-        // Load AI Weather Analysis
+        // Load AI Disaster Monitoring Analysis
         function loadWeatherAnalysis() {
             const contentDiv = document.getElementById('analysisContent');
             const statusBadge = document.getElementById('analysisStatusBadge');
@@ -1026,28 +1026,37 @@ $pageTitle = 'Automated Warning Integration';
             contentDiv.innerHTML = `
                 <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.8);">
                     <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-                    <p>Loading weather analysis...</p>
+                    <p>Loading disaster monitoring analysis...</p>
                 </div>
             `;
             statusBadge.textContent = 'Loading...';
             statusBadge.className = 'badge';
+            statusBadge.style.background = 'rgba(255,255,255,0.2)';
             
             fetch('../api/ai-warnings.php?action=getWeatherAnalysis')
                 .then(response => {
-                    if (!response.ok) {
-                        return response.text().then(text => {
-                            try {
-                                const json = JSON.parse(text);
-                                throw new Error(json.message || `HTTP ${response.status}`);
-                            } catch (e) {
-                                if (e instanceof Error && e.message.includes('HTTP')) {
-                                    throw e;
-                                }
-                                throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+                    // First, try to get response as text to check if it's valid JSON
+                    return response.text().then(text => {
+                        // Check if response is empty
+                        if (!text || text.trim() === '') {
+                            throw new Error(`HTTP ${response.status}: Empty response from server`);
+                        }
+                        
+                        // Try to parse as JSON
+                        try {
+                            const data = JSON.parse(text);
+                            if (!response.ok) {
+                                throw new Error(data.message || `HTTP ${response.status}`);
                             }
-                        });
-                    }
-                    return response.json();
+                            return data;
+                        } catch (parseError) {
+                            // If not JSON, it's an error
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}: ${text.substring(0, 200)}`);
+                            }
+                            throw new Error('Invalid response format: ' + text.substring(0, 100));
+                        }
+                    });
                 })
                 .then(data => {
                     if (data.success && data.analysis) {
@@ -1060,12 +1069,13 @@ $pageTitle = 'Automated Warning Integration';
                     }
                 })
                 .catch(error => {
-                    console.error('Error loading weather analysis:', error);
+                    console.error('Error loading disaster monitoring analysis:', error);
+                    const errorMsg = error.message || 'Failed to load disaster monitoring analysis';
                     contentDiv.innerHTML = `
                         <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.9);">
                             <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem; color: #ffeb3b;"></i>
-                            <p style="margin: 0.5rem 0;">${error.message || 'Failed to load weather analysis'}</p>
-                            <small style="opacity: 0.8;">Please check your API key and try again</small>
+                            <p style="margin: 0.5rem 0; font-weight: 500;">${errorMsg}</p>
+                            <small style="opacity: 0.8; display: block; margin-top: 0.5rem;">Please check your API key configuration in AI Warning Settings</small>
                         </div>
                     `;
                     statusBadge.textContent = 'Error';

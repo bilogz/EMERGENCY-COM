@@ -1078,9 +1078,17 @@ function sendWeatherAnalysisAuto() {
     }
     
     // Get weather data for primary location (Quezon City)
-    $weatherData = getWeatherData();
-    if (empty($weatherData)) {
-        echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data']);
+    $weatherData = [];
+    try {
+        if (function_exists('getWeatherData')) {
+            $weatherData = getWeatherData();
+        }
+    } catch (Exception $e) {
+        error_log("Error getting weather data: " . $e->getMessage());
+    }
+    
+    if (empty($weatherData) || !is_array($weatherData)) {
+        echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Please check PAGASA API key configuration.']);
         return;
     }
     
@@ -1088,12 +1096,12 @@ function sendWeatherAnalysisAuto() {
     $locationName = 'Quezon City';
     $weather = $weatherData[$locationName] ?? reset($weatherData);
     
-    if (!$weather) {
-        echo json_encode(['success' => false, 'message' => 'No weather data available']);
+    if (!$weather || !is_array($weather)) {
+        echo json_encode(['success' => false, 'message' => 'No weather data available for analysis']);
         return;
     }
     
-    // Build weather analysis prompt
+    // Build disaster monitoring analysis prompt
     $temp = $weather['main']['temp'] ?? 0;
     $humidity = $weather['main']['humidity'] ?? 0;
     $condition = $weather['weather'][0]['description'] ?? 'Unknown';
@@ -1271,35 +1279,67 @@ Keep concise and actionable for public communication.";
 }
 
 /**
- * Get AI weather analysis for display (without sending)
+ * Get AI disaster monitoring analysis for display (without sending)
  */
 function getWeatherAnalysis() {
     global $pdo;
     
-    // Get AI settings
     try {
-        $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
-        $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+        // Ensure we have a database connection
+        if ($pdo === null) {
+            echo json_encode(['success' => false, 'message' => 'Database connection not available']);
+            return;
+        }
+    
+    // Get AI settings
+    $settings = null;
+    try {
+        // Check if table exists first
+        $tableCheck = $pdo->query("SHOW TABLES LIKE 'ai_warning_settings'");
+        if ($tableCheck->rowCount() > 0) {
+            $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+            $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+        }
     } catch (PDOException $e) {
-        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
-        return;
+        error_log("Error loading AI settings in getWeatherAnalysis: " . $e->getMessage());
+        // Continue with null settings - will use defaults
+    } catch (Exception $e) {
+        error_log("General error loading AI settings: " . $e->getMessage());
+        // Continue with null settings
     }
     
     // Get API key
-    $apiKey = getGeminiApiKey();
-    if (empty($apiKey)) {
-        $apiKey = $settings['gemini_api_key'] ?? '';
+    $apiKey = null;
+    try {
+        if (function_exists('getGeminiApiKey')) {
+            $apiKey = getGeminiApiKey();
+        }
+    } catch (Exception $e) {
+        error_log("Error getting Gemini API key: " . $e->getMessage());
+    }
+    
+    // Fallback to database if secure config doesn't have it
+    if (empty($apiKey) && $settings && !empty($settings['gemini_api_key'])) {
+        $apiKey = $settings['gemini_api_key'];
     }
     
     if (empty($apiKey)) {
-        echo json_encode(['success' => false, 'message' => 'Gemini API key not configured']);
+        echo json_encode(['success' => false, 'message' => 'Gemini API key not configured. Please set your API key in AI Warning Settings.']);
         return;
     }
     
     // Get weather data for primary location (Quezon City)
-    $weatherData = getWeatherData();
-    if (empty($weatherData)) {
-        echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data']);
+    $weatherData = [];
+    try {
+        if (function_exists('getWeatherData')) {
+            $weatherData = getWeatherData();
+        }
+    } catch (Exception $e) {
+        error_log("Error getting weather data: " . $e->getMessage());
+    }
+    
+    if (empty($weatherData) || !is_array($weatherData)) {
+        echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Please check PAGASA API key configuration.']);
         return;
     }
     
@@ -1307,12 +1347,12 @@ function getWeatherAnalysis() {
     $locationName = 'Quezon City';
     $weather = $weatherData[$locationName] ?? reset($weatherData);
     
-    if (!$weather) {
-        echo json_encode(['success' => false, 'message' => 'No weather data available']);
+    if (!$weather || !is_array($weather)) {
+        echo json_encode(['success' => false, 'message' => 'No weather data available for analysis']);
         return;
     }
     
-    // Build weather analysis prompt
+    // Build disaster monitoring analysis prompt
     $temp = $weather['main']['temp'] ?? 0;
     $humidity = $weather['main']['humidity'] ?? 0;
     $condition = $weather['weather'][0]['description'] ?? 'Unknown';
@@ -1321,7 +1361,7 @@ function getWeatherAnalysis() {
     $pressure = $weather['main']['pressure'] ?? 0;
     $visibility = isset($weather['visibility']) ? round($weather['visibility'] / 1000, 1) : 0;
     
-    $prompt = "You are an emergency weather analyst for {$locationName}, Philippines. Analyze the current weather conditions and provide a comprehensive analysis.
+    $prompt = "You are a disaster monitoring analyst for {$locationName}, Philippines. Analyze the current weather conditions and potential disaster risks, providing a comprehensive disaster monitoring analysis.
 
 CURRENT CONDITIONS:
 - Temperature: {$temp}°C (Feels like: {$feelsLike}°C)
@@ -1384,10 +1424,24 @@ Keep recommendations practical and actionable for public safety. Risk level shou
         $curlError = curl_error($ch);
         curl_close($ch);
         
-        if ($curlError || $httpCode !== 200) {
+        if ($curlError) {
+            error_log("CURL Error in getWeatherAnalysis: " . $curlError);
+            echo json_encode(['success' => false, 'message' => 'Network error: ' . $curlError]);
+            return;
+        }
+        
+        if ($httpCode !== 200) {
             $errorData = json_decode($response, true);
-            $errorMsg = $errorData['error']['message'] ?? "HTTP $httpCode";
-            echo json_encode(['success' => false, 'message' => 'Failed to generate weather analysis: ' . $errorMsg]);
+            $errorMsg = 'Unknown error';
+            if (isset($errorData['error']['message'])) {
+                $errorMsg = $errorData['error']['message'];
+            } elseif (!empty($response)) {
+                $errorMsg = "HTTP $httpCode: " . substr($response, 0, 100);
+            } else {
+                $errorMsg = "HTTP $httpCode: Empty response";
+            }
+            error_log("Gemini API error in getWeatherAnalysis: HTTP $httpCode - $errorMsg");
+            echo json_encode(['success' => false, 'message' => 'Failed to generate analysis: ' . $errorMsg]);
             return;
         }
         
@@ -1435,8 +1489,14 @@ Keep recommendations practical and actionable for public safety. Risk level shou
         ], JSON_UNESCAPED_UNICODE);
         
     } catch (Exception $e) {
-        error_log("Error getting weather analysis: " . $e->getMessage());
+        error_log("Error getting disaster monitoring analysis: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
         echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+    } catch (Error $e) {
+        error_log("Fatal error getting disaster monitoring analysis: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
+        echo json_encode(['success' => false, 'message' => 'Fatal error: ' . $e->getMessage()]);
+    }
     }
 }
 
