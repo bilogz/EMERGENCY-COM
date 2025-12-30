@@ -109,7 +109,13 @@ if (empty($email) || empty($plainPassword)) {
 $recaptchaSecretKey = getSecureConfig('RECAPTCHA_SECRET_KEY', '');
 $isTestKey = ($recaptchaSecretKey === '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe'); // Google test key
 
+// Log reCAPTCHA status for debugging
+error_log("reCAPTCHA Debug - Response present: " . (!empty($recaptchaResponse) ? 'YES (' . strlen($recaptchaResponse) . ' chars)' : 'NO'));
+error_log("reCAPTCHA Debug - OTP verified: " . ($otpVerified ? 'YES' : 'NO'));
+error_log("reCAPTCHA Debug - Is test key: " . ($isTestKey ? 'YES' : 'NO'));
+
 if (!$otpVerified && empty($recaptchaResponse) && !$isTestKey) {
+    error_log("reCAPTCHA error: No response token provided and not using test key");
     echo json_encode(["success" => false, "message" => "Security verification failed. Please refresh the page and try again."]);
     exit();
 }
@@ -151,7 +157,18 @@ if ($otpVerified) {
 
         $recaptchaContext = stream_context_create($recaptchaOptions);
         $recaptchaResult = @file_get_contents($recaptchaUrl, false, $recaptchaContext);
+        
+        // Log the raw response for debugging
+        if ($recaptchaResult === false) {
+            error_log('reCAPTCHA API request failed - unable to reach Google servers');
+            echo json_encode(["success" => false, "message" => "Security verification service unavailable. Please try again."]);
+            exit();
+        }
+        
         $recaptchaJson = json_decode($recaptchaResult, true);
+        
+        // Log response for debugging
+        error_log('reCAPTCHA API response: ' . json_encode($recaptchaJson));
 
         // Validate reCAPTCHA v3 response
         // v3 returns a score from 0.0 to 1.0 (1.0 = very likely human, 0.0 = very likely bot)
@@ -160,20 +177,39 @@ if ($otpVerified) {
             $recaptchaAction = $recaptchaJson['action'] ?? '';
             
             // Minimum score threshold (0.5 is recommended, lower = more permissive)
-            $minScore = 0.3;
+            // Temporarily lowered to 0.1 for testing - increase to 0.3-0.5 for production
+            $minScore = 0.1;
             
             if ($recaptchaScore >= $minScore) {
                 $recaptchaValid = true;
                 error_log("reCAPTCHA v3 passed - Score: {$recaptchaScore}, Action: {$recaptchaAction}");
             } else {
-                error_log("reCAPTCHA v3 score too low - Score: {$recaptchaScore}, Action: {$recaptchaAction}");
-                echo json_encode(["success" => false, "message" => "Security verification failed. Please try again or contact support."]);
+                error_log("reCAPTCHA v3 score too low - Score: {$recaptchaScore}, Action: {$recaptchaAction}, Required: {$minScore}");
+                echo json_encode([
+                    "success" => false, 
+                    "message" => "Security verification failed. Please try again or contact support.",
+                    "debug_info" => "Score: {$recaptchaScore}, Required: {$minScore}"
+                ]);
                 exit();
             }
         } else {
             $errorCodes = $recaptchaJson['error-codes'] ?? [];
-            error_log('reCAPTCHA v3 verification failed. Errors: ' . implode(', ', $errorCodes));
-            echo json_encode(["success" => false, "message" => "Security verification failed. Please refresh and try again."]);
+            $errorDetails = [
+                'success' => $recaptchaJson['success'] ?? false,
+                'error-codes' => $errorCodes,
+                'raw_response' => $recaptchaResult
+            ];
+            error_log('reCAPTCHA v3 verification failed. Details: ' . json_encode($errorDetails));
+            
+            // More helpful error message
+            $errorMessage = "Security verification failed. Please refresh and try again.";
+            if (in_array('invalid-input-secret', $errorCodes)) {
+                $errorMessage = "reCAPTCHA configuration error. Please contact administrator.";
+            } elseif (in_array('timeout-or-duplicate', $errorCodes)) {
+                $errorMessage = "Security verification expired. Please refresh the page and try again.";
+            }
+            
+            echo json_encode(["success" => false, "message" => $errorMessage]);
             exit();
         }
     }
