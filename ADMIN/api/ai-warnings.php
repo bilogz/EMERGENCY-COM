@@ -116,7 +116,11 @@ function getAISettings() {
     $secureApiKey = null;
     try {
         if (function_exists('getGeminiApiKey')) {
-            $secureApiKey = getGeminiApiKey();
+            $secureApiKey = getGeminiApiKey('default');
+            // Also check for analysis key
+            if (empty($secureApiKey)) {
+                $secureApiKey = getGeminiApiKey('analysis');
+            }
         }
     } catch (Exception $e) {
         error_log("Error getting Gemini API key: " . $e->getMessage());
@@ -411,7 +415,10 @@ function saveAISettings() {
     $existing = $stmt->fetch();
     
     // Check secure config for API key if not provided
-    $secureApiKey = getGeminiApiKey();
+    $secureApiKey = getGeminiApiKey('default');
+    if (empty($secureApiKey)) {
+        $secureApiKey = getGeminiApiKey('analysis');
+    }
     
     if ($existing) {
         // Only update API key if a new one is provided (not masked)
@@ -628,7 +635,10 @@ function analyzeWithAI($settings) {
     global $pdo;
     $warnings = [];
     
-    $apiKey = getGeminiApiKey();
+    $apiKey = getGeminiApiKey('analysis');
+    if (empty($apiKey)) {
+        $apiKey = getGeminiApiKey('default');
+    }
     if (empty($apiKey)) {
         // Try to get from settings
         $apiKey = $settings['gemini_api_key'] ?? '';
@@ -1066,13 +1076,17 @@ function sendWeatherAnalysisAuto() {
         return;
     }
     
-    // Get API key
-    $apiKey = getGeminiApiKey();
+    // Get API key - prefer analysis key for analysis functions
+    $apiKey = getGeminiApiKey('analysis');
+    if (empty($apiKey)) {
+        $apiKey = getGeminiApiKey('default');
+    }
     if (empty($apiKey)) {
         $apiKey = $settings['gemini_api_key'] ?? '';
     }
     
     if (empty($apiKey)) {
+        http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Gemini API key not configured']);
         return;
     }
@@ -1088,6 +1102,7 @@ function sendWeatherAnalysisAuto() {
     }
     
     if (empty($weatherData) || !is_array($weatherData)) {
+        http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Please check PAGASA API key configuration.']);
         return;
     }
@@ -1097,6 +1112,7 @@ function sendWeatherAnalysisAuto() {
     $weather = $weatherData[$locationName] ?? reset($weatherData);
     
     if (!$weather || !is_array($weather)) {
+        http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'No weather data available for analysis']);
         return;
     }
@@ -1287,6 +1303,7 @@ function getWeatherAnalysis() {
     try {
         // Ensure we have a database connection
         if ($pdo === null) {
+            http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Database connection not available']);
             return;
         }
@@ -1308,14 +1325,20 @@ function getWeatherAnalysis() {
         // Continue with null settings
     }
     
-    // Get API key
+    // Get API key - prefer analysis key for analysis functions
     $apiKey = null;
     try {
         if (function_exists('getGeminiApiKey')) {
-            $apiKey = getGeminiApiKey();
+            $apiKey = getGeminiApiKey('analysis');
+            // Fallback to default key if analysis key not available
+            if (empty($apiKey)) {
+                $apiKey = getGeminiApiKey('default');
+            }
         }
     } catch (Exception $e) {
         error_log("Error getting Gemini API key: " . $e->getMessage());
+    } catch (Error $e) {
+        error_log("Fatal error getting Gemini API key: " . $e->getMessage());
     }
     
     // Fallback to database if secure config doesn't have it
@@ -1324,7 +1347,8 @@ function getWeatherAnalysis() {
     }
     
     if (empty($apiKey)) {
-        echo json_encode(['success' => false, 'message' => 'Gemini API key not configured. Please set your API key in AI Warning Settings.']);
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Gemini API key not configured. Please check your API key configuration in AI Warning Settings.']);
         return;
     }
     
@@ -1339,6 +1363,7 @@ function getWeatherAnalysis() {
     }
     
     if (empty($weatherData) || !is_array($weatherData)) {
+        http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Please check PAGASA API key configuration.']);
         return;
     }
@@ -1348,6 +1373,7 @@ function getWeatherAnalysis() {
     $weather = $weatherData[$locationName] ?? reset($weatherData);
     
     if (!$weather || !is_array($weather)) {
+        http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'No weather data available for analysis']);
         return;
     }
@@ -1426,6 +1452,7 @@ Keep recommendations practical and actionable for public safety. Risk level shou
         
         if ($curlError) {
             error_log("CURL Error in getWeatherAnalysis: " . $curlError);
+            http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Network error: ' . $curlError]);
             return;
         }
@@ -1438,9 +1465,10 @@ Keep recommendations practical and actionable for public safety. Risk level shou
             } elseif (!empty($response)) {
                 $errorMsg = "HTTP $httpCode: " . substr($response, 0, 100);
             } else {
-                $errorMsg = "HTTP $httpCode: Empty response";
+                $errorMsg = "HTTP $httpCode: Empty response from server";
             }
             error_log("Gemini API error in getWeatherAnalysis: HTTP $httpCode - $errorMsg");
+            http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Failed to generate analysis: ' . $errorMsg]);
             return;
         }
@@ -1448,6 +1476,7 @@ Keep recommendations practical and actionable for public safety. Risk level shou
         $responseData = json_decode($response, true);
         
         if (!isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
+            http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Invalid response from AI']);
             return;
         }
@@ -1491,12 +1520,13 @@ Keep recommendations practical and actionable for public safety. Risk level shou
     } catch (Exception $e) {
         error_log("Error getting disaster monitoring analysis: " . $e->getMessage());
         error_log("Stack trace: " . $e->getTraceAsString());
+        http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
     } catch (Error $e) {
         error_log("Fatal error getting disaster monitoring analysis: " . $e->getMessage());
         error_log("Stack trace: " . $e->getTraceAsString());
+        http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Fatal error: ' . $e->getMessage()]);
-    }
     }
 }
 

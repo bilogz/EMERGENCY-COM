@@ -8,21 +8,49 @@
 /**
  * Get Gemini API Key securely
  * Checks: 1) Secure config file, 2) Database, 3) Environment variable
+ * @param string $purpose Optional: 'analysis', 'translation', or 'default' - determines which key to use
  */
-function getGeminiApiKey() {
+function getGeminiApiKey($purpose = 'default') {
     // Priority 1: Secure config file (most secure, not in Git)
-    $secureConfigFile = __DIR__ . '/../../USERS/api/config.local.php';
-    if (file_exists($secureConfigFile)) {
+    // Try multiple possible paths
+    $possiblePaths = [
+        __DIR__ . '/../../USERS/api/config.local.php',
+        __DIR__ . '/../../../USERS/api/config.local.php',
+        dirname(dirname(dirname(__DIR__))) . '/USERS/api/config.local.php'
+    ];
+    
+    $secureConfigFile = null;
+    foreach ($possiblePaths as $path) {
+        if (file_exists($path)) {
+            $secureConfigFile = $path;
+            break;
+        }
+    }
+    
+    if ($secureConfigFile && file_exists($secureConfigFile)) {
         try {
             $secureConfig = require $secureConfigFile;
-            if (is_array($secureConfig) && !empty($secureConfig['AI_API_KEY'])) {
-                return $secureConfig['AI_API_KEY'];
+            if (is_array($secureConfig)) {
+                // Check for purpose-specific key first
+                if ($purpose === 'analysis' && !empty($secureConfig['AI_API_KEY_ANALYSIS'])) {
+                    return $secureConfig['AI_API_KEY_ANALYSIS'];
+                }
+                if ($purpose === 'translation' && !empty($secureConfig['AI_API_KEY_TRANSLATION'])) {
+                    return $secureConfig['AI_API_KEY_TRANSLATION'];
+                }
+                // Fallback to default key
+                if (!empty($secureConfig['AI_API_KEY'])) {
+                    return $secureConfig['AI_API_KEY'];
+                }
             }
         } catch (Exception $e) {
-            error_log("Error loading secure config file: " . $e->getMessage());
+            error_log("Error loading secure config file: " . $e->getMessage() . " (File: " . $secureConfigFile . ")");
         } catch (Error $e) {
-            error_log("Fatal error loading secure config file: " . $e->getMessage());
+            error_log("Fatal error loading secure config file: " . $e->getMessage() . " (File: " . $secureConfigFile . ")");
         }
+    } else {
+        $checkedPaths = implode(', ', $possiblePaths);
+        error_log("Config file not found. Checked paths: " . $checkedPaths);
     }
     
     // Priority 2: Database (for backward compatibility)
@@ -58,8 +86,22 @@ function getGeminiApiKey() {
  * Get Gemini Model (defaults to Gemini 2.5 Flash)
  */
 function getGeminiModel() {
-    $secureConfigFile = __DIR__ . '/../../USERS/api/config.local.php';
-    if (file_exists($secureConfigFile)) {
+    // Try multiple possible paths
+    $possiblePaths = [
+        __DIR__ . '/../../USERS/api/config.local.php',
+        __DIR__ . '/../../../USERS/api/config.local.php',
+        dirname(dirname(dirname(__DIR__))) . '/USERS/api/config.local.php'
+    ];
+    
+    $secureConfigFile = null;
+    foreach ($possiblePaths as $path) {
+        if (file_exists($path)) {
+            $secureConfigFile = $path;
+            break;
+        }
+    }
+    
+    if ($secureConfigFile && file_exists($secureConfigFile)) {
         try {
             $secureConfig = require $secureConfigFile;
             if (is_array($secureConfig) && isset($secureConfig['GEMINI_MODEL'])) {
