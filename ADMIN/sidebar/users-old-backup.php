@@ -1,6 +1,6 @@
 <?php
 /**
- * User Management Portal - Modern Responsive Version
+ * User Management Portal
  * Super Admin can create and manage Admin and Staff accounts
  */
 
@@ -36,15 +36,10 @@ $pageTitle = 'User Management';
     <link rel="stylesheet" href="css/forms.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <style>
-        /* ===================================
-           USER MANAGEMENT RESPONSIVE STYLES
-           =================================== */
-        
         .user-management-container {
             padding: 1rem 0;
         }
         
-        /* Stats Cards - Responsive Grid */
         .user-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -58,12 +53,6 @@ $pageTitle = 'User Management';
             padding: 1.5rem;
             border-left: 4px solid var(--primary-color-1);
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         
         .stat-card.admin { border-left-color: #3498db; }
@@ -75,18 +64,13 @@ $pageTitle = 'User Management';
             font-size: 2rem;
             font-weight: bold;
             color: var(--primary-color-1);
-            margin-bottom: 0.5rem;
         }
         
         .stat-card .stat-label {
             color: var(--text-secondary-1);
             font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
         }
         
-        /* Action Bar - Responsive */
         .action-bar {
             display: flex;
             justify-content: space-between;
@@ -96,30 +80,15 @@ $pageTitle = 'User Management';
             gap: 1rem;
         }
         
-        .search-filter-container {
-            display: flex;
-            gap: 1rem;
-            flex: 1;
-            min-width: 0;
-            flex-wrap: wrap;
-        }
-        
         .search-box {
             display: flex;
             align-items: center;
             background: var(--card-bg-1);
             border: 1px solid var(--border-color-1);
             border-radius: 8px;
-            padding: 0.75rem 1rem;
+            padding: 0.5rem 1rem;
             flex: 1;
-            min-width: 200px;
             max-width: 400px;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-        
-        .search-box:focus-within {
-            border-color: var(--primary-color-1);
-            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
         }
         
         .search-box input {
@@ -133,27 +102,23 @@ $pageTitle = 'User Management';
         
         .search-box i {
             color: var(--text-secondary-1);
-            margin-right: 0.75rem;
-            font-size: 1rem;
+            margin-right: 0.5rem;
         }
         
         .filter-buttons {
             display: flex;
             gap: 0.5rem;
-            flex-wrap: wrap;
         }
         
         .filter-btn {
-            padding: 0.75rem 1.25rem;
+            padding: 0.5rem 1rem;
             border: 1px solid var(--border-color-1);
             background: var(--card-bg-1);
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 0.875rem;
+            font-size: 0.85rem;
             color: var(--text-color-1);
-            transition: all 0.2s ease;
-            font-weight: 500;
-            white-space: nowrap;
+            transition: all 0.15s ease;
         }
         
         .filter-btn:hover {
@@ -169,32 +134,26 @@ $pageTitle = 'User Management';
             color: white;
         }
         
-        .btn-add {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            white-space: nowrap;
+        .filter-btn:active {
+            transform: translateY(0) scale(0.98);
         }
         
-        /* Users Table - Desktop View */
         .users-table-container {
             background: var(--card-bg-1);
             border-radius: 12px;
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             border: 1px solid var(--border-color-1);
-            overflow-x: auto;
         }
         
         .users-table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 800px;
         }
         
         .users-table th,
         .users-table td {
-            padding: 1.25rem 1rem;
+            padding: 1rem;
             text-align: left;
             border-bottom: 1px solid var(--border-color-1);
         }
@@ -203,12 +162,9 @@ $pageTitle = 'User Management';
             background: var(--bg-color-1);
             font-weight: 600;
             color: var(--text-color-1);
-            font-size: 0.875rem;
+            font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            position: sticky;
-            top: 0;
-            z-index: 1;
         }
         
         .users-table tr:hover {
@@ -219,44 +175,15 @@ $pageTitle = 'User Management';
             border-bottom: none;
         }
         
-        /* User Cards - Mobile View */
-        .users-cards-container {
-            display: none;
-            gap: 1rem;
-        }
-        
-        .user-card {
-            background: var(--card-bg-1);
-            border-radius: 12px;
-            padding: 1.5rem;
-            border: 1px solid var(--border-color-1);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        
-        .user-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        
-        .user-card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 1rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border-color-1);
-        }
-        
         .user-info {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.75rem;
         }
         
         .user-avatar {
-            width: 50px;
-            height: 50px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             background: var(--primary-color-1);
             display: flex;
@@ -264,65 +191,25 @@ $pageTitle = 'User Management';
             justify-content: center;
             color: white;
             font-weight: 600;
-            font-size: 1.125rem;
-            flex-shrink: 0;
+            font-size: 1rem;
         }
         
         .user-details .user-name {
             font-weight: 600;
             color: var(--text-color-1);
-            font-size: 1.125rem;
-            margin-bottom: 0.25rem;
         }
         
         .user-details .user-email {
-            font-size: 0.875rem;
+            font-size: 0.85rem;
             color: var(--text-secondary-1);
         }
         
-        .user-card-body {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-        
-        .user-card-field {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-        }
-        
-        .user-card-field-label {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-secondary-1);
-            font-weight: 600;
-        }
-        
-        .user-card-field-value {
-            font-size: 0.9375rem;
-            color: var(--text-color-1);
-        }
-        
-        .user-card-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 0.75rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--border-color-1);
-        }
-        
-        /* Badges */
-        .role-badge, .status-badge {
-            padding: 0.375rem 0.875rem;
+        .role-badge {
+            padding: 0.25rem 0.75rem;
             border-radius: 20px;
             font-size: 0.75rem;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: inline-block;
         }
         
         .role-badge.super_admin {
@@ -340,6 +227,13 @@ $pageTitle = 'User Management';
             color: #2ecc71;
         }
         
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
         .status-badge.active {
             background: rgba(46, 204, 113, 0.15);
             color: #2ecc71;
@@ -355,23 +249,21 @@ $pageTitle = 'User Management';
             color: #f39c12;
         }
         
-        /* Action Buttons */
         .action-buttons {
             display: flex;
             gap: 0.5rem;
         }
         
         .action-btn {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             border-radius: 8px;
             border: none;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s ease;
-            font-size: 1rem;
+            transition: all 0.15s ease;
         }
         
         .action-btn.edit {
@@ -389,6 +281,11 @@ $pageTitle = 'User Management';
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         
+        .action-btn:active {
+            transform: scale(0.95);
+            box-shadow: none;
+        }
+        
         .action-btn.edit:hover {
             background: #3498db;
             color: white;
@@ -399,7 +296,7 @@ $pageTitle = 'User Management';
             color: white;
         }
         
-        /* Modal Styles - Responsive */
+        /* Modal Styles */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -411,10 +308,10 @@ $pageTitle = 'User Management';
             z-index: 10000;
             align-items: center;
             justify-content: center;
-            padding: 1rem;
+            pointer-events: auto;
+            cursor: pointer;
             opacity: 0;
             transition: opacity 0.2s ease;
-            overflow-y: auto;
         }
 
         .modal-overlay.show {
@@ -425,25 +322,15 @@ $pageTitle = 'User Management';
         .modal-content {
             background: var(--card-bg-1);
             border-radius: 16px;
-            width: 100%;
+            width: 90%;
             max-width: 500px;
             max-height: 90vh;
             overflow-y: auto;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
             position: relative;
-            margin: auto;
-            animation: modalSlideIn 0.3s ease;
-        }
-        
-        @keyframes modalSlideIn {
-            from {
-                transform: translateY(-20px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
+            pointer-events: auto;
+            cursor: default;
+            z-index: 10001;
         }
 
         .modal-header {
@@ -452,38 +339,43 @@ $pageTitle = 'User Management';
             display: flex;
             justify-content: space-between;
             align-items: center;
-            position: sticky;
-            top: 0;
-            background: var(--card-bg-1);
-            z-index: 10;
+            pointer-events: auto;
+            position: relative;
         }
 
         .modal-header h2 {
             margin: 0;
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             color: var(--text-color-1);
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
         }
 
         .modal-close {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             background: var(--bg-color-1);
             border: 1px solid var(--border-color-1);
             border-radius: 8px;
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             cursor: pointer;
             color: var(--text-secondary-1);
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
-            flex-shrink: 0;
-            position: relative;
-            z-index: 10001;
             pointer-events: auto;
+            flex-shrink: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            touch-action: manipulation;
+            position: relative;
+            z-index: 10002;
+        }
+
+        .modal-close:focus {
+            outline: 2px solid var(--primary-color-1);
+            outline-offset: 2px;
         }
 
         .modal-close:hover {
@@ -499,62 +391,59 @@ $pageTitle = 'User Management';
 
         .modal-body {
             padding: 1.5rem;
+            pointer-events: auto;
         }
 
         .form-group {
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.25rem;
         }
 
         .form-group label {
             display: block;
-            margin-bottom: 0.75rem;
-            font-weight: 600;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
             color: var(--text-color-1);
-            font-size: 0.9375rem;
         }
 
         .form-group input,
         .form-group select {
             width: 100%;
-            padding: 0.875rem 1rem;
+            padding: 0.75rem 1rem;
             border: 1px solid var(--border-color-1);
             border-radius: 8px;
-            font-size: 0.9375rem;
+            font-size: 0.95rem;
             background: var(--bg-color-1);
             color: var(--text-color-1);
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            transition: border-color 0.2s;
         }
 
         .form-group input:focus,
         .form-group select:focus {
             outline: none;
             border-color: var(--primary-color-1);
-            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
         }
 
         .form-group small {
             display: block;
-            margin-top: 0.5rem;
+            margin-top: 0.25rem;
             color: var(--text-secondary-1);
-            font-size: 0.8125rem;
+            font-size: 0.8rem;
         }
 
         .modal-footer {
-            padding: 1.25rem 1.5rem;
+            padding: 1rem 1.5rem;
             border-top: 1px solid var(--border-color-1);
             display: flex;
             justify-content: flex-end;
             gap: 0.75rem;
-            position: sticky;
-            bottom: 0;
-            background: var(--card-bg-1);
+            pointer-events: auto;
         }
 
         .btn {
-            padding: 0.875rem 1.75rem;
+            padding: 0.75rem 1.5rem;
             border-radius: 8px;
-            font-size: 0.9375rem;
-            font-weight: 600;
+            font-size: 0.95rem;
+            font-weight: 500;
             cursor: pointer;
             border: none;
             transition: all 0.2s ease;
@@ -562,13 +451,18 @@ $pageTitle = 'User Management';
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
-            position: relative;
-            z-index: 10001;
             pointer-events: auto;
+            position: relative;
+            z-index: 10002;
+        }
+
+        .btn:focus {
+            outline: 2px solid var(--primary-color-1);
+            outline-offset: 2px;
         }
 
         .btn:active {
-            transform: scale(0.98);
+            transform: scale(0.95);
         }
 
         .btn-primary {
@@ -582,6 +476,11 @@ $pageTitle = 'User Management';
             box-shadow: 0 4px 12px rgba(76, 138, 137, 0.3);
         }
 
+        .btn-primary:active {
+            transform: translateY(0) scale(0.98);
+            box-shadow: none;
+        }
+
         .btn-secondary {
             background: var(--bg-color-1);
             color: var(--text-color-1);
@@ -593,10 +492,19 @@ $pageTitle = 'User Management';
             transform: translateY(-1px);
         }
 
-        /* Empty State */
+        .btn-secondary:active {
+            transform: translateY(0) scale(0.98);
+        }
+        
+        .btn-add {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
         .empty-state {
             text-align: center;
-            padding: 3rem 1.5rem;
+            padding: 3rem;
             color: var(--text-secondary-1);
         }
         
@@ -606,14 +514,9 @@ $pageTitle = 'User Management';
             opacity: 0.5;
         }
         
-        .empty-state p {
-            font-size: 1.125rem;
-            margin: 0;
-        }
-        
         .access-denied {
             text-align: center;
-            padding: 3rem 1.5rem;
+            padding: 3rem;
             background: var(--card-bg-1);
             border-radius: 12px;
             border: 1px solid var(--border-color-1);
@@ -632,128 +535,47 @@ $pageTitle = 'User Management';
         
         .access-denied p {
             color: var(--text-secondary-1);
-            margin-bottom: 1.5rem;
         }
-
-        /* Responsive Design */
+        
         @media (max-width: 768px) {
-            .user-stats {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 0.75rem;
-            }
-            
-            .stat-card {
-                padding: 1rem;
-            }
-            
-            .stat-card .stat-value {
-                font-size: 1.5rem;
-            }
-            
             .action-bar {
                 flex-direction: column;
                 align-items: stretch;
             }
-            
-            .search-filter-container {
-                flex-direction: column;
-            }
-            
+
             .search-box {
-                max-width: 100%;
+                max-width: none;
             }
-            
+
             .filter-buttons {
-                width: 100%;
+                flex-wrap: wrap;
             }
-            
-            .filter-btn {
-                flex: 1;
-                text-align: center;
-                padding: 0.625rem 0.875rem;
-                font-size: 0.8125rem;
+
+            .users-table {
+                display: block;
+                overflow-x: auto;
             }
-            
-            .btn-add {
-                width: 100%;
-                justify-content: center;
-            }
-            
-            /* Hide table on mobile, show cards */
-            .users-table-container {
-                display: none;
-            }
-            
-            .users-cards-container {
-                display: grid;
-            }
-            
-            .user-card-body {
-                grid-template-columns: 1fr;
-            }
-            
-            .user-card-footer {
-                flex-direction: column;
-            }
-            
-            .user-card-footer .btn {
-                width: 100%;
-            }
-            
+
             .modal-content {
-                max-width: 100%;
-                margin: 0;
-                border-radius: 16px 16px 0 0;
+                width: 95%;
+                max-width: none;
+                margin: 1rem;
                 max-height: 95vh;
             }
-            
-            .modal-header {
-                padding: 1.25rem;
-            }
-            
-            .modal-header h2 {
-                font-size: 1.25rem;
-            }
-            
-            .modal-body {
-                padding: 1.25rem;
-            }
-            
+
+            .modal-header,
+            .modal-body,
             .modal-footer {
-                padding: 1rem 1.25rem;
-                flex-direction: column-reverse;
+                padding: 1rem;
             }
-            
-            .modal-footer .btn {
-                width: 100%;
-            }
-        }
-        
-        @media (max-width: 480px) {
-            .user-stats {
-                grid-template-columns: 1fr;
-            }
-            
-            .user-info {
+
+            .modal-footer {
                 flex-direction: column;
-                align-items: flex-start;
                 gap: 0.75rem;
             }
-            
-            .user-avatar {
-                width: 40px;
-                height: 40px;
-                font-size: 1rem;
-            }
-        }
-        
-        @media (min-width: 769px) {
-            .users-cards-container {
-                display: none !important;
-            }
-            
-            .users-table-container {
-                display: block;
+
+            .modal-footer .btn {
+                width: 100%;
             }
         }
     </style>
@@ -805,44 +627,34 @@ $pageTitle = 'User Management';
                         <div class="user-stats">
                             <div class="stat-card admin">
                                 <div class="stat-value" id="totalAdmins">0</div>
-                                <div class="stat-label">
-                                    <i class="fas fa-user-shield"></i> Administrators
-                                </div>
+                                <div class="stat-label"><i class="fas fa-user-shield"></i> Administrators</div>
                             </div>
                             <div class="stat-card staff">
                                 <div class="stat-value" id="totalStaff">0</div>
-                                <div class="stat-label">
-                                    <i class="fas fa-user-tie"></i> Staff Members
-                                </div>
+                                <div class="stat-label"><i class="fas fa-user-tie"></i> Staff Members</div>
                             </div>
                             <div class="stat-card pending">
                                 <div class="stat-value" id="totalPending">0</div>
-                                <div class="stat-label">
-                                    <i class="fas fa-clock"></i> Pending Approval
-                                </div>
+                                <div class="stat-label"><i class="fas fa-clock"></i> Pending Approval</div>
                             </div>
                             <div class="stat-card inactive">
                                 <div class="stat-value" id="totalInactive">0</div>
-                                <div class="stat-label">
-                                    <i class="fas fa-user-slash"></i> Inactive
-                                </div>
+                                <div class="stat-label"><i class="fas fa-user-slash"></i> Inactive</div>
                             </div>
                         </div>
                         
                         <!-- Action Bar -->
                         <div class="action-bar">
-                            <div class="search-filter-container">
-                                <div class="search-box">
-                                    <i class="fas fa-search"></i>
-                                    <input type="text" id="searchInput" placeholder="Search users by name or email...">
-                                </div>
-                                
-                                <div class="filter-buttons">
-                                    <button class="filter-btn active" data-filter="all">All</button>
-                                    <button class="filter-btn" data-filter="super_admin">Super Admin</button>
-                                    <button class="filter-btn" data-filter="admin">Admin</button>
-                                    <button class="filter-btn" data-filter="staff">Staff</button>
-                                </div>
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="searchInput" placeholder="Search users by name or email...">
+                            </div>
+                            
+                            <div class="filter-buttons">
+                                <button class="filter-btn active" data-filter="all">All</button>
+                                <button class="filter-btn" data-filter="super_admin">Super Admin</button>
+                                <button class="filter-btn" data-filter="admin">Admin</button>
+                                <button class="filter-btn" data-filter="staff">Staff</button>
                             </div>
                             
                             <button class="btn btn-primary btn-add" onclick="openCreateModal()">
@@ -850,7 +662,7 @@ $pageTitle = 'User Management';
                             </button>
                         </div>
                         
-                        <!-- Users Table (Desktop) -->
+                        <!-- Users Table -->
                         <div class="users-table-container">
                             <table class="users-table">
                                 <thead>
@@ -875,11 +687,6 @@ $pageTitle = 'User Management';
                                 </tbody>
                             </table>
                         </div>
-                        
-                        <!-- Users Cards (Mobile) -->
-                        <div class="users-cards-container" id="usersCardsContainer">
-                            <!-- Cards will be inserted here by JavaScript -->
-                        </div>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -892,7 +699,7 @@ $pageTitle = 'User Management';
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalTitle"><i class="fas fa-user-plus"></i> Create New User</h2>
-                <button type="button" class="modal-close" id="modalCloseBtn" onclick="closeModal(); return false;" aria-label="Close">&times;</button>
+                <button type="button" class="modal-close" id="modalCloseBtn" onclick="closeModal(); return false;">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="userForm">
@@ -948,8 +755,16 @@ $pageTitle = 'User Management';
         let users = [];
         let currentFilter = 'all';
         
+        // Function to setup modal button handlers (must be accessible globally)
+        // Note: Buttons now use inline onclick handlers for reliability
+        function setupModalButtons() {
+            // Additional event listeners can be added here if needed
+            // But inline onclick handlers are primary
+        }
+        
         // Load users on page load
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing user management...');
             loadUsers();
 
             // Search functionality
@@ -965,58 +780,33 @@ $pageTitle = 'User Management';
                 });
             });
 
-            // Modal overlay click handler
+            // Setup modal buttons on page load
+            setupModalButtons();
+
+            // Set up overlay click handler - close modal when clicking on overlay (not on content)
             const modalOverlay = document.getElementById('userModal');
             if (modalOverlay) {
                 modalOverlay.addEventListener('click', function(e) {
+                    // Only close if clicking directly on the overlay, not on modal content
                     if (e.target === modalOverlay) {
                         closeModal();
                     }
                 });
             }
 
-            // Prevent modal content clicks from closing the modal (but allow button clicks)
+            // Prevent modal content clicks from closing the modal
             const modalContent = document.querySelector('#userModal .modal-content');
+            console.log('Modal content element:', modalContent);
             if (modalContent) {
                 modalContent.addEventListener('click', function(e) {
-                    // Don't stop propagation for buttons
-                    const isButton = e.target.closest('button');
-                    if (!isButton) {
-                        e.stopPropagation();
-                    }
-                });
-            }
-            
-            // Add direct event listeners to close and cancel buttons for reliability
-            const closeBtn = document.getElementById('modalCloseBtn');
-            const cancelBtn = document.getElementById('cancelBtn');
-            
-            if (closeBtn) {
-                closeBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
+                    // Stop propagation to prevent overlay click from closing modal
                     e.stopPropagation();
-                    if (typeof closeModal === 'function') {
-                        closeModal();
-                    } else if (typeof window.closeModal === 'function') {
-                        window.closeModal();
-                    }
-                    return false;
-                });
-            }
-            
-            if (cancelBtn) {
-                cancelBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (typeof closeModal === 'function') {
-                        closeModal();
-                    } else if (typeof window.closeModal === 'function') {
-                        window.closeModal();
-                    }
-                    return false;
                 });
             }
         });
+        
+        // Make setupModalButtons globally accessible
+        window.setupModalButtons = setupModalButtons;
         
         function loadUsers() {
             fetch('../api/user-management.php?action=list')
@@ -1044,13 +834,6 @@ $pageTitle = 'User Management';
         }
         
         function renderUsers(usersToRender) {
-            // Render table (desktop)
-            renderUsersTable(usersToRender);
-            // Render cards (mobile)
-            renderUsersCards(usersToRender);
-        }
-        
-        function renderUsersTable(usersToRender) {
             const tbody = document.getElementById('usersTableBody');
             
             if (usersToRender.length === 0) {
@@ -1084,77 +867,17 @@ $pageTitle = 'User Management';
                     <td>${user.last_login ? formatDate(user.last_login) : '<span style="color: var(--text-secondary-1);">Never</span>'}</td>
                     <td>
                         <div class="action-buttons">
-                            <button class="action-btn edit" onclick="editUser(${user.id})" title="Edit User" aria-label="Edit User">
+                            <button class="action-btn edit" onclick="editUser(${user.id})" title="Edit User">
                                 <i class="fas fa-edit"></i>
                             </button>
                             ${user.role !== 'super_admin' ? `
-                            <button class="action-btn delete" onclick="deleteUser(${user.id}, '${escapeHtml(user.name)}')" title="Delete User" aria-label="Delete User">
+                            <button class="action-btn delete" onclick="deleteUser(${user.id}, '${escapeHtml(user.name)}')" title="Delete User">
                                 <i class="fas fa-trash"></i>
                             </button>
                             ` : ''}
                         </div>
                     </td>
                 </tr>
-            `).join('');
-        }
-        
-        function renderUsersCards(usersToRender) {
-            const container = document.getElementById('usersCardsContainer');
-            
-            if (usersToRender.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-users"></i>
-                        <p>No users found</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            container.innerHTML = usersToRender.map(user => `
-                <div class="user-card" data-id="${user.id}">
-                    <div class="user-card-header">
-                        <div class="user-info">
-                            <div class="user-avatar">${getInitials(user.name)}</div>
-                            <div class="user-details">
-                                <div class="user-name">${escapeHtml(user.name)}</div>
-                                <div class="user-email">${escapeHtml(user.email)}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="user-card-body">
-                        <div class="user-card-field">
-                            <span class="user-card-field-label">Role</span>
-                            <span class="user-card-field-value">
-                                <span class="role-badge ${user.role}">${formatRole(user.role)}</span>
-                            </span>
-                        </div>
-                        <div class="user-card-field">
-                            <span class="user-card-field-label">Status</span>
-                            <span class="user-card-field-value">
-                                <span class="status-badge ${user.status}">${formatStatus(user.status)}</span>
-                            </span>
-                        </div>
-                        <div class="user-card-field">
-                            <span class="user-card-field-label">Created</span>
-                            <span class="user-card-field-value">${formatDate(user.created_at)}</span>
-                        </div>
-                        <div class="user-card-field">
-                            <span class="user-card-field-label">Last Login</span>
-                            <span class="user-card-field-value">${user.last_login ? formatDate(user.last_login) : 'Never'}</span>
-                        </div>
-                    </div>
-                    <div class="user-card-footer">
-                        <button class="btn btn-secondary" onclick="editUser(${user.id})">
-                            <i class="fas fa-edit"></i> Edit
-                        </button>
-                        ${user.role !== 'super_admin' ? `
-                        <button class="btn btn-primary" style="background: #e74c3c;" onclick="deleteUser(${user.id}, '${escapeHtml(user.name)}')">
-                            <i class="fas fa-trash"></i> Delete
-                        </button>
-                        ` : ''}
-                    </div>
-                </div>
             `).join('');
         }
         
@@ -1177,7 +900,6 @@ $pageTitle = 'User Management';
             document.getElementById('userId').value = '';
             document.getElementById('userPassword').required = true;
             document.getElementById('userModal').classList.add('show');
-            document.body.style.overflow = 'hidden';
         }
         
         function editUser(id) {
@@ -1193,14 +915,13 @@ $pageTitle = 'User Management';
             document.getElementById('userRole').value = user.role;
             document.getElementById('userStatus').value = user.status;
             document.getElementById('userModal').classList.add('show');
-            document.body.style.overflow = 'hidden';
         }
         
         function closeModal() {
+            console.log('closeModal() called');
             const modal = document.getElementById('userModal');
             if (modal) {
                 modal.classList.remove('show');
-                document.body.style.overflow = '';
                 // Reset the form
                 const form = document.getElementById('userForm');
                 if (form) {
@@ -1211,18 +932,27 @@ $pageTitle = 'User Management';
                 if (userIdField) {
                     userIdField.value = '';
                 }
+                console.log('Modal closed and form reset');
+            } else {
+                console.error('Modal element not found!');
             }
         }
-        
-        // Close modal on escape key
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' || e.keyCode === 27) {
-                const modal = document.getElementById('userModal');
-                if (modal && modal.classList.contains('show')) {
-                    closeModal();
-                }
-            }
-        });
+
+        // Debug functions for testing
+        function testOpenModal() {
+            console.log('Manually opening modal for testing');
+            openCreateModal();
+        }
+
+        function testCloseModal() {
+            console.log('Manually closing modal for testing');
+            closeModal();
+        }
+
+        // Make functions globally available for debugging
+        window.testOpenModal = testOpenModal;
+        window.testCloseModal = testCloseModal;
+        window.closeModal = closeModal;
         
         function saveUser() {
             const form = document.getElementById('userForm');
@@ -1262,6 +992,7 @@ $pageTitle = 'User Management';
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
+                    // Show success notification and reload users
                     Swal.fire({
                         icon: 'success',
                         title: 'Success!',
@@ -1272,6 +1003,8 @@ $pageTitle = 'User Management';
                         position: 'top-end'
                     });
                     loadUsers();
+
+                    // Close modal after a brief delay to show the success message
                     setTimeout(() => {
                         closeModal();
                     }, 500);
@@ -1369,33 +1102,19 @@ $pageTitle = 'User Management';
                     </td>
                 </tr>
             `;
-            document.getElementById('usersCardsContainer').innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-exclamation-triangle" style="color: #e74c3c;"></i>
-                    <p>${message}</p>
-                </div>
-            `;
         }
         
-        // Make functions globally accessible BEFORE PHP conditional ends
-        window.closeModal = closeModal;
-        window.openCreateModal = openCreateModal;
-        window.editUser = editUser;
-        window.saveUser = saveUser;
-        window.deleteUser = deleteUser;
-        <?php endif; ?>
-        
-        // Ensure closeModal is always accessible (even outside PHP conditional)
-        if (typeof window.closeModal === 'undefined') {
-            window.closeModal = function() {
+        // Close modal on escape key (only when modal is open)
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) {
                 const modal = document.getElementById('userModal');
-                if (modal) {
-                    modal.classList.remove('show');
-                    document.body.style.overflow = '';
+                if (modal && modal.classList.contains('show')) {
+                    console.log('Escape key pressed, closing modal');
+                    closeModal();
                 }
-            };
-        }
+            }
+        });
+        <?php endif; ?>
     </script>
 </body>
 </html>
-

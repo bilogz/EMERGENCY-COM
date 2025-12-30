@@ -481,9 +481,6 @@ $pageTitle = 'User Management';
             justify-content: center;
             transition: all 0.2s ease;
             flex-shrink: 0;
-            position: relative;
-            z-index: 10001;
-            pointer-events: auto;
         }
 
         .modal-close:hover {
@@ -562,9 +559,6 @@ $pageTitle = 'User Management';
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
-            position: relative;
-            z-index: 10001;
-            pointer-events: auto;
         }
 
         .btn:active {
@@ -975,45 +969,11 @@ $pageTitle = 'User Management';
                 });
             }
 
-            // Prevent modal content clicks from closing the modal (but allow button clicks)
+            // Prevent modal content clicks from closing the modal
             const modalContent = document.querySelector('#userModal .modal-content');
             if (modalContent) {
                 modalContent.addEventListener('click', function(e) {
-                    // Don't stop propagation for buttons
-                    const isButton = e.target.closest('button');
-                    if (!isButton) {
-                        e.stopPropagation();
-                    }
-                });
-            }
-            
-            // Add direct event listeners to close and cancel buttons for reliability
-            const closeBtn = document.getElementById('modalCloseBtn');
-            const cancelBtn = document.getElementById('cancelBtn');
-            
-            if (closeBtn) {
-                closeBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
                     e.stopPropagation();
-                    if (typeof closeModal === 'function') {
-                        closeModal();
-                    } else if (typeof window.closeModal === 'function') {
-                        window.closeModal();
-                    }
-                    return false;
-                });
-            }
-            
-            if (cancelBtn) {
-                cancelBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (typeof closeModal === 'function') {
-                        closeModal();
-                    } else if (typeof window.closeModal === 'function') {
-                        window.closeModal();
-                    }
-                    return false;
                 });
             }
         });
@@ -1377,24 +1337,13 @@ $pageTitle = 'User Management';
             `;
         }
         
-        // Make functions globally accessible BEFORE PHP conditional ends
+        // Make functions globally accessible
         window.closeModal = closeModal;
         window.openCreateModal = openCreateModal;
         window.editUser = editUser;
         window.saveUser = saveUser;
         window.deleteUser = deleteUser;
         <?php endif; ?>
-        
-        // Ensure closeModal is always accessible (even outside PHP conditional)
-        if (typeof window.closeModal === 'undefined') {
-            window.closeModal = function() {
-                const modal = document.getElementById('userModal');
-                if (modal) {
-                    modal.classList.remove('show');
-                    document.body.style.overflow = '';
-                }
-            };
-        }
     </script>
 </body>
 </html>
