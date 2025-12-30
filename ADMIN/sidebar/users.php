@@ -470,8 +470,13 @@ $pageTitle = 'User Management';
             position: sticky;
             top: 0;
             background: var(--card-bg-1);
-            z-index: 10;
-            pointer-events: auto;
+            z-index: 10003 !important;
+            pointer-events: auto !important;
+        }
+        
+        .modal-header button {
+            z-index: 10004 !important;
+            pointer-events: auto !important;
         }
 
         .modal-header h2 {
@@ -498,8 +503,8 @@ $pageTitle = 'User Management';
             transition: all 0.2s ease;
             flex-shrink: 0;
             position: relative;
-            z-index: 10001;
-            pointer-events: auto;
+            z-index: 10003 !important;
+            pointer-events: auto !important;
             -webkit-tap-highlight-color: transparent;
             touch-action: manipulation;
             user-select: none;
@@ -568,7 +573,13 @@ $pageTitle = 'User Management';
             position: sticky;
             bottom: 0;
             background: var(--card-bg-1);
-            z-index: 10002;
+            z-index: 10003 !important;
+            pointer-events: auto !important;
+        }
+        
+        .modal-footer button {
+            z-index: 10004 !important;
+            pointer-events: auto !important;
         }
 
         .btn {
@@ -584,8 +595,8 @@ $pageTitle = 'User Management';
             justify-content: center;
             gap: 0.5rem;
             position: relative;
-            z-index: 10001;
-            pointer-events: auto;
+            z-index: 10003 !important;
+            pointer-events: auto !important;
             -webkit-tap-highlight-color: transparent;
             touch-action: manipulation;
             user-select: none;
@@ -1005,56 +1016,77 @@ $pageTitle = 'User Management';
                 });
             }
 
-            // Prevent modal content clicks from closing the modal
+            // Prevent modal content clicks from closing the modal (but allow button clicks)
             const modalContent = document.querySelector('#userModal .modal-content');
             if (modalContent) {
                 modalContent.addEventListener('click', function(e) {
-                    // Stop propagation so clicks on modal content don't reach overlay
-                    e.stopPropagation();
+                    // Don't stop propagation for buttons, links, or interactive elements
+                    const isButton = e.target.closest('button, .btn, .modal-close, [role="button"]');
+                    if (!isButton) {
+                        // Only stop propagation for non-interactive elements
+                        e.stopPropagation();
+                    }
+                    // Let buttons handle their own clicks
                 });
             }
             
-            // Set up additional event listeners as backup (inline onclick is primary)
+            // Set up button handlers - ensure all buttons work
             function setupButtons() {
                 const closeBtn = document.getElementById('modalCloseBtn');
                 const cancelBtn = document.getElementById('cancelBtn');
                 const saveBtn = document.getElementById('saveUserBtn');
                 const addUserBtn = document.getElementById('addUserBtn');
                 
-                // Helper function to add additional event listeners
-                function addButtonHandlers(button, handler, buttonName) {
+                // Helper function to ensure button works
+                function ensureButtonWorks(button, handler, buttonName) {
                     if (!button) {
+                        console.warn('Button not found:', buttonName);
                         return;
                     }
                     
-                    // Add click handler as backup (inline onclick is primary)
+                    // Add direct event listener as primary handler (onclick is backup)
+                    // Use capture phase to ensure it fires first
                     button.addEventListener('click', function(e) {
-                        // Only handle if inline onclick didn't work
-                        if (e.defaultPrevented) return;
-                        if (handler) {
-                            e.preventDefault();
-                            e.stopPropagation();
+                        console.log('Button clicked via listener:', buttonName);
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        if (handler && typeof handler === 'function') {
+                            handler();
+                        }
+                        return false;
+                    }, true); // Capture phase - fires before onclick
+                    
+                    // Also add in bubble phase as backup
+                    button.addEventListener('click', function(e) {
+                        if (!e.defaultPrevented && handler && typeof handler === 'function') {
                             handler();
                         }
                     }, false);
                     
-                    // Add touch support for mobile
+                    // Touch support for mobile
                     button.addEventListener('touchend', function(e) {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (handler) handler();
-                    }, false);
+                        if (handler && typeof handler === 'function') {
+                            handler();
+                        }
+                        return false;
+                    }, true);
                 }
                 
-                // Set up button handlers (as backup to inline onclick)
-                addButtonHandlers(closeBtn, closeModal, 'closeBtn');
-                addButtonHandlers(cancelBtn, closeModal, 'cancelBtn');
-                addButtonHandlers(saveBtn, saveUser, 'saveBtn');
-                addButtonHandlers(addUserBtn, openCreateModal, 'addUserBtn');
+                // Set up all button handlers
+                ensureButtonWorks(closeBtn, closeModal, 'closeBtn');
+                ensureButtonWorks(cancelBtn, closeModal, 'cancelBtn');
+                ensureButtonWorks(saveBtn, saveUser, 'saveBtn');
+                ensureButtonWorks(addUserBtn, openCreateModal, 'addUserBtn');
             }
             
-            // Set up after DOM is ready
+            // Set up immediately
             setupButtons();
+            
+            // Also set up after a delay to catch any late-loading elements
+            setTimeout(setupButtons, 200);
         });
         
         function loadUsers() {
