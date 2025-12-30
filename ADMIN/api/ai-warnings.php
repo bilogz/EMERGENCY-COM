@@ -145,17 +145,28 @@ function getAISettings() {
     
     $settings = false;
     try {
-        $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
-        $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+        // Try to check if table exists first
+        $tableCheck = $pdo->query("SHOW TABLES LIKE 'ai_warning_settings'");
+        if ($tableCheck->rowCount() > 0) {
+            $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+            $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+        } else {
+            // Table doesn't exist, use default settings
+            $settings = false;
+        }
     } catch (PDOException $e) {
         error_log("Database error in getAISettings: " . $e->getMessage());
+        error_log("SQL Error Code: " . $e->getCode());
         // Table might not exist, return default settings
         $settings = false;
     } catch (Exception $e) {
         error_log("General error in getAISettings: " . $e->getMessage());
+        error_log("Exception type: " . get_class($e));
         $settings = false;
     } catch (Error $e) {
         error_log("Fatal error in getAISettings: " . $e->getMessage());
+        error_log("Error type: " . get_class($e));
+        error_log("File: " . $e->getFile() . " Line: " . $e->getLine());
         $settings = false;
     }
     
