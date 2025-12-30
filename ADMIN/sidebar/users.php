@@ -427,6 +427,7 @@ $pageTitle = 'User Management';
             opacity: 0;
             transition: opacity 0.2s ease;
             overflow-y: auto;
+            pointer-events: auto;
         }
 
         .modal-overlay.show {
@@ -445,6 +446,8 @@ $pageTitle = 'User Management';
             position: relative;
             margin: auto;
             animation: modalSlideIn 0.3s ease;
+            pointer-events: auto;
+            z-index: 10001;
         }
         
         @keyframes modalSlideIn {
@@ -468,6 +471,7 @@ $pageTitle = 'User Management';
             top: 0;
             background: var(--card-bg-1);
             z-index: 10;
+            pointer-events: auto;
         }
 
         .modal-header h2 {
@@ -514,6 +518,7 @@ $pageTitle = 'User Management';
 
         .modal-body {
             padding: 1.5rem;
+            pointer-events: auto;
         }
 
         .form-group {
@@ -869,7 +874,7 @@ $pageTitle = 'User Management';
                                 </div>
                             </div>
                             
-                            <button class="btn btn-primary btn-add" id="addUserBtn">
+                            <button type="button" class="btn btn-primary btn-add" id="addUserBtn" onclick="window.openCreateModal && window.openCreateModal(); return false;">
                                 <i class="fas fa-plus"></i> Add User
                             </button>
                         </div>
@@ -916,7 +921,7 @@ $pageTitle = 'User Management';
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalTitle"><i class="fas fa-user-plus"></i> Create New User</h2>
-                <button type="button" class="modal-close" id="modalCloseBtn" aria-label="Close">&times;</button>
+                <button type="button" class="modal-close" id="modalCloseBtn" onclick="window.closeModal && window.closeModal(); return false;" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="userForm">
@@ -958,8 +963,8 @@ $pageTitle = 'User Management';
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveUserBtn">
+                <button type="button" class="btn btn-secondary" id="cancelBtn" onclick="window.closeModal && window.closeModal(); return false;">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveUserBtn" onclick="window.saveUser && window.saveUser(); return false;">
                     <i class="fas fa-save"></i> Save User
                 </button>
             </div>
@@ -989,67 +994,67 @@ $pageTitle = 'User Management';
                 });
             });
 
-            // Modal overlay click handler
+            // Modal overlay click handler - only close when clicking directly on overlay
             const modalOverlay = document.getElementById('userModal');
             if (modalOverlay) {
                 modalOverlay.addEventListener('click', function(e) {
+                    // Only close if clicking directly on the overlay, not on modal content
                     if (e.target === modalOverlay) {
                         closeModal();
                     }
                 });
             }
 
-            // Prevent modal content clicks from closing the modal (but allow button clicks)
+            // Prevent modal content clicks from closing the modal
             const modalContent = document.querySelector('#userModal .modal-content');
             if (modalContent) {
                 modalContent.addEventListener('click', function(e) {
-                    // Check if the click is on an interactive element
-                    const isInteractive = e.target.closest('button, a, input, select, textarea, [role="button"], .btn, .action-btn, .filter-btn, .modal-close');
-                    
-                    // Only stop propagation for non-interactive elements in the modal body
-                    // Never interfere with buttons in header or footer
-                    if (!isInteractive) {
-                        const clickedInBody = e.target.closest('.modal-body');
-                        if (clickedInBody) {
-                            e.stopPropagation();
-                        }
+                    // Stop propagation so clicks on modal content don't reach overlay
+                    e.stopPropagation();
+                });
+            }
+            
+            // Set up additional event listeners as backup (inline onclick is primary)
+            function setupButtons() {
+                const closeBtn = document.getElementById('modalCloseBtn');
+                const cancelBtn = document.getElementById('cancelBtn');
+                const saveBtn = document.getElementById('saveUserBtn');
+                const addUserBtn = document.getElementById('addUserBtn');
+                
+                // Helper function to add additional event listeners
+                function addButtonHandlers(button, handler, buttonName) {
+                    if (!button) {
+                        return;
                     }
-                }, { passive: true });
+                    
+                    // Add click handler as backup (inline onclick is primary)
+                    button.addEventListener('click', function(e) {
+                        // Only handle if inline onclick didn't work
+                        if (e.defaultPrevented) return;
+                        if (handler) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handler();
+                        }
+                    }, false);
+                    
+                    // Add touch support for mobile
+                    button.addEventListener('touchend', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (handler) handler();
+                    }, false);
+                }
+                
+                // Set up button handlers (as backup to inline onclick)
+                addButtonHandlers(closeBtn, closeModal, 'closeBtn');
+                addButtonHandlers(cancelBtn, closeModal, 'cancelBtn');
+                addButtonHandlers(saveBtn, saveUser, 'saveBtn');
+                addButtonHandlers(addUserBtn, openCreateModal, 'addUserBtn');
             }
             
-            // Add direct event listeners to all buttons for reliability
-            const closeBtn = document.getElementById('modalCloseBtn');
-            const cancelBtn = document.getElementById('cancelBtn');
-            const saveBtn = document.getElementById('saveUserBtn');
-            const addUserBtn = document.getElementById('addUserBtn');
-            
-            // Helper function to add click and touch handlers
-            function addButtonHandlers(button, handler) {
-                if (!button) return;
-                
-                // Remove any existing onclick attributes
-                button.removeAttribute('onclick');
-                
-                // Add click handler
-                button.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handler();
-                });
-                
-                // Add touch support for mobile
-                button.addEventListener('touchend', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handler();
-                });
-            }
-            
-            // Set up button handlers
-            addButtonHandlers(closeBtn, closeModal);
-            addButtonHandlers(cancelBtn, closeModal);
-            addButtonHandlers(saveBtn, saveUser);
-            addButtonHandlers(addUserBtn, openCreateModal);
+            // Set up after DOM is ready
+            setupButtons();
         });
         
         function loadUsers() {
@@ -1213,6 +1218,8 @@ $pageTitle = 'User Management';
             document.getElementById('userModal').classList.add('show');
             document.body.style.overflow = 'hidden';
         }
+        // Make available globally immediately
+        window.openCreateModal = openCreateModal;
         
         function editUser(id) {
             const user = users.find(u => u.id === id);
@@ -1247,6 +1254,8 @@ $pageTitle = 'User Management';
                 }
             }
         }
+        // Make available globally immediately
+        window.closeModal = closeModal;
         
         // Close modal on escape key
         document.addEventListener('keydown', function(e) {
@@ -1318,6 +1327,8 @@ $pageTitle = 'User Management';
                 Swal.fire('Error', 'Failed to save user. Please try again.', 'error');
             });
         }
+        // Make available globally immediately
+        window.saveUser = saveUser;
         
         function deleteUser(id, name) {
             Swal.fire({
