@@ -199,18 +199,18 @@ function getAISettings() {
             echo json_encode(['success' => false, 'message' => 'Error encoding settings']);
         }
     } else {
-        // Ensure all required fields exist (in case table structure is old)
-        if (!isset($settings['weather_analysis_auto_send'])) {
+        // Ensure all required fields exist (in case table structure is old or values are NULL)
+        if (!array_key_exists('weather_analysis_auto_send', $settings) || $settings['weather_analysis_auto_send'] === null) {
             $settings['weather_analysis_auto_send'] = 0;
         } else {
             $settings['weather_analysis_auto_send'] = (int)$settings['weather_analysis_auto_send'];
         }
-        if (!isset($settings['weather_analysis_interval'])) {
+        if (!array_key_exists('weather_analysis_interval', $settings) || $settings['weather_analysis_interval'] === null) {
             $settings['weather_analysis_interval'] = 60;
         } else {
             $settings['weather_analysis_interval'] = (int)$settings['weather_analysis_interval'];
         }
-        if (!isset($settings['weather_analysis_verification_key'])) {
+        if (!array_key_exists('weather_analysis_verification_key', $settings) || $settings['weather_analysis_verification_key'] === null) {
             $settings['weather_analysis_verification_key'] = '';
         } else {
             $settings['weather_analysis_verification_key'] = (string)$settings['weather_analysis_verification_key'];
