@@ -84,28 +84,49 @@ try {
 function getAISettings() {
     global $pdo;
     
-    if ($pdo === null) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Database connection failed']);
-        exit();
-    }
-    
-    // Check secure config first
+    // Check secure config first (before database check, as it might not need DB)
     $secureApiKey = null;
     try {
-        $secureApiKey = getGeminiApiKey();
+        if (function_exists('getGeminiApiKey')) {
+            $secureApiKey = getGeminiApiKey();
+        }
     } catch (Exception $e) {
         error_log("Error getting Gemini API key: " . $e->getMessage());
     } catch (Error $e) {
         error_log("Fatal error getting Gemini API key: " . $e->getMessage());
     }
     
+    // If database is not available, return default settings
+    if ($pdo === null) {
+        $defaultSettings = [
+            'gemini_api_key' => $secureApiKey ? (str_repeat('*', max(0, strlen($secureApiKey) - 4)) . substr($secureApiKey, -4)) : '',
+            'ai_enabled' => false,
+            'ai_check_interval' => 30,
+            'wind_threshold' => 60,
+            'rain_threshold' => 20,
+            'earthquake_threshold' => 5.0,
+            'warning_types' => 'heavy_rain,flooding,earthquake,strong_winds,tsunami,landslide,thunderstorm,ash_fall,fire_incident,typhoon',
+            'monitored_areas' => 'Quezon City\nManila\nMakati',
+            'ai_channels' => 'sms,email,pa',
+            'api_key_source' => $secureApiKey ? 'secure_config' : 'none'
+        ];
+        echo json_encode(['success' => true, 'settings' => $defaultSettings]);
+        return;
+    }
+    
+    $settings = false;
     try {
         $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
         $settings = $stmt->fetch(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
         error_log("Database error in getAISettings: " . $e->getMessage());
         // Table might not exist, return default settings
+        $settings = false;
+    } catch (Exception $e) {
+        error_log("General error in getAISettings: " . $e->getMessage());
+        $settings = false;
+    } catch (Error $e) {
+        error_log("Fatal error in getAISettings: " . $e->getMessage());
         $settings = false;
     }
     
