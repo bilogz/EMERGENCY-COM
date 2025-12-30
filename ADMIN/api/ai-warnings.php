@@ -15,14 +15,19 @@
  * This will check for dangerous conditions and send weather analysis automatically.
  */
 
+// Start output buffering to prevent any accidental output
+ob_start();
+
+// Set JSON header
 header('Content-Type: application/json; charset=utf-8');
 
 // Error handler to ensure JSON is always returned
 register_shutdown_function(function() {
     $error = error_get_last();
     if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        ob_clean(); // Clear any output
         http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Fatal error: ' . $error['message']]);
+        echo json_encode(['success' => false, 'message' => 'Fatal error: ' . $error['message'], 'file' => $error['file'], 'line' => $error['line']]);
         exit();
     }
 });
@@ -57,17 +62,25 @@ try {
     switch ($action) {
         case 'getSettings':
             try {
+                ob_clean(); // Ensure clean output
                 getAISettings();
+                if (ob_get_level()) {
+                    ob_end_flush(); // Flush output buffer
+                }
             } catch (Exception $e) {
+                ob_clean();
                 error_log("Exception in getAISettings: " . $e->getMessage());
                 error_log("Stack trace: " . $e->getTraceAsString());
                 http_response_code(500);
                 echo json_encode(['success' => false, 'message' => 'Error loading settings: ' . $e->getMessage()]);
+                exit();
             } catch (Error $e) {
+                ob_clean();
                 error_log("Fatal error in getAISettings: " . $e->getMessage());
                 error_log("Stack trace: " . $e->getTraceAsString());
                 http_response_code(500);
                 echo json_encode(['success' => false, 'message' => 'Fatal error loading settings: ' . $e->getMessage()]);
+                exit();
             }
             break;
             
@@ -89,17 +102,25 @@ try {
             
         case 'getWeatherAnalysis':
             try {
+                ob_clean(); // Ensure clean output
                 getWeatherAnalysis();
+                if (ob_get_level()) {
+                    ob_end_flush(); // Flush output buffer
+                }
             } catch (Exception $e) {
+                ob_clean();
                 error_log("Exception in getWeatherAnalysis: " . $e->getMessage());
                 error_log("Stack trace: " . $e->getTraceAsString());
                 http_response_code(500);
                 echo json_encode(['success' => false, 'message' => 'Error loading analysis: ' . $e->getMessage()]);
+                exit();
             } catch (Error $e) {
+                ob_clean();
                 error_log("Fatal error in getWeatherAnalysis: " . $e->getMessage());
                 error_log("Stack trace: " . $e->getTraceAsString());
                 http_response_code(500);
                 echo json_encode(['success' => false, 'message' => 'Fatal error loading analysis: ' . $e->getMessage()]);
+                exit();
             }
             break;
             
@@ -124,6 +145,11 @@ try {
 function getAISettings() {
     global $pdo;
     
+    // Clear any previous output
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
     // Check secure config first (before database check, as it might not need DB)
     $secureApiKey = null;
     try {
@@ -133,11 +159,18 @@ function getAISettings() {
             if (empty($secureApiKey)) {
                 $secureApiKey = getGeminiApiKey('analysis');
             }
+            if (!empty($secureApiKey)) {
+                error_log("getAISettings: Found API key from config, length: " . strlen($secureApiKey));
+            } else {
+                error_log("getAISettings: No API key found in config");
+            }
+        } else {
+            error_log("getAISettings: getGeminiApiKey function not found");
         }
     } catch (Exception $e) {
-        error_log("Error getting Gemini API key: " . $e->getMessage());
+        error_log("Error getting Gemini API key in getAISettings: " . $e->getMessage());
     } catch (Error $e) {
-        error_log("Fatal error getting Gemini API key: " . $e->getMessage());
+        error_log("Fatal error getting Gemini API key in getAISettings: " . $e->getMessage());
     }
     
     // If database is not available, return default settings
@@ -251,12 +284,23 @@ function getAISettings() {
         
         // Ensure JSON encoding works properly
         try {
-            echo json_encode(['success' => true, 'settings' => $settings], JSON_UNESCAPED_UNICODE);
+            $output = json_encode(['success' => true, 'settings' => $settings], JSON_UNESCAPED_UNICODE);
+            if ($output === false) {
+                throw new Exception('JSON encoding failed: ' . json_last_error_msg());
+            }
+            echo $output;
         } catch (Exception $e) {
             error_log("JSON encoding error in getAISettings: " . $e->getMessage());
             http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Error encoding settings: ' . $e->getMessage()]);
         }
+    }
+    
+    // Safety check: if we reach here without outputting anything, output an error
+    if (ob_get_level() && ob_get_length() == 0) {
+        error_log("WARNING: getAISettings completed without outputting anything");
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Settings function completed without output']);
     }
 }
 

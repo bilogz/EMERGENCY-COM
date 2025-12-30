@@ -13,35 +13,46 @@
 function getGeminiApiKey($purpose = 'default') {
     // Priority 1: Secure config file (most secure, not in Git)
     // Try multiple possible paths
+    $baseDir = dirname(dirname(__DIR__)); // Go up from ADMIN/api to EMERGENCY-COM
     $possiblePaths = [
         __DIR__ . '/../../USERS/api/config.local.php',
-        __DIR__ . '/../../../USERS/api/config.local.php',
+        $baseDir . '/USERS/api/config.local.php',
+        dirname($baseDir) . '/EMERGENCY-COM/USERS/api/config.local.php',
+        $_SERVER['DOCUMENT_ROOT'] . '/EMERGENCY-COM/USERS/api/config.local.php',
         dirname(dirname(dirname(__DIR__))) . '/USERS/api/config.local.php'
     ];
     
     $secureConfigFile = null;
     foreach ($possiblePaths as $path) {
-        if (file_exists($path)) {
-            $secureConfigFile = $path;
+        $realPath = realpath($path);
+        if ($realPath && file_exists($realPath)) {
+            $secureConfigFile = $realPath;
             break;
         }
     }
     
     if ($secureConfigFile && file_exists($secureConfigFile)) {
         try {
+            error_log("Loading config from: " . $secureConfigFile);
             $secureConfig = require $secureConfigFile;
             if (is_array($secureConfig)) {
                 // Check for purpose-specific key first
                 if ($purpose === 'analysis' && !empty($secureConfig['AI_API_KEY_ANALYSIS'])) {
+                    error_log("Found AI_API_KEY_ANALYSIS in config");
                     return $secureConfig['AI_API_KEY_ANALYSIS'];
                 }
                 if ($purpose === 'translation' && !empty($secureConfig['AI_API_KEY_TRANSLATION'])) {
+                    error_log("Found AI_API_KEY_TRANSLATION in config");
                     return $secureConfig['AI_API_KEY_TRANSLATION'];
                 }
                 // Fallback to default key
                 if (!empty($secureConfig['AI_API_KEY'])) {
+                    error_log("Found AI_API_KEY in config (fallback)");
                     return $secureConfig['AI_API_KEY'];
                 }
+                error_log("Config file loaded but no matching key found for purpose: " . $purpose);
+            } else {
+                error_log("Config file did not return an array");
             }
         } catch (Exception $e) {
             error_log("Error loading secure config file: " . $e->getMessage() . " (File: " . $secureConfigFile . ")");
@@ -51,6 +62,7 @@ function getGeminiApiKey($purpose = 'default') {
     } else {
         $checkedPaths = implode(', ', $possiblePaths);
         error_log("Config file not found. Checked paths: " . $checkedPaths);
+        error_log("Current __DIR__: " . __DIR__);
     }
     
     // Priority 2: Database (for backward compatibility)
