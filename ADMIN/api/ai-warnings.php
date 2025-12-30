@@ -56,7 +56,19 @@ $action = $_GET['action'] ?? ($_POST['action'] ?? '');
 try {
     switch ($action) {
         case 'getSettings':
-            getAISettings();
+            try {
+                getAISettings();
+            } catch (Exception $e) {
+                error_log("Exception in getAISettings: " . $e->getMessage());
+                error_log("Stack trace: " . $e->getTraceAsString());
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Error loading settings: ' . $e->getMessage()]);
+            } catch (Error $e) {
+                error_log("Fatal error in getAISettings: " . $e->getMessage());
+                error_log("Stack trace: " . $e->getTraceAsString());
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Fatal error loading settings: ' . $e->getMessage()]);
+            }
             break;
             
         case 'test':
@@ -121,7 +133,13 @@ function getAISettings() {
             'weather_analysis_verification_key' => '',
             'api_key_source' => $secureApiKey ? 'secure_config' : 'none'
         ];
-        echo json_encode(['success' => true, 'settings' => $defaultSettings]);
+        try {
+            echo json_encode(['success' => true, 'settings' => $defaultSettings], JSON_UNESCAPED_UNICODE);
+        } catch (Exception $e) {
+            error_log("JSON encoding error in getAISettings (no DB): " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Error encoding settings']);
+        }
         return;
     }
     
@@ -158,8 +176,31 @@ function getAISettings() {
             'weather_analysis_verification_key' => '',
             'api_key_source' => $secureApiKey ? 'secure_config' : 'none'
         ];
-        echo json_encode(['success' => true, 'settings' => $defaultSettings]);
+        try {
+            echo json_encode(['success' => true, 'settings' => $defaultSettings], JSON_UNESCAPED_UNICODE);
+        } catch (Exception $e) {
+            error_log("JSON encoding error in getAISettings (default): " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Error encoding settings']);
+        }
     } else {
+        // Ensure all required fields exist (in case table structure is old)
+        if (!isset($settings['weather_analysis_auto_send'])) {
+            $settings['weather_analysis_auto_send'] = 0;
+        } else {
+            $settings['weather_analysis_auto_send'] = (int)$settings['weather_analysis_auto_send'];
+        }
+        if (!isset($settings['weather_analysis_interval'])) {
+            $settings['weather_analysis_interval'] = 60;
+        } else {
+            $settings['weather_analysis_interval'] = (int)$settings['weather_analysis_interval'];
+        }
+        if (!isset($settings['weather_analysis_verification_key'])) {
+            $settings['weather_analysis_verification_key'] = '';
+        } else {
+            $settings['weather_analysis_verification_key'] = (string)$settings['weather_analysis_verification_key'];
+        }
+        
         // If secure config has API key and database doesn't, use secure config
         if (!empty($secureApiKey) && empty($settings['gemini_api_key'])) {
             $settings['gemini_api_key'] = str_repeat('*', max(0, strlen($secureApiKey) - 4)) . substr($secureApiKey, -4);
@@ -172,7 +213,15 @@ function getAISettings() {
         } else {
             $settings['api_key_source'] = 'none';
         }
-        echo json_encode(['success' => true, 'settings' => $settings]);
+        
+        // Ensure JSON encoding works properly
+        try {
+            echo json_encode(['success' => true, 'settings' => $settings], JSON_UNESCAPED_UNICODE);
+        } catch (Exception $e) {
+            error_log("JSON encoding error in getAISettings: " . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Error encoding settings: ' . $e->getMessage()]);
+        }
     }
 }
 
