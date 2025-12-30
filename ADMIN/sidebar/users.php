@@ -885,7 +885,7 @@ $pageTitle = 'User Management';
                                 </div>
                             </div>
                             
-                            <button type="button" class="btn btn-primary btn-add" id="addUserBtn" onclick="window.openCreateModal && window.openCreateModal(); return false;">
+                            <button type="button" class="btn btn-primary btn-add" id="addUserBtn" onclick="(function(){const t=document.getElementById('modalTitle');if(t)t.innerHTML='<i class=\'fas fa-user-plus\'></i> Create New User';const f=document.getElementById('userForm');if(f){f.reset();const id=document.getElementById('userId');if(id)id.value='';const p=document.getElementById('userPassword');if(p){p.required=true;p.value='';}}const m=document.getElementById('userModal');if(m){m.classList.add('show');document.body.style.overflow='hidden';}}());return false;">
                                 <i class="fas fa-plus"></i> Add User
                             </button>
                         </div>
@@ -932,7 +932,7 @@ $pageTitle = 'User Management';
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalTitle"><i class="fas fa-user-plus"></i> Create New User</h2>
-                <button type="button" class="modal-close" id="modalCloseBtn" onclick="window.closeModal && window.closeModal(); return false;" aria-label="Close">&times;</button>
+                <button type="button" class="modal-close" id="modalCloseBtn" onclick="(function(){const m=document.getElementById('userModal');if(m){m.classList.remove('show');document.body.style.overflow='';}}());return false;" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="userForm">
@@ -974,7 +974,7 @@ $pageTitle = 'User Management';
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" id="cancelBtn" onclick="window.closeModal && window.closeModal(); return false;">Cancel</button>
+                <button type="button" class="btn btn-secondary" id="cancelBtn" onclick="(function(){const m=document.getElementById('userModal');if(m){m.classList.remove('show');document.body.style.overflow='';const f=document.getElementById('userForm');if(f)f.reset();}}());return false;">Cancel</button>
                 <button type="button" class="btn btn-primary" id="saveUserBtn" onclick="window.saveUser && window.saveUser(); return false;">
                     <i class="fas fa-save"></i> Save User
                 </button>
@@ -1030,63 +1030,75 @@ $pageTitle = 'User Management';
                 });
             }
             
-            // Set up button handlers - ensure all buttons work
+            // Set up button handlers as backup (inline onclick is primary)
             function setupButtons() {
                 const closeBtn = document.getElementById('modalCloseBtn');
                 const cancelBtn = document.getElementById('cancelBtn');
                 const saveBtn = document.getElementById('saveUserBtn');
                 const addUserBtn = document.getElementById('addUserBtn');
                 
-                // Helper function to ensure button works
-                function ensureButtonWorks(button, handler, buttonName) {
-                    if (!button) {
-                        console.warn('Button not found:', buttonName);
-                        return;
+                // Helper to close modal directly
+                function closeModalDirect() {
+                    const modal = document.getElementById('userModal');
+                    if (modal) {
+                        modal.classList.remove('show');
+                        document.body.style.overflow = '';
+                        const form = document.getElementById('userForm');
+                        if (form) form.reset();
+                        const userId = document.getElementById('userId');
+                        if (userId) userId.value = '';
                     }
-                    
-                    // Add direct event listener as primary handler (onclick is backup)
-                    // Use capture phase to ensure it fires first
-                    button.addEventListener('click', function(e) {
-                        console.log('Button clicked via listener:', buttonName);
-                        e.preventDefault();
-                        e.stopPropagation();
-                        e.stopImmediatePropagation();
-                        if (handler && typeof handler === 'function') {
-                            handler();
-                        }
-                        return false;
-                    }, true); // Capture phase - fires before onclick
-                    
-                    // Also add in bubble phase as backup
-                    button.addEventListener('click', function(e) {
-                        if (!e.defaultPrevented && handler && typeof handler === 'function') {
-                            handler();
-                        }
-                    }, false);
-                    
-                    // Touch support for mobile
-                    button.addEventListener('touchend', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (handler && typeof handler === 'function') {
-                            handler();
-                        }
-                        return false;
-                    }, true);
                 }
                 
-                // Set up all button handlers
-                ensureButtonWorks(closeBtn, closeModal, 'closeBtn');
-                ensureButtonWorks(cancelBtn, closeModal, 'cancelBtn');
-                ensureButtonWorks(saveBtn, saveUser, 'saveBtn');
-                ensureButtonWorks(addUserBtn, openCreateModal, 'addUserBtn');
+                // Helper to open create modal directly
+                function openCreateModalDirect() {
+                    const title = document.getElementById('modalTitle');
+                    if (title) title.innerHTML = '<i class="fas fa-user-plus"></i> Create New User';
+                    const form = document.getElementById('userForm');
+                    if (form) {
+                        form.reset();
+                        const id = document.getElementById('userId');
+                        if (id) id.value = '';
+                        const pwd = document.getElementById('userPassword');
+                        if (pwd) pwd.required = true;
+                    }
+                    const modal = document.getElementById('userModal');
+                    if (modal) {
+                        modal.classList.add('show');
+                        document.body.style.overflow = 'hidden';
+                    }
+                }
+                
+                // Add backup listeners
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', function(e) {
+                        if (!e.defaultPrevented) closeModalDirect();
+                    }, false);
+                }
+                
+                if (cancelBtn) {
+                    cancelBtn.addEventListener('click', function(e) {
+                        if (!e.defaultPrevented) closeModalDirect();
+                    }, false);
+                }
+                
+                if (saveBtn) {
+                    saveBtn.addEventListener('click', function(e) {
+                        if (!e.defaultPrevented && typeof window.saveUser === 'function') {
+                            window.saveUser();
+                        }
+                    }, false);
+                }
+                
+                if (addUserBtn) {
+                    addUserBtn.addEventListener('click', function(e) {
+                        if (!e.defaultPrevented) openCreateModalDirect();
+                    }, false);
+                }
             }
             
-            // Set up immediately
-            setupButtons();
-            
-            // Also set up after a delay to catch any late-loading elements
-            setTimeout(setupButtons, 200);
+            // Set up backup listeners
+            setTimeout(setupButtons, 100);
         });
         
         function loadUsers() {
