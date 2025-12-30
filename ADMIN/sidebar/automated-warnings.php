@@ -161,6 +161,38 @@ $pageTitle = 'Automated Warning Integration';
                         </div>
                     </div>
 
+                    <!-- AI Weather Analysis Card -->
+                    <div class="module-card">
+                        <div class="module-card-header">
+                            <h2><i class="fas fa-cloud-sun"></i> AI Weather Analysis</h2>
+                        </div>
+                        <div>
+                            <div id="aiWeatherAnalysisCard" class="ai-analysis-display-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 2rem; color: white; position: relative; overflow: hidden;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                        <i class="fas fa-robot" style="font-size: 1.5rem;"></i>
+                                        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">AI Weather Analysis</h3>
+                                    </div>
+                                    <span id="analysisStatusBadge" class="badge" style="background: rgba(255,255,255,0.2); color: white; padding: 0.5rem 1rem; border-radius: 20px;">Loading...</span>
+                                </div>
+                                
+                                <div id="analysisContent" style="min-height: 200px;">
+                                    <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.8);">
+                                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                                        <p>Loading weather analysis...</p>
+                                    </div>
+                                </div>
+                                
+                                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.2);">
+                                    <button onclick="refreshWeatherAnalysis()" class="btn btn-primary" style="width: 100%; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 0.75rem; border-radius: 8px; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                        <i class="fas fa-sync-alt"></i>
+                                        <span>Refresh Analysis</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Recent Warnings -->
                     <div class="module-card">
                         <div class="module-card-header">
@@ -510,6 +542,33 @@ $pageTitle = 'Automated Warning Integration';
         .channel-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .ai-analysis-display-card {
+            position: relative;
+        }
+
+        .ai-analysis-display-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .ai-analysis-display-card > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .ai-analysis-display-card button:hover {
+            background: rgba(255,255,255,0.3) !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
 
         @media (max-width: 768px) {
@@ -959,11 +1018,162 @@ $pageTitle = 'Automated Warning Integration';
                 });
         }
 
+        // Load AI Weather Analysis
+        function loadWeatherAnalysis() {
+            const contentDiv = document.getElementById('analysisContent');
+            const statusBadge = document.getElementById('analysisStatusBadge');
+            
+            contentDiv.innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.8);">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                    <p>Loading weather analysis...</p>
+                </div>
+            `;
+            statusBadge.textContent = 'Loading...';
+            statusBadge.className = 'badge';
+            
+            fetch('../api/ai-warnings.php?action=getWeatherAnalysis')
+                .then(response => {
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            try {
+                                const json = JSON.parse(text);
+                                throw new Error(json.message || `HTTP ${response.status}`);
+                            } catch (e) {
+                                if (e instanceof Error && e.message.includes('HTTP')) {
+                                    throw e;
+                                }
+                                throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+                            }
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.analysis) {
+                        displayWeatherAnalysis(data);
+                        statusBadge.textContent = 'Complete';
+                        statusBadge.className = 'badge success';
+                        statusBadge.style.background = 'rgba(76, 175, 80, 0.3)';
+                    } else {
+                        throw new Error(data.message || 'Failed to load analysis');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading weather analysis:', error);
+                    contentDiv.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.9);">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem; color: #ffeb3b;"></i>
+                            <p style="margin: 0.5rem 0;">${error.message || 'Failed to load weather analysis'}</p>
+                            <small style="opacity: 0.8;">Please check your API key and try again</small>
+                        </div>
+                    `;
+                    statusBadge.textContent = 'Error';
+                    statusBadge.className = 'badge';
+                    statusBadge.style.background = 'rgba(244, 67, 54, 0.3)';
+                });
+        }
+
+        function displayWeatherAnalysis(data) {
+            const contentDiv = document.getElementById('analysisContent');
+            const analysis = data.analysis;
+            const location = data.location || 'Quezon City';
+            
+            let html = '';
+            
+            // Summary Section
+            html += `
+                <div style="margin-bottom: 2rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; color: rgba(255,255,255,0.9);">
+                        <i class="fas fa-cloud-sun" style="color: #e1bee7;"></i>
+                        <h4 style="margin: 0; font-size: 1rem; font-weight: 600;">Summary</h4>
+                    </div>
+                    <p style="margin: 0; color: rgba(255,255,255,0.95); line-height: 1.6;">${analysis.summary || 'No summary available'}</p>
+                </div>
+            `;
+            
+            // Recommendations Section
+            if (analysis.recommendations && analysis.recommendations.length > 0) {
+                html += `
+                    <div style="margin-bottom: 2rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; color: rgba(255,255,255,0.9);">
+                            <i class="fas fa-list-ul" style="color: #e1bee7;"></i>
+                            <h4 style="margin: 0; font-size: 1rem; font-weight: 600;">Recommendations</h4>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                `;
+                
+                analysis.recommendations.forEach((rec, index) => {
+                    html += `
+                        <div style="display: flex; align-items: start; gap: 0.75rem;">
+                            <i class="fas fa-check-circle" style="color: #c8e6c9; margin-top: 0.25rem; flex-shrink: 0;"></i>
+                            <span style="color: rgba(255,255,255,0.95); line-height: 1.6;">${index + 1}. ${rec}</span>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Risk Assessment Section
+            if (analysis.risk_assessment) {
+                const riskLevel = analysis.risk_assessment.level || 'MEDIUM';
+                const riskDesc = analysis.risk_assessment.description || 'No risk assessment available';
+                let riskColor = '#ff9800'; // Orange for MEDIUM
+                if (riskLevel === 'LOW') riskColor = '#4caf50'; // Green
+                if (riskLevel === 'HIGH') riskColor = '#f44336'; // Red
+                
+                html += `
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; color: rgba(255,255,255,0.9);">
+                            <i class="fas fa-shield-alt" style="color: #e1bee7;"></i>
+                            <h4 style="margin: 0; font-size: 1rem; font-weight: 600;">Risk Assessment</h4>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border-left: 4px solid ${riskColor};">
+                            <p style="margin: 0; color: ${riskColor}; font-weight: 600; margin-bottom: 0.5rem;">${riskLevel}</p>
+                            <p style="margin: 0; color: rgba(255,255,255,0.95); line-height: 1.6; font-size: 0.9rem;">${riskDesc}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Location and timestamp
+            html += `
+                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.2);">
+                    <small style="color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>Location: ${location}</span>
+                        ${data.timestamp ? `<span style="margin-left: 1rem;"><i class="fas fa-clock"></i> ${new Date(data.timestamp).toLocaleString()}</span>` : ''}
+                    </small>
+                </div>
+            `;
+            
+            contentDiv.innerHTML = html;
+        }
+
+        function refreshWeatherAnalysis() {
+            const btn = event.target.closest('button');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+            btn.disabled = true;
+            
+            loadWeatherAnalysis();
+            
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }, 2000);
+        }
+
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadIntegrationStatus();
             loadWarnings();
             loadAISettings();
+            loadWeatherAnalysis();
         });
     </script>
 </body>

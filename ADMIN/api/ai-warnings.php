@@ -87,6 +87,10 @@ try {
             sendWeatherAnalysisAuto();
             break;
             
+        case 'getWeatherAnalysis':
+            getWeatherAnalysis();
+            break;
+            
         default:
             saveAISettings();
             break;
@@ -1262,6 +1266,176 @@ Keep concise and actionable for public communication.";
         
     } catch (Exception $e) {
         error_log("Error sending weather analysis: " . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+    }
+}
+
+/**
+ * Get AI weather analysis for display (without sending)
+ */
+function getWeatherAnalysis() {
+    global $pdo;
+    
+    // Get AI settings
+    try {
+        $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+        $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+        return;
+    }
+    
+    // Get API key
+    $apiKey = getGeminiApiKey();
+    if (empty($apiKey)) {
+        $apiKey = $settings['gemini_api_key'] ?? '';
+    }
+    
+    if (empty($apiKey)) {
+        echo json_encode(['success' => false, 'message' => 'Gemini API key not configured']);
+        return;
+    }
+    
+    // Get weather data for primary location (Quezon City)
+    $weatherData = getWeatherData();
+    if (empty($weatherData)) {
+        echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data']);
+        return;
+    }
+    
+    // Use Quezon City as primary location
+    $locationName = 'Quezon City';
+    $weather = $weatherData[$locationName] ?? reset($weatherData);
+    
+    if (!$weather) {
+        echo json_encode(['success' => false, 'message' => 'No weather data available']);
+        return;
+    }
+    
+    // Build weather analysis prompt
+    $temp = $weather['main']['temp'] ?? 0;
+    $humidity = $weather['main']['humidity'] ?? 0;
+    $condition = $weather['weather'][0]['description'] ?? 'Unknown';
+    $windSpeed = isset($weather['wind']['speed']) ? round($weather['wind']['speed'] * 3.6, 1) : 0;
+    $feelsLike = $weather['main']['feels_like'] ?? $temp;
+    $pressure = $weather['main']['pressure'] ?? 0;
+    $visibility = isset($weather['visibility']) ? round($weather['visibility'] / 1000, 1) : 0;
+    
+    $prompt = "You are an emergency weather analyst for {$locationName}, Philippines. Analyze the current weather conditions and provide a comprehensive analysis.
+
+CURRENT CONDITIONS:
+- Temperature: {$temp}°C (Feels like: {$feelsLike}°C)
+- Humidity: {$humidity}%
+- Condition: {$condition}
+- Wind Speed: {$windSpeed} km/h
+- Pressure: {$pressure} hPa
+- Visibility: {$visibility} km
+
+Provide your analysis in this EXACT JSON format (no markdown, no code blocks, just valid JSON):
+
+{
+  \"summary\": \"[1-2 sentence summary of current conditions and next 24 hours forecast]\",
+  \"recommendations\": [
+    \"[First recommendation]\",
+    \"[Second recommendation]\",
+    \"[Third recommendation]\",
+    \"[Fourth recommendation]\"
+  ],
+  \"risk_assessment\": {
+    \"level\": \"LOW|MEDIUM|HIGH\",
+    \"description\": \"[Brief explanation of risk level and why]\"
+  }
+}
+
+Keep recommendations practical and actionable for public safety. Risk level should be based on actual danger (heat stress, flooding risk, strong winds, etc.).";
+
+    // Generate AI weather analysis
+    try {
+        $model = getGeminiModel();
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . urlencode($apiKey);
+        
+        $data = [
+            'contents' => [
+                [
+                    'parts' => [
+                        ['text' => $prompt]
+                    ]
+                ]
+            ],
+            'generationConfig' => [
+                'temperature' => 0.7,
+                'maxOutputTokens' => 2048,
+                'topP' => 0.95,
+                'topK' => 40
+            ]
+        ];
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json'
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+        
+        if ($curlError || $httpCode !== 200) {
+            $errorData = json_decode($response, true);
+            $errorMsg = $errorData['error']['message'] ?? "HTTP $httpCode";
+            echo json_encode(['success' => false, 'message' => 'Failed to generate weather analysis: ' . $errorMsg]);
+            return;
+        }
+        
+        $responseData = json_decode($response, true);
+        
+        if (!isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
+            echo json_encode(['success' => false, 'message' => 'Invalid response from AI']);
+            return;
+        }
+        
+        $aiResponse = trim($responseData['candidates'][0]['content']['parts'][0]['text']);
+        
+        // Extract JSON from response (might have markdown code blocks)
+        if (preg_match('/```json\s*(.*?)\s*```/s', $aiResponse, $matches)) {
+            $aiResponse = $matches[1];
+        } elseif (preg_match('/```\s*(.*?)\s*```/s', $aiResponse, $matches)) {
+            $aiResponse = $matches[1];
+        }
+        
+        $analysis = json_decode($aiResponse, true);
+        
+        if (!$analysis || !isset($analysis['summary'])) {
+            // Fallback: try to parse the response as plain text
+            $analysis = [
+                'summary' => $aiResponse,
+                'recommendations' => [],
+                'risk_assessment' => [
+                    'level' => 'MEDIUM',
+                    'description' => 'Unable to parse detailed analysis'
+                ]
+            ];
+        }
+        
+        echo json_encode([
+            'success' => true,
+            'analysis' => $analysis,
+            'location' => $locationName,
+            'weather' => [
+                'temp' => $temp,
+                'humidity' => $humidity,
+                'condition' => $condition,
+                'wind_speed' => $windSpeed
+            ],
+            'timestamp' => date('Y-m-d H:i:s')
+        ], JSON_UNESCAPED_UNICODE);
+        
+    } catch (Exception $e) {
+        error_log("Error getting weather analysis: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
     }
 }
