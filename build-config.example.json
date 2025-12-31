@@ -1,0 +1,32 @@
+{
+  "build": {
+    "source": {
+      "js": [
+        "USERS/js/*.js",
+        "ADMIN/header/js/*.js",
+        "ADMIN/sidebar/js/*.js"
+      ],
+      "css": [
+        "USERS/css/*.css",
+        "ADMIN/header/css/*.css",
+        "ADMIN/sidebar/css/*.css"
+      ]
+    },
+    "output": {
+      "js": "build/js",
+      "css": "build/css",
+      "assets": "build/assets"
+    },
+    "options": {
+      "minify": true,
+      "sourcemaps": true,
+      "concat": false
+    }
+  },
+  "compile": {
+    "sourceDir": "compile/src",
+    "outputDir": "build",
+    "tempDir": "build/temp"
+  }
+}
+
