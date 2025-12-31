@@ -110,10 +110,6 @@ try {
         $stmt->execute([$otpRecord['id']]);
     }
     
-    // Get email and name from session or database
-    $email = $emailNormalized;
-    $name = isset($_SESSION['otp_name']) ? $_SESSION['otp_name'] : null;
-    
     // Get full user details from database
     $stmt = $pdo->prepare("SELECT id, name, email, phone FROM users WHERE id = ?");
     $stmt->execute([$userId]);
@@ -130,6 +126,17 @@ try {
     unset($_SESSION['otp_name']);
     unset($_SESSION['otp_user_id']);
     unset($_SESSION['otp_expires']);
+    unset($_SESSION['otp_phone']);
+    
+    // Set login session variables
+    $_SESSION['user_logged_in'] = true;
+    $_SESSION['user_id'] = $user['id'];
+    $_SESSION['user_name'] = $user['name'];
+    $_SESSION['user_email'] = $user['email'] ?? null;
+    $_SESSION['user_phone'] = $user['phone'];
+    $_SESSION['user_type'] = 'registered';
+    $_SESSION['login_method'] = 'otp';
+    $_SESSION['user_token'] = bin2hex(random_bytes(16));
     
     // Mark user's email as verified (if applicable)
     try {
@@ -138,23 +145,14 @@ try {
     } catch (PDOException $e) {
         error_log("Failed to update user email_verified: " . $e->getMessage());
     }
-
-    // Set user session variables
-    $_SESSION['user_logged_in'] = true;
-    $_SESSION['user_id'] = $user['id'];
-    $_SESSION['user_name'] = $user['name'];
-    $_SESSION['user_email'] = isset($user['email']) ? $user['email'] : $email;
-    $_SESSION['user_phone'] = isset($user['phone']) ? $user['phone'] : null;
-    $_SESSION['user_type'] = 'registered';
-    $_SESSION['user_token'] = bin2hex(random_bytes(16));
     
     echo json_encode([
         "success" => true,
-        "message" => "Email verified successfully!",
+        "message" => "Login successful!",
         "user_id" => $user['id'],
-        "username" => $user['name'],
-        "email" => isset($user['email']) ? $user['email'] : $email,
-        "phone" => isset($user['phone']) ? $user['phone'] : null,
+        "user_name" => $user['name'],
+        "email" => $user['email'] ?? null,
+        "phone" => $user['phone'],
         "user_type" => "registered"
     ]);
     

@@ -35,7 +35,7 @@ if ($data === null) {
 }
 
 // Validate required fields
-$required = ['name', 'email', 'phone', 'barangay', 'house_number', 'street'];
+$required = ['name', 'email', 'phone', 'district', 'barangay', 'house_number', 'street'];
 foreach ($required as $field) {
     if (!isset($data[$field])) {
         echo json_encode(["success" => false, "message" => ucfirst($field) . " is required."]);
@@ -47,12 +47,13 @@ $name = trim($data['name']);
 $email = trim($data['email']);
 $phone = trim($data['phone']);
 $nationality = trim($data['nationality'] ?? '');
+$district = trim($data['district'] ?? '');
 $barangay = trim($data['barangay']);
 $houseNumber = trim($data['house_number']);
 $street = trim($data['street']);
 
 // Validation
-if (empty($name) || empty($email) || empty($phone) || empty($barangay) || empty($houseNumber) || empty($street)) {
+if (empty($name) || empty($email) || empty($phone) || empty($district) || empty($barangay) || empty($houseNumber) || empty($street)) {
     echo json_encode(["success" => false, "message" => "All required fields must be filled."]);
     exit();
 }
@@ -144,7 +145,7 @@ try {
             ':email' => $email,
             ':phone' => $phoneNormalized,
             ':nationality' => $nationality ?: null,
-            ':district' => null,
+            ':district' => $district ?: null,
             ':barangay' => $barangay,
             ':house_number' => $houseNumber,
             ':street' => $street,

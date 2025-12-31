@@ -46,10 +46,9 @@ $assetBase = '../ADMIN/header/';
             <div class="main-container">
                 <div class="sub-container">
                     <h1 data-translate="emergency.title">Call for Emergency</h1>
-                    <p data-translate="emergency.subtitle">Choose the best way to reach responders—via SIM (voice/SMS) or over Internet/WiFi (VoIP/chat).</p>
+                    <p data-translate="emergency.subtitle">Use data or WiFi to connect with responders via Internet calling.</p>
                     <div class="hero-buttons action-buttons">
-                        <a href="tel:911" class="btn btn-primary"><i class="fas fa-phone"></i> <span data-translate="emergency.callSim">Call via SIM (911)</span></a>
-                        <a href="#internet-call" class="btn btn-secondary"><i class="fas fa-wifi"></i> <span data-translate="emergency.callInternet">Call via Internet/WiFi</span></a>
+                        <button class="btn btn-primary" onclick="startInternetCall()"><i class="fas fa-headset"></i> <span>Start Internet Call</span></button>
                     </div>
                 </div>
             </div>
@@ -57,45 +56,22 @@ $assetBase = '../ADMIN/header/';
 
         <div class="main-container">
             <div class="sub-container content-main">
-                <section id="sim-call" class="page-content">
-                    <h2 data-translate="emergency.sim.title">Call Using SIM (Voice/SMS)</h2>
-                    <p data-translate="emergency.sim.desc">Use your mobile network for the fastest connection to responders.</p>
-                    <div class="cards-grid">
-                        <div class="card">
-                            <h3 data-translate="emergency.voice.title">Voice Call (SIM)</h3>
-                            <p data-translate="emergency.voice.desc">Dial national emergency 911 or your LGU hotline.</p>
-                            <div class="action-buttons">
-                                <a href="tel:911" class="btn btn-primary"><i class="fas fa-phone"></i> <span data-translate="emergency.call911">Call 911</span></a>
-                                <a href="tel:+63123456789" class="btn btn-secondary"><i class="fas fa-phone-volume"></i> <span data-translate="emergency.callLGU">Call LGU Hotline</span></a>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <h3 data-translate="emergency.sms.title">SMS (SIM)</h3>
-                            <p data-translate="emergency.sms.desc">Text key details (location, incident type, injuries). Keep messages short and clear.</p>
-                            <div class="action-buttons">
-                                <a href="sms:+63123456789?body=Emergency%20at%20[location]%20-%20[type]%20-%20[injuries]" class="btn btn-primary"><i class="fas fa-comment-dots"></i> <span data-translate="emergency.textLGU">Text LGU</span></a>
-                                <a href="sms:911?body=Emergency%20at%20[location]%20-%20[type]" class="btn btn-secondary"><i class="fas fa-exclamation-circle"></i> <span data-translate="emergency.text911">Text 911</span></a>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
                 <section id="internet-call" class="page-content">
-                    <h2 data-translate="emergency.internet.title">Call Using Internet/WiFi</h2>
-                    <p data-translate="emergency.internet.desc">Use data or WiFi when cellular signal is weak. A VoIP/web-call endpoint can be integrated here.</p>
+                    <h2>Call Using Internet/WiFi</h2>
+                    <p>Use data or WiFi when cellular signal is weak. Connect with emergency responders via VoIP or web-based calling.</p>
                     <div class="cards-grid">
                         <div class="card">
-                            <h3 data-translate="emergency.voip.title">Web/VoIP Call</h3>
-                            <p data-translate="emergency.voip.desc">Start a voice call over WiFi. (Hook this button to your VoIP/web-call service.)</p>
-                            <button class="btn btn-primary" onclick="alert('Connect this to your VoIP/web-call flow');">
-                                <i class="fas fa-headset"></i> <span data-translate="emergency.startCall">Start Internet Call</span>
+                            <h3>Web/VoIP Call</h3>
+                            <p>Start a voice call over WiFi or mobile data. Connect directly with emergency dispatchers.</p>
+                            <button class="btn btn-primary" onclick="startInternetCall()">
+                                <i class="fas fa-headset"></i> <span>Start Internet Call</span>
                             </button>
                         </div>
                         <div class="card">
-                            <h3 data-translate="emergency.chat.title">Two-Way Chat</h3>
-                            <p data-translate="emergency.chat.desc">Send incident details and get dispatcher replies over data. (Integrate with your chat/two-way API.)</p>
-                            <button class="btn btn-secondary" onclick="alert('Connect this to your chat/two-way comms flow');">
-                                <i class="fas fa-comments"></i> <span data-translate="emergency.openChat">Open Chat</span>
+                            <h3>Two-Way Chat</h3>
+                            <p>Send incident details and get dispatcher replies over data. Real-time communication with emergency services.</p>
+                            <button class="btn btn-secondary" onclick="openEmergencyChat()">
+                                <i class="fas fa-comments"></i> <span>Open Chat</span>
                             </button>
                         </div>
                     </div>
@@ -163,8 +139,61 @@ $assetBase = '../ADMIN/header/';
 
     <?php include 'includes/footer-snippet.php'; ?>
 
+    <!-- Firebase SDK (for chat) -->
+    <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
+    <script>
+        function startInternetCall() {
+            // TODO: Integrate with your VoIP/web-call service
+            // Example: window.location.href = 'your-voip-service-url';
+            // Or: initiateWebRTC call, etc.
+            
+            Swal.fire({
+                icon: 'info',
+                title: 'Internet Call',
+                html: `
+                    <p>This feature will connect you to emergency services via Internet calling.</p>
+                    <p><strong>To implement:</strong></p>
+                    <ul style="text-align: left; margin: 1rem 0;">
+                        <li>Integrate with your VoIP service (Twilio, Vonage, etc.)</li>
+                        <li>Or implement WebRTC for browser-based calling</li>
+                        <li>Connect to your emergency dispatch system</li>
+                    </ul>
+                `,
+                confirmButtonText: 'OK',
+                footer: '<small>This is a placeholder. Connect to your VoIP/web-call service.</small>'
+            });
+        }
+
+        function openEmergencyChat() {
+            // Use the global function from sidebar if available
+            if (typeof window.openChat === 'function') {
+                window.openChat();
+                // Initialize Firebase chat if not already done
+                if (window.initFirebaseChat && !window.chatInitialized) {
+                    setTimeout(() => {
+                        window.initFirebaseChat();
+                    }, 100);
+                }
+            } else {
+                // Fallback: try to find and click the chat button
+                const chatFab = document.getElementById('chatFab');
+                if (chatFab) {
+                    chatFab.click();
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Chat Not Available',
+                        text: 'Chat feature is loading. Please wait a moment and try again.',
+                        confirmButtonText: 'OK'
+                    });
+                }
+            }
+        }
+    </script>
 </body>
 </html>

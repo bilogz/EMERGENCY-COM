@@ -21,6 +21,7 @@
     margin-bottom: 2rem;
     line-height: 1.8;
     font-weight: 500;
+    text-align: center;
 }
 
 .form-group {
@@ -341,6 +342,7 @@
 
 .app-download-buttons {
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     gap: 1rem;
@@ -501,21 +503,35 @@
 }
 
 .home-emergency-cta {
+    text-align: center;
+    padding: 2rem 0 1rem;
+}
+
+.emergency-actions {
     display: flex;
     justify-content: center;
-    padding: 1.75rem 0 1rem;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
 }
 
 .emergency-call-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.9rem 1.8rem;
-    font-size: 1.05rem;
+    gap: 1rem;
+    padding: 1rem 2rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+    min-width: 200px;
+    width: 100%;
+    max-width: 300px;
+    border-radius: 12px;
+    justify-content: center;
 }
 
 .emergency-call-btn i {
-    font-size: 1.2rem;
+    font-size: 2.5rem;
 }
 
 .emergency-guide-list {
@@ -1220,7 +1236,7 @@ textarea:focus {
     align-items: flex-end;
     justify-content: flex-end;
     padding: 0 1.5rem 1.5rem;
-    z-index: 1400;
+    z-index: 9999 !important;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
@@ -1228,7 +1244,7 @@ textarea:focus {
 
 .chat-modal-open {
     opacity: 1;
-    pointer-events: auto;
+    pointer-events: auto !important;
 }
 
 .chat-modal-content {
@@ -1241,6 +1257,9 @@ textarea:focus {
     display: flex;
     flex-direction: column;
     max-height: 70vh;
+    position: relative;
+    z-index: 10000 !important;
+    pointer-events: auto !important;
 }
 
 .chat-modal-header {
@@ -1249,6 +1268,9 @@ textarea:focus {
     justify-content: space-between;
     padding: 0.85rem 1rem;
     border-bottom: 1px solid var(--card-border);
+    pointer-events: auto;
+    position: relative;
+    z-index: 10001;
 }
 
 .chat-modal-header h3 {
@@ -1262,6 +1284,9 @@ textarea:focus {
     cursor: pointer;
     color: inherit;
     font-size: 1.1rem;
+    pointer-events: auto;
+    z-index: 10002;
+    position: relative;
 }
 
 .chat-modal-body {
@@ -1269,11 +1294,50 @@ textarea:focus {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    pointer-events: auto;
+    position: relative;
+    z-index: 10001;
 }
 
 .chat-hint {
     font-size: 0.85rem;
     color: var(--text-muted);
+}
+
+.chat-status-indicator {
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+    animation: fadeIn 0.3s ease;
+    border-left: 4px solid;
+}
+
+.chat-status-indicator i {
+    animation: pulse 2s infinite;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
 }
 
 .chat-messages {
@@ -1386,11 +1450,13 @@ textarea:focus {
 
 .page-content h2 {
     margin-bottom: 0.75rem;
+    text-align: center;
 }
 
 .page-content p {
     color: var(--text-muted);
     margin-bottom: 1.5rem;
+    text-align: center;
 }
 
 .cards-grid {
@@ -1611,6 +1677,7 @@ textarea:focus {
     .page-content h2 {
         font-size: 1.35rem;
         margin-bottom: 0.5rem;
+        text-align: center;
     }
 
     .page-content p {
@@ -1697,6 +1764,11 @@ textarea:focus {
         justify-content: center;
         padding: 0.875rem 1.25rem;
         font-size: 0.95rem;
+        min-width: auto;
+    }
+    
+    .emergency-call-btn i {
+        font-size: 1.5rem;
     }
 
     /* Emergency guide list */
@@ -2047,11 +2119,12 @@ textarea:focus {
 
     .emergency-call-btn {
         padding: 0.75rem 1rem;
-        font-size: 0.85rem;
+        font-size: 0.9rem;
+        min-width: auto;
     }
 
     .emergency-call-btn i {
-        font-size: 0.95rem;
+        font-size: 1.5rem;
     }
 
     /* Emergency guide list */

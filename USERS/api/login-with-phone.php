@@ -52,6 +52,8 @@ try {
     $_SESSION['user_id'] = $user['user_id'];
     $_SESSION['user_name'] = $user['full_name'] ?? 'User';
     $_SESSION['phone'] = $phone;
+    $_SESSION['user_logged_in'] = true;
+    $_SESSION['user_type'] = 'registered';
     
     // Optional: Log login activity
     try {

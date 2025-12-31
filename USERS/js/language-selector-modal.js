@@ -121,6 +121,18 @@ class LanguageSelectorModal {
                     </div>
                 </div>
                 
+                <div class="language-auto-detect-section" style="padding: 16px 24px; border-top: 1px solid #e0e0e0;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <input type="checkbox" id="autoDetectLanguageCheckbox" style="width: 20px; height: 20px; cursor: pointer; accent-color: #4c8a89;">
+                        <label for="autoDetectLanguageCheckbox" style="cursor: pointer; font-size: 15px; color: #1f2937; font-weight: 500; flex: 1; user-select: none;">
+                            Auto-detect device language
+                        </label>
+                    </div>
+                    <p style="margin-top: 8px; margin-left: 32px; font-size: 13px; color: #6b7280; line-height: 1.4;">
+                        Automatically use your device's language when available
+                    </p>
+                </div>
+                
                 <div class="language-modal-footer">
                     <button class="btn-secondary" id="cancelBtn">Cancel</button>
                     <button class="btn-primary" id="applyBtn" disabled>
@@ -242,6 +254,19 @@ class LanguageSelectorModal {
         
         // Apply button
         applyBtn.addEventListener('click', () => this.applyLanguage());
+        
+        // Auto-detect checkbox
+        const autoDetectCheckbox = this.modal.querySelector('#autoDetectLanguageCheckbox');
+        if (autoDetectCheckbox) {
+            // Check if auto-detect was previously enabled
+            const autoDetectEnabled = localStorage.getItem('autoDetectLanguage') === 'true';
+            autoDetectCheckbox.checked = autoDetectEnabled;
+            
+            autoDetectCheckbox.addEventListener('change', function() {
+                // Save preference
+                localStorage.setItem('autoDetectLanguage', this.checked ? 'true' : 'false');
+            });
+        }
         
         // Focus search on open
         setTimeout(() => searchInput.focus(), 100);
@@ -374,10 +399,12 @@ class LanguageSelectorModal {
     }
     
     async open() {
-        if (!this.modal) {
-            this.createModal();
-            this.attachEventListeners();
+        // Always recreate modal to ensure latest structure (including auto-detect checkbox)
+        if (this.modal) {
+            this.modal.remove();
         }
+        this.createModal();
+        this.attachEventListeners();
         
         // Always refresh languages from admin-managed database when opening
         await this.loadLanguages(true);
@@ -662,6 +689,21 @@ class LanguageSelectorModal {
                 font-size: 48px;
                 margin-bottom: 16px;
                 opacity: 0.5;
+            }
+            
+            .language-auto-detect-section {
+                padding: 16px 24px;
+                border-top: 1px solid #e0e0e0;
+                background: #fafafa;
+            }
+            
+            .language-auto-detect-section label {
+                cursor: pointer;
+                user-select: none;
+            }
+            
+            .language-auto-detect-section input[type="checkbox"] {
+                cursor: pointer;
             }
             
             .language-modal-footer {

@@ -15,62 +15,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
+// Try .env file first
+$envFile = __DIR__ . '/.env';
+$googleClientId = null;
+
+if (file_exists($envFile)) {
+    $envContent = file_get_contents($envFile);
+    $lines = explode("\n", $envContent);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (empty($line) || strpos($line, '#') === 0) {
+            continue;
+        }
+        if (strpos($line, '=') !== false) {
+            list($key, $value) = explode('=', $line, 2);
+            $key = trim($key);
+            $value = trim($value);
+            $value = trim($value, '"\'');
+            if ($key === 'GOOGLE_CLIENT_ID') {
+                $googleClientId = $value;
+                break;
+            }
+        }
+    }
+}
+
 $configFile = __DIR__ . '/config.local.php';
 
-// Debug: Show the actual path being used
-$debugPath = realpath(__DIR__) . '/config.local.php';
-
 try {
-    // Check if config file exists
-    if (!file_exists($configFile)) {
-        echo json_encode([
-            "success" => false,
-            "message" => "Config file not found.",
-            "debug" => [
-                "config_file_path" => $configFile,
-                "real_path" => $debugPath,
-                "__DIR__" => __DIR__,
-                "file_exists" => false
-            ]
-        ]);
-        exit();
+    // If not found in .env, try config.local.php
+    if (empty($googleClientId) && file_exists($configFile)) {
+        $config = require $configFile;
+        if (is_array($config)) {
+            $googleClientId = isset($config['GOOGLE_CLIENT_ID']) ? trim($config['GOOGLE_CLIENT_ID']) : null;
+        }
     }
 
-    // Load config file
-    $config = require $configFile;
-    
-    // Verify it's an array
-    if (!is_array($config)) {
-        echo json_encode([
-            "success" => false,
-            "message" => "Config file did not return an array.",
-            "debug" => [
-                "config_type" => gettype($config),
-                "config_value" => var_export($config, true)
-            ]
-        ]);
-        exit();
-    }
-
-    // Get the Google Client ID
-    $clientId = isset($config['GOOGLE_CLIENT_ID']) ? trim($config['GOOGLE_CLIENT_ID']) : null;
-
-    if (!empty($clientId)) {
+    if (!empty($googleClientId)) {
         echo json_encode([
             "success" => true,
-            "client_id" => $clientId
+            "client_id" => $googleClientId
         ]);
     } else {
         echo json_encode([
             "success" => false,
             "message" => "Google OAuth is not configured. GOOGLE_CLIENT_ID not found or empty.",
             "debug" => [
-                "config_keys" => array_keys($config),
-                "has_google_client_id" => isset($config['GOOGLE_CLIENT_ID']),
-                "config_file_path" => $configFile,
-                "file_exists" => file_exists($configFile),
-                "file_readable" => is_readable($configFile),
-                "config_dump" => $config
+                "env_file_exists" => file_exists($envFile),
+                "config_file_exists" => file_exists($configFile),
+                "env_file_path" => $envFile,
+                "config_file_path" => $configFile
             ]
         ]);
     }

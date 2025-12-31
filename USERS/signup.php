@@ -81,10 +81,25 @@ $assetBase = '../ADMIN/header/';
                             </div>
                         </div>
                         <div class="form-group">
+                            <label for="district">
+                                <i class="fas fa-map"></i> District (Quezon City)
+                            </label>
+                            <select id="district" name="district" required>
+                                <option value="">Select District</option>
+                                <option value="1">District 1</option>
+                                <option value="2">District 2</option>
+                                <option value="3">District 3</option>
+                                <option value="4">District 4</option>
+                                <option value="5">District 5</option>
+                                <option value="6">District 6</option>
+                            </select>
+                            <small class="form-hint">Select your district first, then choose your barangay</small>
+                        </div>
+                        <div class="form-group">
                             <label for="barangay">
                                 <i class="fas fa-map-marker-alt"></i> <span data-translate="signup.barangay">Barangay (Quezon City)</span>
                             </label>
-                            <input type="text" id="barangay" name="barangay" placeholder="Type to search barangay..." required autocomplete="off">
+                            <input type="text" id="barangay" name="barangay" placeholder="Select district first, then type to search barangay..." required autocomplete="off" disabled>
                             <div id="barangaySuggestions" class="suggestions-dropdown" style="display: none;"></div>
                             <small class="form-hint">Start typing to search for your barangay</small>
                         </div>
@@ -96,9 +111,8 @@ $assetBase = '../ADMIN/header/';
                             <label for="street">
                                 <i class="fas fa-road"></i> Street (Quezon City)
                             </label>
-                            <input type="text" id="street" name="street" placeholder="Type to search street..." required autocomplete="off">
-                            <div id="streetSuggestions" class="suggestions-dropdown" style="display: none;"></div>
-                            <small class="form-hint">Start typing to search for your street</small>
+                            <input type="text" id="street" name="street" placeholder="Enter your street name" required>
+                            <small class="form-hint">Enter your street name</small>
                         </div>
                         
                         <div class="error-message" id="errorMessage" style="display: none;">
@@ -212,36 +226,46 @@ $assetBase = '../ADMIN/header/';
 
             // Wait for DOM to be ready
             function init() {
+                console.log('Initializing Google OAuth...');
                 const googleSignupBtn = document.getElementById('googleSignupBtn');
                 if (!googleSignupBtn) {
-                    console.error('Google sign-up button not found');
+                    console.error('Google sign-up button not found. Retrying...');
+                    setTimeout(init, 200);
                     return;
                 }
+                
+                console.log('Google sign-up button found');
 
                 // Load Google Client ID
+                console.log('Fetching Google config...');
                 fetch('api/get-google-config.php')
                     .then(res => {
                         if (!res.ok) {
                             throw new Error('Failed to fetch Google config: HTTP ' + res.status);
                         }
-                        return res.text().then(text => {
-                            try {
-                                return JSON.parse(text);
-                            } catch (e) {
-                                console.error('Invalid JSON response:', text);
-                                throw new Error('Invalid JSON response from server');
-                            }
-                        });
+                        return res.json();
                     })
                     .then(data => {
                         console.log('Google config response:', data);
-                        if (data && data.success && data.client_id) {
+                        console.log('Response type:', typeof data);
+                        console.log('Has success:', data && data.success);
+                        console.log('Has client_id:', data && data.client_id);
+                        
+                        if (data && data.success === true && data.client_id) {
                             googleClientId = data.client_id;
-                            console.log('Google Client ID loaded successfully:', googleClientId);
+                            window.googleClientId = googleClientId; // Make available globally for debugging
+                            console.log('Google Client ID loaded successfully:', googleClientId.substring(0, 20) + '...');
                             initializeGoogleSignUp();
                         } else {
-                            console.error('Google Client ID not found in config. Response:', data);
-                            showGoogleButtonError('Google sign-up is not configured. Please use the regular sign-up form.');
+                            console.error('Google Client ID not found in config. Response:', JSON.stringify(data, null, 2));
+                            const errorMsg = data && data.message ? data.message : 'Google OAuth is not configured.';
+                            console.error('Error message:', errorMsg);
+                            showGoogleButtonError(errorMsg);
+                            
+                            // Show user-friendly message
+                            if (data && data.debug) {
+                                console.warn('Debug info:', data.debug);
+                            }
                         }
                     })
                     .catch(err => {
@@ -273,11 +297,18 @@ $assetBase = '../ADMIN/header/';
 
                 // Attach click handler only once
                 if (!clickHandlerAttached) {
-                    googleSignupBtn.addEventListener('click', function(e) {
+                    console.log('Attaching click handler to Google signup button');
+                    // Remove any existing listeners by cloning the button
+                    const newBtn = googleSignupBtn.cloneNode(true);
+                    googleSignupBtn.parentNode.replaceChild(newBtn, googleSignupBtn);
+                    
+                    newBtn.addEventListener('click', function(e) {
                         e.preventDefault();
                         e.stopPropagation();
+                        console.log('Google signup button clicked');
                         
                         if (!googleClientId) {
+                            console.error('Google Client ID not available');
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Configuration Error',
@@ -287,6 +318,7 @@ $assetBase = '../ADMIN/header/';
                         }
 
                         if (!checkGoogleApiLoaded()) {
+                            console.warn('Google API not loaded yet');
                             Swal.fire({
                                 icon: 'info',
                                 title: 'Loading...',
@@ -298,6 +330,7 @@ $assetBase = '../ADMIN/header/';
                             return;
                         }
                         
+                        console.log('Initializing Google OAuth token client...');
                         try {
                             // Use Google Identity Services OAuth 2.0
                             const tokenClient = google.accounts.oauth2.initTokenClient({
@@ -306,22 +339,25 @@ $assetBase = '../ADMIN/header/';
                                 callback: handleGoogleTokenResponse,
                             });
                             
+                            console.log('Requesting access token...');
                             tokenClient.requestAccessToken({ prompt: 'consent' });
                         } catch (error) {
                             console.error('Error initializing Google OAuth:', error);
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Authentication Error',
-                                text: 'Failed to start Google sign-up. Please try again.'
+                                text: 'Failed to start Google sign-up: ' + error.message
                             });
                         }
                     });
                     clickHandlerAttached = true;
+                    console.log('Click handler attached successfully');
                 }
 
                 // Wait for Google Identity Services to load
                 if (!checkGoogleApiLoaded()) {
                     initializationAttempts++;
+                    console.log('Waiting for Google API to load... Attempt ' + initializationAttempts);
                     if (initializationAttempts < maxInitializationAttempts) {
                         setTimeout(initializeGoogleSignUp, 100);
                     } else {
@@ -331,50 +367,102 @@ $assetBase = '../ADMIN/header/';
                     return;
                 }
 
+                console.log('Google API loaded successfully');
                 // Remove any error styling
-                googleSignupBtn.style.opacity = '1';
-                googleSignupBtn.style.cursor = 'pointer';
-                googleSignupBtn.disabled = false;
-                console.log('Google sign-up button initialized successfully');
+                const btn = document.getElementById('googleSignupBtn');
+                if (btn) {
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                    btn.disabled = false;
+                    console.log('Google sign-up button initialized successfully');
+                }
             }
 
             function showGoogleButtonError(message) {
                 const googleSignupBtn = document.getElementById('googleSignupBtn');
                 if (googleSignupBtn) {
                     googleSignupBtn.style.opacity = '0.6';
-                    googleSignupBtn.style.cursor = 'not-allowed';
-                    googleSignupBtn.disabled = true;
-                    googleSignupBtn.title = message;
+                    googleSignupBtn.style.cursor = 'pointer'; // Keep pointer so user can click
+                    googleSignupBtn.disabled = false; // Don't disable, allow click to show setup message
+                    googleSignupBtn.title = message + ' Click to setup.';
+                    
+                    // Add click handler to show setup instructions
+                    googleSignupBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'Google OAuth Not Configured',
+                            html: `
+                                <p>Google sign-up is not configured yet.</p>
+                                <p><strong>To enable Google sign-up:</strong></p>
+                                <ol style="text-align: left; margin: 1rem 0;">
+                                    <li>Get Google OAuth credentials from <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
+                                    <li>Configure them using the setup page</li>
+                                </ol>
+                                <a href="api/setup-google-oauth.php" target="_blank" style="display: inline-block; margin-top: 1rem; padding: 0.75rem 1.5rem; background: #4285f4; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Open Setup Page</a>
+                            `,
+                            confirmButtonText: 'OK',
+                            width: '600px'
+                        });
+                    }, { once: true }); // Only attach once
                 }
             }
 
             // Initialize when DOM is ready
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', init);
+                document.addEventListener('DOMContentLoaded', function() {
+                    setTimeout(init, 100); // Small delay to ensure everything is ready
+                });
             } else {
-                init();
+                setTimeout(init, 100);
             }
         })();
 
         function handleGoogleTokenResponse(tokenResponse) {
+            console.log('Google token response received:', tokenResponse);
+            
             if (tokenResponse.error) {
                 console.error('Google OAuth error:', tokenResponse.error);
+                let errorMsg = 'Failed to authenticate with Google. Please try again.';
+                
+                if (tokenResponse.error === 'popup_closed_by_user') {
+                    errorMsg = 'Authentication cancelled.';
+                } else if (tokenResponse.error_description) {
+                    errorMsg = tokenResponse.error_description;
+                }
+                
                 Swal.fire({
                     icon: 'error',
                     title: 'Authentication Error',
-                    text: tokenResponse.error_description || 'Failed to authenticate with Google. Please try again.'
+                    text: errorMsg
                 });
                 return;
             }
 
+            if (!tokenResponse.access_token) {
+                console.error('No access token in response');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Authentication Error',
+                    text: 'No access token received from Google.'
+                });
+                return;
+            }
+
+            console.log('Fetching user info from Google...');
             fetch('https://www.googleapis.com/oauth2/v2/userinfo?access_token=' + tokenResponse.access_token)
                 .then(res => {
                     if (!res.ok) {
-                        throw new Error('Failed to fetch user info');
+                        throw new Error('Failed to fetch user info: HTTP ' + res.status);
                     }
                     return res.json();
                 })
                 .then(userInfo => {
+                    console.log('User info received:', userInfo);
+                    if (!userInfo || !userInfo.email) {
+                        throw new Error('Invalid user info received from Google');
+                    }
+                    console.log('Verifying user with backend...');
                     verifyGoogleUser(userInfo);
                 })
                 .catch(err => {
@@ -382,13 +470,14 @@ $assetBase = '../ADMIN/header/';
                     Swal.fire({
                         icon: 'error',
                         title: 'Authentication Error',
-                        text: 'Failed to authenticate with Google. Please try again.'
+                        text: 'Failed to authenticate with Google: ' + (err.message || 'Unknown error')
                     });
                 });
         }
 
         async function verifyGoogleUser(userInfo) {
             try {
+                console.log('Sending user info to backend for verification...');
                 const response = await fetch('api/google-oauth.php', {
                     method: 'POST',
                     headers: {
@@ -400,19 +489,29 @@ $assetBase = '../ADMIN/header/';
                     })
                 });
 
+                console.log('Backend response status:', response.status);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Backend error:', errorText);
+                    throw new Error('Server error: HTTP ' + response.status + ' - ' + errorText);
+                }
+
                 const data = await response.json();
+                console.log('Backend response:', data);
 
                 if (data.success) {
                     Swal.fire({
                         icon: 'success',
                         title: data.is_new_user ? 'Account Created!' : 'Login Successful!',
-                        text: 'Welcome, ' + data.username,
+                        text: 'Welcome, ' + (data.username || data.user_name || 'User'),
                         showConfirmButton: false,
                         timer: 1500
                     }).then(() => {
+                        console.log('Redirecting to index.php...');
                         window.location.href = '../index.php';
                     });
                 } else {
+                    console.error('Backend returned error:', data.message);
                     Swal.fire({
                         icon: 'error',
                         title: 'Error',
@@ -424,33 +523,119 @@ $assetBase = '../ADMIN/header/';
                 Swal.fire({
                     icon: 'error',
                     title: 'Connection Error',
-                    text: 'Please check your internet connection and try again.'
+                    text: 'Please check your internet connection and try again. Error: ' + error.message
                 });
             }
         }
+        
+        // Debug: Check if button exists after page load
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                const btn = document.getElementById('googleSignupBtn');
+                console.log('Page loaded. Google signup button exists:', !!btn);
+                if (btn) {
+                    console.log('Button disabled:', btn.disabled);
+                    console.log('Button opacity:', btn.style.opacity);
+                }
+            }, 1000);
+        });
     </script>
     <script>
-        // Barangay Autocomplete
+        // Barangay data organized by district
+        const barangaysByDistrict = {
+            '1': [
+                'Vasra', 'Bagong Pag-asa', 'Sto. Cristo', 'Project 6', 'Ramon Magsaysay', 'Alicia',
+                'Bahay Toro', 'Katipunan', 'San Antonio', 'Veterans Village', 'Bungad', 'Phil-Am',
+                'West Triangle', 'Sta. Cruz', 'Nayong Kanluran', 'Paltok', 'Paraiso', 'Mariblo',
+                'Damayan', 'Del Monte', 'Masambong', 'Talayan', 'Sto. Domingo', 'Siena',
+                'St. Peter', 'San Jose', 'Manresa', 'Damar', 'Pag-ibig sa Nayon', 'Balingasa',
+                'Sta. Teresita', 'San Isidro Labrador', 'Paang Bundok', 'Salvacion', 'N.S Amoranto',
+                'Maharlika', 'Lourdes'
+            ],
+            '2': [
+                'Bagong Silangan', 'Batasan Hills', 'Commonwealth', 'Holy Spirit', 'Payatas'
+            ],
+            '3': [
+                'Silangan', 'Socorro', 'E. Rodriguez', 'West Kamias', 'East Kamias', 'Quirino 2-A',
+                'Quirino 2-B', 'Quirino 2-C', 'Quirino 3-A', 'Claro (Quirino 3-B)', 'Duyan-Duyan',
+                'Amihan', 'Matandang Balara', 'Pansol', 'Loyola Heights', 'San Roque', 'Mangga',
+                'Masagana', 'Villa Maria Clara', 'Bayanihan', 'Camp Aguinaldo', 'White Plains',
+                'Libis', 'Ugong Norte', 'Bagumbayan', 'Blue Ridge A', 'Blue Ridge B', 'St. Ignatius',
+                'Milagrosa', 'Escopa I', 'Escopa II', 'Escopa III', 'Escopa IV', 'Marilag',
+                'Bagumbuhay', 'Tagumpay', 'Dioquino Zobel'
+            ],
+            '4': [
+                'Sacred Heart', 'Laging Handa', 'Obrero', 'Paligsahan', 'Roxas', 'Kamuning',
+                'South Triangle', 'Pinagkaisahan', 'Immaculate Concepcion', 'San Martin De Porres',
+                'Kaunlaran', 'Bagong Lipunan ng Crame', 'Horseshoe', 'Valencia', 'Tatalon',
+                'Kalusugan', 'Kristong Hari', 'Damayang Lagi', 'Mariana', 'Doña Imelda', 'Santol',
+                'Sto. Niño', 'San Isidro Galas', 'Doña Aurora', 'Don Manuel', 'Doña Josefa',
+                'UP Village', 'Old Capitol Site', 'UP Campus', 'San Vicente', 'Teachers Village East',
+                'Teachers Village West', 'Central', 'Pinyahan', 'Malaya', 'Sikatuna Village', 'Botocan',
+                'Krus Na Ligas'
+            ],
+            '5': [
+                'Bagbag', 'Capri', 'Greater Lagro', 'Gulod', 'Kaligayahan', 'Nagkaisang Nayon',
+                'North Fairview', 'Novaliches Proper', 'Pasong Putik Proper', 'San Agustin',
+                'San Bartolome', 'Sta. Lucia', 'Sta. Monica', 'Fairview'
+            ],
+            '6': [
+                'Apolonio Samson', 'Baesa', 'Balon Bato', 'Culiat', 'New Era', 'Pasong Tamo',
+                'Sangandaan', 'Tandang Sora', 'Unang Sigaw', 'Sauyo', 'Talipapa'
+            ]
+        };
+
+        // Barangay Autocomplete with District Filtering
         (function () {
-            let barangays = [];
+            let currentDistrict = null;
+            let filteredBarangays = [];
+            const districtSelect = document.getElementById('district');
             const barangayInput = document.getElementById('barangay');
             const barangaySuggestionsDiv = document.getElementById('barangaySuggestions');
             let selectedBarangay = null;
 
-            // Load barangays from API
-            fetch('api/get-barangays.php')
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success && data.barangays) {
-                        barangays = data.barangays;
+            // Handle district selection
+            if (districtSelect) {
+                districtSelect.addEventListener('change', function() {
+                    const selectedDistrict = this.value;
+                    currentDistrict = selectedDistrict;
+                    
+                    // Clear barangay field when district changes
+                    if (barangayInput) {
+                        barangayInput.value = '';
+                        selectedBarangay = null;
                     }
-                })
-                .catch(err => {
-                    console.error('Failed to load barangays:', err);
+                    
+                    // Update filtered barangays based on district
+                    if (selectedDistrict && barangaysByDistrict[selectedDistrict]) {
+                        filteredBarangays = barangaysByDistrict[selectedDistrict];
+                        // Enable barangay input
+                        if (barangayInput) {
+                            barangayInput.disabled = false;
+                            barangayInput.placeholder = 'Type to search barangay...';
+                        }
+                    } else {
+                        filteredBarangays = [];
+                        // Disable barangay input if no district selected
+                        if (barangayInput) {
+                            barangayInput.disabled = true;
+                            barangayInput.placeholder = 'Select district first, then type to search barangay...';
+                        }
+                    }
+                    
+                    // Hide suggestions
+                    if (barangaySuggestionsDiv) {
+                        barangaySuggestionsDiv.style.display = 'none';
+                    }
                 });
+            }
 
             if (barangayInput && barangaySuggestionsDiv) {
                 barangayInput.addEventListener('input', function() {
+                    if (this.disabled || !currentDistrict) {
+                        return;
+                    }
+
                     const query = this.value.trim().toLowerCase();
                     barangaySuggestionsDiv.innerHTML = '';
                     barangaySuggestionsDiv.style.display = 'none';
@@ -459,7 +644,7 @@ $assetBase = '../ADMIN/header/';
                         return;
                     }
 
-                    const matches = barangays.filter(b => 
+                    const matches = filteredBarangays.filter(b => 
                         b.toLowerCase().includes(query)
                     ).slice(0, 15);
 
@@ -480,16 +665,20 @@ $assetBase = '../ADMIN/header/';
                         const noResult = document.createElement('div');
                         noResult.className = 'suggestion-item';
                         noResult.style.color = '#999';
-                        noResult.textContent = 'No barangay found';
+                        noResult.textContent = 'No barangay found in this district';
                         barangaySuggestionsDiv.appendChild(noResult);
                         barangaySuggestionsDiv.style.display = 'block';
                     }
                 });
 
-                // Show all barangays when focused
+                // Show all barangays from selected district when focused
                 barangayInput.addEventListener('focus', function() {
-                    if (this.value.length === 0) {
-                        const topBarangays = barangays.slice(0, 15);
+                    if (this.disabled || !currentDistrict) {
+                        return;
+                    }
+
+                    if (this.value.length === 0 && filteredBarangays.length > 0) {
+                        const topBarangays = filteredBarangays.slice(0, 15);
                         barangaySuggestionsDiv.innerHTML = '';
                         topBarangays.forEach(barangay => {
                             const item = document.createElement('div');
@@ -508,101 +697,13 @@ $assetBase = '../ADMIN/header/';
 
                 // Hide suggestions when clicking outside
                 document.addEventListener('click', function(e) {
-                    if (!barangayInput.contains(e.target) && !barangaySuggestionsDiv.contains(e.target)) {
+                    if (!barangayInput.contains(e.target) && !barangaySuggestionsDiv.contains(e.target) && !districtSelect.contains(e.target)) {
                         barangaySuggestionsDiv.style.display = 'none';
                     }
                 });
             }
         })();
 
-        // Street Autocomplete
-        (function () {
-            let streets = [];
-            const streetInput = document.getElementById('street');
-            const streetSuggestionsDiv = document.getElementById('streetSuggestions');
-            let selectedStreet = null;
-
-            // Load streets from API
-            fetch('api/get-streets.php')
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success && data.streets) {
-                        streets = data.streets;
-                    }
-                })
-                .catch(err => {
-                    console.error('Failed to load streets:', err);
-                });
-
-            if (streetInput && streetSuggestionsDiv) {
-                streetInput.addEventListener('input', function() {
-                    const query = this.value.trim().toLowerCase();
-                    streetSuggestionsDiv.innerHTML = '';
-                    streetSuggestionsDiv.style.display = 'none';
-
-                    if (query.length < 1) {
-                        return;
-                    }
-
-                    const matches = streets.filter(s => 
-                        s.toLowerCase().includes(query)
-                    ).slice(0, 15);
-
-                    if (matches.length > 0) {
-                        matches.forEach(street => {
-                            const item = document.createElement('div');
-                            item.className = 'suggestion-item';
-                            item.textContent = street;
-                            item.addEventListener('click', function() {
-                                streetInput.value = street;
-                                selectedStreet = street;
-                                streetSuggestionsDiv.style.display = 'none';
-                            });
-                            streetSuggestionsDiv.appendChild(item);
-                        });
-                        streetSuggestionsDiv.style.display = 'block';
-                    } else if (query.length >= 2) {
-                        const noResult = document.createElement('div');
-                        noResult.className = 'suggestion-item';
-                        noResult.style.color = '#999';
-                        noResult.textContent = 'No street found. You can type your street name.';
-                        streetSuggestionsDiv.appendChild(noResult);
-                        streetSuggestionsDiv.style.display = 'block';
-                    }
-                });
-
-                // Show popular streets when focused
-                streetInput.addEventListener('focus', function() {
-                    if (this.value.length === 0) {
-                        const popularStreets = streets.filter(s => 
-                            s.includes('Avenue') || s.includes('Boulevard') || s.includes('Highway')
-                        ).slice(0, 15);
-                        streetSuggestionsDiv.innerHTML = '';
-                        popularStreets.forEach(street => {
-                            const item = document.createElement('div');
-                            item.className = 'suggestion-item';
-                            item.textContent = street;
-                            item.addEventListener('click', function() {
-                                streetInput.value = street;
-                                selectedStreet = street;
-                                streetSuggestionsDiv.style.display = 'none';
-                            });
-                            streetSuggestionsDiv.appendChild(item);
-                        });
-                        if (popularStreets.length > 0) {
-                            streetSuggestionsDiv.style.display = 'block';
-                        }
-                    }
-                });
-
-                // Hide suggestions when clicking outside
-                document.addEventListener('click', function(e) {
-                    if (!streetInput.contains(e.target) && !streetSuggestionsDiv.contains(e.target)) {
-                        streetSuggestionsDiv.style.display = 'none';
-                    }
-                });
-            }
-        })();
     </script>
 
     <script>
@@ -658,30 +759,24 @@ $assetBase = '../ADMIN/header/';
             const email = document.getElementById('email').value.trim();
             const phone = document.getElementById('phone').value.trim();
             const nationality = document.getElementById('nationality').value.trim();
+            const district = document.getElementById('district').value.trim();
             const barangay = document.getElementById('barangay').value.trim();
             const houseNumber = document.getElementById('house_number').value.trim();
             const street = document.getElementById('street').value.trim();
             
             // Validation
-            if (!fullName || !email || !phone || !nationality || !barangay || !houseNumber || !street) {
+            if (!fullName || !email || !phone || !nationality || !district || !barangay || !houseNumber || !street) {
                 showError('Please fill out all required fields.');
                 return;
             }
             
-            // Validate barangay is from Quezon City list
+            // Validate barangay is from selected district
+            const districtBarangays = barangaysByDistrict[district] || [];
             const barangayLower = barangay.toLowerCase();
-            const isValidBarangay = await fetch('api/get-barangays.php')
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success && data.barangays) {
-                        return data.barangays.some(b => b.toLowerCase() === barangayLower);
-                    }
-                    return true; // Allow if API fails
-                })
-                .catch(() => true); // Allow if API fails
+            const isValidBarangay = districtBarangays.some(b => b.toLowerCase() === barangayLower);
             
             if (!isValidBarangay) {
-                showError('Please select a valid Quezon City barangay from the list.');
+                showError('Please select a valid barangay from District ' + district + '.');
                 return;
             }
             
@@ -715,6 +810,7 @@ $assetBase = '../ADMIN/header/';
                         email: email,
                         phone: phoneWithPrefix,
                         nationality: nationality,
+                        district: district,
                         barangay: barangay,
                         house_number: houseNumber,
                         street: street
