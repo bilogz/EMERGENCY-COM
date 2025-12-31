@@ -19,6 +19,11 @@ $current = 'alerts.php';
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script>
+        // Set global API base path for all JS files
+        window.API_BASE_PATH = 'api/';
+        window.IS_ROOT_CONTEXT = false;
+    </script>
     <script src="js/translations.js"></script>
     <script src="js/language-manager.js"></script>
     <script src="js/language-selector-modal.js"></script>
@@ -53,19 +58,47 @@ $current = 'alerts.php';
 
         <div class="main-container">
             <div class="sub-container content-main">
+                <!-- Filter Tabs -->
+                <div class="alert-filters" style="margin-bottom: 2rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button class="filter-btn active" data-category="all">
+                        <i class="fas fa-list"></i> All Alerts
+                    </button>
+                    <button class="filter-btn" data-category="Weather">
+                        <i class="fas fa-cloud-rain"></i> Weather
+                    </button>
+                    <button class="filter-btn" data-category="Earthquake">
+                        <i class="fas fa-mountain"></i> Earthquake
+                    </button>
+                    <button class="filter-btn" data-category="Bomb Threat">
+                        <i class="fas fa-bomb"></i> Bomb Threat
+                    </button>
+                    <button class="filter-btn" data-category="Fire">
+                        <i class="fas fa-fire"></i> Fire
+                    </button>
+                    <button class="filter-btn" data-category="General">
+                        <i class="fas fa-exclamation-triangle"></i> General
+                    </button>
+                </div>
+
+                <!-- Live Status Indicator -->
+                <div class="live-status" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; padding: 0.75rem 1rem; background: rgba(76, 175, 80, 0.1); border-radius: 8px; border-left: 4px solid #4caf50;">
+                    <span class="live-dot" style="width: 10px; height: 10px; background: #4caf50; border-radius: 50%; animation: pulse 2s infinite;"></span>
+                    <span style="font-weight: 600; color: #2e7d32;">Live Updates Active</span>
+                    <span id="lastUpdateTime" style="margin-left: auto; font-size: 0.875rem; color: #666;">Loading...</span>
+                </div>
+
                 <section class="page-content">
                     <h2 data-translate="alerts.active.title">Active Alerts</h2>
-                    <div class="cards-grid">
-                        <div class="card">
-                            <h4 data-translate="alerts.weather.title">Weather Advisory</h4>
-                            <p data-translate="alerts.weather.desc">Rainfall alert from PAGASA. Stay indoors if possible.</p>
-                            <button class="btn btn-primary" data-translate="alerts.acknowledge">Acknowledge</button>
+                    <div id="alertsContainer" class="cards-grid">
+                        <div class="loading-alerts" style="text-align: center; padding: 3rem;">
+                            <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #4c8a89;"></i>
+                            <p style="margin-top: 1rem; color: #666;">Loading alerts...</p>
                         </div>
-                        <div class="card">
-                            <h4 data-translate="alerts.earthquake.title">Earthquake Update</h4>
-                            <p data-translate="alerts.earthquake.desc">Aftershock notice from PHIVOLCS. Expect minor tremors.</p>
-                            <button class="btn btn-secondary" data-translate="alerts.viewDetails">View Details</button>
-                        </div>
+                    </div>
+                    <div id="noAlerts" class="no-alerts" style="display: none; text-align: center; padding: 3rem;">
+                        <i class="fas fa-check-circle" style="font-size: 3rem; color: #4caf50; margin-bottom: 1rem;"></i>
+                        <h3>No Active Alerts</h3>
+                        <p style="color: #666;">There are currently no active alerts in Quezon City.</p>
                     </div>
                 </section>
             </div>
@@ -77,6 +110,415 @@ $current = 'alerts.php';
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
+    <script>
+        // Live Alerts System - Real-time Updates
+        let currentCategory = 'all';
+        let lastAlertId = 0;
+        let lastUpdateTime = null;
+        let refreshInterval = null;
+        let isInitialLoad = true;
+        const API_BASE = window.API_BASE_PATH || 'api/';
+        const REFRESH_INTERVAL = 10000; // Refresh every 10 seconds for real-time feel
+        
+        // Category icons and colors mapping
+        const categoryConfig = {
+            'Weather': { icon: 'fa-cloud-rain', color: '#3498db', bgColor: 'rgba(52, 152, 219, 0.1)' },
+            'Earthquake': { icon: 'fa-mountain', color: '#e74c3c', bgColor: 'rgba(231, 76, 60, 0.1)' },
+            'Bomb Threat': { icon: 'fa-bomb', color: '#c0392b', bgColor: 'rgba(192, 57, 43, 0.1)' },
+            'Fire': { icon: 'fa-fire', color: '#e67e22', bgColor: 'rgba(230, 126, 34, 0.1)' },
+            'General': { icon: 'fa-exclamation-triangle', color: '#95a5a6', bgColor: 'rgba(149, 165, 166, 0.1)' }
+        };
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeAlerts();
+            setupFilters();
+            startAutoRefresh();
+        });
+        
+        function initializeAlerts() {
+            loadAlerts(false);
+        }
+        
+        async function loadAlerts(showNewOnly = false) {
+            try {
+                const category = currentCategory === 'all' ? '' : currentCategory;
+                let url = `${API_BASE}get-alerts.php?status=active&limit=50`;
+                
+                if (category) {
+                    url += `&category=${encodeURIComponent(category)}`;
+                }
+                
+                // For incremental updates, use last_id
+                if (showNewOnly && lastAlertId > 0) {
+                    url += `&last_id=${lastAlertId}`;
+                } else if (showNewOnly && lastUpdateTime) {
+                    url += `&last_update=${encodeURIComponent(lastUpdateTime)}`;
+                }
+                
+                const response = await fetch(url, {
+                    cache: 'no-cache',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch alerts');
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.alerts) {
+                    if (showNewOnly && data.alerts.length > 0) {
+                        // Show notification for new alerts
+                        showNewAlertsNotification(data.alerts.length);
+                        // Add animation to new alerts
+                        displayAlerts(data.alerts, true, true);
+                    } else if (!showNewOnly) {
+                        // Initial load or category change
+                        displayAlerts(data.alerts, false, false);
+                    }
+                    
+                    updateLastAlertId(data.alerts);
+                    updateLastUpdateTime(data.timestamp);
+                    isInitialLoad = false;
+                } else if (!showNewOnly) {
+                    // Only show "no alerts" on initial load, not on refresh
+                    showNoAlerts();
+                }
+            } catch (error) {
+                console.error('Error loading alerts:', error);
+                if (!isInitialLoad) {
+                    // Don't show error on refresh, just log it
+                    return;
+                }
+                document.getElementById('alertsContainer').innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: #e74c3c;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                        <p>Failed to load alerts. Please refresh the page.</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function displayAlerts(alerts, append = false, isNew = false) {
+            const container = document.getElementById('alertsContainer');
+            const noAlerts = document.getElementById('noAlerts');
+            
+            if (alerts.length === 0 && !append) {
+                showNoAlerts();
+                return;
+            }
+            
+            noAlerts.style.display = 'none';
+            
+            if (!append) {
+                container.innerHTML = '';
+            }
+            
+            alerts.forEach((alert, index) => {
+                const category = alert.category_name || 'General';
+                const config = categoryConfig[category] || categoryConfig['General'];
+                const alertCard = createAlertCard(alert, config, isNew && index === 0);
+                
+                if (append) {
+                    container.insertBefore(alertCard, container.firstChild);
+                    // Scroll to top smoothly if new alert
+                    if (isNew && index === 0) {
+                        setTimeout(() => {
+                            alertCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }, 100);
+                    }
+                } else {
+                    container.appendChild(alertCard);
+                }
+            });
+        }
+        
+        function createAlertCard(alert, config, isNew = false) {
+            const card = document.createElement('div');
+            card.className = 'card alert-card';
+            card.dataset.alertId = alert.id;
+            card.style.borderLeft = `4px solid ${config.color}`;
+            
+            // Add new alert animation class
+            if (isNew) {
+                card.classList.add('new-alert');
+                card.style.animation = 'slideInFromTop 0.5s ease';
+            }
+            
+            // Determine severity/urgency based on category
+            const isUrgent = ['Bomb Threat', 'Fire', 'Earthquake'].includes(alert.category_name);
+            const urgencyBadge = isUrgent ? '<span class="urgent-badge" style="background: #e74c3c; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; margin-left: 0.5rem;">URGENT</span>' : '';
+            
+            card.innerHTML = `
+                <div class="alert-header" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
+                    <div class="alert-category-badge" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: ${config.bgColor || config.color + '15'}; border-radius: 20px; color: ${config.color}; font-weight: 600; font-size: 0.875rem;">
+                        <i class="fas ${config.icon}"></i>
+                        <span>${alert.category_name || 'General'}</span>
+                        ${urgencyBadge}
+                    </div>
+                    <span class="alert-time" style="margin-left: auto; font-size: 0.875rem; color: #666; display: flex; align-items: center; gap: 0.25rem;">
+                        <i class="fas fa-clock" style="font-size: 0.75rem;"></i>
+                        ${alert.time_ago || 'Just now'}
+                    </span>
+                </div>
+                <h4 style="margin: 0 0 0.5rem 0; color: #1f2937; font-size: 1.25rem; font-weight: 700;">${escapeHtml(alert.title)}</h4>
+                <p style="margin: 0 0 1rem 0; color: #4b5563; line-height: 1.6;">${escapeHtml(alert.message)}</p>
+                ${alert.content ? `<div class="alert-content" style="margin-bottom: 1rem; padding: 1rem; background: ${config.bgColor || '#f9fafb'}; border-radius: 8px; color: #374151; border-left: 3px solid ${config.color};">${escapeHtml(alert.content)}</div>` : ''}
+                <div class="alert-actions" style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-primary btn-sm" onclick="viewAlertDetails(${alert.id})">
+                        <i class="fas fa-info-circle"></i> View Details
+                    </button>
+                    ${isUrgent ? '<button class="btn btn-secondary btn-sm" onclick="shareAlert(' + alert.id + ')"><i class="fas fa-share"></i> Share</button>' : ''}
+                </div>
+            `;
+            
+            return card;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function setupFilters() {
+            const filterButtons = document.querySelectorAll('.filter-btn');
+            filterButtons.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    // Update active state
+                    filterButtons.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Update category
+                    currentCategory = this.dataset.category;
+                    
+                    // Reload alerts
+                    lastAlertId = 0;
+                    loadAlerts();
+                });
+            });
+        }
+        
+        function startAutoRefresh() {
+            // Refresh every 10 seconds for real-time updates
+            refreshInterval = setInterval(() => {
+                loadAlerts(true); // Load only new alerts
+            }, REFRESH_INTERVAL);
+            
+            // Also refresh when page becomes visible
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden) {
+                    loadAlerts(true);
+                }
+            });
+            
+            // Refresh on focus
+            window.addEventListener('focus', function() {
+                loadAlerts(true);
+            });
+        }
+        
+        function updateLastAlertId(alerts) {
+            if (alerts.length > 0) {
+                const maxId = Math.max(...alerts.map(a => parseInt(a.id)));
+                if (maxId > lastAlertId) {
+                    lastAlertId = maxId;
+                }
+            }
+        }
+        
+        function updateLastUpdateTime(timestamp = null) {
+            const timeEl = document.getElementById('lastUpdateTime');
+            if (timeEl) {
+                if (timestamp) {
+                    lastUpdateTime = timestamp;
+                }
+                const now = new Date();
+                timeEl.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+            }
+        }
+        
+        function showNoAlerts() {
+            document.getElementById('alertsContainer').innerHTML = '';
+            document.getElementById('noAlerts').style.display = 'block';
+        }
+        
+        function showNewAlertsNotification(count) {
+            // Show prominent notification for new alerts
+            const notification = document.createElement('div');
+            notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); color: white; padding: 1rem 1.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(76, 175, 80, 0.4); z-index: 2000; animation: slideInRight 0.4s ease; display: flex; align-items: center; gap: 0.75rem; min-width: 250px;';
+            notification.innerHTML = `
+                <div style="background: rgba(255,255,255,0.2); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-bell" style="font-size: 1.2rem;"></i>
+                </div>
+                <div>
+                    <div style="font-weight: 700; font-size: 1rem;">${count} New Alert${count > 1 ? 's' : ''}</div>
+                    <div style="font-size: 0.875rem; opacity: 0.9;">Real-time update from Quezon City</div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Play notification sound if allowed
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OSfTQ8MUKjj8LZjHAY4kdfyzHksBSR3x/DdkEAKFF606euoVRQKRp/g8r5sIQUrgc7y2Yk2CBtpvfDkn00PDFCo4/C2YxwGOJHX8sx5LAUkd8fw3ZBAC');
+                audio.volume = 0.3;
+                audio.play().catch(() => {}); // Ignore errors if autoplay is blocked
+            } catch (e) {}
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOutRight 0.4s ease';
+                setTimeout(() => notification.remove(), 400);
+            }, 4000);
+        }
+        
+        function viewAlertDetails(alertId) {
+            // Fetch full alert details and show in modal
+            fetch(`${API_BASE}get-alerts.php?status=active&limit=1`)
+                .then(res => res.json())
+                .then(data => {
+                    const alert = data.alerts?.find(a => a.id == alertId);
+                    if (alert) {
+                        const config = categoryConfig[alert.category_name] || categoryConfig['General'];
+                        Swal.fire({
+                            title: `<i class="fas ${config.icon}" style="color: ${config.color};"></i> ${escapeHtml(alert.title)}`,
+                            html: `
+                                <div style="text-align: left;">
+                                    <div style="margin-bottom: 1rem;">
+                                        <strong style="color: ${config.color};">Category:</strong> ${alert.category_name || 'General'}<br>
+                                        <strong>Time:</strong> ${alert.time_ago || 'Just now'}<br>
+                                        <strong>Date:</strong> ${new Date(alert.created_at).toLocaleString()}
+                                    </div>
+                                    <div style="margin-bottom: 1rem; padding: 1rem; background: #f9fafb; border-radius: 8px;">
+                                        <strong>Message:</strong><br>
+                                        ${escapeHtml(alert.message)}
+                                    </div>
+                                    ${alert.content ? `<div style="padding: 1rem; background: ${config.bgColor}; border-radius: 8px; border-left: 3px solid ${config.color};">
+                                        <strong>Details:</strong><br>
+                                        ${escapeHtml(alert.content)}
+                                    </div>` : ''}
+                                </div>
+                            `,
+                            icon: null,
+                            showConfirmButton: true,
+                            confirmButtonText: 'Close',
+                            confirmButtonColor: config.color,
+                            width: '700px'
+                        });
+                    }
+                })
+                .catch(() => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Failed to load alert details.'
+                    });
+                });
+        }
+        
+        function shareAlert(alertId) {
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Quezon City Emergency Alert',
+                    text: 'Check this emergency alert from Quezon City',
+                    url: window.location.href
+                }).catch(() => {});
+            } else {
+                // Fallback: copy to clipboard
+                const url = window.location.href + '#alert-' + alertId;
+                navigator.clipboard.writeText(url).then(() => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Link Copied',
+                        text: 'Alert link copied to clipboard!',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                });
+            }
+        }
+        
+        // Add CSS animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.5; }
+            }
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+            @keyframes slideInRight {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOutRight {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+            @keyframes slideInFromTop {
+                from { transform: translateY(-20px); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+            .new-alert {
+                animation: slideInFromTop 0.5s ease, pulseHighlight 2s ease;
+            }
+            @keyframes pulseHighlight {
+                0%, 100% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+                50% { box-shadow: 0 8px 24px rgba(76, 175, 80, 0.3); }
+            }
+            @keyframes pulse {
+                0%, 100% { opacity: 1; transform: scale(1); }
+                50% { opacity: 0.5; transform: scale(1.2); }
+            }
+            .live-dot {
+                animation: pulse 2s infinite;
+            }
+            .filter-btn {
+                padding: 0.75rem 1.25rem;
+                border: 2px solid var(--card-border, #e5e7eb);
+                background: var(--card-bg, #ffffff);
+                color: var(--text-color, #1f2937);
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                font-weight: 500;
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+            .filter-btn:hover {
+                border-color: var(--primary-color, #4c8a89);
+                background: var(--primary-color, #4c8a89);
+                color: white;
+            }
+            .filter-btn.active {
+                background: var(--primary-color, #4c8a89);
+                color: white;
+                border-color: var(--primary-color, #4c8a89);
+            }
+            .alert-card {
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+            .alert-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            }
+            .btn-sm {
+                padding: 0.5rem 1rem;
+                font-size: 0.875rem;
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
 </body>
 </html>
 

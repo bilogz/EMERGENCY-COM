@@ -186,34 +186,63 @@ $pageTitle = 'Two-Way Communication Interface';
         </div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js"></script>
     <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAvfyPTCsBp0dL76VsEVkiIrIsQkko91os",
+            authDomain: "emergencycommunicationsy-eb828.firebaseapp.com",
+            databaseURL: "https://emergencycommunicationsy-eb828-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "emergencycommunicationsy-eb828",
+            storageBucket: "emergencycommunicationsy-eb828.firebasestorage.app",
+            messagingSenderId: "201064241540",
+            appId: "1:201064241540:web:4f6d026cd355404ec365d1",
+            measurementId: "G-ESQ63CMP9B"
+        };
+        
+        if (!window.firebaseApp) {
+            window.firebaseApp = firebase.initializeApp(firebaseConfig);
+        }
+        const database = firebase.database();
+        
         let currentConversationId = null;
+        let messagesListener = null;
 
         function loadConversations() {
-            fetch('../api/two-way-communication.php?action=list')
-                .then(response => response.json())
-                .then(data => {
-                    const list = document.getElementById('conversationsList');
-                    list.innerHTML = '';
-                    
-                    if (data.success && data.conversations) {
-                        data.conversations.forEach(conv => {
-                            const item = document.createElement('div');
-                            item.className = 'conversation-item';
-                            item.innerHTML = `
-                                <strong>${conv.user_name}</strong>
-                                <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: var(--text-secondary);">
-                                    ${conv.last_message || 'No messages yet'}
-                                </p>
-                                <small style="color: var(--text-secondary);">${conv.last_message_time || ''}</small>
-                            `;
-                            item.addEventListener('click', function() {
-                                openConversation(conv.id, conv.user_name, this);
-                            });
-                            list.appendChild(item);
-                        });
-                    }
+            const conversationsRef = database.ref('conversations').orderByChild('updatedAt');
+            const list = document.getElementById('conversationsList');
+            
+            conversationsRef.on('value', (snapshot) => {
+                list.innerHTML = '';
+                
+                if (!snapshot.exists()) {
+                    list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No conversations yet</p>';
+                    return;
+                }
+                
+                const conversations = snapshot.val();
+                const sortedConversations = Object.entries(conversations)
+                    .sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0));
+                
+                sortedConversations.forEach(([convId, conv]) => {
+                    const item = document.createElement('div');
+                    item.className = 'conversation-item';
+                    item.innerHTML = `
+                        <strong>${conv.userName || 'Unknown User'}</strong>
+                        <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: var(--text-secondary);">
+                            ${conv.lastMessage || 'No messages yet'}
+                        </p>
+                        <small style="color: var(--text-secondary);">
+                            ${conv.lastMessageTime ? new Date(conv.lastMessageTime).toLocaleString() : ''}
+                        </small>
+                    `;
+                    item.addEventListener('click', function() {
+                        openConversation(convId, conv.userName || 'Unknown User', this);
+                    });
+                    list.appendChild(item);
                 });
+            });
         }
 
         function openConversation(conversationId, userName, element) {
@@ -235,25 +264,44 @@ $pageTitle = 'Two-Way Communication Interface';
         }
 
         function loadMessages(conversationId) {
-            fetch(`../api/two-way-communication.php?action=messages&conversation_id=${conversationId}`)
-                .then(response => response.json())
-                .then(data => {
-                    const messagesDiv = document.getElementById('chatMessages');
-                    messagesDiv.innerHTML = '';
-                    
-                    if (data.success && data.messages) {
-                        data.messages.forEach(msg => {
-                            const messageDiv = document.createElement('div');
-                            messageDiv.className = `message ${msg.sender_type}`;
-                            messageDiv.innerHTML = `
-                                <div class="message-content">${msg.message}</div>
-                                <small>${msg.timestamp}</small>
-                            `;
-                            messagesDiv.appendChild(messageDiv);
-                        });
-                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                    }
-                });
+            // Remove previous listener
+            if (messagesListener) {
+                messagesListener.off();
+            }
+            
+            const messagesRef = database.ref(`messages/${conversationId}`);
+            const messagesDiv = document.getElementById('chatMessages');
+            messagesDiv.innerHTML = '';
+            
+            // Load existing messages
+            messagesRef.once('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    const messages = snapshot.val();
+                    Object.values(messages).forEach(msg => {
+                        addMessageToChat(msg.text, msg.senderType, msg.timestamp);
+                    });
+                }
+            });
+            
+            // Listen for new messages
+            messagesListener = messagesRef.on('child_added', (snapshot) => {
+                const message = snapshot.val();
+                addMessageToChat(message.text, message.senderType, message.timestamp);
+            });
+        }
+
+        function addMessageToChat(text, senderType, timestamp) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${senderType}`;
+            
+            const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+            messageDiv.innerHTML = `
+                <div class="message-content">${text}</div>
+                <small>${time}</small>
+            `;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
         document.getElementById('sendButton').addEventListener('click', sendMessage);
@@ -264,37 +312,41 @@ $pageTitle = 'Two-Way Communication Interface';
             }
         });
 
-        function sendMessage() {
-            const message = document.getElementById('messageInput').value.trim();
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
             if (!message || !currentConversationId) return;
 
-            fetch('../api/two-way-communication.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    conversation_id: currentConversationId,
-                    message: message,
-                    sender_type: 'admin'
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('messageInput').value = '';
-                    loadMessages(currentConversationId);
-                } else {
-                    alert('Error: ' + data.message);
-                }
-            });
+            try {
+                // Add to UI immediately
+                addMessageToChat(message, 'admin', Date.now());
+                messageInput.value = '';
+
+                // Send to Firebase
+                await database.ref(`messages/${currentConversationId}`).push({
+                    text: message,
+                    senderId: 'admin',
+                    senderName: 'Admin',
+                    senderType: 'admin',
+                    timestamp: firebase.database.ServerValue.TIMESTAMP,
+                    read: false
+                });
+
+                // Update conversation
+                await database.ref(`conversations/${currentConversationId}`).update({
+                    lastMessage: message,
+                    lastMessageTime: firebase.database.ServerValue.TIMESTAMP,
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+                    status: 'active'
+                });
+            } catch (error) {
+                console.error('Error sending message:', error);
+                alert('Error sending message. Please try again.');
+            }
         }
 
         // Load conversations on page load
         document.addEventListener('DOMContentLoaded', loadConversations);
-        
-        // Refresh conversations every 30 seconds
-        setInterval(loadConversations, 30000);
     </script>
 </body>
 </html>

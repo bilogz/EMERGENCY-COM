@@ -7,8 +7,12 @@
 session_start();
 header('Content-Type: application/json');
 
-// Include DB connection
-require_once '../../ADMIN/api/db_connect.php';
+// Include DB connection - try USERS first, then ADMIN
+if (file_exists(__DIR__ . '/db_connect.php')) {
+    require_once __DIR__ . '/db_connect.php';
+} else {
+    require_once '../../ADMIN/api/db_connect.php';
+}
 
 // Load Google OAuth credentials
 // First try .env file (preferred), then fall back to config.local.php
@@ -105,12 +109,24 @@ try {
         
         if ($user) {
             // Update Google ID if not set
-            if (empty($user['google_id'])) {
-                $updateStmt = $pdo->prepare("UPDATE users SET google_id = ? WHERE id = ?");
-                $updateStmt->execute([$googleId, $user['id']]);
+            if (!empty($googleId)) {
+                // Check if google_id column exists
+                $checkStmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE 'google_id'");
+                $checkStmt->execute();
+                $googleIdColumnExists = $checkStmt->rowCount() > 0;
+                
+                if ($googleIdColumnExists && empty($user['google_id'])) {
+                    try {
+                        $updateStmt = $pdo->prepare("UPDATE users SET google_id = ? WHERE id = ?");
+                        $updateStmt->execute([$googleId, $user['id']]);
+                    } catch (PDOException $e) {
+                        error_log("Could not update google_id: " . $e->getMessage());
+                    }
+                }
             }
             
             // Set session variables
+            session_start(); // Ensure session is started
             $_SESSION['user_logged_in'] = true;
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['user_name'] = $user['name'];
@@ -178,7 +194,18 @@ try {
             
             $newUserId = $pdo->lastInsertId();
             
+            // Update google_id if column exists and googleId is available
+            if (!empty($googleId) && $googleIdColumnExists) {
+                try {
+                    $updateStmt = $pdo->prepare("UPDATE users SET google_id = ? WHERE id = ?");
+                    $updateStmt->execute([$googleId, $newUserId]);
+                } catch (PDOException $e) {
+                    error_log("Could not update google_id for new user: " . $e->getMessage());
+                }
+            }
+            
             // Set session variables
+            session_start(); // Ensure session is started
             $_SESSION['user_logged_in'] = true;
             $_SESSION['user_id'] = $newUserId;
             $_SESSION['user_name'] = $name;

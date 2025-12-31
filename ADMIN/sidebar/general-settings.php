@@ -256,6 +256,29 @@ $pageTitle = 'General Settings';
                                     <span class="slider"></span>
                                 </label>
                             </div>
+                            
+                            <!-- Sound Notification Customization -->
+                            <div class="setting-item" id="soundCustomization" style="display: none; flex-direction: column; align-items: flex-start; gap: 1rem;">
+                                <div style="width: 100%;">
+                                    <label for="soundFile" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Notification Sound:</label>
+                                    <select id="soundFile" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color-1); border-radius: 8px; background: var(--card-bg-1);">
+                                        <option value="default">Default</option>
+                                        <option value="bell">Bell</option>
+                                        <option value="chime">Chime</option>
+                                        <option value="notification">Notification</option>
+                                        <option value="alert">Alert</option>
+                                    </select>
+                                </div>
+                                <div style="width: 100%;">
+                                    <label for="soundVolume" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                                        Volume: <span id="volumeValue">50%</span>
+                                    </label>
+                                    <input type="range" id="soundVolume" min="0" max="100" value="50" style="width: 100%;">
+                                </div>
+                                <button type="button" id="testSoundBtn" class="btn btn-secondary" style="width: 100%;">
+                                    <i class="fas fa-volume-up"></i> Test Sound
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -405,9 +428,78 @@ $pageTitle = 'General Settings';
             }
             
             if (soundAlerts) {
+                const soundCustomization = document.getElementById('soundCustomization');
                 soundAlerts.addEventListener('change', function() {
                     localStorage.setItem('soundAlerts', this.checked);
+                    if (soundCustomization) {
+                        soundCustomization.style.display = this.checked ? 'flex' : 'none';
+                    }
                 });
+                
+                // Show customization if sound alerts is enabled
+                if (soundAlerts.checked && soundCustomization) {
+                    soundCustomization.style.display = 'flex';
+                }
+            }
+            
+            // Sound customization handlers
+            const soundFile = document.getElementById('soundFile');
+            const soundVolume = document.getElementById('soundVolume');
+            const volumeValue = document.getElementById('volumeValue');
+            const testSoundBtn = document.getElementById('testSoundBtn');
+            
+            // Load saved settings
+            const chatNotificationSettings = JSON.parse(localStorage.getItem('chatNotificationSettings') || '{}');
+            if (soundFile) {
+                soundFile.value = chatNotificationSettings.soundFile || 'default';
+            }
+            if (soundVolume) {
+                soundVolume.value = (chatNotificationSettings.soundVolume || 0.5) * 100;
+                if (volumeValue) {
+                    volumeValue.textContent = soundVolume.value + '%';
+                }
+            }
+            
+            // Update volume display
+            if (soundVolume && volumeValue) {
+                soundVolume.addEventListener('input', function() {
+                    volumeValue.textContent = this.value + '%';
+                    saveSoundSettings();
+                });
+            }
+            
+            // Save sound file selection
+            if (soundFile) {
+                soundFile.addEventListener('change', saveSoundSettings);
+            }
+            
+            // Test sound button
+            if (testSoundBtn) {
+                testSoundBtn.addEventListener('click', function() {
+                    const soundPath = `sounds/${soundFile.value}.mp3`;
+                    const testSound = new Audio(soundPath);
+                    testSound.volume = soundVolume.value / 100;
+                    testSound.play().catch(err => {
+                        // Fallback to default
+                        const defaultSound = new Audio('sounds/default.mp3');
+                        defaultSound.volume = soundVolume.value / 100;
+                        defaultSound.play();
+                    });
+                });
+            }
+            
+            function saveSoundSettings() {
+                const settings = {
+                    soundEnabled: document.getElementById('soundAlerts').checked,
+                    soundFile: soundFile ? soundFile.value : 'default',
+                    soundVolume: soundVolume ? soundVolume.value / 100 : 0.5
+                };
+                localStorage.setItem('chatNotificationSettings', JSON.stringify(settings));
+                
+                // Notify admin chat system if loaded
+                if (window.adminChatFirebase) {
+                    window.adminChatFirebase.updateNotificationSettings(settings);
+                }
             }
             
             if (showBadges) {

@@ -78,6 +78,10 @@ $assetBase = 'ADMIN/header/';
                 <h3 data-translate="home.download.title">Download Our Mobile App</h3>
                 <p data-translate="home.download.desc">Get instant emergency alerts and notifications on your mobile device</p>
                 <div class="app-download-buttons">
+                    <a href="USERS/emergency-call.php" class="btn btn-primary emergency-call-btn">
+                        <i class="fas fa-phone"></i>
+                        <span data-translate="home.emergency.call">Call for Emergency</span>
+                    </a>
                     <a href="USERS/downloads/emergency-com.apk" class="app-download-btn" id="apkDownloadBtn" download aria-label="Download APK">
                         <i class="fas fa-mobile-alt"></i>
                         <div class="app-btn-text">
@@ -152,25 +156,6 @@ $assetBase = 'ADMIN/header/';
         </div>
 
         <div class="main-container">
-            <div class="sub-container home-emergency-cta">
-                <div class="emergency-actions">
-                    <a href="USERS/emergency-call.php" class="btn btn-primary emergency-call-btn">
-                        <i class="fas fa-phone"></i>
-                        <span data-translate="home.emergency.call">Call for Emergency</span>
-                    </a>
-                    <button id="guestLoginBtn" class="btn btn-secondary guest-login-btn">
-                        <i class="fas fa-user-secret"></i>
-                        <span data-translate="home.guest.button">Continue as Guest (Emergency Only)</span>
-                    </button>
-                </div>
-                <p class="guest-notice" style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
-                    <i class="fas fa-info-circle"></i> <span data-translate="home.guest.notice">Guest access is limited to emergency calls only.</span> 
-                    <a href="USERS/login.php" data-translate="home.guest.login">Login</a> <span data-translate="home.guest.or">or</span> <a href="USERS/signup.php" data-translate="home.guest.signup">Sign Up</a> <span data-translate="home.guest.fullAccess">for full access.</span>
-                </p>
-            </div>
-        </div>
-
-        <div class="main-container">
             <div class="sub-container">
                 <section class="page-content">
                     <h2 data-translate="home.about.title">About Us</h2>
@@ -180,28 +165,6 @@ $assetBase = 'ADMIN/header/';
                         Our goal is to help you receive critical information quickly and safely during disasters, incidents,
                         and city-wide emergencies.
                     </p>
-                </section>
-
-                <section class="page-content">
-                    <h2 data-translate="home.services.title">Services</h2>
-                    <div class="cards-grid">
-                        <div class="card">
-                            <h3 data-translate="home.services.mass">Mass Notifications</h3>
-                            <p data-translate="home.services.mass.desc">City-wide alerts sent via SMS, email, and online channels for urgent incidents and advisories.</p>
-                        </div>
-                        <div class="card">
-                            <h3 data-translate="home.services.twoWay">Two-Way Communication</h3>
-                            <p data-translate="home.services.twoWay.desc">Residents can report incidents, request assistance, and send updates back to responders.</p>
-                        </div>
-                        <div class="card">
-                            <h3 data-translate="home.services.automated">Automated Hazard Feeds</h3>
-                            <p data-translate="home.services.automated.desc">Integrated updates from agencies such as PAGASA and PHIVOLCS for weather and seismic events.</p>
-                        </div>
-                        <div class="card">
-                            <h3 data-translate="home.services.multilingual">Multilingual Alerts</h3>
-                            <p data-translate="home.services.multilingual.desc">Important messages can be delivered in multiple languages to reach more communities.</p>
-                        </div>
-                    </div>
                 </section>
 
                 <section class="page-content">
@@ -236,146 +199,268 @@ $assetBase = 'ADMIN/header/';
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
     <script>
-        // Guest Login Handler
-        document.addEventListener('DOMContentLoaded', function() {
-            const guestLoginBtn = document.getElementById('guestLoginBtn');
-            if (guestLoginBtn) {
-                guestLoginBtn.addEventListener('click', async function() {
-                    const result = await Swal.fire({
-                        title: 'Continue as Guest?',
-                        html: `
-                            <p>Guest access is limited to emergency calls only.</p>
-                            <p><strong>You will be able to:</strong></p>
-                            <ul style="text-align: left; margin: 1rem 0;">
-                                <li>Access emergency hotlines</li>
-                                <li>Make emergency calls</li>
-                            </ul>
-                            <p><strong>You will NOT be able to:</strong></p>
-                            <ul style="text-align: left; margin: 1rem 0;">
-                                <li>Receive personalized alerts</li>
-                                <li>Access your profile</li>
-                                <li>Manage preferences</li>
-                            </ul>
-                            <p style="margin-top: 1rem;"><small>Your session will be monitored for security purposes.</small></p>
-                        `,
-                        icon: 'info',
-                        showCancelButton: true,
-                        confirmButtonText: 'Continue as Guest',
-                        cancelButtonText: 'Cancel',
-                        confirmButtonColor: '#28a745',
-                        cancelButtonColor: '#6c757d'
-                    });
-
-                    if (result.isConfirmed) {
-                        try {
-                            const response = await fetch('USERS/api/user-login.php', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                    login_type: 'guest',
-                                    agreement_accepted: true
-                                })
-                            });
-
-                            const data = await response.json();
-                            
-                            if (data.success) {
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'Guest Access Granted',
-                                    text: 'Redirecting to emergency services...',
-                                    timer: 1500,
-                                    showConfirmButton: false
-                                }).then(() => {
-                                    window.location.href = 'USERS/emergency-call.php';
-                                });
-                            } else {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'Error',
-                                    text: data.message || 'Failed to grant guest access. Please try again.'
-                                });
-                            }
-                        } catch (error) {
-                            console.error('Guest login error:', error);
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Connection Error',
-                                text: 'Please check your internet connection and try again.'
-                            });
-                        }
-                    }
-                });
-            }
-        });
-    </script>
-    <script>
-        // Enhanced language preference modal with improved design
+        // Enhanced language preference modal with improved design - Shows on landing page
         document.addEventListener('DOMContentLoaded', function () {
-            const existingPreference = localStorage.getItem('preferredLanguage');
+            // Function to get cookie value
+            function getCookie(name) {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop().split(';').shift();
+                return null;
+            }
+            
+            // Check both localStorage and cookies for language preference
+            let existingPreference = localStorage.getItem('preferredLanguage');
+            if (!existingPreference) {
+                existingPreference = getCookie('preferredLanguage');
+                // If found in cookie but not localStorage, sync it
+                if (existingPreference) {
+                    localStorage.setItem('preferredLanguage', existingPreference);
+                }
+            }
+            
             const languageMap = {
                 'English': 'en',
                 'Filipino': 'fil',
-                'Cebuano': 'ceb',
-                'Ilocano': 'ilo',
-                'Kapampangan': 'pam',
-                'Bicolano': 'bcl',
-                'Waray': 'war'
+                'Spanish': 'es',
+                'French': 'fr',
+                'German': 'de',
+                'Italian': 'it',
+                'Portuguese': 'pt',
+                'Russian': 'ru',
+                'Chinese (Simplified)': 'zh',
+                'Chinese (Traditional)': 'zh-TW',
+                'Japanese': 'ja',
+                'Korean': 'ko',
+                'Arabic': 'ar',
+                'Hindi': 'hi',
+                'Thai': 'th',
+                'Vietnamese': 'vi',
+                'Indonesian': 'id',
+                'Dutch': 'nl',
+                'Polish': 'pl',
+                'Turkish': 'tr',
+                'Greek': 'el',
+                'Hebrew': 'he',
+                'Swedish': 'sv',
+                'Norwegian': 'no',
+                'Danish': 'da',
+                'Finnish': 'fi',
+                'Czech': 'cs',
+                'Romanian': 'ro',
+                'Hungarian': 'hu',
+                'Malay': 'ms',
+                'Tagalog': 'tl'
             };
             const languages = Object.keys(languageMap);
 
-            // Show modal on first visit or if no preference is saved
-            const hasShownModal = sessionStorage.getItem('languageModalShown');
-            
-            if (!hasShownModal || !existingPreference) {
-                showLanguageModal();
-                if (!hasShownModal) {
-                    sessionStorage.setItem('languageModalShown', 'true');
+            // Show modal on landing page if no preference is saved
+            if (!existingPreference) {
+                // Check if auto-detect is enabled
+                const autoDetectEnabled = localStorage.getItem('autoDetectLanguage') === 'true';
+                if (autoDetectEnabled) {
+                    // Auto-detect language immediately
+                    const browserLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
+                    const langMap = {
+                        'en': 'en', 'en-us': 'en', 'en-gb': 'en', 'en-au': 'en', 'en-ca': 'en',
+                        'es': 'es', 'es-es': 'es', 'es-mx': 'es', 'es-ar': 'es', 'es-co': 'es',
+                        'fr': 'fr', 'fr-fr': 'fr', 'fr-ca': 'fr', 'fr-be': 'fr', 'fr-ch': 'fr',
+                        'de': 'de', 'de-de': 'de', 'de-at': 'de', 'de-ch': 'de',
+                        'it': 'it', 'it-it': 'it', 'it-ch': 'it',
+                        'pt': 'pt', 'pt-br': 'pt', 'pt-pt': 'pt',
+                        'ru': 'ru', 'ru-ru': 'ru',
+                        'zh': 'zh', 'zh-cn': 'zh', 'zh-tw': 'zh-TW', 'zh-hans': 'zh', 'zh-hant': 'zh-TW',
+                        'ja': 'ja', 'ja-jp': 'ja',
+                        'ko': 'ko', 'ko-kr': 'ko',
+                        'ar': 'ar', 'ar-sa': 'ar', 'ar-ae': 'ar', 'ar-eg': 'ar',
+                        'hi': 'hi', 'hi-in': 'hi',
+                        'th': 'th', 'th-th': 'th',
+                        'vi': 'vi', 'vi-vn': 'vi',
+                        'id': 'id', 'id-id': 'id',
+                        'nl': 'nl', 'nl-nl': 'nl', 'nl-be': 'nl',
+                        'pl': 'pl', 'pl-pl': 'pl',
+                        'tr': 'tr', 'tr-tr': 'tr',
+                        'el': 'el', 'el-gr': 'el',
+                        'he': 'he', 'he-il': 'he',
+                        'sv': 'sv', 'sv-se': 'sv',
+                        'no': 'no', 'nb': 'no', 'nn': 'no',
+                        'da': 'da', 'da-dk': 'da',
+                        'fi': 'fi', 'fi-fi': 'fi',
+                        'cs': 'cs', 'cs-cz': 'cs',
+                        'ro': 'ro', 'ro-ro': 'ro',
+                        'hu': 'hu', 'hu-hu': 'hu',
+                        'ms': 'ms', 'ms-my': 'ms',
+                        'fil': 'fil', 'tl': 'fil', 'fil-ph': 'fil'
+                    };
+                    
+                    let detectedLang = 'en';
+                    if (langMap[browserLang]) {
+                        detectedLang = langMap[browserLang];
+                    } else {
+                        const langPrefix = browserLang.split('-')[0];
+                        if (langMap[langPrefix]) {
+                            detectedLang = langMap[langPrefix];
+                        }
+                    }
+                    
+                    // Set language automatically
+                    document.documentElement.setAttribute('data-lang', detectedLang);
+                    localStorage.setItem('preferredLanguage', detectedLang);
+                    const expiryDate = new Date();
+                    expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+                    document.cookie = `preferredLanguage=${detectedLang}; expires=${expiryDate.toUTCString()}; path=/`;
+                    
+                    // Apply translations
+                    if (typeof window.setLanguage === 'function') {
+                        window.setLanguage(detectedLang);
+                    }
+                    if (typeof window.applyTranslations === 'function') {
+                        setTimeout(() => window.applyTranslations(), 100);
+                    }
+                } else {
+                    // Show modal if auto-detect is not enabled
+                    showLanguageModal();
                 }
-            } else if (existingPreference) {
-                // Apply existing preference
+            } else {
+                // Apply existing preference and auto-translate
+                document.documentElement.setAttribute('data-lang', existingPreference);
+                
+                // Apply translations automatically
                 if (typeof window.setLanguage === 'function') {
                     window.setLanguage(existingPreference);
-                } else {
-                    document.documentElement.setAttribute('data-lang', existingPreference);
+                }
+                
+                // Also call applyTranslations directly to ensure it runs
+                if (typeof window.applyTranslations === 'function') {
+                    setTimeout(() => {
+                        window.applyTranslations();
+                    }, 100);
                 }
             }
 
             function showLanguageModal() {
+                // Remove any existing modal first
+                const existingModal = document.querySelector('.language-modal-backdrop');
+                if (existingModal) {
+                    existingModal.remove();
+                }
+
                 const wrapper = document.createElement('div');
                 wrapper.className = 'language-modal-backdrop';
+                wrapper.setAttribute('role', 'dialog');
+                wrapper.setAttribute('aria-modal', 'true');
+                wrapper.setAttribute('aria-labelledby', 'language-modal-title');
                 wrapper.innerHTML = `
                     <div class="language-modal">
-                        <h2 data-translate="lang.select">Select Language</h2>
+                        <h2 id="language-modal-title" data-translate="lang.select">Select Your Language</h2>
                         <p data-translate="lang.choose">Please choose your preferred language for alerts and content.</p>
-                        <div class="language-buttons-row">
-                            <button data-lang="en" data-translate="lang.english">English</button>
-                            <button data-lang="fil" data-translate="lang.filipino">Filipino</button>
+                        <div class="language-buttons-row" style="display: flex; flex-direction: row; gap: 1rem; margin-bottom: 1rem;">
+                            <button data-lang="en" data-translate="lang.english" style="flex: 1;">English</button>
+                            <button data-lang="fil" data-translate="lang.filipino" style="flex: 1;">Filipino</button>
                         </div>
-                        <div class="language-search">
+                        <div class="language-auto-detect" style="width: 100%;">
+                            <button id="autoDetectBtn" style="width: 100%; padding: 1.5rem 2rem; font-size: 1.25rem; font-weight: 700; border-radius: 14px; cursor: pointer; transition: all 0.3s ease; border: 3px solid var(--card-border, #d1d5db); background: var(--card-bg, #ffffff); color: var(--text-color, #1f2937);">
+                                <i class="fas fa-globe" style="margin-right: 0.5rem;"></i>
+                                Auto Detect Language
+                            </button>
+                        </div>
+                        <div class="language-search" style="margin-top: 1.5rem;">
                             <input type="text" id="languageSearchInput" data-translate-placeholder="lang.search.placeholder" placeholder="Search language...">
                             <ul id="languageSuggestions"></ul>
                         </div>
                     </div>
                 `;
                 document.body.appendChild(wrapper);
+                
+                // Prevent body scroll when modal is open
+                document.body.style.overflow = 'hidden';
+                
+                // Focus on first button for accessibility
+                const firstButton = wrapper.querySelector('.language-buttons-row button');
+                if (firstButton) {
+                    setTimeout(() => firstButton.focus(), 100);
+                }
 
                 const suggestionsList = wrapper.querySelector('#languageSuggestions');
                 const searchInput = wrapper.querySelector('#languageSearchInput');
 
                 function setLanguage(code, label) {
+                    // Save to localStorage (browser cache)
+                    localStorage.setItem('preferredLanguage', code);
+                    
+                    // Also save to cookie as backup
+                    const expiryDate = new Date();
+                    expiryDate.setFullYear(expiryDate.getFullYear() + 1); // 1 year expiry
+                    document.cookie = `preferredLanguage=${code}; expires=${expiryDate.toUTCString()}; path=/`;
+                    
+                    // Set language attribute
+                    document.documentElement.setAttribute('data-lang', code);
+                    
+                    // Apply translations automatically
                     if (typeof window.setLanguage === 'function') {
                         window.setLanguage(code);
+                    }
+                    
+                    // Also call applyTranslations directly to ensure it runs
+                    if (typeof window.applyTranslations === 'function') {
+                        window.applyTranslations();
+                    }
+                    
+                    // Restore body scroll
+                    document.body.style.overflow = '';
+                    wrapper.remove();
+                }
+                
+                function autoDetectLanguage() {
+                    // Get browser language
+                    const browserLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
+                    let detectedLang = 'en'; // Default to English
+                    
+                    // Map browser language codes to our supported international languages
+                    const langMap = {
+                        'en': 'en', 'en-us': 'en', 'en-gb': 'en', 'en-au': 'en', 'en-ca': 'en',
+                        'es': 'es', 'es-es': 'es', 'es-mx': 'es', 'es-ar': 'es', 'es-co': 'es',
+                        'fr': 'fr', 'fr-fr': 'fr', 'fr-ca': 'fr', 'fr-be': 'fr', 'fr-ch': 'fr',
+                        'de': 'de', 'de-de': 'de', 'de-at': 'de', 'de-ch': 'de',
+                        'it': 'it', 'it-it': 'it', 'it-ch': 'it',
+                        'pt': 'pt', 'pt-br': 'pt', 'pt-pt': 'pt',
+                        'ru': 'ru', 'ru-ru': 'ru',
+                        'zh': 'zh', 'zh-cn': 'zh', 'zh-tw': 'zh-TW', 'zh-hans': 'zh', 'zh-hant': 'zh-TW',
+                        'ja': 'ja', 'ja-jp': 'ja',
+                        'ko': 'ko', 'ko-kr': 'ko',
+                        'ar': 'ar', 'ar-sa': 'ar', 'ar-ae': 'ar', 'ar-eg': 'ar',
+                        'hi': 'hi', 'hi-in': 'hi',
+                        'th': 'th', 'th-th': 'th',
+                        'vi': 'vi', 'vi-vn': 'vi',
+                        'id': 'id', 'id-id': 'id',
+                        'nl': 'nl', 'nl-nl': 'nl', 'nl-be': 'nl',
+                        'pl': 'pl', 'pl-pl': 'pl',
+                        'tr': 'tr', 'tr-tr': 'tr',
+                        'el': 'el', 'el-gr': 'el',
+                        'he': 'he', 'he-il': 'he',
+                        'sv': 'sv', 'sv-se': 'sv',
+                        'no': 'no', 'nb': 'no', 'nn': 'no',
+                        'da': 'da', 'da-dk': 'da',
+                        'fi': 'fi', 'fi-fi': 'fi',
+                        'cs': 'cs', 'cs-cz': 'cs',
+                        'ro': 'ro', 'ro-ro': 'ro',
+                        'hu': 'hu', 'hu-hu': 'hu',
+                        'ms': 'ms', 'ms-my': 'ms',
+                        'fil': 'fil', 'tl': 'fil', 'fil-ph': 'fil'
+                    };
+                    
+                    // Check exact match first
+                    if (langMap[browserLang]) {
+                        detectedLang = langMap[browserLang];
                     } else {
-                        localStorage.setItem('preferredLanguage', code);
-                        document.documentElement.setAttribute('data-lang', code);
-                        if (typeof window.applyTranslations === 'function') {
-                            window.applyTranslations();
+                        // Check language prefix (e.g., 'es' from 'es-MX')
+                        const langPrefix = browserLang.split('-')[0];
+                        if (langMap[langPrefix]) {
+                            detectedLang = langMap[langPrefix];
                         }
                     }
-                    wrapper.remove();
+                    
+                    setLanguage(detectedLang, 'Auto-detected');
                 }
 
                 // Apply translations to modal if available
@@ -383,13 +468,41 @@ $assetBase = 'ADMIN/header/';
                     setTimeout(() => window.applyTranslations(), 100);
                 }
 
-                wrapper.querySelectorAll('.language-buttons-row button').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const code = btn.getAttribute('data-lang');
-                        const label = btn.textContent.trim();
-                        setLanguage(code, label);
+                // English button (left)
+                const englishBtn = wrapper.querySelector('button[data-lang="en"]');
+                if (englishBtn) {
+                    englishBtn.addEventListener('click', () => {
+                        setLanguage('en', 'English');
                     });
-                });
+                }
+                
+                // Filipino button (right)
+                const filipinoBtn = wrapper.querySelector('button[data-lang="fil"]');
+                if (filipinoBtn) {
+                    filipinoBtn.addEventListener('click', () => {
+                        setLanguage('fil', 'Filipino');
+                    });
+                }
+                
+                // Auto-detect button
+                const autoDetectBtn = wrapper.querySelector('#autoDetectBtn');
+                if (autoDetectBtn) {
+                    autoDetectBtn.addEventListener('click', () => {
+                        autoDetectLanguage();
+                    });
+                    
+                    // Add hover effect
+                    autoDetectBtn.addEventListener('mouseenter', function() {
+                        this.style.background = 'var(--primary-color, #4c8a89)';
+                        this.style.color = 'white';
+                        this.style.borderColor = 'var(--primary-color, #4c8a89)';
+                    });
+                    autoDetectBtn.addEventListener('mouseleave', function() {
+                        this.style.background = 'var(--card-bg, #ffffff)';
+                        this.style.color = 'var(--text-color, #1f2937)';
+                        this.style.borderColor = 'var(--card-border, #d1d5db)';
+                    });
+                }
 
                 wrapper.addEventListener('click', (e) => {
                     if (e.target === wrapper) {

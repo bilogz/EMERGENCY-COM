@@ -19,16 +19,16 @@ if ($data === null) {
 }
 
 // Validate required fields
-if (!isset($data['phone']) || !isset($data['name'])) {
-    echo json_encode(["success" => false, "message" => "Phone number and name are required."]);
+if (!isset($data['phone'])) {
+    echo json_encode(["success" => false, "message" => "Phone number is required."]);
     exit();
 }
 
 $phone = trim($data['phone']);
-$name = trim($data['name']);
+$name = trim($data['name'] ?? ''); // Name is optional for OTP login
 
-if (empty($phone) || empty($name)) {
-    echo json_encode(["success" => false, "message" => "Phone number and name must not be empty."]);
+if (empty($phone)) {
+    echo json_encode(["success" => false, "message" => "Phone number must not be empty."]);
     exit();
 }
 
@@ -50,14 +50,27 @@ try {
         exit();
     }
     
-    // Check if user exists by phone and name (case-insensitive name)
-    $stmt = $pdo->prepare("SELECT id, name, phone FROM users WHERE phone = ? AND LOWER(name) = LOWER(?)");
-    $stmt->execute([$phoneNormalized, $name]);
+    // Check if user exists by phone (and optionally name if provided)
+    if (!empty($name)) {
+        $stmt = $pdo->prepare("SELECT id, name, phone FROM users WHERE phone = ? AND LOWER(name) = LOWER(?)");
+        $stmt->execute([$phoneNormalized, $name]);
+    } else {
+        $stmt = $pdo->prepare("SELECT id, name, phone FROM users WHERE phone = ?");
+        $stmt->execute([$phoneNormalized]);
+    }
     $user = $stmt->fetch();
     
     if (!$user) {
-        echo json_encode(["success" => false, "message" => "User not found with this name and phone number. Please sign up first."]);
+        $errorMsg = !empty($name) 
+            ? "User not found with this name and phone number. Please sign up first."
+            : "User not found with this phone number. Please sign up first.";
+        echo json_encode(["success" => false, "message" => $errorMsg]);
         exit();
+    }
+    
+    // Use user's name from database if not provided
+    if (empty($name)) {
+        $name = $user['name'];
     }
     
     // Generate 6-digit OTP
