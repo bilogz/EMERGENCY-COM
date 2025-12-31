@@ -714,8 +714,14 @@ function analyzeWithAI($settings) {
     // Prepare prompt for Gemini AI
     $prompt = "Analyze the following weather and earthquake data for the Philippines. " .
               "Determine if there are any DANGEROUS conditions that require immediate emergency alerts. " .
-              "Consider: heavy rain (>20mm/hour), strong winds (>60km/h), earthquakes (>5.0 magnitude), " .
-              "flooding risks, landslide risks, typhoon conditions, thunderstorms, and other emergencies.\n\n" .
+              "You must check for ALL disaster types including: FIRE INCIDENTS, LANDSLIDES, FLOODING, TYPHOONS, EARTHQUAKES, TSUNAMI, THUNDERSTORMS, ASH FALL, and other natural disasters.\n\n" .
+              "SPECIFIC DISASTER DETECTION CRITERIA:\n" .
+              "1. FIRE INCIDENTS: High temperature (>35°C) + Low humidity (<30%) + Strong winds (>30 km/h) = HIGH FIRE RISK\n" .
+              "2. LANDSLIDES: Heavy rainfall (>20mm/hour = moderate risk, >50mm/hour = high risk) + Hilly/mountainous terrain = LANDSLIDE RISK\n" .
+              "3. FLOODING: Heavy rainfall (>20mm/hour) + Low-lying areas = FLOODING RISK\n" .
+              "4. TYPHOONS/STRONG WINDS: Wind speed >60km/h = DANGEROUS\n" .
+              "5. EARTHQUAKES: Magnitude >5.0 = DANGEROUS\n" .
+              "6. THUNDERSTORMS: Severe weather conditions with lightning = DANGEROUS\n\n" .
               "Weather Data:\n" . json_encode($weatherData, JSON_PRETTY_PRINT) . "\n\n" .
               "Warning Types Enabled: " . ($settings['warning_types'] ?? 'all') . "\n" .
               "Monitored Areas: " . ($settings['monitored_areas'] ?? 'Quezon City, Manila, Makati') . "\n\n" .
@@ -724,14 +730,15 @@ function analyzeWithAI($settings) {
               "  \"warnings\": [\n" .
               "    {\n" .
               "      \"type\": \"typhoon|flooding|earthquake|landslide|heavy_rain|strong_winds|thunderstorm|fire_incident|tsunami|ash_fall\",\n" .
-              "      \"title\": \"Brief alert title\",\n" .
-              "      \"content\": \"Detailed warning message with location and recommendations\",\n" .
+              "      \"title\": \"Brief alert title (specify disaster type: Fire Alert, Landslide Warning, etc.)\",\n" .
+              "      \"content\": \"Detailed warning message with location, specific disaster type, and recommendations\",\n" .
               "      \"severity\": \"medium|high|critical\",\n" .
               "      \"location\": \"City/Area name\",\n" .
               "      \"is_dangerous\": true\n" .
               "    }\n" .
               "  ]\n" .
               "}\n\n" .
+              "IMPORTANT: Actively identify FIRE INCIDENTS and LANDSLIDES based on weather conditions. " .
               "Only include warnings where is_dangerous is true. Be conservative - only alert for real dangers.";
     
     try {
@@ -1459,7 +1466,7 @@ function getWeatherAnalysis() {
     $pressure = $weather['main']['pressure'] ?? 0;
     $visibility = isset($weather['visibility']) ? round($weather['visibility'] / 1000, 1) : 0;
     
-    $prompt = "You are a disaster monitoring analyst for {$locationName}, Philippines. Analyze the current weather conditions and potential disaster risks, providing a comprehensive disaster monitoring analysis.
+    $prompt = "You are a disaster monitoring analyst for {$locationName}, Philippines. Analyze the current weather conditions and identify potential disaster risks including: FIRE INCIDENTS, LANDSLIDES, FLOODING, TYPHOONS, EARTHQUAKES, TSUNAMI, THUNDERSTORMS, ASH FALL, and other natural disasters. Provide a comprehensive disaster monitoring analysis.
 
 CURRENT CONDITIONS:
 - Temperature: {$temp}°C (Feels like: {$feelsLike}°C)
@@ -1469,23 +1476,39 @@ CURRENT CONDITIONS:
 - Pressure: {$pressure} hPa
 - Visibility: {$visibility} km
 
+DISASTER ANALYSIS REQUIREMENTS:
+1. FIRE INCIDENTS: Assess fire risk based on temperature (>35°C = high risk), low humidity (<30% = high risk), strong winds (>30 km/h = spreads fire faster), and dry conditions
+2. LANDSLIDES: Assess landslide risk based on heavy rainfall (>20mm/hour = moderate risk, >50mm/hour = high risk), soil saturation, and terrain conditions
+3. FLOODING: Assess flooding risk based on rainfall intensity, low-lying areas, and drainage capacity
+4. TYPHOONS/STRONG WINDS: Assess wind-related risks (winds >60 km/h = dangerous)
+5. EARTHQUAKES: Note if recent seismic activity could trigger secondary disasters
+6. TSUNAMI: Assess coastal area risks if applicable
+7. THUNDERSTORMS: Assess lightning and severe weather risks
+8. ASH FALL: Assess volcanic activity risks if applicable
+
 Provide your analysis in this EXACT JSON format (no markdown, no code blocks, just valid JSON):
 
 {
-  \"summary\": \"[1-2 sentence summary of current conditions and next 24 hours forecast]\",
+  \"summary\": \"[2-3 sentence summary identifying current disaster risks including fire, landslide, flooding, or other natural disasters. Be specific about which disasters are most likely based on current conditions.]\",
   \"recommendations\": [
-    \"[First recommendation]\",
-    \"[Second recommendation]\",
-    \"[Third recommendation]\",
-    \"[Fourth recommendation]\"
+    \"[First specific recommendation related to identified disaster risks]\",
+    \"[Second specific recommendation]\",
+    \"[Third specific recommendation]\",
+    \"[Fourth specific recommendation]\",
+    \"[Fifth recommendation if needed]\"
   ],
   \"risk_assessment\": {
     \"level\": \"LOW|MEDIUM|HIGH\",
-    \"description\": \"[Brief explanation of risk level and why]\"
+    \"description\": \"[Brief explanation of risk level focusing on specific disaster threats identified (fire, landslide, flooding, etc.)]\"
   }
 }
 
-Keep recommendations practical and actionable for public safety. Risk level should be based on actual danger (heat stress, flooding risk, strong winds, etc.).";
+IMPORTANT: 
+- If temperature is high (>35°C) and humidity is low (<30%), identify FIRE INCIDENT risk
+- If there's heavy rainfall (>20mm/hour), identify LANDSLIDE and FLOODING risks
+- If wind speed is high (>60 km/h), identify TYPHOON/STRONG WIND risks
+- Be specific about which disasters are most likely to occur based on the current conditions
+- Keep recommendations practical and actionable for public safety";
 
     // Generate AI weather analysis
     try {
