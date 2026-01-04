@@ -308,32 +308,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Re-attach button handlers when modal opens
         setTimeout(() => {
-            const sendBtn = document.getElementById('chatSendBtn');
-            const input = document.getElementById('chatInput');
-            if (sendBtn && input && window.sendChatMessage) {
-                // Remove old listeners
-                const newBtn = sendBtn.cloneNode(true);
-                sendBtn.parentNode.replaceChild(newBtn, sendBtn);
-                const freshBtn = document.getElementById('chatSendBtn');
-                
-                freshBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (window.sendChatMessage) {
-                        window.sendChatMessage();
-                    }
-                });
-                
-                input.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (window.sendChatMessage) {
-                            window.sendChatMessage();
-                        }
-                    }
-                });
+            // Use the centralized attachSendButtonHandlers function instead of duplicating
+            if (window.attachSendButtonHandlers) {
+                window.attachSendButtonHandlers();
             }
             
+            const input = document.getElementById('chatInput');
             if (input) {
                 input.focus();
             }
@@ -477,6 +457,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     chatInterface.style.display = 'block';
                 }
                 
+                // Enable chat input and send button
+                const chatInput = document.getElementById('chatInput');
+                const chatSendBtn = document.getElementById('chatSendBtn');
+                if (chatInput) chatInput.disabled = false;
+                if (chatSendBtn) {
+                    chatSendBtn.disabled = false;
+                    chatSendBtn.textContent = 'Send';
+                }
+                
                 // Initialize MySQL chat with the provided info
                 if (window.initChatMySQL) {
                     try {
@@ -487,6 +476,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             setTimeout(() => {
                                 if (window.attachSendButtonHandlers) {
                                     window.attachSendButtonHandlers();
+                                }
+                                // Focus input after handlers are attached
+                                if (chatInput) {
+                                    chatInput.focus();
                                 }
                             }, 200);
                         } else {
@@ -1324,13 +1317,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 freshBtn.disabled = false;
                 freshBtn.type = 'button';
                 
-                // Attach multiple event handlers for better responsiveness
-                console.log('Attaching onclick handler to send button');
-                freshBtn.onclick = async function(e) {
+                // Attach click handler - use addEventListener for better compatibility
+                console.log('Attaching click handler to send button');
+                
+                // Remove any existing click handlers first
+                const handleSendClick = async function(e) {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
                     console.log('=== SEND BUTTON CLICKED ===');
+                    
+                    // Check if button is disabled
+                    if (freshBtn.disabled) {
+                        console.warn('Button is disabled, ignoring click');
+                        return false;
+                    }
                     
                     const input = document.getElementById('chatInput');
                     const text = input ? input.value.trim() : '';
@@ -1390,42 +1391,48 @@ document.addEventListener('DOMContentLoaded', function() {
                             input.value = text;
                         }
                     } finally {
-                        // Always re-enable button
-                        freshBtn.disabled = false;
-                        freshBtn.textContent = 'Send';
+                        // Always re-enable button (unless conversation is closed)
+                        const conversationId = sessionStorage.getItem('conversation_id');
+                        if (conversationId) {
+                            // Quick check if conversation is closed
+                            try {
+                                const res = await fetch('../USERS/api/chat-get-conversation.php?conversationId=' + conversationId);
+                                const data = await res.json();
+                                if (data.success && data.status === 'closed') {
+                                    freshBtn.disabled = true;
+                                    freshBtn.textContent = 'Closed';
+                                    if (input) {
+                                        input.disabled = true;
+                                        input.placeholder = 'This conversation is closed';
+                                    }
+                                } else {
+                                    freshBtn.disabled = false;
+                                    freshBtn.textContent = 'Send';
+                                }
+                            } catch (err) {
+                                // If check fails, just re-enable
+                                freshBtn.disabled = false;
+                                freshBtn.textContent = 'Send';
+                            }
+                        } else {
+                            freshBtn.disabled = false;
+                            freshBtn.textContent = 'Send';
+                        }
                     }
                     
                     return false;
                 };
                 
+                // Use addEventListener instead of onclick for better reliability
+                freshBtn.addEventListener('click', handleSendClick, { capture: false, passive: false });
+                
+                // Also attach touchend for mobile devices
                 freshBtn.addEventListener('touchend', async function(e) {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('Send button touched');
-                    
-                    const input = document.getElementById('chatInput');
-                    const text = input ? input.value.trim() : '';
-                    
-                    if (!text) {
-                        return;
-                    }
-                    
-                    // Try sendChatMessage first, then sendChatMessageMySQL
-                    if (window.sendChatMessage) {
-                        window.sendChatMessage();
-                    } else if (window.sendChatMessageMySQL) {
-                        try {
-                            await window.sendChatMessageMySQL(text);
-                        } catch (error) {
-                            console.error('Error calling sendChatMessageMySQL:', error);
-                        }
-                    }
+                    handleSendClick(e);
                 }, { passive: false });
-                
-                freshBtn.addEventListener('mousedown', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                });
                 
                 // Clone and reattach input handlers
                 const newInput = input.cloneNode(true);
@@ -1471,16 +1478,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
                 
-                // Also attach mousedown and touchstart for better responsiveness
+                // Don't prevent default on mousedown/touchstart as it can interfere with click events
+                // Just log for debugging
                 freshBtn.addEventListener('mousedown', function(e) {
                     console.log('Send button mousedown');
-                    e.preventDefault();
-                }, { passive: false });
+                });
                 
                 freshBtn.addEventListener('touchstart', function(e) {
                     console.log('Send button touchstart');
-                    e.preventDefault();
-                }, { passive: false });
+                });
                 
                 // Test if button is actually clickable
                 console.log('Send button styles:', {
