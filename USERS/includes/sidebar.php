@@ -250,9 +250,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Attach form handler if needed (for anonymous users)
         attachUserInfoFormHandler();
         
-        // Attach form handler if needed (for anonymous users)
-        attachUserInfoFormHandler();
-        
         // Initialize Firebase chat if not already done
         if (window.initFirebaseChat && !window.chatInitialized) {
             window.initFirebaseChat().then(() => {
@@ -1243,6 +1240,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 attachSendButtonHandlers();
             }, 100);
         }
+    }
     
     // Expose initFirebaseChat globally
     window.initFirebaseChat = initFirebaseChat;
