@@ -175,9 +175,16 @@
             
             const data = await response.json();
             
-            // Check if conversation is closed
-            if (data.success && data.conversationStatus === 'closed') {
-                console.log('Conversation is closed, refreshing chat interface');
+            // Check if conversation is closed - check this FIRST before processing messages
+            if (data.conversationStatus === 'closed') {
+                console.log('Conversation is closed (detected in loadMessages), refreshing chat interface immediately');
+                handleConversationClosed();
+                return;
+            }
+            
+            // Also check if success is false but status indicates closed
+            if (!data.success && data.conversationStatus === 'closed') {
+                console.log('Conversation is closed (detected via API error), refreshing chat interface');
                 handleConversationClosed();
                 return;
             }
@@ -228,11 +235,15 @@
                     handleConversationClosed();
                     return;
                 }
-            } else if (!data.success && data.conversationStatus === 'closed') {
-                // API returned error but indicated conversation is closed
-                console.log('Conversation is closed (detected via API error)');
-                handleConversationClosed();
-                return;
+            } else if (!data.success) {
+                // API returned error - check if conversation is closed
+                if (data.conversationStatus === 'closed') {
+                    console.log('Conversation is closed (detected via API error)');
+                    handleConversationClosed();
+                    return;
+                }
+                // For other errors, also check status directly
+                checkConversationStatus();
             }
         } catch (error) {
             console.error('Error loading messages:', error);
@@ -252,6 +263,11 @@
             }
         }
         
+        // Skip if already handling closed
+        if (window.conversationClosedHandled) {
+            return;
+        }
+        
         try {
             const response = await fetch(API_BASE + 'chat-get-conversation.php?' + new URLSearchParams({
                 conversationId: conversationId
@@ -260,9 +276,16 @@
             if (response.ok) {
                 const data = await response.json();
                 if (data.success && data.status === 'closed') {
-                    console.log('Conversation status check: closed');
+                    console.log('Conversation status check: closed - refreshing immediately');
                     handleConversationClosed();
+                } else if (data.success && data.status === 'active') {
+                    // Reset the closed handler flag if conversation is active again
+                    window.conversationClosedHandled = false;
                 }
+            } else if (response.status === 404 || response.status === 400) {
+                // Conversation not found - might be closed or deleted
+                console.log('Conversation not found - treating as closed');
+                handleConversationClosed();
             }
         } catch (error) {
             console.error('Error checking conversation status:', error);
@@ -312,13 +335,25 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
         
+        // Clear status indicator
+        const statusIndicator = document.getElementById('chatStatusIndicator');
+        if (statusIndicator) {
+            statusIndicator.style.display = 'none';
+        }
+        const statusText = document.getElementById('chatStatusText');
+        if (statusText) {
+            statusText.textContent = '';
+        }
+        
         // Enable input but with special placeholder - allow typing to start new conversation
         const chatInput = document.getElementById('chatInput');
         const chatSendBtn = document.getElementById('chatSendBtn');
         if (chatInput) {
             chatInput.disabled = false;
-            chatInput.placeholder = 'This conversation is closed. Type a message to start a new conversation...';
+            chatInput.placeholder = 'Type a message to start a new conversation...';
             chatInput.style.cursor = 'text';
+            chatInput.style.opacity = '1';
+            chatInput.value = ''; // Clear any existing text
             
             // Add event listener to reset chat when user starts typing
             const handleInput = function() {
@@ -341,6 +376,8 @@
         if (chatSendBtn) {
             chatSendBtn.disabled = false;
             chatSendBtn.textContent = 'Send';
+            chatSendBtn.style.opacity = '1';
+            chatSendBtn.style.cursor = 'pointer';
         }
         
         // Reset chat initialization flag to allow new conversation
@@ -539,15 +576,18 @@
             clearInterval(pollingInterval);
         }
         
-        // Poll every 2 seconds for new messages and status (not initial load)
+        // Poll every 1.5 seconds for new messages and status (not initial load)
+        // More frequent polling to detect closed conversations faster
         pollingInterval = setInterval(() => {
             if (conversationId) {
+                // Always check status first, then load messages
+                checkConversationStatus();
                 loadMessages(false); // Not initial load - this will check status too
             } else {
                 // If no conversation ID, try to check status anyway
                 checkConversationStatus();
             }
-        }, 2000);
+        }, 1500); // Poll every 1.5 seconds for faster detection
         
         console.log('Started polling for messages and conversation status');
     }
