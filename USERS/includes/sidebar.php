@@ -267,9 +267,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Global event delegation for send button as ultimate fallback
     // This will catch clicks even if other handlers fail
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', async function(e) {
         const target = e.target;
-        // Check if clicked element is the send button or inside it
+        
+        // IMPORTANT: Don't interfere with chat button (chatFab) - let it work normally
+        if (target && (target.id === 'chatFab' || target.closest('#chatFab'))) {
+            return; // Let chat button handler work normally
+        }
+        
+        // Only handle send button clicks
         if (target && (target.id === 'chatSendBtn' || target.closest('#chatSendBtn'))) {
             const sendBtn = target.id === 'chatSendBtn' ? target : target.closest('#chatSendBtn');
             if (sendBtn && !sendBtn.disabled) {
@@ -367,7 +373,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         }
-    }, true); // Use capture phase to catch early
+    }, false); // Use bubble phase, not capture, to avoid interfering with chat button
     
     function toggleSidebar() {
         sidebar.classList.toggle('sidebar-open');
