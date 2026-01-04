@@ -38,13 +38,32 @@ try {
         exit;
     }
     
-    // Update conversation status to 'closed'
+    // Get admin name
+    $adminName = $_SESSION['admin_username'] ?? $_SESSION['admin_name'] ?? 'Administrator';
+    
+    // Update conversation status to 'closed' and store who closed it
     $stmt = $pdo->prepare("
         UPDATE conversations 
-        SET status = 'closed', updated_at = NOW() 
+        SET status = 'closed', 
+            last_message = CONCAT('Closed by ', ?),
+            updated_at = NOW() 
         WHERE conversation_id = ?
     ");
-    $stmt->execute([$conversationId]);
+    $stmt->execute([$adminName, $conversationId]);
+    
+    // Store who closed the conversation in a separate field if available
+    // Check if closed_by column exists, if not, we'll use last_message
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE conversations 
+            SET closed_by = ?, updated_at = NOW() 
+            WHERE conversation_id = ?
+        ");
+        $stmt->execute([$adminName, $conversationId]);
+    } catch (PDOException $e) {
+        // Column might not exist, that's okay - we stored it in last_message
+        error_log('closed_by column might not exist: ' . $e->getMessage());
+    }
     
     // Also update chat queue if exists
     try {

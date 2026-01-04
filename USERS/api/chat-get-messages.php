@@ -43,9 +43,9 @@ try {
         }
     }
     
-    // Get conversation status (don't check device/IP here - too strict, causes false positives)
+    // Get conversation status and who closed it
     $stmt = $pdo->prepare("
-        SELECT status 
+        SELECT status, last_message, closed_by 
         FROM conversations 
         WHERE conversation_id = ?
     ");
@@ -54,8 +54,17 @@ try {
     
     if ($conversation) {
         $conversationStatus = $conversation['status'] ?? 'active';
+        
+        // Extract admin name from last_message if it contains "Closed by"
+        $closedBy = null;
+        if ($conversation['closed_by']) {
+            $closedBy = $conversation['closed_by'];
+        } elseif ($conversation['last_message'] && strpos($conversation['last_message'], 'Closed by') === 0) {
+            $closedBy = str_replace('Closed by ', '', $conversation['last_message']);
+        }
     } else {
         $conversationStatus = 'closed';
+        $closedBy = null;
     }
     
     // Get messages newer than lastMessageId
@@ -76,13 +85,13 @@ try {
     $stmt->execute([$conversationId, $lastMessageId]);
     $messages = $stmt->fetchAll();
     
-    // Format messages
+    // Format messages - include sender_name for admin messages
     $formattedMessages = array_map(function($msg) {
         return [
             'id' => $msg['message_id'],
             'conversationId' => $msg['conversation_id'],
             'senderId' => $msg['sender_id'],
-            'senderName' => $msg['sender_name'],
+            'senderName' => $msg['sender_name'] ?? null, // Include admin name
             'senderType' => $msg['sender_type'],
             'text' => $msg['message_text'],
             'timestamp' => strtotime($msg['created_at']) * 1000, // Convert to milliseconds
@@ -94,7 +103,8 @@ try {
         'success' => true,
         'messages' => $formattedMessages,
         'conversationId' => $conversationId,
-        'conversationStatus' => $conversationStatus
+        'conversationStatus' => $conversationStatus,
+        'closedBy' => $closedBy ?? null
     ]);
     
 } catch (PDOException $e) {

@@ -195,14 +195,14 @@
             // Check if conversation is closed - check this FIRST before processing messages
             if (data.conversationStatus === 'closed') {
                 console.log('Conversation is closed (detected in loadMessages), refreshing chat interface immediately');
-                handleConversationClosed();
+                handleConversationClosed(data.closedBy);
                 return;
             }
             
             // Also check if success is false but status indicates closed
             if (!data.success && data.conversationStatus === 'closed') {
                 console.log('Conversation is closed (detected via API error), refreshing chat interface');
-                handleConversationClosed();
+                handleConversationClosed(data.closedBy);
                 return;
             }
             
@@ -229,7 +229,9 @@
                         if (shouldAdd) {
                             existingIds.add(msg.id);
                             if (window.addMessageToChat) {
-                                window.addMessageToChat(msg.text, msg.senderType, msg.timestamp, msg.id);
+                                // Pass admin name if available (for admin messages)
+                                const adminName = (msg.senderType === 'admin' && msg.senderName) ? msg.senderName : null;
+                                window.addMessageToChat(msg.text, msg.senderType, msg.timestamp, msg.id, adminName);
                             }
                             lastMessageId = Math.max(lastMessageId, msg.id);
                             newMessagesAdded = true;
@@ -249,14 +251,14 @@
                 // Even if no messages, check status in case conversation was closed
                 if (data.conversationStatus === 'closed') {
                     console.log('Conversation is closed (detected during empty message check)');
-                    handleConversationClosed();
+                    handleConversationClosed(data.closedBy);
                     return;
                 }
             } else if (!data.success) {
                 // API returned error - check if conversation is closed
                 if (data.conversationStatus === 'closed') {
                     console.log('Conversation is closed (detected via API error)');
-                    handleConversationClosed();
+                    handleConversationClosed(data.closedBy);
                     return;
                 }
                 // For other errors, also check status directly
@@ -294,7 +296,7 @@
                 const data = await response.json();
                 if (data.success && data.status === 'closed') {
                     console.log('Conversation status check: closed - refreshing immediately');
-                    handleConversationClosed();
+                    handleConversationClosed(data.closedBy);
                 } else if (data.success && data.status === 'active') {
                     // Reset the closed handler flag if conversation is active again
                     window.conversationClosedHandled = false;
@@ -302,7 +304,7 @@
             } else if (response.status === 404 || response.status === 400) {
                 // Conversation not found - might be closed or deleted
                 console.log('Conversation not found - treating as closed');
-                handleConversationClosed();
+                handleConversationClosed(null);
             }
         } catch (error) {
             console.error('Error checking conversation status:', error);
@@ -310,7 +312,7 @@
     }
     
     // Handle conversation closed by admin
-    function handleConversationClosed() {
+    function handleConversationClosed(closedByAdmin = null) {
         // Prevent multiple calls
         if (window.conversationClosedHandled) {
             console.log('Conversation close already handled, skipping');
@@ -348,13 +350,30 @@
             systemMsg.innerHTML = '<strong>System:</strong> For life-threatening emergencies, call 911 or the Quezon City emergency hotlines immediately.';
             chatMessages.appendChild(systemMsg);
             
-            // Add closed message
+            // Add closed message with admin name if available
             const closedMsg = document.createElement('div');
             closedMsg.className = 'chat-message chat-message-system chat-message-closed';
             closedMsg.style.cssText = 'background: rgba(255, 193, 7, 0.15); border-left: 4px solid #ffc107; padding: 1rem; margin: 1rem 0; border-radius: 4px;';
-            closedMsg.innerHTML = '<strong style="color: #856404;">System:</strong> <span style="color: #856404;">This conversation has been closed. Please select a category below to start a new conversation.</span>';
+            
+            let closedMessageText = 'This conversation has been closed.';
+            if (closedByAdmin) {
+                closedMessageText += ` Closed by administrator: <strong>${escapeHtml(closedByAdmin)}</strong>.`;
+            } else {
+                closedMessageText += ' Closed by an administrator.';
+            }
+            closedMessageText += ' Please select a category below to start a new conversation.';
+            
+            closedMsg.innerHTML = `<strong style="color: #856404;">System:</strong> <span style="color: #856404;">${closedMessageText}</span>`;
             chatMessages.appendChild(closedMsg);
             chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Helper function for escaping HTML
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
         }
         
         // Clear status indicator
@@ -430,6 +449,36 @@
         }
         if (chatSendBtn) {
             chatSendBtn.disabled = true;
+        }
+        
+        // Allow modal to be closed after refresh - enable header close button
+        const chatModal = document.getElementById('chatModal');
+        const modalHeaderCloseBtn = chatModal ? chatModal.querySelector('.chat-modal-header .chat-close-btn') : null;
+        if (modalHeaderCloseBtn) {
+            modalHeaderCloseBtn.style.display = 'block';
+            modalHeaderCloseBtn.style.pointerEvents = 'auto';
+            modalHeaderCloseBtn.style.cursor = 'pointer';
+            modalHeaderCloseBtn.style.opacity = '1';
+            modalHeaderCloseBtn.disabled = false;
+            
+            // Ensure close handler is attached
+            if (!modalHeaderCloseBtn.hasAttribute('data-close-handler-attached')) {
+                modalHeaderCloseBtn.setAttribute('data-close-handler-attached', 'true');
+                modalHeaderCloseBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (window.closeChat || window.closeChatWithFlag) {
+                        (window.closeChatWithFlag || window.closeChat)();
+                    } else {
+                        // Fallback close
+                        if (chatModal) {
+                            chatModal.style.display = 'none';
+                            chatModal.classList.remove('chat-modal-open');
+                            document.body.style.overflow = '';
+                        }
+                    }
+                });
+            }
         }
         
         // Reset chat initialization flag to allow new conversation
@@ -679,7 +728,7 @@
     }
     
     // Add message to chat UI (this will be called from sidebar.php)
-    function addMessageToChat(text, senderType, timestamp, messageId = null) {
+    function addMessageToChat(text, senderType, timestamp, messageId = null, senderName = null) {
         const chatMessages = document.querySelector('.chat-messages');
         if (!chatMessages) {
             console.warn('Chat messages container not found');
@@ -710,20 +759,23 @@
         }
 
         const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
-        const senderName = senderType === 'user' ? 'You' : 'Admin';
+        
+        // Get sender name - for admin messages, use provided admin name or default to "Admin"
+        let displayName = senderType === 'user' ? 'You' : (senderName || 'Admin');
 
         // Escape HTML
         const escapeHtml = (str) => {
+            if (!str) return '';
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
         };
         
-        msg.innerHTML = `<strong style="color: var(--text-color) !important;">${escapeHtml(senderName)}:</strong> <span style="color: var(--text-color) !important;">${escapeHtml(text)}</span> <small style="display: block; font-size: 0.8em; opacity: 0.7; margin-top: 0.25rem; color: var(--text-muted) !important;">${time}</small>`;
+        msg.innerHTML = `<strong style="color: var(--text-color) !important;">${escapeHtml(displayName)}:</strong> <span style="color: var(--text-color) !important;">${escapeHtml(text)}</span> <small style="display: block; font-size: 0.8em; opacity: 0.7; margin-top: 0.25rem; color: var(--text-muted) !important;">${time}</small>`;
         chatMessages.appendChild(msg);
         chatMessages.scrollTop = chatMessages.scrollHeight;
         
-        console.log('Message added to UI:', { text, senderType, messageId });
+        console.log('Message added to UI:', { text, senderType, messageId, senderName: displayName });
     }
     
     // Expose functions globally

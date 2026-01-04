@@ -516,6 +516,11 @@ document.addEventListener('DOMContentLoaded', function() {
         chatModal.style.opacity = '0';
         chatModal.style.pointerEvents = 'none';
         document.body.style.overflow = ''; // Restore scrolling
+        
+        // Stop polling when modal is closed
+        if (window.stopChatPolling) {
+            window.stopChatPolling();
+        }
     }
     
     // Store original closeChat before overriding

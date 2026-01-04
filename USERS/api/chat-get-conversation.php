@@ -29,17 +29,30 @@ try {
     $deviceInfo = formatDeviceInfoForDB();
     $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
     
-    // If conversationId is provided, just return its status
+    // If conversationId is provided, just return its status and who closed it
     if ($conversationId && !$userId) {
-        $stmt = $pdo->prepare("SELECT conversation_id, status FROM conversations WHERE conversation_id = ?");
+        $stmt = $pdo->prepare("
+            SELECT conversation_id, status, last_message, closed_by 
+            FROM conversations 
+            WHERE conversation_id = ?
+        ");
         $stmt->execute([$conversationId]);
         $conversation = $stmt->fetch();
         
         if ($conversation) {
+            // Extract admin name from last_message if it contains "Closed by"
+            $closedBy = null;
+            if ($conversation['closed_by']) {
+                $closedBy = $conversation['closed_by'];
+            } elseif ($conversation['last_message'] && strpos($conversation['last_message'], 'Closed by') === 0) {
+                $closedBy = str_replace('Closed by ', '', $conversation['last_message']);
+            }
+            
             echo json_encode([
                 'success' => true,
                 'conversationId' => $conversation['conversation_id'],
-                'status' => $conversation['status'] ?? 'active'
+                'status' => $conversation['status'] ?? 'active',
+                'closedBy' => $closedBy
             ]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Conversation not found']);
