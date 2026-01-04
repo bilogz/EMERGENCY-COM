@@ -148,6 +148,8 @@ class AdminChatFirebase {
                 userName: queueItem.userName,
                 userEmail: queueItem.userEmail || null,
                 userPhone: queueItem.userPhone || null,
+                userLocation: queueItem.userLocation || null,
+                userConcern: queueItem.userConcern || null,
                 isGuest: queueItem.isGuest || false,
                 message: queueItem.message,
                 timestamp: queueItem.timestamp

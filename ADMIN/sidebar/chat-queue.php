@@ -277,8 +277,8 @@ $pageTitle = 'Chat Queue';
         function setupEventListeners() {
             // New chat notification
             window.addEventListener('newChatNotification', function(e) {
-                const { queueId, conversationId, userName, userEmail, userPhone, isGuest, message } = e.detail;
-                showNotification(queueId, conversationId, userName, userEmail, userPhone, isGuest, message);
+                const { queueId, conversationId, userName, userEmail, userPhone, isGuest, message, userLocation, userConcern } = e.detail;
+                showNotification(queueId, conversationId, userName, userEmail, userPhone, isGuest, message, userLocation, userConcern);
             });
 
             // Chat queue update
@@ -331,11 +331,13 @@ $pageTitle = 'Chat Queue';
                     const userInfo = [];
                     if (item.userEmail) userInfo.push(`<i class="fas fa-envelope"></i> ${item.userEmail}`);
                     if (item.userPhone) userInfo.push(`<i class="fas fa-phone"></i> ${item.userPhone}`);
+                    if (item.userLocation) userInfo.push(`<i class="fas fa-map-marker-alt"></i> ${item.userLocation}`);
                     const userInfoHtml = userInfo.length > 0 ? `<div style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">${userInfo.join(' | ')}</div>` : '';
+                    const concernBadge = item.userConcern ? `<span style="background: #2196f3; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; text-transform: capitalize;">${item.userConcern}</span>` : '';
                     queueItem.innerHTML = `
                         <div class="queue-header">
                             <div>
-                                <strong>${item.userName}</strong>${guestBadge}
+                                <strong>${item.userName}</strong>${guestBadge}${concernBadge}
                             </div>
                             <span class="queue-badge badge-pending">Pending</span>
                         </div>
@@ -358,13 +360,34 @@ $pageTitle = 'Chat Queue';
             const userNameEl = document.getElementById('chatUserName');
             const userStatusEl = document.getElementById('chatUserStatus');
             const guestBadge = item.isGuest ? ' <span style="background: #ff9800; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem;">GUEST</span>' : '';
-            userNameEl.innerHTML = item.userName + guestBadge;
+            const concernBadge = item.userConcern ? ` <span style="background: #2196f3; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: capitalize;">${item.userConcern}</span>` : '';
+            userNameEl.innerHTML = item.userName + guestBadge + concernBadge;
+            
+            // Also try to get from conversation if not in item
+            if (window.firebaseDatabase && item.conversationId) {
+                window.firebaseDatabase.ref(`conversations/${item.conversationId}`).once('value', (snapshot) => {
+                    const conversation = snapshot.val();
+                    if (conversation) {
+                        const userInfo = [];
+                        if (conversation.userEmail || item.userEmail) userInfo.push(`Email: ${conversation.userEmail || item.userEmail}`);
+                        if (conversation.userPhone || item.userPhone) userInfo.push(`Phone: ${conversation.userPhone || item.userPhone}`);
+                        if (conversation.userLocation || item.userLocation) userInfo.push(`Location: ${conversation.userLocation || item.userLocation}`);
+                        if (conversation.userConcern || item.userConcern) userInfo.push(`Concern: ${conversation.userConcern || item.userConcern}`);
+                        if (conversation.userId || item.userId) userInfo.push(`ID: ${conversation.userId || item.userId}`);
+                        userStatusEl.textContent = userInfo.length > 0 ? userInfo.join(' | ') : 'Pending';
+                    }
+                });
+            }
             
             const userInfo = [];
             if (item.userEmail) userInfo.push(`Email: ${item.userEmail}`);
             if (item.userPhone) userInfo.push(`Phone: ${item.userPhone}`);
+            if (item.userLocation) userInfo.push(`Location: ${item.userLocation}`);
+            if (item.userConcern) userInfo.push(`Concern: ${item.userConcern}`);
             if (item.userId) userInfo.push(`ID: ${item.userId}`);
-            userStatusEl.textContent = userInfo.length > 0 ? userInfo.join(' | ') : 'Pending';
+            if (userInfo.length > 0) {
+                userStatusEl.textContent = userInfo.join(' | ');
+            }
             
             document.getElementById('messageInput').disabled = false;
             document.getElementById('sendButton').disabled = false;
@@ -444,18 +467,23 @@ $pageTitle = 'Chat Queue';
             }
         }
 
-        function showNotification(queueId, conversationId, userName, userEmail, userPhone, isGuest, message) {
+        function showNotification(queueId, conversationId, userName, userEmail, userPhone, isGuest, message, userLocation, userConcern) {
             currentQueueId = queueId;
             currentConversationId = conversationId;
             
             const guestBadge = isGuest ? ' <span style="background: #ff9800; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem;">GUEST</span>' : '';
-            document.getElementById('notificationUserName').innerHTML = userName + guestBadge;
+            const concernBadge = userConcern ? ` <span style="background: #2196f3; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: capitalize;">${userConcern}</span>` : '';
+            document.getElementById('notificationUserName').innerHTML = userName + guestBadge + concernBadge;
             document.getElementById('notificationMessage').textContent = message;
             
             // Show user info if available
             const userInfo = [];
             if (userEmail) userInfo.push(`Email: ${userEmail}`);
             if (userPhone) userInfo.push(`Phone: ${userPhone}`);
+            const userLocation = e.detail.userLocation || null;
+            const userConcern = e.detail.userConcern || null;
+            if (userLocation) userInfo.push(`Location: ${userLocation}`);
+            if (userConcern) userInfo.push(`Concern: ${userConcern}`);
             if (userInfo.length > 0) {
                 const infoEl = document.createElement('small');
                 infoEl.style.display = 'block';
