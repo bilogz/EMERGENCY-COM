@@ -175,8 +175,59 @@ include __DIR__ . '/guest-monitoring-notice.php';
 </div>
 
 <!-- MySQL Chat System -->
-<script src="js/chat-mysql.js"></script>
 <script>
+// Determine correct path for chat-mysql.js based on current location
+(function() {
+    const currentPath = window.location.pathname;
+    let scriptPath = '../js/chat-mysql.js'; // Default for USERS/includes/
+    
+    // If we're in root or different context, adjust path
+    if (currentPath.includes('/index.php') || currentPath === '/' || currentPath.endsWith('/')) {
+        scriptPath = 'USERS/js/chat-mysql.js';
+    } else if (currentPath.includes('/USERS/')) {
+        scriptPath = 'js/chat-mysql.js';
+    }
+    
+    console.log('Loading chat-mysql.js from:', scriptPath);
+    const script = document.createElement('script');
+    script.src = scriptPath;
+    script.onload = function() {
+        console.log('chat-mysql.js loaded successfully from:', scriptPath);
+        // Verify functions are available
+        setTimeout(() => {
+            if (window.sendChatMessageMySQL || window.initChatMySQL) {
+                console.log('✓ chat-mysql.js functions are available');
+            } else {
+                console.warn('⚠ chat-mysql.js loaded but functions not available yet');
+            }
+        }, 100);
+    };
+    script.onerror = function() {
+        console.error('Failed to load chat-mysql.js from:', scriptPath);
+        // Try fallback paths
+        const fallbackPaths = ['js/chat-mysql.js', '../USERS/js/chat-mysql.js', 'USERS/js/chat-mysql.js'];
+        let fallbackIndex = 0;
+        const tryFallback = () => {
+            if (fallbackIndex < fallbackPaths.length) {
+                const fallbackScript = document.createElement('script');
+                fallbackScript.src = fallbackPaths[fallbackIndex];
+                fallbackScript.onload = () => console.log('chat-mysql.js loaded from fallback:', fallbackPaths[fallbackIndex]);
+                fallbackScript.onerror = () => {
+                    fallbackIndex++;
+                    tryFallback();
+                };
+                document.head.appendChild(fallbackScript);
+            } else {
+                console.error('Failed to load chat-mysql.js from all paths');
+            }
+        };
+        tryFallback();
+    };
+    document.head.appendChild(script);
+})();
+</script>
+<script>
+
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');
     const sidebarOverlay = document.getElementById('sidebarOverlay');
@@ -186,6 +237,33 @@ document.addEventListener('DOMContentLoaded', function() {
     const chatForm = document.getElementById('chatForm');
     const chatInput = document.getElementById('chatInput');
     const chatMessages = document.querySelector('.chat-messages');
+    
+    // Function to ensure chat-mysql.js is loaded
+    function ensureChatScriptLoaded() {
+        return new Promise((resolve) => {
+            // Check if already loaded
+            if (window.sendChatMessageMySQL || window.initChatMySQL) {
+                console.log('chat-mysql.js already loaded');
+                resolve(true);
+                return;
+            }
+            
+            // Wait a bit for script to load
+            let attempts = 0;
+            const checkInterval = setInterval(() => {
+                attempts++;
+                if (window.sendChatMessageMySQL || window.initChatMySQL) {
+                    console.log('chat-mysql.js loaded after', attempts * 100, 'ms');
+                    clearInterval(checkInterval);
+                    resolve(true);
+                } else if (attempts > 50) { // 5 seconds max
+                    console.error('chat-mysql.js did not load after 5 seconds');
+                    clearInterval(checkInterval);
+                    resolve(false);
+                }
+            }, 100);
+        });
+    }
     
     // Global event delegation for send button as ultimate fallback
     // This will catch clicks even if other handlers fail
@@ -208,27 +286,84 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 
+                // Ensure script is loaded first
+                const scriptLoaded = await ensureChatScriptLoaded();
+                if (!scriptLoaded) {
+                    console.error('GLOBAL HANDLER: chat-mysql.js script not loaded');
+                    alert('Chat system script failed to load. Please refresh the page.');
+                    return;
+                }
+                
+                // Log available functions for debugging
+                console.log('GLOBAL HANDLER: Available functions:', {
+                    sendChatMessageMySQL: typeof window.sendChatMessageMySQL,
+                    sendChatMessage: typeof window.sendChatMessage,
+                    sendMessage: typeof window.sendMessage,
+                    initChatMySQL: typeof window.initChatMySQL
+                });
+                
+                // Try to initialize chat if not already done
+                if (!window.sendChatMessageMySQL && window.initChatMySQL) {
+                    console.log('GLOBAL HANDLER: Initializing chat first...');
+                    sendBtn.disabled = true;
+                    sendBtn.textContent = 'Initializing...';
+                    try {
+                        const initSuccess = await window.initChatMySQL();
+                        if (initSuccess && window.sendChatMessageMySQL) {
+                            console.log('GLOBAL HANDLER: Chat initialized, sending message');
+                            sendBtn.textContent = 'Sending...';
+                            const success = await window.sendChatMessageMySQL(text);
+                            if (success && input) {
+                                input.value = '';
+                            }
+                            sendBtn.disabled = false;
+                            sendBtn.textContent = 'Send';
+                            return;
+                        }
+                    } catch (err) {
+                        console.error('GLOBAL HANDLER: Error initializing:', err);
+                        sendBtn.disabled = false;
+                        sendBtn.textContent = 'Send';
+                        alert('Failed to initialize chat. Please refresh the page.');
+                        return;
+                    }
+                }
+                
                 // Call send function if available
                 if (window.sendChatMessageMySQL) {
                     console.log('GLOBAL HANDLER: Calling sendChatMessageMySQL');
                     sendBtn.disabled = true;
                     sendBtn.textContent = 'Sending...';
-                    window.sendChatMessageMySQL(text).then(success => {
+                    try {
+                        const success = await window.sendChatMessageMySQL(text);
                         if (success && input) {
                             input.value = '';
                         }
                         sendBtn.disabled = false;
                         sendBtn.textContent = 'Send';
-                    }).catch(err => {
+                    } catch (err) {
                         console.error('GLOBAL HANDLER: Error sending:', err);
                         sendBtn.disabled = false;
                         sendBtn.textContent = 'Send';
-                    });
+                        alert('Failed to send message: ' + err.message);
+                    }
                 } else if (window.sendChatMessage) {
                     console.log('GLOBAL HANDLER: Calling sendChatMessage');
-                    window.sendChatMessage();
+                    sendBtn.disabled = true;
+                    sendBtn.textContent = 'Sending...';
+                    try {
+                        await window.sendChatMessage();
+                        sendBtn.disabled = false;
+                        sendBtn.textContent = 'Send';
+                    } catch (err) {
+                        console.error('GLOBAL HANDLER: Error in sendChatMessage:', err);
+                        sendBtn.disabled = false;
+                        sendBtn.textContent = 'Send';
+                    }
                 } else {
                     console.error('GLOBAL HANDLER: No send function available');
+                    console.error('GLOBAL HANDLER: Please check if chat-mysql.js is loaded');
+                    alert('Chat system is not ready. Please refresh the page or check the console for errors.');
                 }
             }
         }
