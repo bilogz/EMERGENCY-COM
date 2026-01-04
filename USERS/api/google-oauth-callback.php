@@ -79,9 +79,20 @@ if (!$googleClientId || !$googleClientSecret) {
     exit();
 }
 
-// Get the callback URL (this file)
+// Get the callback URL (this file) - must match exactly what was sent in the authorization request
+// Use the same construction method as google-oauth-init.php to ensure they match
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-$redirectUri = $protocol . '://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . '/google-oauth-callback.php';
+$host = $_SERVER['HTTP_HOST'];
+$scriptPath = $_SERVER['SCRIPT_NAME']; // Full path to current script
+$scriptDir = dirname($scriptPath); // Directory containing the script
+$callbackPath = rtrim($scriptDir, '/') . '/google-oauth-callback.php';
+$redirectUri = $protocol . '://' . $host . $callbackPath;
+
+// Remove any double slashes (except after protocol)
+$redirectUri = preg_replace('#([^:])//+#', '$1/', $redirectUri);
+
+// Log the redirect URI for debugging (remove in production)
+error_log("Google OAuth Callback - Redirect URI: " . $redirectUri);
 
 // Handle OAuth callback
 $code = $_GET['code'] ?? null;
@@ -187,34 +198,95 @@ try {
     $picture = $userInfo['picture'] ?? null;
     $verifiedEmail = $userInfo['verified_email'] ?? false;
 
-    // Step 3: Check if user exists in database
-    $stmt = $pdo->prepare("SELECT id, name, email, phone, google_id FROM users WHERE email = ? OR google_id = ? LIMIT 1");
-    $stmt->execute([$email, $googleId]);
-    $user = $stmt->fetch();
+    // Step 3: Check if google_id column exists, create if not
+    $checkStmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE 'google_id'");
+    $checkStmt->execute();
+    $googleIdColumnExists = $checkStmt->rowCount() > 0;
+    
+    if (!$googleIdColumnExists) {
+        try {
+            $pdo->exec("ALTER TABLE users ADD COLUMN google_id VARCHAR(255) NULL UNIQUE");
+            error_log("Added google_id column to users table");
+        } catch (PDOException $e) {
+            error_log("Could not add google_id column: " . $e->getMessage());
+        }
+    }
+
+    // Step 4: Check if user exists in database
+    $query = "SELECT id, name, email, phone";
+    if ($googleIdColumnExists) {
+        $query .= ", google_id";
+    }
+    $query .= " FROM users WHERE email = ?";
+    if ($googleIdColumnExists && !empty($googleId)) {
+        $query .= " OR google_id = ?";
+    }
+    $query .= " LIMIT 1";
+    
+    $stmt = $pdo->prepare($query);
+    if ($googleIdColumnExists && !empty($googleId)) {
+        $stmt->execute([$email, $googleId]);
+    } else {
+        $stmt->execute([$email]);
+    }
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($user) {
-        // Existing user - update Google ID if needed
-        if (!empty($googleId)) {
-            // Check if google_id column exists
-            $checkStmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE 'google_id'");
-            $checkStmt->execute();
-            $googleIdColumnExists = $checkStmt->rowCount() > 0;
-            
-            if ($googleIdColumnExists && empty($user['google_id'])) {
-                try {
-                    $updateStmt = $pdo->prepare("UPDATE users SET google_id = ? WHERE id = ?");
-                    $updateStmt->execute([$googleId, $user['id']]);
-                } catch (PDOException $e) {
-                    error_log("Could not update google_id: " . $e->getMessage());
-                }
+        // Existing user - update Google ID and email if needed
+        $updateFields = [];
+        $updateValues = [];
+        
+        if (!empty($googleId) && $googleIdColumnExists && empty($user['google_id'])) {
+            $updateFields[] = "google_id = ?";
+            $updateValues[] = $googleId;
+        }
+        
+        // Update email if it's missing but we have it from Google
+        if (empty($user['email']) && !empty($email)) {
+            $updateFields[] = "email = ?";
+            $updateValues[] = $email;
+        }
+        
+        // Update name if it's different (use Google's name as it's more current)
+        if (!empty($name) && $name !== $user['name']) {
+            $updateFields[] = "name = ?";
+            $updateValues[] = $name;
+        }
+        
+        if (!empty($updateFields)) {
+            $updateValues[] = $user['id'];
+            $updateQuery = "UPDATE users SET " . implode(", ", $updateFields) . ", updated_at = NOW() WHERE id = ?";
+            try {
+                $updateStmt = $pdo->prepare($updateQuery);
+                $updateStmt->execute($updateValues);
+            } catch (PDOException $e) {
+                error_log("Could not update user: " . $e->getMessage());
             }
+        }
+        
+        // Log user activity
+        $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
+        try {
+            $activityStmt = $pdo->prepare("
+                INSERT INTO user_activity_logs (user_id, activity_type, description, ip_address, user_agent, status, created_at)
+                VALUES (?, 'login', ?, ?, ?, 'success', NOW())
+            ");
+            $activityStmt->execute([
+                $user['id'],
+                "User logged in via Google OAuth",
+                $ipAddress,
+                $userAgent
+            ]);
+        } catch (PDOException $e) {
+            error_log("Could not log user activity: " . $e->getMessage());
         }
         
         // Set session variables for existing user
         $_SESSION['user_logged_in'] = true;
         $_SESSION['user_id'] = $user['id'];
-        $_SESSION['user_name'] = $user['name'];
-        $_SESSION['user_email'] = $user['email'];
+        $_SESSION['user_name'] = $name; // Use updated name from Google
+        $_SESSION['user_email'] = $email; // Use email from Google
         $_SESSION['user_phone'] = $user['phone'] ?? null;
         $_SESSION['user_type'] = 'registered';
         $_SESSION['login_method'] = 'google';
@@ -225,60 +297,59 @@ try {
         exit();
         
     } else {
-        // New user - create account
-        // Check if email and google_id columns exist
+        // New user - create account in users table
+        // Check if email column exists
         $checkStmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE 'email'");
         $checkStmt->execute();
         $emailColumnExists = $checkStmt->rowCount() > 0;
         
-        $checkStmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE 'google_id'");
-        $checkStmt->execute();
-        $googleIdColumnExists = $checkStmt->rowCount() > 0;
+        // Insert new user (users table doesn't have password column)
+        $insertFields = ['name', 'status', 'user_type'];
+        $insertValues = [$name, 'active', 'citizen'];
+        $placeholders = ['?', '?', '?'];
         
-        // Add google_id column if it doesn't exist
-        if (!$googleIdColumnExists) {
-            try {
-                $pdo->exec("ALTER TABLE users ADD COLUMN google_id VARCHAR(255) NULL UNIQUE");
-            } catch (PDOException $e) {
-                error_log("Could not add google_id column: " . $e->getMessage());
-            }
+        if ($emailColumnExists && !empty($email)) {
+            $insertFields[] = 'email';
+            $insertValues[] = $email;
+            $placeholders[] = '?';
         }
         
-        // Generate a random password (user won't need it for Google login)
-        $randomPassword = bin2hex(random_bytes(16));
-        $hashedPassword = password_hash($randomPassword, PASSWORD_DEFAULT);
-        
-        // Insert new user
-        if ($emailColumnExists && $googleIdColumnExists) {
-            $insertStmt = $pdo->prepare("
-                INSERT INTO users (name, email, password, google_id, status, created_at) 
-                VALUES (?, ?, ?, ?, 'active', NOW())
-            ");
-            $insertStmt->execute([$name, $email, $hashedPassword, $googleId]);
-        } else if ($emailColumnExists) {
-            $insertStmt = $pdo->prepare("
-                INSERT INTO users (name, email, password, status, created_at) 
-                VALUES (?, ?, ?, 'active', NOW())
-            ");
-            $insertStmt->execute([$name, $email, $hashedPassword]);
-        } else {
-            $insertStmt = $pdo->prepare("
-                INSERT INTO users (name, password, status, created_at) 
-                VALUES (?, ?, 'active', NOW())
-            ");
-            $insertStmt->execute([$name, $hashedPassword]);
+        if ($googleIdColumnExists && !empty($googleId)) {
+            $insertFields[] = 'google_id';
+            $insertValues[] = $googleId;
+            $placeholders[] = '?';
         }
         
-        $newUserId = $pdo->lastInsertId();
+        // Build insert query - created_at uses NOW() directly
+        $insertQuery = "INSERT INTO users (" . implode(", ", $insertFields) . ", created_at) VALUES (" . implode(", ", $placeholders) . ", NOW())";
         
-        // Update google_id if column exists and googleId is available
-        if (!empty($googleId) && $googleIdColumnExists) {
-            try {
-                $updateStmt = $pdo->prepare("UPDATE users SET google_id = ? WHERE id = ?");
-                $updateStmt->execute([$googleId, $newUserId]);
-            } catch (PDOException $e) {
-                error_log("Could not update google_id for new user: " . $e->getMessage());
-            }
+        try {
+            $insertStmt = $pdo->prepare($insertQuery);
+            $insertStmt->execute($insertValues);
+            $newUserId = $pdo->lastInsertId();
+        } catch (PDOException $e) {
+            error_log("Could not insert new user: " . $e->getMessage());
+            $_SESSION['oauth_error'] = 'Failed to create user account. Please try again.';
+            header('Location: ../login.php?error=user_creation_failed');
+            exit();
+        }
+        
+        // Log user activity
+        $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
+        try {
+            $activityStmt = $pdo->prepare("
+                INSERT INTO user_activity_logs (user_id, activity_type, description, ip_address, user_agent, status, created_at)
+                VALUES (?, 'signup', ?, ?, ?, 'success', NOW())
+            ");
+            $activityStmt->execute([
+                $newUserId,
+                "New user registered via Google OAuth",
+                $ipAddress,
+                $userAgent
+            ]);
+        } catch (PDOException $e) {
+            error_log("Could not log user activity: " . $e->getMessage());
         }
         
         // Set session variables for new user

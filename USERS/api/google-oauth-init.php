@@ -56,9 +56,19 @@ if (!$googleClientId) {
     exit();
 }
 
-// Get the callback URL
+// Get the callback URL - construct it reliably
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-$redirectUri = $protocol . '://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . '/google-oauth-callback.php';
+$host = $_SERVER['HTTP_HOST'];
+$scriptPath = $_SERVER['SCRIPT_NAME']; // Full path to current script
+$scriptDir = dirname($scriptPath); // Directory containing the script
+$callbackPath = rtrim($scriptDir, '/') . '/google-oauth-callback.php';
+$redirectUri = $protocol . '://' . $host . $callbackPath;
+
+// Remove any double slashes (except after protocol)
+$redirectUri = preg_replace('#([^:])//+#', '$1/', $redirectUri);
+
+// Log the redirect URI for debugging (remove in production)
+error_log("Google OAuth Redirect URI: " . $redirectUri);
 
 // Generate state parameter for CSRF protection
 $state = bin2hex(random_bytes(16));
