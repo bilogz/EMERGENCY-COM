@@ -1544,6 +1544,22 @@ textarea:focus {
     padding: 0.45rem 0.6rem;
     border-radius: 8px;
     border: 1px solid var(--card-border);
+    pointer-events: auto !important;
+    cursor: text !important;
+}
+
+.chat-input-row button,
+#chatSendBtn {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+    touch-action: manipulation !important;
+    z-index: 10001 !important;
+    position: relative;
+}
+
+#chatSendBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed !important;
 }
 
 /* Auth forms */

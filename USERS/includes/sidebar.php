@@ -349,35 +349,44 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Check if user is logged in
+        // Check if user is logged in (has a real user_id from PHP session)
         const userId = sessionStorage.getItem('user_id');
         const isLoggedIn = userId && 
                           userId !== 'null' &&
                           userId !== 'undefined' &&
                           !userId.startsWith('guest_');
         
-        // Check if guest has provided info
+        // Check if guest has provided info (from form submission)
         const guestInfoProvided = localStorage.getItem('guest_info_provided') === 'true';
+        const hasStoredName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
         
-        console.log('User check - isLoggedIn:', isLoggedIn, 'guestInfoProvided:', guestInfoProvided);
+        console.log('User check - isLoggedIn:', isLoggedIn, 'guestInfoProvided:', guestInfoProvided, 'hasStoredName:', hasStoredName);
         
-        if (!isLoggedIn && !guestInfoProvided) {
-            // Show form for anonymous users
-            userInfoForm.style.display = 'block';
-            chatInterface.style.display = 'none';
-            console.log('Showing user info form');
-        } else {
-            // Show chat interface
+        if (isLoggedIn) {
+            // Logged in user - show chat interface
             userInfoForm.style.display = 'none';
             chatInterface.style.display = 'block';
-            console.log('Showing chat interface');
+            console.log('Showing chat interface (logged in)');
+        } else if (!guestInfoProvided || !hasStoredName) {
+            // Anonymous user without info - show form
+            userInfoForm.style.display = 'block';
+            chatInterface.style.display = 'none';
+            console.log('Showing user info form (anonymous)');
+        } else {
+            // Guest has provided info - show chat interface
+            userInfoForm.style.display = 'none';
+            chatInterface.style.display = 'block';
+            console.log('Showing chat interface (guest with info)');
         }
     }
     
     // Function to attach user info form handler
     function attachUserInfoFormHandler() {
         const form = document.getElementById('userInfoForm');
-        if (!form) return;
+        if (!form) {
+            console.log('User info form not found, may not be needed');
+            return;
+        }
         
         // Remove old handler if exists
         const newForm = form.cloneNode(true);
@@ -390,6 +399,7 @@ document.addEventListener('DOMContentLoaded', function() {
             freshForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
                 
                 const name = document.getElementById('userNameInput').value.trim();
                 const contact = document.getElementById('userContactInput').value.trim();
@@ -398,18 +408,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (!name || !contact || !location || !concern) {
                     alert('Please fill in all required fields.');
-                    return;
+                    return false;
                 }
                 
                 console.log('Form submitted:', { name, contact, location, concern });
                 
-                // Store user info
+                // Store user info in both sessionStorage and localStorage
                 sessionStorage.setItem('user_name', name);
                 sessionStorage.setItem('user_phone', contact);
                 sessionStorage.setItem('user_location', location);
                 sessionStorage.setItem('user_concern', concern);
                 
-                // Save to localStorage
+                // Save to localStorage for persistence
                 localStorage.setItem('guest_info_provided', 'true');
                 localStorage.setItem('guest_name', name);
                 localStorage.setItem('guest_contact', contact);
@@ -424,12 +434,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     chatInterface.style.display = 'block';
                 }
                 
-                // Initialize MySQL chat
+                // Initialize MySQL chat with the provided info
                 if (window.initChatMySQL) {
                     try {
                         const success = await window.initChatMySQL();
                         if (success) {
                             console.log('Chat initialized after form submission');
+                            // Attach send button handlers
+                            setTimeout(() => {
+                                if (window.attachSendButtonHandlers) {
+                                    window.attachSendButtonHandlers();
+                                }
+                            }, 200);
                         } else {
                             console.error('Failed to initialize chat');
                             alert('Failed to initialize chat. Please try again.');
@@ -442,6 +458,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('initChatMySQL function not available');
                     alert('Chat system is not ready. Please refresh the page.');
                 }
+                
+                return false;
             });
         }
     }

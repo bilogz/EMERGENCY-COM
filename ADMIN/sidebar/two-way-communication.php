@@ -235,15 +235,36 @@ $pageTitle = 'Two-Way Communication Interface';
                             ${conv.lastMessageTime ? new Date(conv.lastMessageTime).toLocaleString() : ''}
                         </small>
                     `;
-                    item.addEventListener('click', function() {
-                        openConversation(conv.id, conv, this);
+                    // Add click handler with proper event handling
+                    item.style.cursor = 'pointer';
+                    item.style.pointerEvents = 'auto';
+                    item.style.touchAction = 'manipulation';
+                    const convId = conv.id || conv.conversation_id; // API returns 'id'
+                    item.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        console.log('Conversation clicked:', convId, conv);
+                        openConversation(convId, conv, this);
+                        return false;
                     });
+                    
+                    // Also handle touch events
+                    item.addEventListener('touchend', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Conversation touched:', convId);
+                        openConversation(convId, conv, this);
+                    }, { passive: false });
                     list.appendChild(item);
                 });
                 
-                // Start polling for new conversations
+                // Start polling for new conversations (only if not already polling)
                 if (!conversationPollingInterval) {
-                    conversationPollingInterval = setInterval(loadConversations, 5000); // Poll every 5 seconds
+                    conversationPollingInterval = setInterval(() => {
+                        // Only reload if no conversation is open or if we want to update the list
+                        loadConversations();
+                    }, 5000); // Poll every 5 seconds
                 }
             } catch (error) {
                 console.error('Error loading conversations:', error);
@@ -252,10 +273,18 @@ $pageTitle = 'Two-Way Communication Interface';
         }
 
         function openConversation(conversationId, conversation, element) {
+            console.log('Opening conversation:', conversationId, conversation);
             currentConversationId = conversationId;
+            lastMessageId = 0; // Reset message ID when opening new conversation
+            
             const userName = typeof conversation === 'string' ? conversation : (conversation.userName || 'Unknown User');
             const userNameEl = document.getElementById('chatUserName');
             const userStatusEl = document.getElementById('chatUserStatus');
+            
+            if (!userNameEl || !userStatusEl) {
+                console.error('Chat header elements not found');
+                return;
+            }
             
             const guestBadge = (typeof conversation === 'object' && conversation.isGuest) ? ' <span style="background: #ff9800; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem;">GUEST</span>' : '';
             const concernBadge = (typeof conversation === 'object' && conversation.userConcern) ? ` <span style="background: #2196f3; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: capitalize;">${conversation.userConcern}</span>` : '';
@@ -271,8 +300,20 @@ $pageTitle = 'Two-Way Communication Interface';
             }
             userStatusEl.textContent = userInfo.length > 0 ? userInfo.join(' | ') : 'Online';
             
-            document.getElementById('messageInput').disabled = false;
-            document.getElementById('sendButton').disabled = false;
+            const messageInput = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            
+            if (messageInput) {
+                messageInput.disabled = false;
+                messageInput.style.pointerEvents = 'auto';
+                messageInput.style.cursor = 'text';
+            }
+            
+            if (sendButton) {
+                sendButton.disabled = false;
+                sendButton.style.pointerEvents = 'auto';
+                sendButton.style.cursor = 'pointer';
+            }
             
             // Update active conversation
             document.querySelectorAll('.conversation-item').forEach(item => {
@@ -282,6 +323,7 @@ $pageTitle = 'Two-Way Communication Interface';
                 element.classList.add('active');
             }
             
+            // Load messages
             loadMessages(conversationId);
         }
 

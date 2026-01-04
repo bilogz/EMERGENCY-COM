@@ -97,7 +97,10 @@
     async function loadMessages() {
         if (!conversationId) {
             conversationId = sessionStorage.getItem('conversation_id');
-            if (!conversationId) return;
+            if (!conversationId) {
+                console.log('No conversation ID for loading messages');
+                return;
+            }
         }
         
         try {
@@ -106,15 +109,37 @@
                 lastMessageId: lastMessageId
             }));
             
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
             
-            if (data.success && data.messages) {
-                data.messages.forEach(msg => {
-                    if (msg.id > lastMessageId) {
-                        lastMessageId = msg.id;
-                    }
-                    addMessageToChat(msg.text, msg.senderType, msg.timestamp);
-                });
+            if (data.success && data.messages && data.messages.length > 0) {
+                // Track existing messages to avoid duplicates
+                const chatMessages = document.querySelector('.chat-messages');
+                if (chatMessages) {
+                    const existingTimes = new Set();
+                    chatMessages.querySelectorAll('.chat-message').forEach(msg => {
+                        const timeEl = msg.querySelector('small');
+                        if (timeEl) {
+                            existingTimes.add(timeEl.textContent.trim());
+                        }
+                    });
+                    
+                    data.messages.forEach(msg => {
+                        if (msg.id > lastMessageId) {
+                            lastMessageId = msg.id;
+                        }
+                        
+                        // Check if message already exists
+                        const msgTime = new Date(msg.timestamp).toLocaleTimeString();
+                        if (!existingTimes.has(msgTime)) {
+                            existingTimes.add(msgTime);
+                            addMessageToChat(msg.text, msg.senderType, msg.timestamp);
+                        }
+                    });
+                }
             }
         } catch (error) {
             console.error('Error loading messages:', error);
@@ -211,12 +236,14 @@
             clearInterval(pollingInterval);
         }
         
-        // Poll every 2 seconds
+        // Poll every 2 seconds for new messages
         pollingInterval = setInterval(() => {
             if (conversationId) {
                 loadMessages();
             }
         }, 2000);
+        
+        console.log('Started polling for messages');
     }
     
     // Stop polling
