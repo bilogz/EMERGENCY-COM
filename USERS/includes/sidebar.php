@@ -98,16 +98,13 @@ include __DIR__ . '/guest-monitoring-notice.php';
     <button class="auth-icon-link" id="languageSelectorBtn" title="Change Language" aria-label="Select Language">
         <i class="fas fa-globe"></i>
     </button>
+    <button class="auth-icon-link" id="chatFab" title="Any concerns? Contact support" aria-label="Open chat">
+        <i class="fas fa-comments"></i>
+    </button>
     <a href="<?= $basePath ?><?= $linkPrefix ?>login.php" class="auth-icon-link" title="Login / Sign Up">
         <i class="fas fa-user-circle"></i>
     </a>
 </div>
-
-<!-- Floating chat button and modal -->
-<button class="chat-fab" id="chatFab" aria-label="Open chat" title="Any concerns? Contact support">
-    <i class="fas fa-comments"></i>
-    <span class="chat-tooltip" id="chatTooltip">Any concerns? Contact support</span>
-</button>
 
 <div class="chat-modal" id="chatModal" aria-hidden="true">
     <div class="chat-modal-content">
@@ -300,38 +297,43 @@ document.addEventListener('DOMContentLoaded', function() {
     window.openChat = openChat;
     window.closeChat = closeChatWithFlag;
 
+    // Chat button is now in auth-icons, ensure it's clickable
     if (chatFab) {
-        // Ensure button is clickable
-        chatFab.style.pointerEvents = 'auto';
-        chatFab.style.position = 'fixed';
-        chatFab.style.zIndex = '1350';
+        // Remove any existing listeners and add fresh one
+        const newChatFab = chatFab.cloneNode(true);
+        chatFab.parentNode.replaceChild(newChatFab, chatFab);
+        const freshChatFab = document.getElementById('chatFab');
         
-        // Use direct event listener without cloning to avoid issues
-        chatFab.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            console.log('Chat button clicked');
-            openChat();
-        }, true); // Use capture phase to ensure it fires
-        
-        // Also add touch event for mobile
-        chatFab.addEventListener('touchend', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            console.log('Chat button touched');
-            openChat();
-        }, true);
-        
-        // Fallback: ensure button is accessible
-        chatFab.setAttribute('tabindex', '0');
-        chatFab.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
+        if (freshChatFab) {
+            // Ensure it's a button, not a link
+            freshChatFab.type = 'button';
+            
+            freshChatFab.addEventListener('click', function(e) {
                 e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                console.log('Chat button clicked');
                 openChat();
-            }
-        });
+            }, false);
+            
+            // Also add touch event for mobile
+            freshChatFab.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                console.log('Chat button touched');
+                openChat();
+            }, false);
+            
+            // Keyboard support
+            freshChatFab.setAttribute('tabindex', '0');
+            freshChatFab.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openChat();
+                }
+            });
+        }
     }
 
     if (chatCloseBtn) {
