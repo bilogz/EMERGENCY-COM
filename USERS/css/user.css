@@ -1555,6 +1555,27 @@ textarea:focus {
     touch-action: manipulation !important;
     z-index: 10001 !important;
     position: relative;
+    min-width: 80px;
+    min-height: 40px;
+}
+
+#chatSendBtn {
+    background: var(--primary-color) !important;
+    color: white !important;
+    border: none !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+}
+
+#chatSendBtn:hover:not(:disabled) {
+    background: var(--primary-color-hover, #7a3a7a) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+#chatSendBtn:active:not(:disabled) {
+    transform: translateY(0);
 }
 
 #chatSendBtn:disabled {

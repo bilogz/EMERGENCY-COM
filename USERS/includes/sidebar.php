@@ -1277,21 +1277,31 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Function to attach send button handlers
             function attachSendButtonHandlers() {
+                console.log('=== ATTACHING SEND BUTTON HANDLERS ===');
                 const sendBtn = document.getElementById('chatSendBtn');
                 const input = document.getElementById('chatInput');
                 
-                if (!sendBtn || !input) {
-                    console.warn('Chat send button or input not found', { sendBtn, input });
+                if (!sendBtn) {
+                    console.error('Chat send button not found!');
                     return false;
                 }
                 
-                // Ensure button is clickable
+                if (!input) {
+                    console.error('Chat input not found!');
+                    return false;
+                }
+                
+                console.log('Send button found:', sendBtn);
+                console.log('Input found:', input);
+                
+                // Ensure button is clickable BEFORE cloning
                 sendBtn.style.pointerEvents = 'auto';
                 sendBtn.style.cursor = 'pointer';
                 sendBtn.style.touchAction = 'manipulation';
                 sendBtn.style.zIndex = '10001';
                 sendBtn.style.position = 'relative';
                 sendBtn.disabled = false;
+                sendBtn.type = 'button'; // Ensure it's a button, not submit
                 
                 // Remove old listeners by cloning
                 const newBtn = sendBtn.cloneNode(true);
@@ -1299,24 +1309,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 const freshBtn = document.getElementById('chatSendBtn');
                 
                 if (!freshBtn) {
-                    console.error('Failed to get fresh button');
+                    console.error('Failed to get fresh button after cloning');
                     return false;
                 }
                 
+                console.log('Fresh button obtained:', freshBtn);
+                
                 // Ensure fresh button is clickable
-                freshBtn.style.pointerEvents = 'auto';
-                freshBtn.style.cursor = 'pointer';
+                freshBtn.style.pointerEvents = 'auto !important';
+                freshBtn.style.cursor = 'pointer !important';
                 freshBtn.style.touchAction = 'manipulation';
                 freshBtn.style.zIndex = '10001';
                 freshBtn.style.position = 'relative';
                 freshBtn.disabled = false;
+                freshBtn.type = 'button';
                 
                 // Attach multiple event handlers for better responsiveness
+                console.log('Attaching onclick handler to send button');
                 freshBtn.onclick = async function(e) {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
-                    console.log('Send button clicked');
+                    console.log('=== SEND BUTTON CLICKED ===');
                     
                     const input = document.getElementById('chatInput');
                     const text = input ? input.value.trim() : '';
@@ -1455,6 +1469,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                     }
+                });
+                
+                // Also attach mousedown and touchstart for better responsiveness
+                freshBtn.addEventListener('mousedown', function(e) {
+                    console.log('Send button mousedown');
+                    e.preventDefault();
+                }, { passive: false });
+                
+                freshBtn.addEventListener('touchstart', function(e) {
+                    console.log('Send button touchstart');
+                    e.preventDefault();
+                }, { passive: false });
+                
+                // Test if button is actually clickable
+                console.log('Send button styles:', {
+                    pointerEvents: window.getComputedStyle(freshBtn).pointerEvents,
+                    cursor: window.getComputedStyle(freshBtn).cursor,
+                    zIndex: window.getComputedStyle(freshBtn).zIndex,
+                    disabled: freshBtn.disabled,
+                    type: freshBtn.type
                 });
                 
                 console.log('Chat send button handlers attached successfully');
