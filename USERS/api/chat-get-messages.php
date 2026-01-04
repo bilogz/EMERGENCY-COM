@@ -43,13 +43,9 @@ try {
         }
     }
     
-    // Get conversation status and verify it matches device/IP (for anonymous users)
-    require_once __DIR__ . '/device_tracking.php';
-    $ipAddress = getClientIP();
-    $deviceInfo = formatDeviceInfoForDB();
-    
+    // Get conversation status (don't check device/IP here - too strict, causes false positives)
     $stmt = $pdo->prepare("
-        SELECT status, is_guest, ip_address, device_info 
+        SELECT status 
         FROM conversations 
         WHERE conversation_id = ?
     ");
@@ -57,18 +53,6 @@ try {
     $conversation = $stmt->fetch();
     
     if ($conversation) {
-        // For anonymous users, verify device/IP matches
-        if ($conversation['is_guest'] == 1) {
-            if ($conversation['ip_address'] !== $ipAddress || $conversation['device_info'] !== $deviceInfo) {
-                // Device/IP mismatch - conversation doesn't belong to this device
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Conversation not found for this device',
-                    'conversationStatus' => 'closed'
-                ]);
-                exit;
-            }
-        }
         $conversationStatus = $conversation['status'] ?? 'active';
     } else {
         $conversationStatus = 'closed';

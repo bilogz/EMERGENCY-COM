@@ -547,9 +547,19 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Don't show form if chat is already initialized and has a conversation
-        if (window.chatInitialized && sessionStorage.getItem('conversation_id')) {
-            console.log('Chat already initialized with conversation, not showing form');
+        // Don't show form if chat is already initialized and has an active conversation
+        const conversationId = sessionStorage.getItem('conversation_id');
+        if (window.chatInitialized && conversationId && !window.conversationClosedHandled) {
+            console.log('Chat already initialized with active conversation, not showing form');
+            // Ensure chat interface is shown
+            userInfoForm.style.display = 'none';
+            chatInterface.style.display = 'block';
+            return;
+        }
+        
+        // Don't show form if conversation was just closed (handleConversationClosed handles this)
+        if (window.conversationClosedHandled) {
+            console.log('Conversation closed handler is active, not showing form via checkAndShowUserInfoForm');
             return;
         }
         
@@ -665,9 +675,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Set a flag to prevent form from showing again after submission
                 window.formJustSubmitted = true;
-                setTimeout(() => {
-                    window.formJustSubmitted = false;
-                }, 2000);
+                // Clear the closed handler flag since we're starting fresh
+                window.conversationClosedHandled = false;
                 
                 // Initialize MySQL chat with the provided info
                 if (window.initChatMySQL) {
@@ -675,6 +684,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         const success = await window.initChatMySQL();
                         if (success) {
                             console.log('Chat initialized after form submission - new conversation created');
+                            // Clear form submission flag after successful initialization
+                            setTimeout(() => {
+                                window.formJustSubmitted = false;
+                            }, 1000);
                             // Attach send button handlers
                             setTimeout(() => {
                                 if (window.attachSendButtonHandlers) {

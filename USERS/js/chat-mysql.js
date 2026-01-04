@@ -136,6 +136,9 @@
                 sessionStorage.setItem('conversation_id', conversationId);
                 window.currentConversationId = conversationId;
                 
+                // Clear closed handler flag since we have a new active conversation
+                window.conversationClosedHandled = false;
+                
                 console.log('Conversation ready:', conversationId);
                 
                 // Load existing messages (initial load)
@@ -146,6 +149,14 @@
                 
                 isInitialized = true;
                 window.chatInitialized = true;
+                
+                // Ensure chat interface is shown (not form)
+                const chatInterface = document.getElementById('chatInterface');
+                const userInfoForm = document.getElementById('chatUserInfoForm');
+                if (chatInterface && userInfoForm) {
+                    userInfoForm.style.display = 'none';
+                    chatInterface.style.display = 'block';
+                }
                 
                 return true;
             } else {
@@ -302,6 +313,7 @@
     function handleConversationClosed() {
         // Prevent multiple calls
         if (window.conversationClosedHandled) {
+            console.log('Conversation close already handled, skipping');
             return;
         }
         window.conversationClosedHandled = true;
@@ -319,6 +331,10 @@
         
         // Reset last message ID
         lastMessageId = 0;
+        
+        // Reset initialization flags
+        isInitialized = false;
+        window.chatInitialized = false;
         
         // Clear and refresh chat messages
         const chatMessages = document.querySelector('.chat-messages');
@@ -435,6 +451,10 @@
         
         // Reset last message ID
         lastMessageId = 0;
+        
+        // Reset initialization flags
+        isInitialized = false;
+        window.chatInitialized = false;
         
         // Clear chat messages (except system message)
         const chatMessages = document.querySelector('.chat-messages');
