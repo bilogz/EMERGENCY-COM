@@ -35,6 +35,9 @@ try {
             user_location,
             user_concern,
             is_guest,
+            device_info,
+            ip_address,
+            user_agent,
             status,
             last_message,
             last_message_time,
@@ -50,6 +53,12 @@ try {
     
     // Format conversations
     $formattedConversations = array_map(function($conv) {
+        // Parse device info if available
+        $deviceInfoParsed = null;
+        if (!empty($conv['device_info'])) {
+            $deviceInfoParsed = json_decode($conv['device_info'], true);
+        }
+        
         return [
             'id' => $conv['conversation_id'],
             'userId' => $conv['user_id'],
@@ -59,6 +68,9 @@ try {
             'userLocation' => $conv['user_location'],
             'userConcern' => $conv['user_concern'],
             'isGuest' => (bool)$conv['is_guest'],
+            'deviceInfo' => $deviceInfoParsed,
+            'ipAddress' => $conv['ip_address'] ?? null,
+            'userAgent' => $conv['user_agent'] ?? null,
             'status' => $conv['status'],
             'lastMessage' => $conv['last_message'],
             'lastMessageTime' => $conv['last_message_time'] ? strtotime($conv['last_message_time']) * 1000 : null,

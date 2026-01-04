@@ -6,6 +6,7 @@
 
 header('Content-Type: application/json');
 require_once __DIR__ . '/db_connect.php';
+require_once __DIR__ . '/device_tracking.php';
 
 if (!$pdo) {
     http_response_code(500);
@@ -22,6 +23,11 @@ try {
     $userLocation = $_GET['userLocation'] ?? $_POST['userLocation'] ?? null;
     $userConcern = $_GET['userConcern'] ?? $_POST['userConcern'] ?? null;
     $isGuest = isset($_GET['isGuest']) ? (bool)$_GET['isGuest'] : (isset($_POST['isGuest']) ? (bool)$_POST['isGuest'] : true);
+    
+    // Get device info and IP address
+    $ipAddress = getClientIP();
+    $deviceInfo = formatDeviceInfoForDB();
+    $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
     
     // If conversationId is provided, just return its status
     if ($conversationId && !$userId) {
@@ -58,6 +64,9 @@ try {
             user_location,
             user_concern,
             is_guest,
+            device_info,
+            ip_address,
+            user_agent,
             status,
             last_message,
             last_message_time,
@@ -72,6 +81,12 @@ try {
     $conversation = $stmt->fetch();
     
     if ($conversation) {
+        // Parse device info if available
+        $deviceInfoParsed = null;
+        if (!empty($conversation['device_info'])) {
+            $deviceInfoParsed = json_decode($conversation['device_info'], true);
+        }
+        
         // Return existing conversation
         echo json_encode([
             'success' => true,
@@ -85,6 +100,9 @@ try {
                 'userLocation' => $conversation['user_location'],
                 'userConcern' => $conversation['user_concern'],
                 'isGuest' => (bool)$conversation['is_guest'],
+                'deviceInfo' => $deviceInfoParsed,
+                'ipAddress' => $conversation['ip_address'] ?? null,
+                'userAgent' => $conversation['user_agent'] ?? null,
                 'status' => $conversation['status'],
                 'lastMessage' => $conversation['last_message'],
                 'lastMessageTime' => $conversation['last_message_time'] ? strtotime($conversation['last_message_time']) * 1000 : null,
@@ -97,8 +115,8 @@ try {
         // Create new conversation
         $stmt = $pdo->prepare("
             INSERT INTO conversations 
-            (user_id, user_name, user_email, user_phone, user_location, user_concern, is_guest, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NOW(), NOW())
+            (user_id, user_name, user_email, user_phone, user_location, user_concern, is_guest, device_info, ip_address, user_agent, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NOW(), NOW())
         ");
         $stmt->execute([
             $userId,
@@ -107,7 +125,10 @@ try {
             $userPhone,
             $userLocation,
             $userConcern,
-            $isGuest ? 1 : 0
+            $isGuest ? 1 : 0,
+            $deviceInfo,
+            $ipAddress,
+            $userAgent
         ]);
         $conversationId = $pdo->lastInsertId();
         

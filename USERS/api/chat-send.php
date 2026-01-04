@@ -6,6 +6,7 @@
 
 header('Content-Type: application/json');
 require_once __DIR__ . '/db_connect.php';
+require_once __DIR__ . '/device_tracking.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -36,6 +37,11 @@ try {
     $userConcern = $input['userConcern'] ?? $_POST['userConcern'] ?? null;
     $isGuest = isset($input['isGuest']) ? ($input['isGuest'] === '1' || $input['isGuest'] === true) : (isset($_POST['isGuest']) ? ($_POST['isGuest'] === '1') : true);
     $conversationId = $input['conversationId'] ?? $_POST['conversationId'] ?? null;
+    
+    // Get device info and IP address
+    $ipAddress = getClientIP();
+    $deviceInfo = formatDeviceInfoForDB();
+    $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
     
     if (empty($text)) {
         http_response_code(400);
@@ -84,8 +90,8 @@ try {
             // Create new conversation
             $stmt = $pdo->prepare("
                 INSERT INTO conversations 
-                (user_id, user_name, user_email, user_phone, user_location, user_concern, is_guest, status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NOW(), NOW())
+                (user_id, user_name, user_email, user_phone, user_location, user_concern, is_guest, device_info, ip_address, user_agent, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NOW(), NOW())
             ");
             $stmt->execute([
                 $userId,
@@ -94,12 +100,15 @@ try {
                 $userPhone,
                 $userLocation,
                 $userConcern,
-                $isGuest ? 1 : 0
+                $isGuest ? 1 : 0,
+                $deviceInfo,
+                $ipAddress,
+                $userAgent
             ]);
             $conversationId = $pdo->lastInsertId();
         }
     } else {
-        // Update conversation info if provided
+        // Update conversation info if provided (also update device/IP if changed)
         $stmt = $pdo->prepare("
             UPDATE conversations 
             SET user_name = COALESCE(?, user_name),
@@ -107,6 +116,9 @@ try {
                 user_phone = COALESCE(?, user_phone),
                 user_location = COALESCE(?, user_location),
                 user_concern = COALESCE(?, user_concern),
+                device_info = COALESCE(?, device_info),
+                ip_address = COALESCE(?, ip_address),
+                user_agent = COALESCE(?, user_agent),
                 updated_at = NOW()
             WHERE conversation_id = ?
         ");
@@ -116,21 +128,26 @@ try {
             $userPhone,
             $userLocation,
             $userConcern,
+            $deviceInfo,
+            $ipAddress,
+            $userAgent,
             $conversationId
         ]);
     }
     
-    // Insert message
+    // Insert message (with device/IP tracking)
     $stmt = $pdo->prepare("
         INSERT INTO chat_messages 
-        (conversation_id, sender_id, sender_name, sender_type, message_text, created_at)
-        VALUES (?, ?, ?, 'user', ?, NOW())
+        (conversation_id, sender_id, sender_name, sender_type, message_text, ip_address, device_info, created_at)
+        VALUES (?, ?, ?, 'user', ?, ?, ?, NOW())
     ");
     $stmt->execute([
         $conversationId,
         $userId,
         $userName,
-        $text
+        $text,
+        $ipAddress,
+        $deviceInfo
     ]);
     $messageId = $pdo->lastInsertId();
     

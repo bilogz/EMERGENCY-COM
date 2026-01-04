@@ -501,13 +501,29 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const concernBadge = (typeof conversation === 'object' && conversation.userConcern) ? ` <span style="background: #2196f3; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: capitalize;">${conversation.userConcern}</span>` : '';
             userNameEl.innerHTML = userName + guestBadge + concernBadge;
             
-            // Show user info
+            // Show user info including device and IP
             const userInfo = [];
             if (typeof conversation === 'object') {
                 if (conversation.userEmail) userInfo.push(`Email: ${conversation.userEmail}`);
                 if (conversation.userPhone) userInfo.push(`Phone: ${conversation.userPhone}`);
                 if (conversation.userLocation) userInfo.push(`Location: ${conversation.userLocation}`);
                 if (conversation.userConcern) userInfo.push(`Concern: ${conversation.userConcern}`);
+                
+                // Add device info
+                if (conversation.deviceInfo) {
+                    const deviceParts = [];
+                    if (conversation.deviceInfo.device_type) deviceParts.push(conversation.deviceInfo.device_type);
+                    if (conversation.deviceInfo.os) deviceParts.push(conversation.deviceInfo.os);
+                    if (conversation.deviceInfo.browser) deviceParts.push(conversation.deviceInfo.browser);
+                    if (deviceParts.length > 0) {
+                        userInfo.push(`Device: ${deviceParts.join(' - ')}`);
+                    }
+                }
+                
+                // Add IP address
+                if (conversation.ipAddress) {
+                    userInfo.push(`IP: ${conversation.ipAddress}`);
+                }
             }
             userStatusEl.textContent = userInfo.length > 0 ? userInfo.join(' | ') : 'Online';
             
