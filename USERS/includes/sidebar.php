@@ -217,10 +217,14 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        console.log('Opening chat modal...');
         chatModal.classList.add('chat-modal-open');
         chatModal.setAttribute('aria-hidden', 'false');
         chatModal.style.pointerEvents = 'auto';
-        chatModal.style.zIndex = '9999';
+        chatModal.style.zIndex = '99999';
+        chatModal.style.display = 'flex';
+        chatModal.style.visibility = 'visible';
+        chatModal.style.opacity = '1';
         document.body.style.overflow = 'hidden'; // Prevent background scrolling
         
         // Ensure content is clickable
@@ -307,13 +311,30 @@ document.addEventListener('DOMContentLoaded', function() {
         if (freshChatFab) {
             // Ensure it's a button, not a link
             freshChatFab.type = 'button';
+            freshChatFab.style.pointerEvents = 'auto';
+            freshChatFab.style.cursor = 'pointer';
+            freshChatFab.style.touchAction = 'manipulation';
+            
+            // Debug: Check if modal exists
+            console.log('Chat button found:', freshChatFab);
+            console.log('Chat modal exists:', !!chatModal);
             
             freshChatFab.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
-                console.log('Chat button clicked');
+                console.log('Chat button clicked - opening modal');
+                if (chatModal) {
+                    console.log('Modal element:', chatModal);
+                    console.log('Modal classes before:', chatModal.className);
+                }
                 openChat();
+                if (chatModal) {
+                    console.log('Modal classes after:', chatModal.className);
+                    console.log('Modal style display:', chatModal.style.display);
+                    console.log('Modal style visibility:', chatModal.style.visibility);
+                    console.log('Modal style opacity:', chatModal.style.opacity);
+                }
             }, false);
             
             // Also add touch event for mobile
@@ -321,7 +342,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
-                console.log('Chat button touched');
+                console.log('Chat button touched - opening modal');
                 openChat();
             }, false);
             
@@ -333,7 +354,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     openChat();
                 }
             });
+        } else {
+            console.error('Chat button not found after cloning');
         }
+    } else {
+        console.error('Chat button (chatFab) not found in DOM');
     }
 
     if (chatCloseBtn) {

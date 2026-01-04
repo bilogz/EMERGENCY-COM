@@ -1323,19 +1323,22 @@ textarea:focus {
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.35);
-    display: flex;
+    display: flex !important;
     align-items: flex-end;
     justify-content: flex-end;
     padding: 0 1.5rem 1.5rem;
-    z-index: 9999 !important;
+    z-index: 99999 !important;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
+    visibility: hidden;
 }
 
 .chat-modal-open {
-    opacity: 1;
+    opacity: 1 !important;
     pointer-events: auto !important;
+    visibility: visible !important;
+    display: flex !important;
 }
 
 .chat-modal-content {

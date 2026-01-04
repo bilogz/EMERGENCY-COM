@@ -117,19 +117,52 @@ $current = 'support.php';
                 btn.style.pointerEvents = 'auto';
                 btn.style.cursor = 'pointer';
                 btn.style.touchAction = 'manipulation';
+                btn.style.position = 'relative';
+                btn.style.zIndex = '1201';
                 
-                // Add click handler if not already present
-                if (!btn.hasAttribute('data-handler-attached')) {
-                    btn.setAttribute('data-handler-attached', 'true');
-                    btn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const theme = this.getAttribute('data-theme');
-                        if (theme && window.setTheme) {
+                // Remove old listeners and add fresh one
+                const newBtn = btn.cloneNode(true);
+                btn.parentNode.replaceChild(newBtn, btn);
+                const freshBtn = newBtn;
+                
+                freshBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    const theme = this.getAttribute('data-theme');
+                    console.log('Theme button clicked:', theme);
+                    if (theme) {
+                        if (window.themeManager) {
+                            window.themeManager.applyTheme(theme);
+                        } else if (window.setTheme) {
+                            window.setTheme(theme);
+                        } else {
+                            // Fallback
+                            const root = document.documentElement;
+                            if (theme === 'system') {
+                                const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                                root.setAttribute('data-theme', systemTheme);
+                            } else {
+                                root.setAttribute('data-theme', theme);
+                            }
+                            localStorage.setItem('theme', theme);
+                        }
+                    }
+                }, false);
+                
+                freshBtn.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    const theme = this.getAttribute('data-theme');
+                    if (theme) {
+                        if (window.themeManager) {
+                            window.themeManager.applyTheme(theme);
+                        } else if (window.setTheme) {
                             window.setTheme(theme);
                         }
-                    }, true);
-                }
+                    }
+                }, false);
             });
             
             // Ensure chat button is clickable

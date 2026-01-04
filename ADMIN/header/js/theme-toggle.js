@@ -39,10 +39,37 @@ class ThemeManager {
         // Theme toggle buttons
         const themeButtons = document.querySelectorAll('.theme-toggle-btn');
         themeButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
-                const theme = e.currentTarget.getAttribute('data-theme');
-                this.applyTheme(theme);
-            });
+            // Remove any existing listeners by cloning
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+            const freshButton = newButton;
+            
+            // Ensure button is clickable
+            freshButton.style.pointerEvents = 'auto';
+            freshButton.style.cursor = 'pointer';
+            freshButton.style.touchAction = 'manipulation';
+            
+            freshButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                const theme = freshButton.getAttribute('data-theme');
+                console.log('Theme button clicked:', theme);
+                if (theme) {
+                    this.applyTheme(theme);
+                }
+            }, false);
+            
+            // Also add touch event for mobile
+            freshButton.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                const theme = freshButton.getAttribute('data-theme');
+                if (theme) {
+                    this.applyTheme(theme);
+                }
+            }, false);
         });
 
         // Listen for system theme changes
