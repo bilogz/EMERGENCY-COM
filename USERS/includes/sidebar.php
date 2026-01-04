@@ -214,25 +214,46 @@ document.addEventListener('DOMContentLoaded', function() {
     function openChat() {
         if (!chatModal) {
             console.error('Chat modal not found');
+            // Try to find it again
+            const modal = document.getElementById('chatModal');
+            if (modal) {
+                console.log('Found modal on retry');
+                modal.classList.add('chat-modal-open');
+                modal.setAttribute('aria-hidden', 'false');
+                modal.style.display = 'flex';
+                modal.style.visibility = 'visible';
+                modal.style.opacity = '1';
+                modal.style.pointerEvents = 'auto';
+                document.body.style.overflow = 'hidden';
+                return;
+            }
+            alert('Chat is not available. Please refresh the page.');
             return;
         }
         
         console.log('Opening chat modal...');
-        chatModal.classList.add('chat-modal-open');
-        chatModal.setAttribute('aria-hidden', 'false');
-        chatModal.style.pointerEvents = 'auto';
-        chatModal.style.zIndex = '99999';
+        // Force show the modal
         chatModal.style.display = 'flex';
         chatModal.style.visibility = 'visible';
         chatModal.style.opacity = '1';
+        chatModal.style.pointerEvents = 'auto';
+        chatModal.style.zIndex = '99999';
+        chatModal.classList.add('chat-modal-open');
+        chatModal.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        
+        // Check if user info form should be shown
+        checkAndShowUserInfoForm();
         
         // Ensure content is clickable
         const content = chatModal.querySelector('.chat-modal-content');
         if (content) {
             content.style.pointerEvents = 'auto';
-            content.style.zIndex = '10000';
+            content.style.zIndex = '100000';
         }
+        
+        // Attach form handler if needed (for anonymous users)
+        attachUserInfoFormHandler();
         
         // Initialize Firebase chat if not already done
         if (window.initFirebaseChat && !window.chatInitialized) {
@@ -240,6 +261,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Firebase chat initialized');
             }).catch(err => {
                 console.error('Failed to initialize Firebase chat:', err);
+            });
+        }
+        
+        // Close modal when clicking outside (on backdrop) - only add once
+        if (!chatModal.hasAttribute('data-backdrop-handler')) {
+            chatModal.setAttribute('data-backdrop-handler', 'true');
+            chatModal.addEventListener('click', function(e) {
+                if (e.target === chatModal) {
+                    closeChatWithFlag();
+                }
             });
         }
         
@@ -281,6 +312,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!chatModal) return;
         chatModal.classList.remove('chat-modal-open');
         chatModal.setAttribute('aria-hidden', 'true');
+        chatModal.style.display = 'none';
+        chatModal.style.visibility = 'hidden';
+        chatModal.style.opacity = '0';
+        chatModal.style.pointerEvents = 'none';
         document.body.style.overflow = ''; // Restore scrolling
     }
     
@@ -295,6 +330,108 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(() => {
             chatClosingIntentionally = false;
         }, 100);
+    }
+    
+    // Function to check and show user info form for anonymous users
+    function checkAndShowUserInfoForm() {
+        const userInfoForm = document.getElementById('chatUserInfoForm');
+        const chatInterface = document.getElementById('chatInterface');
+        
+        if (!userInfoForm || !chatInterface) {
+            console.warn('User info form or chat interface not found');
+            return;
+        }
+        
+        // Check if user is logged in
+        const userId = sessionStorage.getItem('user_id');
+        const isLoggedIn = userId && 
+                          userId !== 'null' &&
+                          userId !== 'undefined' &&
+                          !userId.startsWith('guest_');
+        
+        // Check if guest has provided info
+        const guestInfoProvided = localStorage.getItem('guest_info_provided') === 'true';
+        
+        console.log('User check - isLoggedIn:', isLoggedIn, 'guestInfoProvided:', guestInfoProvided);
+        
+        if (!isLoggedIn && !guestInfoProvided) {
+            // Show form for anonymous users
+            userInfoForm.style.display = 'block';
+            chatInterface.style.display = 'none';
+            console.log('Showing user info form');
+        } else {
+            // Show chat interface
+            userInfoForm.style.display = 'none';
+            chatInterface.style.display = 'block';
+            console.log('Showing chat interface');
+        }
+    }
+    
+    // Function to attach user info form handler
+    function attachUserInfoFormHandler() {
+        const form = document.getElementById('userInfoForm');
+        if (!form) return;
+        
+        // Remove old handler if exists
+        const newForm = form.cloneNode(true);
+        form.parentNode.replaceChild(newForm, form);
+        const freshForm = document.getElementById('userInfoForm');
+        
+        if (freshForm && !freshForm.hasAttribute('data-handler-attached')) {
+            freshForm.setAttribute('data-handler-attached', 'true');
+            
+            freshForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const name = document.getElementById('userNameInput').value.trim();
+                const contact = document.getElementById('userContactInput').value.trim();
+                const location = document.getElementById('userLocationInput').value.trim();
+                const concern = document.getElementById('userConcernSelect').value;
+                
+                if (!name || !contact || !location || !concern) {
+                    alert('Please fill in all required fields.');
+                    return;
+                }
+                
+                console.log('Form submitted:', { name, contact, location, concern });
+                
+                // Store user info
+                sessionStorage.setItem('user_name', name);
+                sessionStorage.setItem('user_phone', contact);
+                sessionStorage.setItem('user_location', location);
+                sessionStorage.setItem('user_concern', concern);
+                
+                // Save to localStorage
+                localStorage.setItem('guest_info_provided', 'true');
+                localStorage.setItem('guest_name', name);
+                localStorage.setItem('guest_contact', contact);
+                localStorage.setItem('guest_location', location);
+                localStorage.setItem('guest_concern', concern);
+                
+                // Hide form and show chat interface
+                const userInfoForm = document.getElementById('chatUserInfoForm');
+                const chatInterface = document.getElementById('chatInterface');
+                if (userInfoForm && chatInterface) {
+                    userInfoForm.style.display = 'none';
+                    chatInterface.style.display = 'block';
+                }
+                
+                // Initialize Firebase and chat
+                if (window.initFirebaseChat) {
+                    try {
+                        await window.initFirebaseChat();
+                        console.log('Chat initialized after form submission');
+                    } catch (err) {
+                        console.error('Failed to initialize chat:', err);
+                        alert('Failed to initialize chat. Please try again.');
+                    }
+                } else {
+                    console.error('initFirebaseChat function not available');
+                    alert('Chat system is not ready. Please refresh the page.');
+                }
+            });
+        }
     }
     
     // Expose openChat globally so it can be called from other pages
@@ -324,17 +461,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.stopPropagation();
                 e.stopImmediatePropagation();
                 console.log('Chat button clicked - opening modal');
-                if (chatModal) {
-                    console.log('Modal element:', chatModal);
-                    console.log('Modal classes before:', chatModal.className);
-                }
                 openChat();
-                if (chatModal) {
-                    console.log('Modal classes after:', chatModal.className);
-                    console.log('Modal style display:', chatModal.style.display);
-                    console.log('Modal style visibility:', chatModal.style.visibility);
-                    console.log('Modal style opacity:', chatModal.style.opacity);
-                }
+                
+                // Verify modal is visible after a short delay
+                setTimeout(() => {
+                    if (chatModal) {
+                        const isVisible = chatModal.classList.contains('chat-modal-open') && 
+                                        chatModal.style.display === 'flex' &&
+                                        chatModal.style.visibility === 'visible';
+                        console.log('Modal visibility check:', isVisible);
+                        if (!isVisible) {
+                            console.warn('Modal not visible, forcing display...');
+                            chatModal.style.display = 'flex';
+                            chatModal.style.visibility = 'visible';
+                            chatModal.style.opacity = '1';
+                            chatModal.classList.add('chat-modal-open');
+                        }
+                    }
+                }, 100);
             }, false);
             
             // Also add touch event for mobile

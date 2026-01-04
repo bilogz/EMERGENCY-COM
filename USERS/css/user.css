@@ -1322,38 +1322,52 @@ textarea:focus {
 .chat-modal {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.35);
-    display: flex !important;
-    align-items: flex-end;
-    justify-content: flex-end;
-    padding: 0 1.5rem 1.5rem;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
     z-index: 99999 !important;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
     visibility: hidden;
+    overflow-y: auto;
 }
 
 .chat-modal-open {
+    display: flex !important;
     opacity: 1 !important;
     pointer-events: auto !important;
     visibility: visible !important;
-    display: flex !important;
 }
 
 .chat-modal-content {
-    width: 420px;
-    max-width: 100%;
+    width: 100%;
+    max-width: 500px;
     background: var(--card-bg);
     border-radius: 16px;
-    box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.5);
     border: 1px solid var(--card-border);
     display: flex;
     flex-direction: column;
-    max-height: 70vh;
+    max-height: 90vh;
     position: relative;
-    z-index: 10000 !important;
+    z-index: 100000 !important;
     pointer-events: auto !important;
+    margin: auto;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 .chat-modal-header {
@@ -1391,6 +1405,9 @@ textarea:focus {
     pointer-events: auto;
     position: relative;
     z-index: 10001;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
 }
 
 .chat-hint {
@@ -1442,6 +1459,14 @@ textarea:focus {
     padding: 0.25rem 0;
     border-radius: 8px;
     background: rgba(0,0,0,0.02);
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 640px) {
+    .chat-messages {
+        max-height: 300px;
+        min-height: 200px;
+    }
 }
 
 .chat-message {
@@ -1528,14 +1553,97 @@ textarea:focus {
 
 @media (max-width: 640px) {
     .chat-modal {
-        padding: 0.5rem;
+        padding: 0;
         align-items: flex-end;
         justify-content: center;
+        background: rgba(0,0,0,0.6);
     }
 
     .chat-modal-content {
         width: 100%;
+        max-width: 100%;
+        border-radius: 16px 16px 0 0;
+        max-height: 95vh;
+        margin: 0;
+        animation: slideUpMobile 0.3s ease;
     }
+    
+    @keyframes slideUpMobile {
+        from {
+            transform: translateY(100%);
+        }
+        to {
+            transform: translateY(0);
+        }
+    }
+    
+    .chat-modal-header {
+        padding: 1rem;
+        flex-shrink: 0;
+    }
+    
+    .chat-modal-body {
+        padding: 1rem;
+        max-height: calc(95vh - 60px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .chat-messages {
+        max-height: 300px;
+        min-height: 200px;
+    }
+    
+    .chat-user-info-form {
+        max-height: calc(95vh - 120px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .chat-user-info-form input,
+    .chat-user-info-form select {
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+    
+    .chat-input-row {
+        flex-shrink: 0;
+        margin-top: 0.5rem;
+    }
+    
+    .chat-input-row input {
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+
+@media (max-width: 640px) {
+    .chat-user-info-form {
+        max-height: calc(95vh - 100px);
+        padding: 0.5rem 0;
+    }
+    
+    .chat-user-info-form h4 {
+        font-size: 0.95rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .chat-user-info-form .form-group {
+        margin-bottom: 0.65rem;
+    }
+    
+    .chat-user-info-form label {
+        font-size: 0.8rem;
+    }
+    
+    .chat-user-info-form input,
+    .chat-user-info-form select {
+        padding: 0.6rem 0.75rem;
+        font-size: 16px;
+    }
+    
+    .chat-user-info-form button {
+        padding: 0.75rem;
+        font-size: 0.9rem;
+    }
+}
 }
 
 .page-content {
