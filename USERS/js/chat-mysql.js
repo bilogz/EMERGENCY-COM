@@ -8,15 +8,28 @@
     
     // Get API base path - try to detect the correct path
     let API_BASE = 'api/';
-    // If we're in a subdirectory, adjust the path
-    if (window.location.pathname.includes('/USERS/')) {
-        API_BASE = '../USERS/api/';
-    } else if (window.location.pathname.includes('/includes/')) {
-        API_BASE = '../api/';
-    } else {
+    const pathname = window.location.pathname;
+    
+    // Determine correct API path based on current location
+    if (pathname.includes('/USERS/') && !pathname.includes('/includes/')) {
+        // We're in a USERS page (not includes)
         API_BASE = 'api/';
+    } else if (pathname.includes('/USERS/includes/')) {
+        // We're in includes directory
+        API_BASE = '../api/';
+    } else if (pathname === '/' || pathname === '/index.php' || pathname.endsWith('/index.php') || pathname.endsWith('/')) {
+        // We're at root level (index.php)
+        API_BASE = 'USERS/api/';
+    } else if (pathname.includes('/ADMIN/')) {
+        // We're in admin area
+        API_BASE = '../USERS/api/';
+    } else {
+        // Default: assume we're at root or in USERS
+        // Try to detect by checking if we can access the file
+        API_BASE = 'USERS/api/';
     }
-    console.log('API_BASE set to:', API_BASE);
+    
+    console.log('API_BASE set to:', API_BASE, 'for pathname:', pathname);
     let conversationId = null;
     let lastMessageId = 0;
     let pollingInterval = null;
@@ -51,22 +64,59 @@
         console.log('User info:', { userId, userName, isGuest });
         
         try {
-            const apiUrl = API_BASE + 'chat-get-conversation.php?' + new URLSearchParams({
-                userId: userId,
-                userName: userName,
-                userEmail: userEmail || '',
-                userPhone: userPhone || '',
-                userLocation: userLocation || '',
-                userConcern: userConcern || '',
-                isGuest: isGuest ? '1' : '0'
-            });
+            // Try different API paths if first one fails
+            const possiblePaths = [
+                API_BASE,
+                'USERS/api/',
+                'api/',
+                '../USERS/api/',
+                '../api/'
+            ];
             
-            console.log('Fetching conversation from:', apiUrl);
+            let response = null;
+            let apiUrl = null;
+            let lastError = null;
             
-            // Get or create conversation
-            const response = await fetch(apiUrl);
+            for (const basePath of possiblePaths) {
+                apiUrl = basePath + 'chat-get-conversation.php?' + new URLSearchParams({
+                    userId: userId,
+                    userName: userName,
+                    userEmail: userEmail || '',
+                    userPhone: userPhone || '',
+                    userLocation: userLocation || '',
+                    userConcern: userConcern || '',
+                    isGuest: isGuest ? '1' : '0'
+                });
+                
+                console.log('Trying to fetch conversation from:', apiUrl);
+                
+                try {
+                    response = await fetch(apiUrl);
+                    console.log('Response status:', response.status, 'from:', apiUrl);
+                    
+                    if (response.ok) {
+                        // Success! Update API_BASE for future calls
+                        API_BASE = basePath;
+                        console.log('API_BASE updated to:', API_BASE);
+                        break;
+                    } else if (response.status === 404) {
+                        // Try next path
+                        console.warn('404 error, trying next path...');
+                        continue;
+                    } else {
+                        // Other error, but path might be correct
+                        break;
+                    }
+                } catch (fetchError) {
+                    console.warn('Fetch error for', apiUrl, ':', fetchError.message);
+                    lastError = fetchError;
+                    continue;
+                }
+            }
             
-            console.log('Response status:', response.status);
+            if (!response) {
+                throw new Error(`Failed to fetch from all API paths. Last error: ${lastError ? lastError.message : 'Unknown'}`);
+            }
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
