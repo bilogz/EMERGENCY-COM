@@ -456,8 +456,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Attach form handler if needed (for anonymous users)
         attachUserInfoFormHandler();
         
-        // Initialize MySQL chat if not already done
-        if (window.initChatMySQL && !window.chatInitialized) {
+        // Initialize MySQL chat if not already done AND form is not showing
+        const userInfoForm = document.getElementById('chatUserInfoForm');
+        const isFormShowing = userInfoForm && userInfoForm.style.display !== 'none' && userInfoForm.style.display !== '';
+        
+        if (!isFormShowing && window.initChatMySQL && !window.chatInitialized) {
             window.initChatMySQL().then((success) => {
                 if (success) {
                     console.log('MySQL chat initialized');
@@ -471,11 +474,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }).catch(err => {
                 console.error('Failed to initialize MySQL chat:', err);
             });
-        } else if (window.attachSendButtonHandlers) {
+        } else if (!isFormShowing && window.attachSendButtonHandlers) {
             // If already initialized, attach handlers immediately
             setTimeout(() => {
                 window.attachSendButtonHandlers();
             }, 100);
+        } else if (isFormShowing) {
+            console.log('Form is showing, skipping auto-initialization to prevent loop');
         }
         
         // Close modal when clicking outside (on backdrop) - only add once
@@ -528,11 +533,23 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to check and show user info form for anonymous users
     function checkAndShowUserInfoForm() {
+        // Don't check if form was just submitted (prevents loop)
+        if (window.formJustSubmitted) {
+            console.log('Form just submitted, skipping form check to prevent loop');
+            return;
+        }
+        
         const userInfoForm = document.getElementById('chatUserInfoForm');
         const chatInterface = document.getElementById('chatInterface');
         
         if (!userInfoForm || !chatInterface) {
             console.warn('User info form or chat interface not found');
+            return;
+        }
+        
+        // Don't show form if chat is already initialized and has a conversation
+        if (window.chatInitialized && sessionStorage.getItem('conversation_id')) {
+            console.log('Chat already initialized with conversation, not showing form');
             return;
         }
         
@@ -645,6 +662,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (window.chatInitialized !== undefined) {
                     window.chatInitialized = false;
                 }
+                
+                // Set a flag to prevent form from showing again after submission
+                window.formJustSubmitted = true;
+                setTimeout(() => {
+                    window.formJustSubmitted = false;
+                }, 2000);
                 
                 // Initialize MySQL chat with the provided info
                 if (window.initChatMySQL) {

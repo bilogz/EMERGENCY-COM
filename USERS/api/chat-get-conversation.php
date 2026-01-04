@@ -53,10 +53,10 @@ try {
         exit;
     }
     
-    // For anonymous/guest users, find conversation by device/IP combination
+    // For anonymous/guest users, find conversation by user_id first, then device/IP
     // For registered users, find by user_id
     if ($isGuest) {
-        // Check if device/IP has an active conversation
+        // First, try to find by user_id (most reliable for same user)
         $stmt = $pdo->prepare("
             SELECT 
                 conversation_id,
@@ -76,13 +76,44 @@ try {
                 created_at,
                 updated_at
             FROM conversations 
-            WHERE ip_address = ? 
-              AND device_info = ? 
+            WHERE user_id = ? 
               AND status = 'active' 
             ORDER BY updated_at DESC 
             LIMIT 1
         ");
-        $stmt->execute([$ipAddress, $deviceInfo]);
+        $stmt->execute([$userId]);
+        $conversation = $stmt->fetch();
+        
+        // If not found by user_id, try device/IP as fallback
+        if (!$conversation) {
+            $stmt = $pdo->prepare("
+                SELECT 
+                    conversation_id,
+                    user_id,
+                    user_name,
+                    user_email,
+                    user_phone,
+                    user_location,
+                    user_concern,
+                    is_guest,
+                    device_info,
+                    ip_address,
+                    user_agent,
+                    status,
+                    last_message,
+                    last_message_time,
+                    created_at,
+                    updated_at
+                FROM conversations 
+                WHERE ip_address = ? 
+                  AND device_info = ? 
+                  AND status = 'active' 
+                ORDER BY updated_at DESC 
+                LIMIT 1
+            ");
+            $stmt->execute([$ipAddress, $deviceInfo]);
+            $conversation = $stmt->fetch();
+        }
     } else {
         // Registered user - find by user_id
         $stmt = $pdo->prepare("
@@ -109,8 +140,8 @@ try {
             LIMIT 1
         ");
         $stmt->execute([$userId]);
+        $conversation = $stmt->fetch();
     }
-    $conversation = $stmt->fetch();
     
     if ($conversation) {
         // Parse device info if available

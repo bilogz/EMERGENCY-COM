@@ -53,6 +53,12 @@
         const userConcern = sessionStorage.getItem('user_concern') || localStorage.getItem('guest_concern') || null;
         const isGuest = !sessionStorage.getItem('user_id') || userId.startsWith('guest_');
         
+        // If concern is missing, don't initialize - let the form handle it
+        if (isGuest && !userConcern) {
+            console.log('Concern/category not provided - form should be shown');
+            return false;
+        }
+        
         // Store user ID if not set
         if (!sessionStorage.getItem('user_id')) {
             sessionStorage.setItem('user_id', userId);
