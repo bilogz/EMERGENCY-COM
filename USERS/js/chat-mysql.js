@@ -175,6 +175,13 @@
             
             const data = await response.json();
             
+            // Check if conversation is closed
+            if (data.success && data.conversationStatus === 'closed') {
+                console.log('Conversation is closed, refreshing chat interface');
+                handleConversationClosed();
+                return;
+            }
+            
             if (data.success && data.messages && data.messages.length > 0) {
                 // Track existing messages to avoid duplicates
                 const chatMessages = document.querySelector('.chat-messages');
@@ -221,6 +228,124 @@
         }
     }
     
+    // Handle conversation closed by admin
+    function handleConversationClosed() {
+        // Stop polling
+        stopPolling();
+        
+        // Clear conversation ID
+        conversationId = null;
+        sessionStorage.removeItem('conversation_id');
+        window.currentConversationId = null;
+        
+        // Reset last message ID
+        lastMessageId = 0;
+        
+        // Show closed message in chat
+        const chatMessages = document.querySelector('.chat-messages');
+        if (chatMessages) {
+            // Check if closed message already exists
+            const existingClosedMsg = chatMessages.querySelector('.chat-message-closed');
+            if (!existingClosedMsg) {
+                const closedMsg = document.createElement('div');
+                closedMsg.className = 'chat-message chat-message-system chat-message-closed';
+                closedMsg.style.cssText = 'background: rgba(255, 193, 7, 0.15); border-left: 4px solid #ffc107; padding: 1rem; margin: 1rem 0; border-radius: 4px;';
+                closedMsg.innerHTML = '<strong style="color: #856404;">System:</strong> <span style="color: #856404;">This conversation has been closed by an administrator. You can start a new conversation by typing a message below.</span>';
+                chatMessages.appendChild(closedMsg);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+        
+        // Enable input but with special placeholder - allow typing to start new conversation
+        const chatInput = document.getElementById('chatInput');
+        const chatSendBtn = document.getElementById('chatSendBtn');
+        if (chatInput) {
+            chatInput.disabled = false;
+            chatInput.placeholder = 'This conversation is closed. Type a message to start a new conversation...';
+            chatInput.style.cursor = 'text';
+            
+            // Add event listener to reset chat when user starts typing
+            const handleInput = function() {
+                if (chatInput.value.trim().length > 0) {
+                    // User is typing - reset chat for new conversation
+                    resetChatForNewConversation();
+                    chatInput.removeEventListener('input', handleInput);
+                    chatInput.removeEventListener('focus', handleInput);
+                }
+            };
+            
+            // Remove old listeners if any
+            chatInput.removeEventListener('input', handleInput);
+            chatInput.removeEventListener('focus', handleInput);
+            
+            // Add new listeners
+            chatInput.addEventListener('input', handleInput);
+            chatInput.addEventListener('focus', handleInput);
+        }
+        if (chatSendBtn) {
+            chatSendBtn.disabled = false;
+            chatSendBtn.textContent = 'Send';
+        }
+        
+        // Reset chat initialization flag to allow new conversation
+        isInitialized = false;
+        window.chatInitialized = false;
+        
+        console.log('Conversation closed - chat interface refreshed, ready for new conversation');
+    }
+    
+    // Reset chat for new conversation
+    function resetChatForNewConversation() {
+        // Clear conversation ID
+        conversationId = null;
+        sessionStorage.removeItem('conversation_id');
+        window.currentConversationId = null;
+        
+        // Reset last message ID
+        lastMessageId = 0;
+        
+        // Clear chat messages (except system message)
+        const chatMessages = document.querySelector('.chat-messages');
+        if (chatMessages) {
+            // Remove all messages except system message
+            const messages = chatMessages.querySelectorAll('.chat-message:not(.chat-message-system)');
+            messages.forEach(msg => msg.remove());
+            
+            // Remove closed message if exists
+            const closedMsg = chatMessages.querySelector('.chat-message-closed');
+            if (closedMsg) {
+                closedMsg.remove();
+            }
+            
+            // Ensure system message exists
+            const systemMsg = chatMessages.querySelector('.chat-message-system');
+            if (!systemMsg) {
+                const systemMsgDiv = document.createElement('div');
+                systemMsgDiv.className = 'chat-message chat-message-system';
+                systemMsgDiv.innerHTML = '<strong>System:</strong> For life-threatening emergencies, call 911 or the Quezon City emergency hotlines immediately.';
+                chatMessages.appendChild(systemMsgDiv);
+            }
+        }
+        
+        // Re-enable input and send button
+        const chatInput = document.getElementById('chatInput');
+        const chatSendBtn = document.getElementById('chatSendBtn');
+        if (chatInput) {
+            chatInput.disabled = false;
+            chatInput.placeholder = 'Type your message...';
+            chatInput.value = '';
+        }
+        if (chatSendBtn) {
+            chatSendBtn.disabled = false;
+        }
+        
+        // Reset initialization flag
+        isInitialized = false;
+        window.chatInitialized = false;
+        
+        console.log('Chat reset for new conversation');
+    }
+    
     // Send message
     async function sendMessage(text) {
         if (!text || !text.trim()) {
@@ -228,11 +353,20 @@
             return false;
         }
         
+        // Check if we need to reset for new conversation (if previous was closed)
+        const currentConvId = sessionStorage.getItem('conversation_id');
+        if (currentConvId && conversationId !== currentConvId) {
+            // Conversation ID changed, reset chat
+            resetChatForNewConversation();
+        }
+        
         // Get conversation ID
         if (!conversationId) {
             conversationId = sessionStorage.getItem('conversation_id');
             if (!conversationId) {
-                console.error('No conversation ID, initializing...');
+                console.log('No conversation ID, initializing new conversation...');
+                // Reset chat first to clear any closed conversation state
+                resetChatForNewConversation();
                 const success = await initChat();
                 if (!success) {
                     console.error('Failed to initialize chat');
@@ -417,6 +551,7 @@
     window.sendChatMessageMySQL = sendMessage;
     window.addMessageToChat = addMessageToChat;
     window.stopChatPolling = stopPolling;
+    window.resetChatForNewConversation = resetChatForNewConversation;
     
     // Auto-initialize when DOM is ready
     if (document.readyState === 'loading') {

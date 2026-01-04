@@ -43,6 +43,12 @@ try {
         }
     }
     
+    // Get conversation status
+    $stmt = $pdo->prepare("SELECT status FROM conversations WHERE conversation_id = ?");
+    $stmt->execute([$conversationId]);
+    $conversation = $stmt->fetch();
+    $conversationStatus = $conversation ? $conversation['status'] : 'active';
+    
     // Get messages newer than lastMessageId
     $stmt = $pdo->prepare("
         SELECT 
@@ -78,7 +84,8 @@ try {
     echo json_encode([
         'success' => true,
         'messages' => $formattedMessages,
-        'conversationId' => $conversationId
+        'conversationId' => $conversationId,
+        'conversationStatus' => $conversationStatus
     ]);
     
 } catch (PDOException $e) {

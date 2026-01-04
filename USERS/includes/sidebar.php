@@ -410,26 +410,17 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Check if user info is required and filled (for anonymous users)
-        const userId = sessionStorage.getItem('user_id');
-        const isLoggedIn = userId && 
-                          userId !== 'null' &&
-                          userId !== 'undefined' &&
-                          !userId.startsWith('guest_');
+        // Anonymous mode - always allow chat, just check if info is provided
+        const hasStoredName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
+        const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
+        const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
+        const hasStoredConcern = localStorage.getItem('guest_concern') || sessionStorage.getItem('user_concern');
+        const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
         
-        if (!isLoggedIn) {
-            // Check if all required info is provided
-            const hasStoredName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
-            const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
-            const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
-            const hasStoredConcern = localStorage.getItem('guest_concern') || sessionStorage.getItem('user_concern');
-            const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
-            
-            if (!hasAllRequiredInfo) {
-                // Show form and prevent chat
-                checkAndShowUserInfoForm();
-                console.log('User info required - showing form');
-            }
+        if (!hasAllRequiredInfo) {
+            // Show form and prevent chat
+            checkAndShowUserInfoForm();
+            console.log('User info required - showing form');
         }
         
         console.log('Opening chat modal...', modal);
@@ -542,15 +533,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Check if user is logged in (has a real user_id from PHP session)
-        const userId = sessionStorage.getItem('user_id');
-        const isLoggedIn = userId && 
-                          userId !== 'null' &&
-                          userId !== 'undefined' &&
-                          !userId.startsWith('guest_');
-        
-        // Check if guest has provided ALL required info (name, contact, location, concern)
-        const guestInfoProvided = localStorage.getItem('guest_info_provided') === 'true';
+        // Anonymous mode - check if guest has provided ALL required info (name, contact, location, concern)
         const hasStoredName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
         const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
         const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
@@ -559,14 +542,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // All fields are required for anonymous users
         const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
         
-        console.log('User check - isLoggedIn:', isLoggedIn, 'guestInfoProvided:', guestInfoProvided, 'hasAllRequiredInfo:', hasAllRequiredInfo);
+        console.log('Anonymous mode - hasAllRequiredInfo:', hasAllRequiredInfo);
         
-        if (isLoggedIn) {
-            // Logged in user - show chat interface
-            userInfoForm.style.display = 'none';
-            chatInterface.style.display = 'block';
-            console.log('Showing chat interface (logged in)');
-        } else if (!hasAllRequiredInfo) {
+        if (!hasAllRequiredInfo) {
             // Anonymous user without ALL required info - show form (REQUIRED)
             userInfoForm.style.display = 'block';
             chatInterface.style.display = 'none';
@@ -581,7 +559,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Guest has provided all required info - show chat interface
             userInfoForm.style.display = 'none';
             chatInterface.style.display = 'block';
-            console.log('Showing chat interface (guest with all required info)');
+            console.log('Showing chat interface (anonymous user with all required info)');
             
             // Enable chat input
             const chatInput = document.getElementById('chatInput');
@@ -1231,26 +1209,26 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Function to send message using MySQL
             async function sendChatMessage() {
-            // Check if user info is required and filled (for anonymous users)
-            const userId = sessionStorage.getItem('user_id');
-            const isLoggedIn = userId && 
-                              userId !== 'null' &&
-                              userId !== 'undefined' &&
-                              !userId.startsWith('guest_');
+            // Anonymous mode - check if all required info is provided
+            const hasStoredName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
+            const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
+            const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
+            const hasStoredConcern = localStorage.getItem('guest_concern') || sessionStorage.getItem('user_concern');
+            const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
             
-            if (!isLoggedIn) {
-                // Check if all required info is provided
-                const hasStoredName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
-                const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
-                const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
-                const hasStoredConcern = localStorage.getItem('guest_concern') || sessionStorage.getItem('user_concern');
-                const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
-                
-                if (!hasAllRequiredInfo) {
-                    alert('Please fill in all required information (Name, Contact, Location, and Concern) before sending a message.');
-                    // Show the form
-                    checkAndShowUserInfoForm();
-                    return;
+            if (!hasAllRequiredInfo) {
+                alert('Please fill in all required information (Name, Contact, Location, and Concern) before sending a message.');
+                // Show the form
+                checkAndShowUserInfoForm();
+                return;
+            }
+            
+            // Check if conversation is closed - if so, reset for new conversation
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput && chatInput.disabled && chatInput.placeholder.includes('closed')) {
+                // Reset chat for new conversation
+                if (window.resetChatForNewConversation) {
+                    window.resetChatForNewConversation();
                 }
             }
             
