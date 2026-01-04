@@ -171,9 +171,8 @@ include __DIR__ . '/guest-monitoring-notice.php';
     </div>
 </div>
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js"></script>
+<!-- MySQL Chat System -->
+<script src="js/chat-mysql.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');
@@ -250,10 +249,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Attach form handler if needed (for anonymous users)
         attachUserInfoFormHandler();
         
-        // Initialize Firebase chat if not already done
-        if (window.initFirebaseChat && !window.chatInitialized) {
-            window.initFirebaseChat().then(() => {
-                console.log('Firebase chat initialized');
+        // Initialize MySQL chat if not already done
+        if (window.initChatMySQL && !window.chatInitialized) {
+            window.initChatMySQL().then((success) => {
+                if (success) {
+                    console.log('MySQL chat initialized');
+                }
                 // Attach send button handlers after initialization
                 setTimeout(() => {
                     if (window.attachSendButtonHandlers) {
@@ -261,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }, 200);
             }).catch(err => {
-                console.error('Failed to initialize Firebase chat:', err);
+                console.error('Failed to initialize MySQL chat:', err);
             });
         } else if (window.attachSendButtonHandlers) {
             // If already initialized, attach handlers immediately
@@ -423,17 +424,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     chatInterface.style.display = 'block';
                 }
                 
-                // Initialize Firebase and chat
-                if (window.initFirebaseChat) {
+                // Initialize MySQL chat
+                if (window.initChatMySQL) {
                     try {
-                        await window.initFirebaseChat();
-                        console.log('Chat initialized after form submission');
+                        const success = await window.initChatMySQL();
+                        if (success) {
+                            console.log('Chat initialized after form submission');
+                        } else {
+                            console.error('Failed to initialize chat');
+                            alert('Failed to initialize chat. Please try again.');
+                        }
                     } catch (err) {
                         console.error('Failed to initialize chat:', err);
                         alert('Failed to initialize chat. Please try again.');
                     }
                 } else {
-                    console.error('initFirebaseChat function not available');
+                    console.error('initChatMySQL function not available');
                     alert('Chat system is not ready. Please refresh the page.');
                 }
             });
@@ -541,10 +547,12 @@ document.addEventListener('DOMContentLoaded', function() {
             checkAndShowUserInfoForm();
             attachUserInfoFormHandler();
             
-            // Initialize Firebase if needed
-            if (window.initFirebaseChat && !window.chatInitialized) {
-                window.initFirebaseChat().then(() => {
-                    console.log('Firebase chat initialized');
+            // Initialize MySQL chat if needed
+            if (window.initChatMySQL && !window.chatInitialized) {
+                window.initChatMySQL().then((success) => {
+                    if (success) {
+                        console.log('MySQL chat initialized');
+                    }
                     // Attach send button handlers after initialization
                     setTimeout(() => {
                         if (window.attachSendButtonHandlers) {
@@ -552,7 +560,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }, 200);
                 }).catch(err => {
-                    console.error('Failed to initialize Firebase chat:', err);
+                    console.error('Failed to initialize MySQL chat:', err);
                 });
             } else if (window.attachSendButtonHandlers) {
                 // If already initialized, attach handlers immediately
@@ -979,39 +987,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const chatSendBtn = document.getElementById('chatSendBtn');
             const chatInput = document.getElementById('chatInput');
             
-            // Function to send message
+            // Function to send message using MySQL
             async function sendChatMessage() {
             const text = chatInput ? chatInput.value.trim() : '';
             if (!text) {
                 console.warn('Cannot send empty message');
                 return;
-            }
-            
-            // Check if conversationId exists, if not try to get from sessionStorage or initialize
-            if (!conversationId) {
-                conversationId = sessionStorage.getItem('conversation_id');
-                if (!conversationId) {
-                    console.error('Cannot send message: conversationId missing. Initializing Firebase...');
-                    // Try to initialize if not done
-                    if (window.initFirebaseChat && !window.chatInitialized) {
-                        try {
-                            await window.initFirebaseChat();
-                            conversationId = sessionStorage.getItem('conversation_id');
-                            if (!conversationId) {
-                                console.error('Still no conversationId after initialization');
-                                alert('Chat is not ready. Please wait a moment and try again.');
-                                return;
-                            }
-                        } catch (err) {
-                            console.error('Failed to initialize Firebase:', err);
-                            alert('Failed to initialize chat. Please refresh the page.');
-                            return;
-                        }
-                    } else {
-                        alert('Chat is not ready. Please wait a moment and try again.');
-                        return;
-                    }
-                }
             }
             
             // Disable send button temporarily
@@ -1021,7 +1002,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             try {
-                // CRITICAL: Ensure modal stays open - force it to remain open
+                // Ensure modal stays open
                 if (chatModal) {
                     chatModal.classList.add('chat-modal-open');
                     chatModal.setAttribute('aria-hidden', 'false');
@@ -1029,80 +1010,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Show waiting status immediately
-                updateChatStatus('waiting');
-                lastMessageSenderType = 'user';
+                if (window.updateChatStatus) {
+                    updateChatStatus('waiting');
+                }
                 
                 // Add message to UI immediately
-                addMessageToChat(text, 'user', Date.now());
+                if (window.addMessageToChat) {
+                    addMessageToChat(text, 'user', Date.now());
+                }
                 if (chatInput) {
                     chatInput.value = '';
                 }
                 
-                // Get user location and concern from sessionStorage
-                const currentUserLocation = sessionStorage.getItem('user_location') || userLocation || null;
-                const currentUserConcern = sessionStorage.getItem('user_concern') || userConcern || null;
-                
-                // Send to Firebase with all user info for admin visibility
-                const messageData = {
-                    text: text,
-                    senderId: userId,
-                    senderName: userName,
-                    senderEmail: userEmail || null,
-                    senderPhone: userPhone || null,
-                    senderLocation: currentUserLocation,
-                    senderConcern: currentUserConcern,
-                    isGuest: isGuest,
-                    senderType: 'user',
-                    timestamp: firebase.database.ServerValue.TIMESTAMP,
-                    read: false
-                };
-                
-                // Get database reference (use global or local)
-                const db = window.chatDatabase || database;
-                if (!db) {
-                    console.error('Database not available');
-                    alert('Chat database is not ready. Please refresh the page.');
-                    if (chatSendBtn) {
-                        chatSendBtn.disabled = false;
-                        chatSendBtn.textContent = 'Send';
+                // Use MySQL chat system
+                if (window.sendChatMessageMySQL) {
+                    const success = await window.sendChatMessageMySQL(text);
+                    if (success) {
+                        console.log('Message sent successfully');
+                    } else {
+                        console.error('Failed to send message');
+                        // Remove the message from UI if send failed
+                        const messages = document.querySelectorAll('.chat-message');
+                        if (messages.length > 0) {
+                            messages[messages.length - 1].remove();
+                        }
                     }
-                    return;
+                } else {
+                    console.error('MySQL chat system not available');
+                    alert('Chat system is not ready. Please refresh the page.');
                 }
-                
-                console.log('Sending message to conversation:', messageConversationId);
-                const messageRef = db.ref(`messages/${messageConversationId}`).push(messageData);
-                
-                // Update conversation with user info
-                db.ref(`conversations/${messageConversationId}`).update({
-                    lastMessage: text,
-                    lastMessageTime: firebase.database.ServerValue.TIMESTAMP,
-                    updatedAt: firebase.database.ServerValue.TIMESTAMP,
-                    status: 'active',
-                    userId: userId,
-                    userName: userName,
-                    userEmail: userEmail || null,
-                    userPhone: userPhone || null,
-                    userLocation: currentUserLocation,
-                    userConcern: currentUserConcern,
-                    isGuest: isGuest
-                });
-                
-                // Add to chat queue for admin with full user info
-                db.ref('chat_queue').push({
-                    conversationId: messageConversationId,
-                    userId: userId,
-                    userName: userName,
-                    userEmail: userEmail || null,
-                    userPhone: userPhone || null,
-                    userLocation: currentUserLocation,
-                    userConcern: currentUserConcern,
-                    isGuest: isGuest,
-                    message: text,
-                    timestamp: firebase.database.ServerValue.TIMESTAMP,
-                    status: 'pending'
-                });
-                
-                console.log('Message sent successfully:', messageRef.key);
             } catch (error) {
                 console.error('Error sending message:', error);
                 alert('Failed to send message. Please try again.');
@@ -1113,16 +1049,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     chatSendBtn.textContent = 'Send';
                 }
                 
-                // Keep focus on input and ensure modal stays open
+                // Keep focus on input
                 setTimeout(() => {
                     if (chatInput) {
                         chatInput.focus();
-                    }
-                    // Double-check modal is still open
-                    if (chatModal && !chatModal.classList.contains('chat-modal-open')) {
-                        chatModal.classList.add('chat-modal-open');
-                        chatModal.setAttribute('aria-hidden', 'false');
-                        document.body.style.overflow = 'hidden';
                     }
                 }, 100);
             }
