@@ -241,19 +241,25 @@
         // Reset last message ID
         lastMessageId = 0;
         
-        // Show closed message in chat
+        // Clear and refresh chat messages
         const chatMessages = document.querySelector('.chat-messages');
         if (chatMessages) {
-            // Check if closed message already exists
-            const existingClosedMsg = chatMessages.querySelector('.chat-message-closed');
-            if (!existingClosedMsg) {
-                const closedMsg = document.createElement('div');
-                closedMsg.className = 'chat-message chat-message-system chat-message-closed';
-                closedMsg.style.cssText = 'background: rgba(255, 193, 7, 0.15); border-left: 4px solid #ffc107; padding: 1rem; margin: 1rem 0; border-radius: 4px;';
-                closedMsg.innerHTML = '<strong style="color: #856404;">System:</strong> <span style="color: #856404;">This conversation has been closed by an administrator. You can start a new conversation by typing a message below.</span>';
-                chatMessages.appendChild(closedMsg);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
+            // Clear all existing messages (including old conversation messages)
+            chatMessages.innerHTML = '';
+            
+            // Add system message
+            const systemMsg = document.createElement('div');
+            systemMsg.className = 'chat-message chat-message-system';
+            systemMsg.innerHTML = '<strong>System:</strong> For life-threatening emergencies, call 911 or the Quezon City emergency hotlines immediately.';
+            chatMessages.appendChild(systemMsg);
+            
+            // Add closed message
+            const closedMsg = document.createElement('div');
+            closedMsg.className = 'chat-message chat-message-system chat-message-closed';
+            closedMsg.style.cssText = 'background: rgba(255, 193, 7, 0.15); border-left: 4px solid #ffc107; padding: 1rem; margin: 1rem 0; border-radius: 4px;';
+            closedMsg.innerHTML = '<strong style="color: #856404;">System:</strong> <span style="color: #856404;">This conversation has been closed by an administrator. You can start a new conversation by typing a message below.</span>';
+            chatMessages.appendChild(closedMsg);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
         
         // Enable input but with special placeholder - allow typing to start new conversation
