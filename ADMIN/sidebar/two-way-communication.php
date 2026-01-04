@@ -40,7 +40,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             height: calc(100vh - 300px);
         }
         .conversations-list {
-            background: var(--card-bg);
+            background: var(--card-bg-1);
             border-radius: 12px;
             padding: 1rem;
             overflow-y: auto;
@@ -53,41 +53,45 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             background: transparent;
         }
         .conversations-list::-webkit-scrollbar-thumb {
-            background: var(--border-color);
+            background: var(--border-color-1);
             border-radius: 3px;
         }
         .conversations-list::-webkit-scrollbar-thumb:hover {
-            background: var(--text-secondary);
+            background: var(--text-secondary-1);
         }
         .conversation-item {
             padding: 1rem;
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color-1);
             cursor: pointer;
             transition: all 0.2s ease;
             border-radius: 8px;
             margin-bottom: 0.5rem;
+            color: var(--text-color-1);
         }
         .conversation-item:hover {
-            background: var(--hover-bg);
+            background: rgba(76, 138, 137, 0.1);
             transform: translateX(4px);
         }
+        [data-theme="dark"] .conversation-item:hover {
+            background: rgba(76, 138, 137, 0.2);
+        }
         .conversation-item.active {
-            background: var(--primary-color);
+            background: var(--primary-color-1);
             color: white;
             box-shadow: 0 2px 8px rgba(76, 138, 137, 0.3);
         }
         .chat-window {
             display: flex;
             flex-direction: column;
-            background: var(--card-bg);
+            background: var(--card-bg-1);
             border-radius: 12px;
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
         .chat-header {
             padding: 1.25rem 1.5rem;
-            border-bottom: 1px solid var(--border-color);
-            background: var(--primary-color);
+            border-bottom: 1px solid var(--border-color-1);
+            background: var(--primary-color-1);
             color: white;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
         }
@@ -109,7 +113,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
-            background: linear-gradient(to bottom, var(--bg-color) 0%, var(--card-bg) 100%);
+            background: linear-gradient(to bottom, var(--bg-color-1) 0%, var(--card-bg-1) 100%);
             scroll-behavior: smooth;
         }
         .chat-messages::-webkit-scrollbar {
@@ -119,11 +123,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             background: transparent;
         }
         .chat-messages::-webkit-scrollbar-thumb {
-            background: var(--border-color);
+            background: var(--border-color-1);
             border-radius: 3px;
         }
         .chat-messages::-webkit-scrollbar-thumb:hover {
-            background: var(--text-secondary);
+            background: var(--text-secondary-1);
         }
         .message {
             display: flex;
@@ -155,11 +159,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             border-radius: 50%;
             flex-shrink: 0;
             object-fit: cover;
-            border: 2px solid var(--border-color);
+            border: 2px solid var(--border-color-1);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .message.admin .message-avatar {
-            border-color: var(--primary-color);
+            border-color: var(--primary-color-1);
         }
         .message-content-wrapper {
             display: flex;
@@ -169,26 +173,39 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         .message-content {
             padding: 0.875rem 1.125rem;
             border-radius: 18px;
-            background: var(--border-color);
-            color: var(--text-color);
+            background: var(--border-color-1);
+            color: var(--text-color-1);
             word-wrap: break-word;
             line-height: 1.5;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
             position: relative;
         }
         .message.admin .message-content {
-            background: var(--primary-color);
+            background: var(--primary-color-1);
             color: white;
             border-bottom-right-radius: 4px;
         }
         .message.user .message-content {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
+            background: var(--card-bg-1);
+            color: var(--text-color-1);
+            border: 1px solid var(--border-color-1);
             border-bottom-left-radius: 4px;
+        }
+        /* Ensure text visibility in dark mode for user messages */
+        [data-theme="dark"] .message.user .message-content {
+            background: var(--card-bg-1);
+            color: var(--text-color-1);
+            border-color: var(--border-color-1);
+        }
+        /* Ensure text visibility in light mode for user messages */
+        [data-theme="light"] .message.user .message-content {
+            background: #f5f5f5;
+            color: #171717;
+            border-color: var(--border-color-1);
         }
         .message-time {
             font-size: 0.75rem;
-            color: var(--text-secondary);
+            color: var(--text-secondary-1);
             padding: 0 0.5rem;
             margin-top: 0.25rem;
         }
@@ -200,25 +217,25 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         .chat-input {
             padding: 1.25rem;
-            border-top: 1px solid var(--border-color);
+            border-top: 1px solid var(--border-color-1);
             display: flex;
             gap: 0.75rem;
-            background: var(--card-bg);
+            background: var(--card-bg-1);
             align-items: center;
         }
         .chat-input input {
             flex: 1;
             padding: 0.875rem 1.125rem;
-            border: 2px solid var(--border-color);
+            border: 2px solid var(--border-color-1);
             border-radius: 24px;
-            background: var(--bg-color);
-            color: var(--text-color);
+            background: var(--bg-color-1);
+            color: var(--text-color-1);
             font-size: 0.95rem;
             transition: all 0.2s ease;
         }
         .chat-input input:focus {
             outline: none;
-            border-color: var(--primary-color);
+            border-color: var(--primary-color-1);
             box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
         }
         .chat-input input:disabled {
@@ -298,7 +315,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 <small id="chatUserStatus"></small>
                             </div>
                             <div class="chat-messages" id="chatMessages">
-                                <p style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                                <p style="text-align: center; color: var(--text-secondary-1); padding: 2rem;">
                                     Select a conversation to start messaging
                                 </p>
                             </div>
@@ -335,7 +352,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (isInitialLoad) {
                 const existingItems = list.querySelectorAll('.conversation-item');
                 if (existingItems.length === 0) {
-                    list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">Loading...</p>';
+                    list.innerHTML = '<p style="text-align: center; color: var(--text-secondary-1); padding: 2rem;">Loading...</p>';
                 }
             }
             
@@ -348,7 +365,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (!data.success || !data.conversations || data.conversations.length === 0) {
                     // Only show "No conversations" on initial load
                     if (isInitialLoad) {
-                        list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No conversations yet</p>';
+                        list.innerHTML = '<p style="text-align: center; color: var(--text-secondary-1); padding: 2rem;">No conversations yet</p>';
                     }
                     return;
                 }
@@ -417,17 +434,17 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     const userInfo = [];
                     if (conv.userPhone) userInfo.push(`<i class="fas fa-phone"></i> ${conv.userPhone}`);
                     if (conv.userLocation) userInfo.push(`<i class="fas fa-map-marker-alt"></i> ${conv.userLocation}`);
-                    const userInfoHtml = userInfo.length > 0 ? `<div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">${userInfo.join(' | ')}</div>` : '';
+                    const userInfoHtml = userInfo.length > 0 ? `<div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary-1);">${userInfo.join(' | ')}</div>` : '';
                     
                     const newContent = `
                         <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
                             <strong>${conv.userName || 'Unknown User'}</strong>${guestBadge}${concernBadge}
                         </div>
-                        <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: var(--text-secondary);">
+                        <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: var(--text-secondary-1);">
                             ${conv.lastMessage || 'No messages yet'}
                         </p>
                         ${userInfoHtml}
-                        <small style="color: var(--text-secondary); display: block; margin-top: 0.5rem;">
+                        <small style="color: var(--text-secondary-1); display: block; margin-top: 0.5rem;">
                             ${conv.lastMessageTime ? new Date(conv.lastMessageTime).toLocaleString() : ''}
                         </small>
                     `;
@@ -629,7 +646,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (isInitialLoad && messagesDiv.querySelectorAll('.message').length === 0) {
                 const placeholder = messagesDiv.querySelector('p');
                 if (!placeholder || !placeholder.textContent.includes('Select a conversation')) {
-                    messagesDiv.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">Loading messages...</p>';
+                    messagesDiv.innerHTML = '<p style="text-align: center; color: var(--text-secondary-1); padding: 2rem;">Loading messages...</p>';
                 }
             }
             
@@ -693,9 +710,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         const loadingMsg = messagesDiv.querySelector('p');
                         if (loadingMsg && loadingMsg.textContent.includes('Loading')) {
                             loadingMsg.textContent = 'No messages yet';
-                            loadingMsg.style.color = 'var(--text-secondary)';
+                            loadingMsg.style.color = 'var(--text-secondary-1)';
                         } else if (!loadingMsg) {
-                            messagesDiv.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No messages yet</p>';
+                            messagesDiv.innerHTML = '<p style="text-align: center; color: var(--text-secondary-1); padding: 2rem;">No messages yet</p>';
                         }
                     }
                 } else {
