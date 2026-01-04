@@ -16,7 +16,7 @@ if (!$pdo) {
 try {
     $conversationId = $_GET['conversationId'] ?? null;
     $userId = $_GET['userId'] ?? null;
-    $lastMessageId = $_GET['lastMessageId'] ?? 0;
+    $lastMessageId = isset($_GET['lastMessageId']) ? (int)$_GET['lastMessageId'] : 0;
     
     if (empty($conversationId) && empty($userId)) {
         http_response_code(400);
@@ -44,8 +44,9 @@ try {
     }
     
     // Get conversation status and who closed it
+    // Query without closed_by column (it may not exist in all databases)
     $stmt = $pdo->prepare("
-        SELECT status, last_message, closed_by 
+        SELECT status, last_message 
         FROM conversations 
         WHERE conversation_id = ?
     ");
@@ -57,9 +58,7 @@ try {
         
         // Extract admin name from last_message if it contains "Closed by"
         $closedBy = null;
-        if ($conversation['closed_by']) {
-            $closedBy = $conversation['closed_by'];
-        } elseif ($conversation['last_message'] && strpos($conversation['last_message'], 'Closed by') === 0) {
+        if (isset($conversation['last_message']) && $conversation['last_message'] && strpos($conversation['last_message'], 'Closed by') === 0) {
             $closedBy = str_replace('Closed by ', '', $conversation['last_message']);
         }
     } else {
@@ -129,7 +128,20 @@ try {
     
 } catch (PDOException $e) {
     error_log('Chat get messages error: ' . $e->getMessage());
+    error_log('Stack trace: ' . $e->getTraceAsString());
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Failed to retrieve messages']);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'Failed to retrieve messages',
+        'error' => $e->getMessage()
+    ]);
+} catch (Exception $e) {
+    error_log('Chat get messages general error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'Failed to retrieve messages',
+        'error' => $e->getMessage()
+    ]);
 }
 
