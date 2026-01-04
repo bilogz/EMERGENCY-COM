@@ -73,15 +73,31 @@ try {
     
     // Get or create conversation
     if (empty($conversationId)) {
-        // Check if user has an active conversation
-        $stmt = $pdo->prepare("
-            SELECT conversation_id 
-            FROM conversations 
-            WHERE user_id = ? AND status = 'active' 
-            ORDER BY updated_at DESC 
-            LIMIT 1
-        ");
-        $stmt->execute([$userId]);
+        // For anonymous/guest users, find conversation by device/IP combination
+        // For registered users, find by user_id
+        if ($isGuest) {
+            // Check if device/IP has an active conversation
+            $stmt = $pdo->prepare("
+                SELECT conversation_id 
+                FROM conversations 
+                WHERE ip_address = ? 
+                  AND device_info = ? 
+                  AND status = 'active' 
+                ORDER BY updated_at DESC 
+                LIMIT 1
+            ");
+            $stmt->execute([$ipAddress, $deviceInfo]);
+        } else {
+            // Registered user - find by user_id
+            $stmt = $pdo->prepare("
+                SELECT conversation_id 
+                FROM conversations 
+                WHERE user_id = ? AND status = 'active' 
+                ORDER BY updated_at DESC 
+                LIMIT 1
+            ");
+            $stmt->execute([$userId]);
+        }
         $existingConv = $stmt->fetch();
         
         if ($existingConv) {

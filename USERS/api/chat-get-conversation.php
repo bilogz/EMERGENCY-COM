@@ -53,31 +53,63 @@ try {
         exit;
     }
     
-    // Check if user has an active conversation
-    $stmt = $pdo->prepare("
-        SELECT 
-            conversation_id,
-            user_id,
-            user_name,
-            user_email,
-            user_phone,
-            user_location,
-            user_concern,
-            is_guest,
-            device_info,
-            ip_address,
-            user_agent,
-            status,
-            last_message,
-            last_message_time,
-            created_at,
-            updated_at
-        FROM conversations 
-        WHERE user_id = ? AND status = 'active' 
-        ORDER BY updated_at DESC 
-        LIMIT 1
-    ");
-    $stmt->execute([$userId]);
+    // For anonymous/guest users, find conversation by device/IP combination
+    // For registered users, find by user_id
+    if ($isGuest) {
+        // Check if device/IP has an active conversation
+        $stmt = $pdo->prepare("
+            SELECT 
+                conversation_id,
+                user_id,
+                user_name,
+                user_email,
+                user_phone,
+                user_location,
+                user_concern,
+                is_guest,
+                device_info,
+                ip_address,
+                user_agent,
+                status,
+                last_message,
+                last_message_time,
+                created_at,
+                updated_at
+            FROM conversations 
+            WHERE ip_address = ? 
+              AND device_info = ? 
+              AND status = 'active' 
+            ORDER BY updated_at DESC 
+            LIMIT 1
+        ");
+        $stmt->execute([$ipAddress, $deviceInfo]);
+    } else {
+        // Registered user - find by user_id
+        $stmt = $pdo->prepare("
+            SELECT 
+                conversation_id,
+                user_id,
+                user_name,
+                user_email,
+                user_phone,
+                user_location,
+                user_concern,
+                is_guest,
+                device_info,
+                ip_address,
+                user_agent,
+                status,
+                last_message,
+                last_message_time,
+                created_at,
+                updated_at
+            FROM conversations 
+            WHERE user_id = ? AND status = 'active' 
+            ORDER BY updated_at DESC 
+            LIMIT 1
+        ");
+        $stmt->execute([$userId]);
+    }
     $conversation = $stmt->fetch();
     
     if ($conversation) {

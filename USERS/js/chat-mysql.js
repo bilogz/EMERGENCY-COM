@@ -222,18 +222,68 @@
                 }
             } else if (data.success && (!data.messages || data.messages.length === 0)) {
                 console.log('No messages in conversation yet');
+                // Even if no messages, check status in case conversation was closed
+                if (data.conversationStatus === 'closed') {
+                    console.log('Conversation is closed (detected during empty message check)');
+                    handleConversationClosed();
+                    return;
+                }
+            } else if (!data.success && data.conversationStatus === 'closed') {
+                // API returned error but indicated conversation is closed
+                console.log('Conversation is closed (detected via API error)');
+                handleConversationClosed();
+                return;
             }
         } catch (error) {
             console.error('Error loading messages:', error);
+            // On error, try to check conversation status directly
+            if (conversationId) {
+                checkConversationStatus();
+            }
+        }
+    }
+    
+    // Check conversation status directly
+    async function checkConversationStatus() {
+        if (!conversationId) {
+            conversationId = sessionStorage.getItem('conversation_id');
+            if (!conversationId) {
+                return;
+            }
+        }
+        
+        try {
+            const response = await fetch(API_BASE + 'chat-get-conversation.php?' + new URLSearchParams({
+                conversationId: conversationId
+            }));
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.status === 'closed') {
+                    console.log('Conversation status check: closed');
+                    handleConversationClosed();
+                }
+            }
+        } catch (error) {
+            console.error('Error checking conversation status:', error);
         }
     }
     
     // Handle conversation closed by admin
     function handleConversationClosed() {
+        // Prevent multiple calls
+        if (window.conversationClosedHandled) {
+            return;
+        }
+        window.conversationClosedHandled = true;
+        
+        console.log('Handling conversation closed - clearing all messages and resetting');
+        
         // Stop polling
         stopPolling();
         
         // Clear conversation ID
+        const oldConversationId = conversationId;
         conversationId = null;
         sessionStorage.removeItem('conversation_id');
         window.currentConversationId = null;
@@ -244,7 +294,7 @@
         // Clear and refresh chat messages
         const chatMessages = document.querySelector('.chat-messages');
         if (chatMessages) {
-            // Clear all existing messages (including old conversation messages)
+            // Clear ALL existing messages completely
             chatMessages.innerHTML = '';
             
             // Add system message
@@ -302,6 +352,9 @@
     
     // Reset chat for new conversation
     function resetChatForNewConversation() {
+        // Clear the closed handler flag
+        window.conversationClosedHandled = false;
+        
         // Clear conversation ID
         conversationId = null;
         sessionStorage.removeItem('conversation_id');
@@ -486,14 +539,17 @@
             clearInterval(pollingInterval);
         }
         
-        // Poll every 2 seconds for new messages (not initial load)
+        // Poll every 2 seconds for new messages and status (not initial load)
         pollingInterval = setInterval(() => {
             if (conversationId) {
-                loadMessages(false); // Not initial load
+                loadMessages(false); // Not initial load - this will check status too
+            } else {
+                // If no conversation ID, try to check status anyway
+                checkConversationStatus();
             }
         }, 2000);
         
-        console.log('Started polling for messages');
+        console.log('Started polling for messages and conversation status');
     }
     
     // Stop polling
