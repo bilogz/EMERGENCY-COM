@@ -3,15 +3,15 @@
  * AI-Powered Auto Warning System API
  * Analyzes weather and earthquake data using Gemini AI to automatically send warnings
  * Automatically sends SMS/Email/Push notifications to subscribed users
- * 
+ *
  * SETUP CRON JOBS for automatic checking:
- * 
+ *
  * 1. For dangerous conditions alerts (every 30 minutes):
- * */30 * * * * curl -s "https://emergency-comm.alertaraqc.com//EMERGENCY-COM/ADMIN/api/ai-warnings.php?action=check&cron=true" > /dev/null 2>&1
- * 
+ *    Cron: 0,30 * * * * curl -s "https://emergency-comm.alertaraqc.com//EMERGENCY-COM/ADMIN/api/ai-warnings.php?action=check&cron=true" > /dev/null 2>&1
+ *
  * 2. For weather analysis auto-send (every hour, or as configured):
- * 0 * * * * curl -s "https://emergency-comm.alertaraqc.com//EMERGENCY-COM/ADMIN/api/ai-warnings.php?action=sendWeatherAnalysis&cron=true" > /dev/null 2>&1
- * 
+ *    Cron: 0 * * * * curl -s "https://emergency-comm.alertaraqc.com//EMERGENCY-COM/ADMIN/api/ai-warnings.php?action=sendWeatherAnalysis&cron=true" > /dev/null 2>&1
+ *
  * This will check for dangerous conditions and send weather analysis automatically.
  */
 
@@ -83,23 +83,23 @@ try {
                 exit();
             }
             break;
-            
+
         case 'diagnostic':
             diagnosticCheck();
             break;
-            
+
         case 'test':
             sendTestWarning();
             break;
-            
+
         case 'check':
             checkAndSendWarnings();
             break;
-            
+
         case 'sendWeatherAnalysis':
             sendWeatherAnalysisAuto();
             break;
-            
+
         case 'getWeatherAnalysis':
             try {
                 ob_clean(); // Ensure clean output
@@ -123,7 +123,7 @@ try {
                 exit();
             }
             break;
-            
+
         default:
             saveAISettings();
             break;
@@ -144,12 +144,12 @@ try {
 
 function getAISettings() {
     global $pdo;
-    
+
     // Clear any previous output
     if (ob_get_level()) {
         ob_clean();
     }
-    
+
     // Check secure config first (before database check, as it might not need DB)
     $secureApiKey = null;
     try {
@@ -172,7 +172,7 @@ function getAISettings() {
     } catch (Error $e) {
         error_log("Fatal error getting Gemini API key in getAISettings: " . $e->getMessage());
     }
-    
+
     // If database is not available, return default settings
     if ($pdo === null) {
         $defaultSettings = [
@@ -199,7 +199,7 @@ function getAISettings() {
         }
         return;
     }
-    
+
     $settings = false;
     try {
         // Try to check if table exists first
@@ -226,7 +226,7 @@ function getAISettings() {
         error_log("File: " . $e->getFile() . " Line: " . $e->getLine());
         $settings = false;
     }
-    
+
     if (!$settings) {
         // Return default settings, but check if secure config has API key
         $defaultSettings = [
@@ -268,7 +268,7 @@ function getAISettings() {
         } else {
             $settings['weather_analysis_verification_key'] = (string)$settings['weather_analysis_verification_key'];
         }
-        
+
         // If secure config has API key and database doesn't, use secure config
         if (!empty($secureApiKey) && empty($settings['gemini_api_key'])) {
             $settings['gemini_api_key'] = str_repeat('*', max(0, strlen($secureApiKey) - 4)) . substr($secureApiKey, -4);
@@ -281,7 +281,7 @@ function getAISettings() {
         } else {
             $settings['api_key_source'] = 'none';
         }
-        
+
         // Ensure JSON encoding works properly
         try {
             $output = json_encode(['success' => true, 'settings' => $settings], JSON_UNESCAPED_UNICODE);
@@ -295,7 +295,7 @@ function getAISettings() {
             echo json_encode(['success' => false, 'message' => 'Error encoding settings: ' . $e->getMessage()]);
         }
     }
-    
+
     // Safety check: if we reach here without outputting anything, output an error
     if (ob_get_level() && ob_get_length() == 0) {
         error_log("WARNING: getAISettings completed without outputting anything");
@@ -306,14 +306,14 @@ function getAISettings() {
 
 function diagnosticCheck() {
     global $pdo;
-    
+
     header('Content-Type: application/json; charset=utf-8');
-    
+
     $result = [
         'success' => true,
         'checks' => []
     ];
-    
+
     try {
         // Check database connection
         if ($pdo === null) {
@@ -321,39 +321,39 @@ function diagnosticCheck() {
             $result['success'] = false;
         } else {
             $result['checks']['database_connection'] = 'OK';
-            
+
             // Check if table exists
             try {
                 $stmt = $pdo->query("SHOW TABLES LIKE 'ai_warning_settings'");
                 if ($stmt->rowCount() > 0) {
                     $result['checks']['table_exists'] = 'OK';
-                    
+
                     // Get all columns
                     $stmt = $pdo->query("DESCRIBE ai_warning_settings");
                     $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
                     $result['checks']['columns'] = $columns;
-                    
+
                     // Check for required columns
                     $requiredColumns = [
                         'weather_analysis_auto_send',
                         'weather_analysis_interval',
                         'weather_analysis_verification_key'
                     ];
-                    
+
                     $missingColumns = [];
                     foreach ($requiredColumns as $col) {
                         if (!in_array($col, $columns)) {
                             $missingColumns[] = $col;
                         }
                     }
-                    
+
                     if (empty($missingColumns)) {
                         $result['checks']['required_columns'] = 'OK - All columns exist';
                     } else {
                         $result['checks']['required_columns'] = 'MISSING: ' . implode(', ', $missingColumns);
                         $result['success'] = false;
                     }
-                    
+
                     // Try to fetch settings
                     try {
                         $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
@@ -382,7 +382,7 @@ function diagnosticCheck() {
                 $result['success'] = false;
             }
         }
-        
+
         // Check secure config
         if (function_exists('getGeminiApiKey')) {
             try {
@@ -394,22 +394,22 @@ function diagnosticCheck() {
         } else {
             $result['checks']['secure_config'] = 'getGeminiApiKey() function not found';
         }
-        
+
     } catch (Exception $e) {
         $result['success'] = false;
         $result['error'] = $e->getMessage();
         $result['error_file'] = $e->getFile();
         $result['error_line'] = $e->getLine();
     }
-    
+
     echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 }
 
 function saveAISettings() {
     global $pdo;
-    
+
     $adminId = $_SESSION['admin_user_id'] ?? null;
-    
+
     // Create table if not exists
     $pdo->exec("CREATE TABLE IF NOT EXISTS ai_warning_settings (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -427,23 +427,23 @@ function saveAISettings() {
         weather_analysis_verification_key VARCHAR(255) DEFAULT NULL,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    
+
     // Add new columns if they don't exist (for existing tables)
     $columnsToAdd = [
         'weather_analysis_auto_send' => "TINYINT(1) DEFAULT 0 AFTER ai_channels",
         'weather_analysis_interval' => "INT DEFAULT 60 AFTER weather_analysis_auto_send",
         'weather_analysis_verification_key' => "VARCHAR(255) DEFAULT NULL AFTER weather_analysis_interval"
     ];
-    
+
     foreach ($columnsToAdd as $columnName => $definition) {
         try {
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
-                                   WHERE TABLE_SCHEMA = DATABASE() 
-                                   AND TABLE_NAME = 'ai_warning_settings' 
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                                   WHERE TABLE_SCHEMA = DATABASE()
+                                   AND TABLE_NAME = 'ai_warning_settings'
                                    AND COLUMN_NAME = ?");
             $stmt->execute([$columnName]);
             $exists = $stmt->fetchColumn() > 0;
-            
+
             if (!$exists) {
                 $pdo->exec("ALTER TABLE ai_warning_settings ADD COLUMN `{$columnName}` {$definition}");
             }
@@ -452,7 +452,7 @@ function saveAISettings() {
             error_log("Could not add column {$columnName}: " . $e->getMessage());
         }
     }
-    
+
     $geminiApiKey = $_POST['gemini_api_key'] ?? '';
     $aiEnabled = isset($_POST['ai_enabled']) ? 1 : 0;
     $aiCheckInterval = intval($_POST['ai_check_interval'] ?? 30);
@@ -465,17 +465,17 @@ function saveAISettings() {
     $weatherAnalysisAutoSend = isset($_POST['weather_analysis_auto_send']) ? 1 : 0;
     $weatherAnalysisInterval = intval($_POST['weather_analysis_interval'] ?? 60);
     $weatherAnalysisVerificationKey = $_POST['weather_analysis_verification_key'] ?? '';
-    
+
     // Check if settings exist
     $stmt = $pdo->query("SELECT id, gemini_api_key FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
     $existing = $stmt->fetch();
-    
+
     // Check secure config for API key if not provided
     $secureApiKey = getGeminiApiKey('default');
     if (empty($secureApiKey)) {
         $secureApiKey = getGeminiApiKey('analysis');
     }
-    
+
     if ($existing) {
         // Only update API key if a new one is provided (not masked)
         $updateApiKey = $geminiApiKey;
@@ -487,21 +487,21 @@ function saveAISettings() {
                 $updateApiKey = $existing['gemini_api_key']; // Keep existing
             }
         }
-        
+
         // If secure config has API key and database doesn't, use secure config
         if (empty($updateApiKey) && !empty($secureApiKey)) {
             $updateApiKey = $secureApiKey;
         }
-        
-        $stmt = $pdo->prepare("UPDATE ai_warning_settings SET 
+
+        $stmt = $pdo->prepare("UPDATE ai_warning_settings SET
             gemini_api_key = ?,
-            ai_enabled = ?, 
-            ai_check_interval = ?, 
-            wind_threshold = ?, 
-            rain_threshold = ?, 
-            earthquake_threshold = ?, 
-            warning_types = ?, 
-            monitored_areas = ?, 
+            ai_enabled = ?,
+            ai_check_interval = ?,
+            wind_threshold = ?,
+            rain_threshold = ?,
+            earthquake_threshold = ?,
+            warning_types = ?,
+            monitored_areas = ?,
             ai_channels = ?,
             weather_analysis_auto_send = ?,
             weather_analysis_interval = ?,
@@ -519,11 +519,11 @@ function saveAISettings() {
         if (empty($insertApiKey) && !empty($secureApiKey)) {
             $insertApiKey = $secureApiKey;
         }
-        
-        $stmt = $pdo->prepare("INSERT INTO ai_warning_settings 
-            (gemini_api_key, ai_enabled, ai_check_interval, wind_threshold, rain_threshold, 
+
+        $stmt = $pdo->prepare("INSERT INTO ai_warning_settings
+            (gemini_api_key, ai_enabled, ai_check_interval, wind_threshold, rain_threshold,
              earthquake_threshold, warning_types, monitored_areas, ai_channels,
-             weather_analysis_auto_send, weather_analysis_interval, weather_analysis_verification_key) 
+             weather_analysis_auto_send, weather_analysis_interval, weather_analysis_verification_key)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
             $insertApiKey, $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
@@ -531,7 +531,7 @@ function saveAISettings() {
             $weatherAnalysisAutoSend, $weatherAnalysisInterval, $weatherAnalysisVerificationKey
         ]);
     }
-    
+
     // Log admin activity
     if ($adminId) {
         $changes = [];
@@ -546,33 +546,33 @@ function saveAISettings() {
         }
         logAdminActivity($adminId, 'update_ai_warning_settings', 'Updated AI warning settings: ' . implode(', ', $changes));
     }
-    
+
     echo json_encode(['success' => true, 'message' => 'AI settings saved successfully']);
 }
 
 function sendTestWarning() {
     global $pdo;
-    
+
     $adminId = $_SESSION['admin_user_id'] ?? null;
-    
+
     // Create a test warning
     $title = "Test AI Warning - Dangerous Weather Detected";
     $content = "This is a test warning from the AI Auto Warning System. If you receive this, the system is working correctly.";
-    
+
     // Insert into automated_warnings
-    $stmt = $pdo->prepare("INSERT INTO automated_warnings 
-        (source, type, title, content, severity, status) 
+    $stmt = $pdo->prepare("INSERT INTO automated_warnings
+        (source, type, title, content, severity, status)
         VALUES (?, ?, ?, ?, ?, ?)");
     $stmt->execute(['ai', 'test', $title, $content, 'high', 'published']);
     $warningId = $pdo->lastInsertId();
-    
+
     // Log admin activity
     if ($adminId) {
         logAdminActivity($adminId, 'test_ai_warning', "Sent test AI warning (ID: {$warningId})");
     }
-    
+
     echo json_encode([
-        'success' => true, 
+        'success' => true,
         'message' => 'Test warning created successfully',
         'warning_id' => $warningId
     ]);
@@ -580,34 +580,34 @@ function sendTestWarning() {
 
 function checkAndSendWarnings() {
     global $pdo;
-    
+
     $adminId = $_SESSION['admin_user_id'] ?? null;
     $isCronJob = isset($_GET['cron']) && $_GET['cron'] === 'true';
-    
+
     // Get AI settings
     $stmt = $pdo->query("SELECT * FROM ai_warning_settings WHERE ai_enabled = 1 ORDER BY id DESC LIMIT 1");
     $settings = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     if (!$settings || !$settings['ai_enabled']) {
         echo json_encode(['success' => false, 'message' => 'AI warnings are disabled']);
         return;
     }
-    
+
     // Log activity if manual check (not cron)
     if ($adminId && !$isCronJob) {
         logAdminActivity($adminId, 'check_ai_warnings', 'Manually triggered AI warning check');
     }
-    
+
     $warnings = [];
-    
+
     // Use Gemini AI to analyze weather and earthquake conditions
     $warnings = array_merge($warnings, analyzeWithAI($settings));
-    
+
     // Also check traditional thresholds as backup
     $warnings = array_merge($warnings, checkWeatherConditions($settings));
     $warnings = array_merge($warnings, checkEarthquakeConditions($settings));
     $warnings = array_merge($warnings, checkFloodingLandslideRisks($settings));
-    
+
     // Remove duplicates based on type
     $uniqueWarnings = [];
     foreach ($warnings as $warning) {
@@ -617,20 +617,20 @@ function checkAndSendWarnings() {
         }
     }
     $warnings = array_values($uniqueWarnings);
-    
+
     $sentCount = 0;
     $alertIds = [];
-    
+
     // Save warnings to database and send notifications
     foreach ($warnings as $warning) {
         // Only send if severity is medium or higher
         if (!in_array($warning['severity'], ['medium', 'high', 'critical'])) {
             continue;
         }
-        
+
         // Insert into automated_warnings
-        $stmt = $pdo->prepare("INSERT INTO automated_warnings 
-            (source, type, title, content, severity, status) 
+        $stmt = $pdo->prepare("INSERT INTO automated_warnings
+            (source, type, title, content, severity, status)
             VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->execute([
             'ai',
@@ -642,7 +642,7 @@ function checkAndSendWarnings() {
         ]);
         $warningId = $pdo->lastInsertId();
         $alertIds[] = $warningId;
-        
+
         // Create alert entry for translation
         // First, get or create category
         $categoryName = mapWarningTypeToCategory($warning['type']);
@@ -650,10 +650,10 @@ function checkAndSendWarnings() {
         $stmt->execute([$categoryName]);
         $category = $stmt->fetch();
         $categoryId = $category ? $category['id'] : null;
-        
+
         // Insert alert
-        $stmt = $pdo->prepare("INSERT INTO alerts 
-            (title, message, content, category_id, status, created_at) 
+        $stmt = $pdo->prepare("INSERT INTO alerts
+            (title, message, content, category_id, status, created_at)
             VALUES (?, ?, ?, ?, 'active', NOW())");
         $stmt->execute([
             $warning['title'],
@@ -662,19 +662,19 @@ function checkAndSendWarnings() {
             $categoryId
         ]);
         $alertId = $pdo->lastInsertId();
-        
+
         // Send notifications to subscribed users
         $sent = sendNotificationsToSubscribers($alertId, $warning, $settings);
         $sentCount += $sent;
     }
-    
+
     // Log activity if warnings were generated
     if ($adminId && count($warnings) > 0) {
         $source = $isCronJob ? 'cron' : 'manual';
-        logAdminActivity($adminId, 'ai_warnings_generated', 
+        logAdminActivity($adminId, 'ai_warnings_generated',
             "AI generated {$sentCount} notifications for " . count($warnings) . " warning(s) via {$source} check");
     }
-    
+
     echo json_encode([
         'success' => true,
         'warnings_generated' => count($warnings),
@@ -690,7 +690,7 @@ function checkAndSendWarnings() {
 function analyzeWithAI($settings) {
     global $pdo;
     $warnings = [];
-    
+
     $apiKey = getGeminiApiKey('analysis');
     if (empty($apiKey)) {
         $apiKey = getGeminiApiKey('default');
@@ -699,18 +699,18 @@ function analyzeWithAI($settings) {
         // Try to get from settings
         $apiKey = $settings['gemini_api_key'] ?? '';
     }
-    
+
     if (empty($apiKey)) {
         error_log("Gemini API key not configured for AI analysis");
         return $warnings;
     }
-    
+
     // Get weather data
     $weatherData = getWeatherData();
     if (empty($weatherData)) {
         return $warnings;
     }
-    
+
     // Prepare prompt for Gemini AI
     $prompt = "Analyze the following weather and earthquake data for the Philippines. " .
               "Determine if there are any DANGEROUS conditions that require immediate emergency alerts. " .
@@ -733,11 +733,11 @@ function analyzeWithAI($settings) {
               "  ]\n" .
               "}\n\n" .
               "Only include warnings where is_dangerous is true. Be conservative - only alert for real dangers.";
-    
+
     try {
         $model = getGeminiModel();
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . urlencode($apiKey);
-        
+
         $data = [
             'contents' => [
                 [
@@ -753,7 +753,7 @@ function analyzeWithAI($settings) {
                 'topK' => 40
             ]
         ];
-        
+
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
@@ -762,32 +762,32 @@ function analyzeWithAI($settings) {
             'Content-Type: application/json'
         ]);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
         curl_close($ch);
-        
+
         if ($curlError) {
             error_log("CURL Error in AI analysis: " . $curlError);
             return $warnings;
         }
-        
+
         if ($httpCode === 200 && $response) {
             $responseData = json_decode($response, true);
-            
+
             if (isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
                 $aiResponse = trim($responseData['candidates'][0]['content']['parts'][0]['text']);
-                
+
                 // Extract JSON from response (might have markdown code blocks)
                 if (preg_match('/```json\s*(.*?)\s*```/s', $aiResponse, $matches)) {
                     $aiResponse = $matches[1];
                 } elseif (preg_match('/```\s*(.*?)\s*```/s', $aiResponse, $matches)) {
                     $aiResponse = $matches[1];
                 }
-                
+
                 $aiData = json_decode($aiResponse, true);
-                
+
                 if (isset($aiData['warnings']) && is_array($aiData['warnings'])) {
                     foreach ($aiData['warnings'] as $warning) {
                         if (isset($warning['is_dangerous']) && $warning['is_dangerous']) {
@@ -806,10 +806,10 @@ function analyzeWithAI($settings) {
             // Handle API errors properly
             $errorData = json_decode($response, true);
             $errorMsg = $errorData['error']['message'] ?? "HTTP $httpCode";
-            
+
             // Check for API key errors
-            if ($httpCode === 401 || $httpCode === 403 || 
-                strpos(strtolower($errorMsg), 'expired') !== false || 
+            if ($httpCode === 401 || $httpCode === 403 ||
+                strpos(strtolower($errorMsg), 'expired') !== false ||
                 strpos(strtolower($errorMsg), 'invalid') !== false ||
                 strpos(strtolower($errorMsg), 'api key') !== false) {
                 error_log("Gemini API key error: $errorMsg (HTTP $httpCode)");
@@ -829,7 +829,7 @@ function analyzeWithAI($settings) {
     } catch (Exception $e) {
         error_log("AI Analysis Error: " . $e->getMessage());
     }
-    
+
     return $warnings;
 }
 
@@ -838,22 +838,22 @@ function analyzeWithAI($settings) {
  */
 function getWeatherData() {
     global $pdo;
-    
+
     $stmt = $pdo->query("SELECT api_key FROM integration_settings WHERE source = 'pagasa' LIMIT 1");
     $apiKeyRow = $stmt->fetch(PDO::FETCH_ASSOC);
     $apiKey = $apiKeyRow['api_key'] ?? '';
-    
+
     if (empty($apiKey)) {
         return [];
     }
-    
+
     $weatherData = [];
     $locations = [
         ['name' => 'Quezon City', 'lat' => 14.6488, 'lon' => 121.0509],
         ['name' => 'Manila', 'lat' => 14.5995, 'lon' => 120.9842],
         ['name' => 'Makati', 'lat' => 14.5547, 'lon' => 121.0244],
     ];
-    
+
     foreach ($locations as $loc) {
         $url = "https://api.openweathermap.org/data/2.5/weather?lat={$loc['lat']}&lon={$loc['lon']}&appid={$apiKey}&units=metric";
         $response = @file_get_contents($url);
@@ -864,7 +864,7 @@ function getWeatherData() {
             }
         }
     }
-    
+
     return $weatherData;
 }
 
@@ -873,10 +873,10 @@ function getWeatherData() {
  */
 function sendNotificationsToSubscribers($alertId, $warning, $settings) {
     global $pdo;
-    
+
     $channels = explode(',', $settings['ai_channels'] ?? 'sms,email');
     $channels = array_map('trim', $channels);
-    
+
     // Get all active subscribers
     $categoryName = mapWarningTypeToCategory($warning['type']);
     $stmt = $pdo->prepare("
@@ -890,23 +890,23 @@ function sendNotificationsToSubscribers($alertId, $warning, $settings) {
     $categoryPattern = "%{$categoryName}%";
     $stmt->execute([$categoryPattern]);
     $subscribers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     if (empty($subscribers)) {
         return 0;
     }
-    
+
     $translationHelper = new AlertTranslationHelper($pdo);
     $sentCount = 0;
-    
+
     foreach ($subscribers as $subscriber) {
         $userId = $subscriber['user_id'];
         $userChannels = explode(',', $subscriber['channels'] ?? '');
         $userChannels = array_map('trim', $userChannels);
-        
+
         // Get translated alert for user's preferred language
         $userLanguage = $subscriber['preferred_language'] ?? 'en';
         $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $userLanguage, $userId);
-        
+
         if (!$translatedAlert) {
             // Fallback to original warning
             $translatedAlert = [
@@ -914,15 +914,15 @@ function sendNotificationsToSubscribers($alertId, $warning, $settings) {
                 'message' => $warning['content']
             ];
         }
-        
+
         $message = $translatedAlert['title'] . "\n\n" . $translatedAlert['message'];
-        
+
         // Send via each enabled channel
         foreach ($channels as $channel) {
             if (!in_array($channel, $userChannels) && !empty($userChannels)) {
                 continue; // User hasn't subscribed to this channel
             }
-            
+
             if ($channel === 'sms' && !empty($subscriber['phone'])) {
                 sendSMSNotification($subscriber['phone'], $message, $alertId);
                 $sentCount++;
@@ -936,7 +936,7 @@ function sendNotificationsToSubscribers($alertId, $warning, $settings) {
             }
         }
     }
-    
+
     return $sentCount;
 }
 
@@ -945,20 +945,20 @@ function sendNotificationsToSubscribers($alertId, $warning, $settings) {
  */
 function sendSMSNotification($phone, $message, $alertId) {
     global $pdo;
-    
+
     // Log notification
     $stmt = $pdo->prepare("
         INSERT INTO notification_logs (channel, message, recipient, recipients, priority, status, sent_at, sent_by, ip_address)
         VALUES ('sms', ?, ?, ?, 'high', 'pending', NOW(), 'ai_system', '127.0.0.1')
     ");
     $stmt->execute([$message, $phone, $phone]);
-    
+
     // Try to send via SMS helper if available
     if (file_exists(__DIR__ . '/../../USERS/lib/sms.php')) {
         require_once __DIR__ . '/../../USERS/lib/sms.php';
         $smsError = null;
         $smsSent = sendSMS($phone, $message, $smsError);
-        
+
         if ($smsSent) {
             $stmt = $pdo->prepare("UPDATE notification_logs SET status = 'success' WHERE id = ?");
             $stmt->execute([$pdo->lastInsertId()]);
@@ -975,7 +975,7 @@ function sendSMSNotification($phone, $message, $alertId) {
  */
 function sendEmailNotification($email, $name, $subject, $body, $alertId) {
     global $pdo;
-    
+
     // Log notification
     $stmt = $pdo->prepare("
         INSERT INTO notification_logs (channel, message, recipient, recipients, priority, status, sent_at, sent_by, ip_address)
@@ -983,10 +983,10 @@ function sendEmailNotification($email, $name, $subject, $body, $alertId) {
     ");
     $emailMessage = $subject . "\n\n" . $body;
     $stmt->execute([$emailMessage, $email, $email]);
-    
+
     // Try to send email
     $emailSent = false;
-    
+
     // Try PHPMailer if available
     if (file_exists(__DIR__ . '/../../USERS/lib/mail.php')) {
         require_once __DIR__ . '/../../USERS/lib/mail.php';
@@ -999,7 +999,7 @@ function sendEmailNotification($email, $name, $subject, $body, $alertId) {
         $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
         $emailSent = @mail($email, $subject, $body, $headers);
     }
-    
+
     if ($emailSent) {
         $stmt = $pdo->prepare("UPDATE notification_logs SET status = 'success' WHERE id = ?");
         $stmt->execute([$pdo->lastInsertId()]);
@@ -1013,7 +1013,7 @@ function sendEmailNotification($email, $name, $subject, $body, $alertId) {
  */
 function logPANotification($message, $alertId) {
     global $pdo;
-    
+
     $stmt = $pdo->prepare("
         INSERT INTO notification_logs (channel, message, recipient, recipients, priority, status, sent_at, sent_by, ip_address)
         VALUES ('pa', ?, 'pa_system', 'all', 'high', 'success', NOW(), 'ai_system', '127.0.0.1')
@@ -1037,40 +1037,40 @@ function mapWarningTypeToCategory($type) {
         'fire_incident' => 'Fire',
         'ash_fall' => 'General'
     ];
-    
+
     return $mapping[$type] ?? 'General';
 }
 
 function checkWeatherConditions($settings) {
     global $pdo;
     $warnings = [];
-    
+
     $windThreshold = floatval($settings['wind_threshold'] ?? 60); // km/h
     $rainThreshold = floatval($settings['rain_threshold'] ?? 20); // mm/hour
     $warningTypes = explode(',', $settings['warning_types'] ?? '');
-    
+
     // Get OpenWeatherMap API key
     $stmt = $pdo->query("SELECT api_key FROM integration_settings WHERE source = 'pagasa' LIMIT 1");
     $apiKeyRow = $stmt->fetch(PDO::FETCH_ASSOC);
     $apiKey = $apiKeyRow['api_key'] ?? '';
-    
+
     if (empty($apiKey)) {
         return $warnings; // No API key configured
     }
-    
+
     // Check Quezon City weather (primary monitoring area)
     $lat = 14.6488;
     $lon = 121.0509;
     $url = "https://api.openweathermap.org/data/2.5/weather?lat={$lat}&lon={$lon}&appid={$apiKey}&units=metric";
-    
+
     $response = @file_get_contents($url);
     if ($response) {
         $weatherData = json_decode($response, true);
-        
+
         if (isset($weatherData['wind']['speed'])) {
             $windSpeedMs = floatval($weatherData['wind']['speed']); // m/s
             $windSpeedKmh = $windSpeedMs * 3.6; // Convert to km/h
-            
+
             if ($windSpeedKmh >= $windThreshold && in_array('typhoon', $warningTypes)) {
                 $warnings[] = [
                     'type' => 'typhoon',
@@ -1080,10 +1080,10 @@ function checkWeatherConditions($settings) {
                 ];
             }
         }
-        
+
         if (isset($weatherData['rain']['1h'])) {
             $rainfall = floatval($weatherData['rain']['1h']); // mm in last hour
-            
+
             if ($rainfall >= $rainThreshold) {
                 if (in_array('flooding', $warningTypes)) {
                     $warnings[] = [
@@ -1093,7 +1093,7 @@ function checkWeatherConditions($settings) {
                         'severity' => $rainfall >= 50 ? 'critical' : ($rainfall >= 30 ? 'high' : 'medium')
                     ];
                 }
-                
+
                 if (in_array('landslide', $warningTypes) && $rainfall >= 30) {
                     $warnings[] = [
                         'type' => 'landslide',
@@ -1105,7 +1105,7 @@ function checkWeatherConditions($settings) {
             }
         }
     }
-    
+
     return $warnings;
 }
 
@@ -1114,10 +1114,10 @@ function checkWeatherConditions($settings) {
  */
 function sendWeatherAnalysisAuto() {
     global $pdo;
-    
+
     $adminId = $_SESSION['admin_user_id'] ?? null;
     $isCronJob = isset($_GET['cron']) && $_GET['cron'] === 'true';
-    
+
     // Get AI settings
     try {
         $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
@@ -1126,12 +1126,12 @@ function sendWeatherAnalysisAuto() {
         echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
         return;
     }
-    
+
     if (!$settings || !$settings['weather_analysis_auto_send']) {
         echo json_encode(['success' => false, 'message' => 'Weather analysis auto-send is disabled']);
         return;
     }
-    
+
     // Get API key - prefer analysis key for analysis functions
     $apiKey = getGeminiApiKey('analysis');
     if (empty($apiKey)) {
@@ -1140,13 +1140,13 @@ function sendWeatherAnalysisAuto() {
     if (empty($apiKey)) {
         $apiKey = $settings['gemini_api_key'] ?? '';
     }
-    
+
     if (empty($apiKey)) {
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Gemini API key not configured']);
         return;
     }
-    
+
     // Get weather data for primary location (Quezon City)
     $weatherData = [];
     try {
@@ -1156,29 +1156,29 @@ function sendWeatherAnalysisAuto() {
     } catch (Exception $e) {
         error_log("Error getting weather data: " . $e->getMessage());
     }
-    
+
     if (empty($weatherData) || !is_array($weatherData)) {
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Please check PAGASA API key configuration.']);
         return;
     }
-    
+
     // Use Quezon City as primary location
     $locationName = 'Quezon City';
     $weather = $weatherData[$locationName] ?? reset($weatherData);
-    
+
     if (!$weather || !is_array($weather)) {
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'No weather data available for analysis']);
         return;
     }
-    
+
     // Build disaster monitoring analysis prompt
     $temp = $weather['main']['temp'] ?? 0;
     $humidity = $weather['main']['humidity'] ?? 0;
     $condition = $weather['weather'][0]['description'] ?? 'Unknown';
     $windSpeed = isset($weather['wind']['speed']) ? round($weather['wind']['speed'] * 3.6, 1) : 0;
-    
+
     $prompt = "You are an emergency weather analyst for {$locationName}, Philippines. Analyze:
 
 CURRENT: Temp {$temp}°C, Humidity {$humidity}%, {$condition}, Wind {$windSpeed} km/h
@@ -1200,7 +1200,7 @@ Keep concise and actionable for public communication.";
     try {
         $model = getGeminiModel();
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . urlencode($apiKey);
-        
+
         $data = [
             'contents' => [
                 [
@@ -1216,7 +1216,7 @@ Keep concise and actionable for public communication.";
                 'topK' => 40
             ]
         ];
-        
+
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
@@ -1225,45 +1225,45 @@ Keep concise and actionable for public communication.";
             'Content-Type: application/json'
         ]);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
         curl_close($ch);
-        
+
         if ($curlError || $httpCode !== 200) {
             echo json_encode(['success' => false, 'message' => 'Failed to generate weather analysis']);
             return;
         }
-        
+
         $responseData = json_decode($response, true);
-        
+
         if (!isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
             echo json_encode(['success' => false, 'message' => 'Invalid response from AI']);
             return;
         }
-        
+
         $analysis = trim($responseData['candidates'][0]['content']['parts'][0]['text']);
-        
+
         // Add verification key if set
         $verificationKey = $settings['weather_analysis_verification_key'] ?? '';
         if (!empty($verificationKey)) {
             $analysis .= "\n\nVerification Key: " . $verificationKey;
         }
-        
+
         // Create alert title and content
         $alertTitle = "AI Weather Analysis - {$locationName}";
         $alertContent = "Current Weather Status:\n" . $analysis;
-        
+
         // Get or create Weather category
         $stmt = $pdo->prepare("SELECT id FROM alert_categories WHERE name = 'Weather' LIMIT 1");
         $stmt->execute();
         $category = $stmt->fetch();
         $categoryId = $category ? $category['id'] : null;
-        
+
         // Insert alert
-        $stmt = $pdo->prepare("INSERT INTO alerts 
-            (title, message, content, category_id, status, created_at) 
+        $stmt = $pdo->prepare("INSERT INTO alerts
+            (title, message, content, category_id, status, created_at)
             VALUES (?, ?, ?, ?, 'active', NOW())");
         $stmt->execute([
             $alertTitle,
@@ -1272,11 +1272,11 @@ Keep concise and actionable for public communication.";
             $categoryId
         ]);
         $alertId = $pdo->lastInsertId();
-        
+
         // Send via mass notification channels
         $channels = explode(',', $settings['ai_channels'] ?? 'sms,email');
         $channels = array_map('trim', $channels);
-        
+
         // Get all active subscribers for weather alerts
         $stmt = $pdo->prepare("
             SELECT DISTINCT s.user_id, s.channels, s.preferred_language,
@@ -1288,34 +1288,34 @@ Keep concise and actionable for public communication.";
         ");
         $stmt->execute();
         $subscribers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         $sentCount = 0;
         $translationHelper = new AlertTranslationHelper($pdo);
-        
+
         foreach ($subscribers as $subscriber) {
             $userId = $subscriber['user_id'];
             $userChannels = explode(',', $subscriber['channels'] ?? '');
             $userChannels = array_map('trim', $userChannels);
-            
+
             // Get translated alert for user's preferred language
             $userLanguage = $subscriber['preferred_language'] ?? 'en';
             $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $userLanguage, $userId);
-            
+
             if (!$translatedAlert) {
                 $translatedAlert = [
                     'title' => $alertTitle,
                     'message' => $alertContent
                 ];
             }
-            
+
             $message = $translatedAlert['title'] . "\n\n" . $translatedAlert['message'];
-            
+
             // Send via each enabled channel
             foreach ($channels as $channel) {
                 if (!empty($userChannels) && !in_array($channel, $userChannels)) {
                     continue;
                 }
-                
+
                 if ($channel === 'sms' && !empty($subscriber['phone'])) {
                     sendSMSNotification($subscriber['phone'], $message, $alertId);
                     $sentCount++;
@@ -1328,14 +1328,14 @@ Keep concise and actionable for public communication.";
                 }
             }
         }
-        
+
         // Log activity
         if ($adminId) {
             $source = $isCronJob ? 'cron' : 'manual';
-            logAdminActivity($adminId, 'weather_analysis_sent', 
+            logAdminActivity($adminId, 'weather_analysis_sent',
                 "AI Weather Analysis sent to {$sentCount} recipients via {$source}");
         }
-        
+
         echo json_encode([
             'success' => true,
             'message' => 'Weather analysis sent successfully',
@@ -1343,7 +1343,7 @@ Keep concise and actionable for public communication.";
             'notifications_sent' => $sentCount,
             'alert_id' => $alertId
         ]);
-        
+
     } catch (Exception $e) {
         error_log("Error sending weather analysis: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
@@ -1355,12 +1355,12 @@ Keep concise and actionable for public communication.";
  */
 function getWeatherAnalysis() {
     global $pdo;
-    
+
     // Clear any previous output
     if (ob_get_level()) {
         ob_clean();
     }
-    
+
     try {
         // Ensure we have a database connection
         if ($pdo === null) {
@@ -1368,7 +1368,7 @@ function getWeatherAnalysis() {
             echo json_encode(['success' => false, 'message' => 'Database connection not available']);
             return;
         }
-    
+
         // Get AI settings
         $settings = null;
         try {
@@ -1385,7 +1385,7 @@ function getWeatherAnalysis() {
             error_log("General error loading AI settings: " . $e->getMessage());
             // Continue with null settings
         }
-        
+
         // Get API key - prefer analysis key for analysis functions
         $apiKey = null;
         try {
@@ -1408,58 +1408,58 @@ function getWeatherAnalysis() {
         } catch (Error $e) {
             error_log("Fatal error getting Gemini API key: " . $e->getMessage());
         }
-        
+
         // Fallback to database if secure config doesn't have it
         if (empty($apiKey) && $settings && !empty($settings['gemini_api_key'])) {
             $apiKey = $settings['gemini_api_key'];
             error_log("Using API key from database");
         }
-        
+
         if (empty($apiKey)) {
             error_log("No Gemini API key found in config or database");
             http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Gemini API key not configured. Please check your API key configuration in AI Warning Settings.']);
             return;
         }
-        
+
         error_log("API key found, length: " . strlen($apiKey));
-    
-    // Get weather data for primary location (Quezon City)
-    $weatherData = [];
-    try {
-        if (function_exists('getWeatherData')) {
-            $weatherData = getWeatherData();
+
+        // Get weather data for primary location (Quezon City)
+        $weatherData = [];
+        try {
+            if (function_exists('getWeatherData')) {
+                $weatherData = getWeatherData();
+            }
+        } catch (Exception $e) {
+            error_log("Error getting weather data: " . $e->getMessage());
         }
-    } catch (Exception $e) {
-        error_log("Error getting weather data: " . $e->getMessage());
-    }
-    
-    if (empty($weatherData) || !is_array($weatherData)) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Please check PAGASA API key configuration.']);
-        return;
-    }
-    
-    // Use Quezon City as primary location
-    $locationName = 'Quezon City';
-    $weather = $weatherData[$locationName] ?? reset($weatherData);
-    
-    if (!$weather || !is_array($weather)) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'No weather data available for analysis']);
-        return;
-    }
-    
-    // Build disaster monitoring analysis prompt
-    $temp = $weather['main']['temp'] ?? 0;
-    $humidity = $weather['main']['humidity'] ?? 0;
-    $condition = $weather['weather'][0]['description'] ?? 'Unknown';
-    $windSpeed = isset($weather['wind']['speed']) ? round($weather['wind']['speed'] * 3.6, 1) : 0;
-    $feelsLike = $weather['main']['feels_like'] ?? $temp;
-    $pressure = $weather['main']['pressure'] ?? 0;
-    $visibility = isset($weather['visibility']) ? round($weather['visibility'] / 1000, 1) : 0;
-    
-    $prompt = "You are a disaster monitoring analyst for {$locationName}, Philippines. Analyze the current weather conditions and potential disaster risks, providing a comprehensive disaster monitoring analysis.
+
+        if (empty($weatherData) || !is_array($weatherData)) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Please check PAGASA API key configuration.']);
+            return;
+        }
+
+        // Use Quezon City as primary location
+        $locationName = 'Quezon City';
+        $weather = $weatherData[$locationName] ?? reset($weatherData);
+
+        if (!$weather || !is_array($weather)) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'No weather data available for analysis']);
+            return;
+        }
+
+        // Build disaster monitoring analysis prompt
+        $temp = $weather['main']['temp'] ?? 0;
+        $humidity = $weather['main']['humidity'] ?? 0;
+        $condition = $weather['weather'][0]['description'] ?? 'Unknown';
+        $windSpeed = isset($weather['wind']['speed']) ? round($weather['wind']['speed'] * 3.6, 1) : 0;
+        $feelsLike = $weather['main']['feels_like'] ?? $temp;
+        $pressure = $weather['main']['pressure'] ?? 0;
+        $visibility = isset($weather['visibility']) ? round($weather['visibility'] / 1000, 1) : 0;
+
+        $prompt = "You are a disaster monitoring analyst for {$locationName}, Philippines. Analyze the current weather conditions and potential disaster risks, providing a comprehensive disaster monitoring analysis.
 
 CURRENT CONDITIONS:
 - Temperature: {$temp}°C (Feels like: {$feelsLike}°C)
@@ -1487,11 +1487,11 @@ Provide your analysis in this EXACT JSON format (no markdown, no code blocks, ju
 
 Keep recommendations practical and actionable for public safety. Risk level should be based on actual danger (heat stress, flooding risk, strong winds, etc.).";
 
-    // Generate AI weather analysis
-    try {
+        // Generate AI weather analysis
+        try {
         $model = getGeminiModel();
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . urlencode($apiKey);
-        
+
         $data = [
             'contents' => [
                 [
@@ -1507,7 +1507,7 @@ Keep recommendations practical and actionable for public safety. Risk level shou
                 'topK' => 40
             ]
         ];
-        
+
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
@@ -1516,19 +1516,19 @@ Keep recommendations practical and actionable for public safety. Risk level shou
             'Content-Type: application/json'
         ]);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
         curl_close($ch);
-        
+
         if ($curlError) {
             error_log("CURL Error in getWeatherAnalysis: " . $curlError);
             http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Network error: ' . $curlError]);
             return;
         }
-        
+
         if ($httpCode !== 200) {
             $errorData = json_decode($response, true);
             $errorMsg = 'Unknown error';
@@ -1544,26 +1544,26 @@ Keep recommendations practical and actionable for public safety. Risk level shou
             echo json_encode(['success' => false, 'message' => 'Failed to generate analysis: ' . $errorMsg]);
             return;
         }
-        
+
         $responseData = json_decode($response, true);
-        
+
         if (!isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
             http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Invalid response from AI']);
             return;
         }
-        
+
         $aiResponse = trim($responseData['candidates'][0]['content']['parts'][0]['text']);
-        
+
         // Extract JSON from response (might have markdown code blocks)
         if (preg_match('/```json\s*(.*?)\s*```/s', $aiResponse, $matches)) {
             $aiResponse = $matches[1];
         } elseif (preg_match('/```\s*(.*?)\s*```/s', $aiResponse, $matches)) {
             $aiResponse = $matches[1];
         }
-        
+
         $analysis = json_decode($aiResponse, true);
-        
+
         if (!$analysis || !isset($analysis['summary'])) {
             // Fallback: try to parse the response as plain text
             $analysis = [
@@ -1575,7 +1575,7 @@ Keep recommendations practical and actionable for public safety. Risk level shou
                 ]
             ];
         }
-        
+
         echo json_encode([
             'success' => true,
             'analysis' => $analysis,
@@ -1588,14 +1588,25 @@ Keep recommendations practical and actionable for public safety. Risk level shou
             ],
             'timestamp' => date('Y-m-d H:i:s')
         ], JSON_UNESCAPED_UNICODE);
-        
+
+        } catch (Exception $e) {
+            error_log("Error getting disaster monitoring analysis: " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+        } catch (Error $e) {
+            error_log("Fatal error getting disaster monitoring analysis: " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Fatal error: ' . $e->getMessage()]);
+        }
     } catch (Exception $e) {
-        error_log("Error getting disaster monitoring analysis: " . $e->getMessage());
+        error_log("Error in getWeatherAnalysis: " . $e->getMessage());
         error_log("Stack trace: " . $e->getTraceAsString());
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
     } catch (Error $e) {
-        error_log("Fatal error getting disaster monitoring analysis: " . $e->getMessage());
+        error_log("Fatal error in getWeatherAnalysis: " . $e->getMessage());
         error_log("Stack trace: " . $e->getTraceAsString());
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Fatal error: ' . $e->getMessage()]);
@@ -1605,13 +1616,13 @@ Keep recommendations practical and actionable for public safety. Risk level shou
 function checkEarthquakeConditions($settings) {
     $warnings = [];
     $threshold = floatval($settings['earthquake_threshold'] ?? 5.0);
-    
+
     // Check recent earthquakes from USGS API
-    $url = "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=" . 
-           date('Y-m-d', strtotime('-1 day')) . 
-           "&minmagnitude=" . $threshold . 
+    $url = "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=" .
+           date('Y-m-d', strtotime('-1 day')) .
+           "&minmagnitude=" . $threshold .
            "&maxlatitude=21.0&minlatitude=4.5&maxlongitude=127.0&minlongitude=116.0";
-    
+
     $response = @file_get_contents($url);
     if ($response) {
         $data = json_decode($response, true);
@@ -1630,7 +1641,7 @@ function checkEarthquakeConditions($settings) {
             }
         }
     }
-    
+
     return $warnings;
 }
 
@@ -1639,39 +1650,39 @@ function checkFloodingLandslideRisks($settings) {
     $warnings = [];
     $monitoredAreas = explode("\n", $settings['monitored_areas'] ?? '');
     $warningTypes = explode(',', $settings['warning_types'] ?? '');
-    
+
     $rainThreshold = floatval($settings['rain_threshold'] ?? 20);
-    
+
     // Get OpenWeatherMap API key
     $stmt = $pdo->query("SELECT api_key FROM integration_settings WHERE source = 'pagasa' LIMIT 1");
     $apiKeyRow = $stmt->fetch(PDO::FETCH_ASSOC);
     $apiKey = $apiKeyRow['api_key'] ?? '';
-    
+
     if (empty($apiKey)) {
         return $warnings;
     }
-    
+
     // Area coordinates (simplified - in production, use geocoding)
     $areaCoords = [
         'Quezon City' => ['lat' => 14.6488, 'lon' => 121.0509],
         'Manila' => ['lat' => 14.5995, 'lon' => 120.9842],
         'Makati' => ['lat' => 14.5547, 'lon' => 121.0244],
     ];
-    
+
     foreach ($monitoredAreas as $area) {
         $area = trim($area);
         if (empty($area) || !isset($areaCoords[$area])) continue;
-        
+
         $coords = $areaCoords[$area];
         $url = "https://api.openweathermap.org/data/2.5/weather?lat={$coords['lat']}&lon={$coords['lon']}&appid={$apiKey}&units=metric";
-        
+
         $response = @file_get_contents($url);
         if ($response) {
             $weatherData = json_decode($response, true);
-            
+
             if (isset($weatherData['rain']['1h'])) {
                 $rainfall = floatval($weatherData['rain']['1h']);
-                
+
                 if ($rainfall >= $rainThreshold) {
                     if (in_array('flooding', $warningTypes)) {
                         $warnings[] = [
@@ -1681,7 +1692,7 @@ function checkFloodingLandslideRisks($settings) {
                             'severity' => $rainfall >= 50 ? 'critical' : ($rainfall >= 30 ? 'high' : 'medium')
                         ];
                     }
-                    
+
                     if (in_array('landslide', $warningTypes) && $rainfall >= 30) {
                         $warnings[] = [
                             'type' => 'landslide',
@@ -1694,7 +1705,7 @@ function checkFloodingLandslideRisks($settings) {
             }
         }
     }
-    
+
     return $warnings;
 }
 
