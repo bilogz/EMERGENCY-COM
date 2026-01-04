@@ -219,6 +219,28 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Check if user info is required and filled (for anonymous users)
+        const userId = sessionStorage.getItem('user_id');
+        const isLoggedIn = userId && 
+                          userId !== 'null' &&
+                          userId !== 'undefined' &&
+                          !userId.startsWith('guest_');
+        
+        if (!isLoggedIn) {
+            // Check if all required info is provided
+            const hasStoredName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
+            const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
+            const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
+            const hasStoredConcern = localStorage.getItem('guest_concern') || sessionStorage.getItem('user_concern');
+            const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
+            
+            if (!hasAllRequiredInfo) {
+                // Show form and prevent chat
+                checkAndShowUserInfoForm();
+                console.log('User info required - showing form');
+            }
+        }
+        
         console.log('Opening chat modal...', modal);
         
         // Force show the modal with all necessary styles
@@ -356,27 +378,45 @@ document.addEventListener('DOMContentLoaded', function() {
                           userId !== 'undefined' &&
                           !userId.startsWith('guest_');
         
-        // Check if guest has provided info (from form submission)
+        // Check if guest has provided ALL required info (name, contact, location, concern)
         const guestInfoProvided = localStorage.getItem('guest_info_provided') === 'true';
         const hasStoredName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
+        const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
+        const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
+        const hasStoredConcern = localStorage.getItem('guest_concern') || sessionStorage.getItem('user_concern');
         
-        console.log('User check - isLoggedIn:', isLoggedIn, 'guestInfoProvided:', guestInfoProvided, 'hasStoredName:', hasStoredName);
+        // All fields are required for anonymous users
+        const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
+        
+        console.log('User check - isLoggedIn:', isLoggedIn, 'guestInfoProvided:', guestInfoProvided, 'hasAllRequiredInfo:', hasAllRequiredInfo);
         
         if (isLoggedIn) {
             // Logged in user - show chat interface
             userInfoForm.style.display = 'none';
             chatInterface.style.display = 'block';
             console.log('Showing chat interface (logged in)');
-        } else if (!guestInfoProvided || !hasStoredName) {
-            // Anonymous user without info - show form
+        } else if (!hasAllRequiredInfo) {
+            // Anonymous user without ALL required info - show form (REQUIRED)
             userInfoForm.style.display = 'block';
             chatInterface.style.display = 'none';
-            console.log('Showing user info form (anonymous)');
+            console.log('Showing user info form (anonymous - REQUIRED)');
+            
+            // Disable chat input if form is not filled
+            const chatInput = document.getElementById('chatInput');
+            const chatSendBtn = document.getElementById('chatSendBtn');
+            if (chatInput) chatInput.disabled = true;
+            if (chatSendBtn) chatSendBtn.disabled = true;
         } else {
-            // Guest has provided info - show chat interface
+            // Guest has provided all required info - show chat interface
             userInfoForm.style.display = 'none';
             chatInterface.style.display = 'block';
-            console.log('Showing chat interface (guest with info)');
+            console.log('Showing chat interface (guest with all required info)');
+            
+            // Enable chat input
+            const chatInput = document.getElementById('chatInput');
+            const chatSendBtn = document.getElementById('chatSendBtn');
+            if (chatInput) chatInput.disabled = false;
+            if (chatSendBtn) chatSendBtn.disabled = false;
         }
     }
     
@@ -1007,6 +1047,29 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Function to send message using MySQL
             async function sendChatMessage() {
+            // Check if user info is required and filled (for anonymous users)
+            const userId = sessionStorage.getItem('user_id');
+            const isLoggedIn = userId && 
+                              userId !== 'null' &&
+                              userId !== 'undefined' &&
+                              !userId.startsWith('guest_');
+            
+            if (!isLoggedIn) {
+                // Check if all required info is provided
+                const hasStoredName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
+                const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
+                const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
+                const hasStoredConcern = localStorage.getItem('guest_concern') || sessionStorage.getItem('user_concern');
+                const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
+                
+                if (!hasAllRequiredInfo) {
+                    alert('Please fill in all required information (Name, Contact, Location, and Concern) before sending a message.');
+                    // Show the form
+                    checkAndShowUserInfoForm();
+                    return;
+                }
+            }
+            
             const text = chatInput ? chatInput.value.trim() : '';
             if (!text) {
                 console.warn('Cannot send empty message');
@@ -1079,6 +1142,36 @@ document.addEventListener('DOMContentLoaded', function() {
             // Make sendChatMessage available globally
             window.sendChatMessage = sendChatMessage;
             
+            // Also add a check to prevent sending if form is not filled
+            const originalSendChatMessage = sendChatMessage;
+            window.sendChatMessage = function() {
+                // Check if user info is required and filled (for anonymous users)
+                const userId = sessionStorage.getItem('user_id');
+                const isLoggedIn = userId && 
+                                  userId !== 'null' &&
+                                  userId !== 'undefined' &&
+                                  !userId.startsWith('guest_');
+                
+                if (!isLoggedIn) {
+                    // Check if all required info is provided
+                    const hasStoredName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
+                    const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
+                    const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
+                    const hasStoredConcern = localStorage.getItem('guest_concern') || sessionStorage.getItem('user_concern');
+                    const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
+                    
+                    if (!hasAllRequiredInfo) {
+                        alert('Please fill in all required information (Name, Contact, Location, and Concern) before sending a message.');
+                        // Show the form
+                        checkAndShowUserInfoForm();
+                        return;
+                    }
+                }
+                
+                // Call original function
+                return originalSendChatMessage();
+            };
+            
             // Make attachSendButtonHandlers available globally
             window.attachSendButtonHandlers = attachSendButtonHandlers;
             
@@ -1087,41 +1180,92 @@ document.addEventListener('DOMContentLoaded', function() {
                 const sendBtn = document.getElementById('chatSendBtn');
                 const input = document.getElementById('chatInput');
                 
-                if (sendBtn && input) {
-                    // Remove old listeners by cloning
-                    const newBtn = sendBtn.cloneNode(true);
-                    sendBtn.parentNode.replaceChild(newBtn, sendBtn);
-                    const freshBtn = document.getElementById('chatSendBtn');
-                    
-                    // Attach click handler
-                    freshBtn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        e.stopImmediatePropagation();
-                        if (window.sendChatMessage) {
-                            window.sendChatMessage();
-                        } else {
-                            console.error('sendChatMessage function not available');
-                        }
-                    });
-                    
-                    // Attach Enter key handler
-                    input.addEventListener('keypress', function(e) {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (window.sendChatMessage) {
-                                window.sendChatMessage();
-                            }
-                        }
-                    });
-                    
-                    console.log('Chat send button handlers attached');
-                    return true;
-                } else {
-                    console.warn('Chat send button or input not found, will retry...', { sendBtn, input });
+                if (!sendBtn || !input) {
+                    console.warn('Chat send button or input not found', { sendBtn, input });
                     return false;
                 }
+                
+                // Ensure button is clickable
+                sendBtn.style.pointerEvents = 'auto';
+                sendBtn.style.cursor = 'pointer';
+                sendBtn.style.touchAction = 'manipulation';
+                sendBtn.style.zIndex = '10001';
+                sendBtn.style.position = 'relative';
+                sendBtn.disabled = false;
+                
+                // Remove old listeners by cloning
+                const newBtn = sendBtn.cloneNode(true);
+                sendBtn.parentNode.replaceChild(newBtn, sendBtn);
+                const freshBtn = document.getElementById('chatSendBtn');
+                
+                if (!freshBtn) {
+                    console.error('Failed to get fresh button');
+                    return false;
+                }
+                
+                // Ensure fresh button is clickable
+                freshBtn.style.pointerEvents = 'auto';
+                freshBtn.style.cursor = 'pointer';
+                freshBtn.style.touchAction = 'manipulation';
+                freshBtn.style.zIndex = '10001';
+                freshBtn.style.position = 'relative';
+                freshBtn.disabled = false;
+                
+                // Attach multiple event handlers for better responsiveness
+                freshBtn.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    console.log('Send button clicked');
+                    if (window.sendChatMessage) {
+                        window.sendChatMessage();
+                    } else {
+                        console.error('sendChatMessage function not available');
+                    }
+                    return false;
+                };
+                
+                freshBtn.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Send button touched');
+                    if (window.sendChatMessage) {
+                        window.sendChatMessage();
+                    }
+                }, { passive: false });
+                
+                freshBtn.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+                
+                // Clone and reattach input handlers
+                const newInput = input.cloneNode(true);
+                input.parentNode.replaceChild(newInput, input);
+                const freshInput = document.getElementById('chatInput');
+                
+                freshInput.style.pointerEvents = 'auto';
+                freshInput.style.cursor = 'text';
+                
+                freshInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Enter key pressed');
+                        if (window.sendChatMessage) {
+                            window.sendChatMessage();
+                        }
+                    }
+                });
+                
+                freshInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                    }
+                });
+                
+                console.log('Chat send button handlers attached successfully');
+                return true;
             }
             
             // Attach handlers immediately

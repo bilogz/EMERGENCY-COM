@@ -396,23 +396,89 @@ $pageTitle = 'Two-Way Communication Interface';
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
-        document.getElementById('sendButton').addEventListener('click', sendMessage);
-        document.getElementById('messageInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
+        // Attach send button handlers with better event handling
+        const sendButton = document.getElementById('sendButton');
+        const messageInput = document.getElementById('messageInput');
+        
+        if (sendButton) {
+            // Ensure button is clickable
+            sendButton.style.pointerEvents = 'auto';
+            sendButton.style.cursor = 'pointer';
+            sendButton.style.touchAction = 'manipulation';
+            sendButton.disabled = false;
+            
+            // Remove old listeners by cloning
+            const newBtn = sendButton.cloneNode(true);
+            sendButton.parentNode.replaceChild(newBtn, sendButton);
+            const freshBtn = document.getElementById('sendButton');
+            
+            if (freshBtn) {
+                freshBtn.style.pointerEvents = 'auto';
+                freshBtn.style.cursor = 'pointer';
+                freshBtn.style.touchAction = 'manipulation';
+                freshBtn.disabled = false;
+                
+                freshBtn.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Admin send button clicked');
+                    sendMessage();
+                    return false;
+                };
+                
+                freshBtn.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Admin send button touched');
+                    sendMessage();
+                }, { passive: false });
             }
-        });
+        }
+        
+        if (messageInput) {
+            messageInput.style.pointerEvents = 'auto';
+            messageInput.style.cursor = 'text';
+            
+            messageInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Admin Enter key pressed');
+                    sendMessage();
+                }
+            });
+            
+            messageInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                }
+            });
+        }
 
         async function sendMessage() {
             const messageInput = document.getElementById('messageInput');
             const message = messageInput.value.trim();
-            if (!message || !currentConversationId) {
-                console.warn('Cannot send: message or conversationId missing');
+            
+            if (!message) {
+                console.warn('Cannot send: message is empty');
+                return;
+            }
+            
+            if (!currentConversationId) {
+                console.warn('Cannot send: no conversation selected');
+                alert('Please select a conversation first.');
                 return;
             }
 
             try {
+                // Disable input and button while sending
+                messageInput.disabled = true;
+                const sendBtn = document.getElementById('sendButton');
+                if (sendBtn) {
+                    sendBtn.disabled = true;
+                    sendBtn.textContent = 'Sending...';
+                }
+                
                 // Add to UI immediately
                 addMessageToChat(message, 'admin', Date.now());
                 messageInput.value = '';
@@ -422,21 +488,35 @@ $pageTitle = 'Two-Way Communication Interface';
                 formData.append('text', message);
                 formData.append('conversationId', currentConversationId);
                 
+                console.log('Sending admin message:', message, 'to conversation:', currentConversationId);
+                
                 const response = await fetch(API_BASE + 'chat-send.php', {
                     method: 'POST',
                     body: formData
                 });
                 
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
+                console.log('Response data:', data);
                 
                 if (data.success) {
-                    console.log('Message sent successfully');
+                    console.log('Admin message sent successfully');
                     // Reload conversations to update last message
                     loadConversations();
+                    // Reload messages to get updated list
+                    if (currentConversationId) {
+                        loadMessages(currentConversationId);
+                    }
                 } else {
                     console.error('Failed to send message:', data.message);
                     alert('Failed to send message: ' + (data.message || 'Unknown error'));
                     // Remove the message from UI if send failed
+                    const messagesDiv = document.getElementById('chatMessages');
                     const messages = messagesDiv.querySelectorAll('.message');
                     if (messages.length > 0) {
                         messages[messages.length - 1].remove();
@@ -444,12 +524,21 @@ $pageTitle = 'Two-Way Communication Interface';
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
-                alert('Error sending message. Please try again.');
+                alert('Error sending message: ' + error.message);
                 // Remove the message from UI if send failed
                 const messagesDiv = document.getElementById('chatMessages');
                 const messages = messagesDiv.querySelectorAll('.message');
                 if (messages.length > 0) {
                     messages[messages.length - 1].remove();
+                }
+            } finally {
+                // Re-enable input and button
+                messageInput.disabled = false;
+                messageInput.focus();
+                const sendBtn = document.getElementById('sendButton');
+                if (sendBtn) {
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = 'Send';
                 }
             }
         }
