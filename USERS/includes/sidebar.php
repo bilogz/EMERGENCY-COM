@@ -1098,40 +1098,75 @@ document.addEventListener('DOMContentLoaded', function() {
                     updateChatStatus('waiting');
                 }
                 
-                // Add message to UI immediately
-                if (window.addMessageToChat) {
-                    addMessageToChat(text, 'user', Date.now());
+                // Get text from input
+                const text = chatInput ? chatInput.value.trim() : '';
+                if (!text) {
+                    console.warn('No text to send');
+                    return;
                 }
+                
+                // Clear input immediately for better UX
                 if (chatInput) {
                     chatInput.value = '';
                 }
                 
+                // Add message to UI immediately
+                if (window.addMessageToChat) {
+                    window.addMessageToChat(text, 'user', Date.now());
+                }
+                
                 // Use MySQL chat system - try both function names
                 let success = false;
-                if (window.sendChatMessageMySQL) {
-                    success = await window.sendChatMessageMySQL(text);
-                } else if (window.sendMessage && typeof window.sendMessage === 'function') {
-                    // Fallback to sendMessage if available
-                    success = await window.sendMessage(text);
-                } else {
-                    console.error('MySQL chat system not available');
-                    alert('Chat system is not ready. Please refresh the page.');
-                    // Remove the message from UI if send failed
-                    const messages = document.querySelectorAll('.chat-message');
-                    if (messages.length > 0) {
-                        messages[messages.length - 1].remove();
+                let errorMessage = null;
+                
+                try {
+                    if (window.sendChatMessageMySQL) {
+                        console.log('Calling sendChatMessageMySQL with text:', text);
+                        success = await window.sendChatMessageMySQL(text);
+                        console.log('sendChatMessageMySQL result:', success);
+                    } else if (window.sendMessage && typeof window.sendMessage === 'function') {
+                        console.log('Calling sendMessage (fallback)');
+                        success = await window.sendMessage(text);
+                    } else {
+                        console.error('MySQL chat system not available');
+                        console.log('Available functions:', {
+                            sendChatMessage: typeof window.sendChatMessage,
+                            sendChatMessageMySQL: typeof window.sendChatMessageMySQL,
+                            sendMessage: typeof window.sendMessage
+                        });
+                        errorMessage = 'Chat system is not ready. Please refresh the page.';
                     }
-                    return;
+                } catch (error) {
+                    console.error('Error calling send function:', error);
+                    errorMessage = 'Error sending message: ' + error.message;
+                    success = false;
                 }
                 
                 if (success) {
                     console.log('Message sent successfully');
+                    // Update status
+                    if (window.updateChatStatus) {
+                        window.updateChatStatus('waiting');
+                    }
                 } else {
-                    console.error('Failed to send message');
+                    console.error('Failed to send message', errorMessage);
                     // Remove the message from UI if send failed
                     const messages = document.querySelectorAll('.chat-message');
                     if (messages.length > 0) {
-                        messages[messages.length - 1].remove();
+                        const lastMessage = messages[messages.length - 1];
+                        // Only remove if it's the message we just added
+                        if (lastMessage.textContent.includes(text)) {
+                            lastMessage.remove();
+                        }
+                    }
+                    if (errorMessage) {
+                        alert(errorMessage);
+                    } else {
+                        alert('Failed to send message. Please try again.');
+                    }
+                    // Restore input text
+                    if (chatInput) {
+                        chatInput.value = text;
                     }
                 }
             } catch (error) {
@@ -1222,6 +1257,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Make attachSendButtonHandlers available globally
             window.attachSendButtonHandlers = attachSendButtonHandlers;
             
+            // Make attachCloseButtonHandler available globally
+            window.attachCloseButtonHandler = attachCloseButtonHandler;
+            
             // Function to attach send button handlers
             function attachSendButtonHandlers() {
                 const sendBtn = document.getElementById('chatSendBtn');
@@ -1259,39 +1297,88 @@ document.addEventListener('DOMContentLoaded', function() {
                 freshBtn.disabled = false;
                 
                 // Attach multiple event handlers for better responsiveness
-                freshBtn.onclick = function(e) {
+                freshBtn.onclick = async function(e) {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
                     console.log('Send button clicked');
-                    // Try both function names for compatibility
-                    if (window.sendChatMessage) {
-                        window.sendChatMessage();
-                    } else if (window.sendChatMessageMySQL) {
-                        const input = document.getElementById('chatInput');
-                        const text = input ? input.value.trim() : '';
-                        if (text) {
-                            window.sendChatMessageMySQL(text);
-                        }
-                    } else {
-                        console.error('sendChatMessage function not available');
-                        alert('Chat system is not ready. Please refresh the page.');
+                    
+                    const input = document.getElementById('chatInput');
+                    const text = input ? input.value.trim() : '';
+                    
+                    if (!text) {
+                        console.warn('No text to send');
+                        return false;
                     }
+                    
+                    // Disable button while sending
+                    freshBtn.disabled = true;
+                    freshBtn.textContent = 'Sending...';
+                    
+                    try {
+                        // Try sendChatMessage first (wrapper function), then sendChatMessageMySQL
+                        if (window.sendChatMessage) {
+                            console.log('Using sendChatMessage wrapper');
+                            await window.sendChatMessage();
+                        } else if (window.sendChatMessageMySQL) {
+                            console.log('Using sendChatMessageMySQL directly');
+                            const success = await window.sendChatMessageMySQL(text);
+                            if (!success) {
+                                console.error('Failed to send message');
+                                alert('Failed to send message. Please try again.');
+                                // Restore input
+                                if (input) {
+                                    input.value = text;
+                                }
+                            }
+                        } else {
+                            console.error('No send function available');
+                            console.log('Available functions:', {
+                                sendChatMessage: typeof window.sendChatMessage,
+                                sendChatMessageMySQL: typeof window.sendChatMessageMySQL
+                            });
+                            alert('Chat system is not ready. Please refresh the page.');
+                            // Restore input
+                            if (input) {
+                                input.value = text;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error in send button handler:', error);
+                        alert('Error sending message: ' + error.message);
+                        // Restore input
+                        if (input) {
+                            input.value = text;
+                        }
+                    } finally {
+                        // Re-enable button
+                        freshBtn.disabled = false;
+                        freshBtn.textContent = 'Send';
+                    }
+                    
                     return false;
                 };
                 
-                freshBtn.addEventListener('touchend', function(e) {
+                freshBtn.addEventListener('touchend', async function(e) {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('Send button touched');
-                    // Try both function names for compatibility
+                    
+                    const input = document.getElementById('chatInput');
+                    const text = input ? input.value.trim() : '';
+                    
+                    if (!text) {
+                        return;
+                    }
+                    
+                    // Try sendChatMessage first, then sendChatMessageMySQL
                     if (window.sendChatMessage) {
                         window.sendChatMessage();
                     } else if (window.sendChatMessageMySQL) {
-                        const input = document.getElementById('chatInput');
-                        const text = input ? input.value.trim() : '';
-                        if (text) {
-                            window.sendChatMessageMySQL(text);
+                        try {
+                            await window.sendChatMessageMySQL(text);
+                        } catch (error) {
+                            console.error('Error calling sendChatMessageMySQL:', error);
                         }
                     }
                 }, { passive: false });
@@ -1309,19 +1396,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 freshInput.style.pointerEvents = 'auto';
                 freshInput.style.cursor = 'text';
                 
-                freshInput.addEventListener('keypress', function(e) {
+                freshInput.addEventListener('keypress', async function(e) {
                     if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         e.stopPropagation();
                         console.log('Enter key pressed');
-                        // Try both function names for compatibility
+                        
+                        const text = this.value.trim();
+                        if (!text) {
+                            return;
+                        }
+                        
+                        // Try sendChatMessage first, then sendChatMessageMySQL
                         if (window.sendChatMessage) {
                             window.sendChatMessage();
                         } else if (window.sendChatMessageMySQL) {
-                            const text = this.value.trim();
-                            if (text) {
-                                window.sendChatMessageMySQL(text);
+                            try {
+                                const success = await window.sendChatMessageMySQL(text);
+                                if (!success) {
+                                    console.error('Failed to send message');
+                                }
+                            } catch (error) {
+                                console.error('Error calling sendChatMessageMySQL:', error);
                             }
+                        } else {
+                            console.error('No send function available');
+                            alert('Chat system is not ready. Please refresh the page.');
                         }
                     }
                 });

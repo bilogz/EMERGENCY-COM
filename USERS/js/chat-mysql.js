@@ -218,7 +218,12 @@
             console.log('Response data:', data);
             
             if (data.success) {
-                console.log('Message sent successfully, messageId:', data.messageId);
+                console.log('Message sent successfully, messageId:', data.messageId, 'conversationId:', data.conversationId);
+                // Update conversation ID if returned
+                if (data.conversationId) {
+                    conversationId = data.conversationId;
+                    sessionStorage.setItem('conversation_id', conversationId);
+                }
                 // Update last message ID
                 if (data.messageId) {
                     lastMessageId = data.messageId;
@@ -226,13 +231,13 @@
                 return true;
             } else {
                 console.error('Failed to send message:', data.message);
-                alert('Failed to send message: ' + (data.message || 'Unknown error'));
+                // Don't show alert here, let the caller handle it
                 return false;
             }
         } catch (error) {
             console.error('Error sending message:', error);
-            alert('Error sending message: ' + error.message);
-            return false;
+            // Don't show alert here, let the caller handle it
+            throw error; // Re-throw so caller can handle
         }
     }
     
