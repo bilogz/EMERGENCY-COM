@@ -301,15 +301,36 @@ document.addEventListener('DOMContentLoaded', function() {
     window.closeChat = closeChatWithFlag;
 
     if (chatFab) {
-        // Remove any existing listeners first
-        const newFab = chatFab.cloneNode(true);
-        chatFab.parentNode.replaceChild(newFab, chatFab);
-        const freshFab = document.getElementById('chatFab');
+        // Ensure button is clickable
+        chatFab.style.pointerEvents = 'auto';
+        chatFab.style.position = 'fixed';
+        chatFab.style.zIndex = '1350';
         
-        freshFab.addEventListener('click', function(e) {
+        // Use direct event listener without cloning to avoid issues
+        chatFab.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation();
+            console.log('Chat button clicked');
             openChat();
+        }, true); // Use capture phase to ensure it fires
+        
+        // Also add touch event for mobile
+        chatFab.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            console.log('Chat button touched');
+            openChat();
+        }, true);
+        
+        // Fallback: ensure button is accessible
+        chatFab.setAttribute('tabindex', '0');
+        chatFab.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openChat();
+            }
         });
     }
 
