@@ -187,6 +187,53 @@ document.addEventListener('DOMContentLoaded', function() {
     const chatInput = document.getElementById('chatInput');
     const chatMessages = document.querySelector('.chat-messages');
     
+    // Global event delegation for send button as ultimate fallback
+    // This will catch clicks even if other handlers fail
+    document.addEventListener('click', function(e) {
+        const target = e.target;
+        // Check if clicked element is the send button or inside it
+        if (target && (target.id === 'chatSendBtn' || target.closest('#chatSendBtn'))) {
+            const sendBtn = target.id === 'chatSendBtn' ? target : target.closest('#chatSendBtn');
+            if (sendBtn && !sendBtn.disabled) {
+                console.log('GLOBAL HANDLER: Send button clicked via delegation');
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Get input value
+                const input = document.getElementById('chatInput');
+                const text = input ? input.value.trim() : '';
+                
+                if (!text) {
+                    console.warn('GLOBAL HANDLER: No text to send');
+                    return;
+                }
+                
+                // Call send function if available
+                if (window.sendChatMessageMySQL) {
+                    console.log('GLOBAL HANDLER: Calling sendChatMessageMySQL');
+                    sendBtn.disabled = true;
+                    sendBtn.textContent = 'Sending...';
+                    window.sendChatMessageMySQL(text).then(success => {
+                        if (success && input) {
+                            input.value = '';
+                        }
+                        sendBtn.disabled = false;
+                        sendBtn.textContent = 'Send';
+                    }).catch(err => {
+                        console.error('GLOBAL HANDLER: Error sending:', err);
+                        sendBtn.disabled = false;
+                        sendBtn.textContent = 'Send';
+                    });
+                } else if (window.sendChatMessage) {
+                    console.log('GLOBAL HANDLER: Calling sendChatMessage');
+                    window.sendChatMessage();
+                } else {
+                    console.error('GLOBAL HANDLER: No send function available');
+                }
+            }
+        }
+    }, true); // Use capture phase to catch early
+    
     function toggleSidebar() {
         sidebar.classList.toggle('sidebar-open');
         sidebarOverlay.classList.toggle('sidebar-overlay-open');
@@ -1276,6 +1323,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (!sendBtn) {
                     console.error('Chat send button not found!');
+                    console.log('Available elements:', {
+                        chatForm: !!document.getElementById('chatForm'),
+                        chatInterface: !!document.getElementById('chatInterface'),
+                        chatModal: !!document.getElementById('chatModal')
+                    });
+                    // Retry after a short delay
+                    setTimeout(() => {
+                        if (document.getElementById('chatSendBtn')) {
+                            console.log('Retrying attachSendButtonHandlers...');
+                            attachSendButtonHandlers();
+                        }
+                    }, 300);
                     return false;
                 }
                 
@@ -1286,6 +1345,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 console.log('Send button found:', sendBtn);
                 console.log('Input found:', input);
+                console.log('Button current state:', {
+                    disabled: sendBtn.disabled,
+                    display: window.getComputedStyle(sendBtn).display,
+                    visibility: window.getComputedStyle(sendBtn).visibility,
+                    pointerEvents: window.getComputedStyle(sendBtn).pointerEvents
+                });
                 
                 // Ensure button is clickable BEFORE cloning
                 sendBtn.style.pointerEvents = 'auto';
@@ -1423,16 +1488,32 @@ document.addEventListener('DOMContentLoaded', function() {
                     return false;
                 };
                 
-                // Use addEventListener instead of onclick for better reliability
+                // Use multiple methods to ensure the handler works
+                // Method 1: addEventListener
                 freshBtn.addEventListener('click', handleSendClick, { capture: false, passive: false });
                 
-                // Also attach touchend for mobile devices
+                // Method 2: Direct onclick as fallback
+                freshBtn.onclick = handleSendClick;
+                
+                // Method 3: Also attach touchend for mobile devices
                 freshBtn.addEventListener('touchend', async function(e) {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('Send button touched');
                     handleSendClick(e);
                 }, { passive: false });
+                
+                // Method 4: Use event delegation on parent as ultimate fallback
+                const chatForm = document.getElementById('chatForm');
+                if (chatForm && !chatForm.hasAttribute('data-send-delegation')) {
+                    chatForm.setAttribute('data-send-delegation', 'true');
+                    chatForm.addEventListener('click', function(e) {
+                        if (e.target && e.target.id === 'chatSendBtn') {
+                            console.log('Send button clicked via delegation');
+                            handleSendClick(e);
+                        }
+                    }, { capture: true });
+                }
                 
                 // Clone and reattach input handlers
                 const newInput = input.cloneNode(true);
@@ -1494,10 +1575,43 @@ document.addEventListener('DOMContentLoaded', function() {
                     cursor: window.getComputedStyle(freshBtn).cursor,
                     zIndex: window.getComputedStyle(freshBtn).zIndex,
                     disabled: freshBtn.disabled,
-                    type: freshBtn.type
+                    type: freshBtn.type,
+                    display: window.getComputedStyle(freshBtn).display,
+                    visibility: window.getComputedStyle(freshBtn).visibility,
+                    opacity: window.getComputedStyle(freshBtn).opacity
                 });
                 
+                // Add a simple test handler to verify button is clickable
+                freshBtn.addEventListener('mousedown', function(e) {
+                    console.log('TEST: Send button mousedown detected!', e);
+                });
+                
+                freshBtn.addEventListener('mouseup', function(e) {
+                    console.log('TEST: Send button mouseup detected!', e);
+                });
+                
+                // Verify handler was attached
+                const hasClickHandler = freshBtn.onclick !== null || 
+                    (freshBtn.addEventListener && true);
+                console.log('Button has click handler:', hasClickHandler);
+                console.log('Button onclick type:', typeof freshBtn.onclick);
+                
+                // Force button to be visible and clickable
+                freshBtn.style.display = 'block';
+                freshBtn.style.visibility = 'visible';
+                freshBtn.style.opacity = '1';
+                freshBtn.style.pointerEvents = 'auto';
+                freshBtn.style.cursor = 'pointer';
+                freshBtn.removeAttribute('disabled');
+                freshBtn.disabled = false;
+                
                 console.log('Chat send button handlers attached successfully');
+                console.log('Final button state:', {
+                    disabled: freshBtn.disabled,
+                    onclick: typeof freshBtn.onclick,
+                    style: freshBtn.style.cssText
+                });
+                
                 return true;
             }
             
