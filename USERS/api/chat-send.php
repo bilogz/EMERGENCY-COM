@@ -20,9 +20,13 @@ if (!$pdo) {
 }
 
 try {
-    $input = json_decode(file_get_contents('php://input'), true);
+    // Get data from POST (FormData) or JSON
+    $input = null;
+    $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+    if (strpos($contentType, 'application/json') !== false) {
+        $input = json_decode(file_get_contents('php://input'), true);
+    }
     
-    // Get data from POST or JSON
     $text = $input['text'] ?? $_POST['text'] ?? '';
     $userId = $input['userId'] ?? $_POST['userId'] ?? null;
     $userName = $input['userName'] ?? $_POST['userName'] ?? 'Guest User';
@@ -30,7 +34,7 @@ try {
     $userPhone = $input['userPhone'] ?? $_POST['userPhone'] ?? null;
     $userLocation = $input['userLocation'] ?? $_POST['userLocation'] ?? null;
     $userConcern = $input['userConcern'] ?? $_POST['userConcern'] ?? null;
-    $isGuest = $input['isGuest'] ?? $_POST['isGuest'] ?? true;
+    $isGuest = isset($input['isGuest']) ? ($input['isGuest'] === '1' || $input['isGuest'] === true) : (isset($_POST['isGuest']) ? ($_POST['isGuest'] === '1') : true);
     $conversationId = $input['conversationId'] ?? $_POST['conversationId'] ?? null;
     
     if (empty($text)) {

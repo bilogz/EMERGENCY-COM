@@ -16,7 +16,7 @@
     async function initChat() {
         if (isInitialized) {
             console.log('Chat already initialized');
-            return;
+            return true;
         }
         
         console.log('Initializing MySQL chat system...');
@@ -38,9 +38,10 @@
             }
         }
         
+        console.log('User info:', { userId, userName, isGuest });
+        
         try {
-            // Get or create conversation
-            const response = await fetch(API_BASE + 'chat-get-conversation.php?' + new URLSearchParams({
+            const apiUrl = API_BASE + 'chat-get-conversation.php?' + new URLSearchParams({
                 userId: userId,
                 userName: userName,
                 userEmail: userEmail || '',
@@ -48,9 +49,21 @@
                 userLocation: userLocation || '',
                 userConcern: userConcern || '',
                 isGuest: isGuest ? '1' : '0'
-            }));
+            });
+            
+            console.log('Fetching conversation from:', apiUrl);
+            
+            // Get or create conversation
+            const response = await fetch(apiUrl);
+            
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             
             const data = await response.json();
+            console.log('Conversation response:', data);
             
             if (data.success) {
                 conversationId = data.conversationId;
@@ -75,6 +88,7 @@
             }
         } catch (error) {
             console.error('Error initializing chat:', error);
+            alert('Failed to initialize chat: ' + error.message);
             return false;
         }
     }
@@ -114,13 +128,20 @@
             return false;
         }
         
+        // Get conversation ID
         if (!conversationId) {
             conversationId = sessionStorage.getItem('conversation_id');
             if (!conversationId) {
                 console.error('No conversation ID, initializing...');
-                await initChat();
+                const success = await initChat();
+                if (!success) {
+                    console.error('Failed to initialize chat');
+                    alert('Chat is not ready. Please try again.');
+                    return false;
+                }
                 conversationId = sessionStorage.getItem('conversation_id');
                 if (!conversationId) {
+                    console.error('Still no conversation ID after initialization');
                     alert('Chat is not ready. Please try again.');
                     return false;
                 }
@@ -135,6 +156,8 @@
         const userConcern = sessionStorage.getItem('user_concern') || null;
         const isGuest = !sessionStorage.getItem('user_id') || userId.startsWith('guest_');
         
+        console.log('Sending message:', { text, conversationId, userId, userName });
+        
         try {
             const formData = new FormData();
             formData.append('text', text.trim());
@@ -147,15 +170,24 @@
             formData.append('isGuest', isGuest ? '1' : '0');
             formData.append('conversationId', conversationId);
             
+            console.log('Sending to:', API_BASE + 'chat-send.php');
+            
             const response = await fetch(API_BASE + 'chat-send.php', {
                 method: 'POST',
                 body: formData
             });
             
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
+            console.log('Response data:', data);
             
             if (data.success) {
-                console.log('Message sent successfully');
+                console.log('Message sent successfully, messageId:', data.messageId);
                 // Update last message ID
                 if (data.messageId) {
                     lastMessageId = data.messageId;
@@ -168,7 +200,7 @@
             }
         } catch (error) {
             console.error('Error sending message:', error);
-            alert('Error sending message. Please try again.');
+            alert('Error sending message: ' + error.message);
             return false;
         }
     }

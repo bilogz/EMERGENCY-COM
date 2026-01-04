@@ -186,56 +186,35 @@ $pageTitle = 'Two-Way Communication Interface';
         </div>
     </div>
 
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js"></script>
+    <!-- MySQL Chat System -->
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyAvfyPTCsBp0dL76VsEVkiIrIsQkko91os",
-            authDomain: "emergencycommunicationsy-eb828.firebaseapp.com",
-            databaseURL: "https://emergencycommunicationsy-eb828-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "emergencycommunicationsy-eb828",
-            storageBucket: "emergencycommunicationsy-eb828.firebasestorage.app",
-            messagingSenderId: "201064241540",
-            appId: "1:201064241540:web:4f6d026cd355404ec365d1",
-            measurementId: "G-ESQ63CMP9B"
-        };
-        
-        if (!window.firebaseApp) {
-            window.firebaseApp = firebase.initializeApp(firebaseConfig);
-        }
-        const database = firebase.database();
-        
+        const API_BASE = '../api/';
         let currentConversationId = null;
-        let messagesListener = null;
+        let lastMessageId = 0;
+        let conversationPollingInterval = null;
+        let messagePollingInterval = null;
 
-        function loadConversations() {
-            const conversationsRef = database.ref('conversations');
+        async function loadConversations() {
             const list = document.getElementById('conversationsList');
+            list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">Loading...</p>';
             
-            console.log('Loading conversations...');
+            console.log('Loading conversations from MySQL...');
             
-            conversationsRef.on('value', (snapshot) => {
+            try {
+                const response = await fetch(API_BASE + 'chat-get-conversations.php?status=active');
+                const data = await response.json();
+                
                 list.innerHTML = '';
                 
-                if (!snapshot.exists()) {
+                if (!data.success || !data.conversations || data.conversations.length === 0) {
                     console.log('No conversations found');
                     list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No conversations yet</p>';
                     return;
                 }
                 
-                const conversations = snapshot.val();
-                console.log('Found conversations:', Object.keys(conversations).length);
+                console.log('Found conversations:', data.conversations.length);
                 
-                // Sort by updatedAt (most recent first), fallback to createdAt
-                const sortedConversations = Object.entries(conversations)
-                    .sort((a, b) => {
-                        const timeA = a[1].updatedAt || a[1].createdAt || 0;
-                        const timeB = b[1].updatedAt || b[1].createdAt || 0;
-                        return timeB - timeA;
-                    });
-                
-                sortedConversations.forEach(([convId, conv]) => {
+                data.conversations.forEach(conv => {
                     const item = document.createElement('div');
                     item.className = 'conversation-item';
                     const guestBadge = conv.isGuest ? '<span style="background: #ff9800; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem;">GUEST</span>' : '';
@@ -257,11 +236,19 @@ $pageTitle = 'Two-Way Communication Interface';
                         </small>
                     `;
                     item.addEventListener('click', function() {
-                        openConversation(convId, conv, this);
+                        openConversation(conv.id, conv, this);
                     });
                     list.appendChild(item);
                 });
-            });
+                
+                // Start polling for new conversations
+                if (!conversationPollingInterval) {
+                    conversationPollingInterval = setInterval(loadConversations, 5000); // Poll every 5 seconds
+                }
+            } catch (error) {
+                console.error('Error loading conversations:', error);
+                list.innerHTML = '<p style="text-align: center; color: red; padding: 2rem;">Error loading conversations</p>';
+            }
         }
 
         function openConversation(conversationId, conversation, element) {
@@ -298,55 +285,69 @@ $pageTitle = 'Two-Way Communication Interface';
             loadMessages(conversationId);
         }
 
-        function loadMessages(conversationId) {
-            // Remove previous listener
-            if (messagesListener) {
-                messagesListener.off();
-            }
-            
-            const messagesRef = database.ref(`messages/${conversationId}`);
+        async function loadMessages(conversationId) {
             const messagesDiv = document.getElementById('chatMessages');
-            messagesDiv.innerHTML = '';
+            messagesDiv.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">Loading messages...</p>';
             
-            const loadedMessageIds = new Set();
-            
-            // Load existing messages
-            messagesRef.once('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    const messages = snapshot.val();
-                    // Sort messages by timestamp
-                    const sortedMessages = Object.entries(messages).sort((a, b) => {
-                        const timeA = a[1].timestamp || 0;
-                        const timeB = b[1].timestamp || 0;
-                        return timeA - timeB;
-                    });
+            try {
+                const response = await fetch(API_BASE + 'chat-get-messages.php?' + new URLSearchParams({
+                    conversationId: conversationId,
+                    lastMessageId: lastMessageId
+                }));
+                
+                const data = await response.json();
+                
+                if (data.success && data.messages) {
+                    messagesDiv.innerHTML = '';
                     
-                    sortedMessages.forEach(([msgId, msg]) => {
-                        loadedMessageIds.add(msgId);
+                    data.messages.forEach(msg => {
+                        if (msg.id > lastMessageId) {
+                            lastMessageId = msg.id;
+                        }
                         addMessageToChat(msg.text, msg.senderType, msg.timestamp);
                     });
+                    
+                    // Start polling for new messages
+                    if (!messagePollingInterval) {
+                        messagePollingInterval = setInterval(() => {
+                            if (currentConversationId) {
+                                loadMessages(currentConversationId);
+                            }
+                        }, 2000); // Poll every 2 seconds
+                    }
+                } else {
+                    messagesDiv.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No messages yet</p>';
                 }
-            });
-            
-            // Listen for new messages (real-time)
-            messagesListener = messagesRef.on('child_added', (snapshot) => {
-                const messageId = snapshot.key;
-                if (!loadedMessageIds.has(messageId)) {
-                    loadedMessageIds.add(messageId);
-                    const message = snapshot.val();
-                    addMessageToChat(message.text, message.senderType, message.timestamp);
-                }
-            });
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                messagesDiv.innerHTML = '<p style="text-align: center; color: red; padding: 2rem;">Error loading messages</p>';
+            }
         }
 
         function addMessageToChat(text, senderType, timestamp) {
             const messagesDiv = document.getElementById('chatMessages');
+            
+            // Remove placeholder messages
+            const placeholders = messagesDiv.querySelectorAll('p');
+            placeholders.forEach(p => {
+                if (p.textContent.includes('Select a conversation') || p.textContent.includes('Loading')) {
+                    p.remove();
+                }
+            });
+            
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${senderType}`;
             
+            // Escape HTML to prevent XSS
+            const escapeHtml = (str) => {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            };
+            
             const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
             messageDiv.innerHTML = `
-                <div class="message-content">${text}</div>
+                <div class="message-content">${escapeHtml(text)}</div>
                 <small>${time}</small>
             `;
             messagesDiv.appendChild(messageDiv);
@@ -364,33 +365,50 @@ $pageTitle = 'Two-Way Communication Interface';
         async function sendMessage() {
             const messageInput = document.getElementById('messageInput');
             const message = messageInput.value.trim();
-            if (!message || !currentConversationId) return;
+            if (!message || !currentConversationId) {
+                console.warn('Cannot send: message or conversationId missing');
+                return;
+            }
 
             try {
                 // Add to UI immediately
                 addMessageToChat(message, 'admin', Date.now());
                 messageInput.value = '';
 
-                // Send to Firebase
-                await database.ref(`messages/${currentConversationId}`).push({
-                    text: message,
-                    senderId: 'admin',
-                    senderName: 'Admin',
-                    senderType: 'admin',
-                    timestamp: firebase.database.ServerValue.TIMESTAMP,
-                    read: false
+                // Send to MySQL via API
+                const formData = new FormData();
+                formData.append('text', message);
+                formData.append('conversationId', currentConversationId);
+                
+                const response = await fetch(API_BASE + 'chat-send.php', {
+                    method: 'POST',
+                    body: formData
                 });
-
-                // Update conversation
-                await database.ref(`conversations/${currentConversationId}`).update({
-                    lastMessage: message,
-                    lastMessageTime: firebase.database.ServerValue.TIMESTAMP,
-                    updatedAt: firebase.database.ServerValue.TIMESTAMP,
-                    status: 'active'
-                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('Message sent successfully');
+                    // Reload conversations to update last message
+                    loadConversations();
+                } else {
+                    console.error('Failed to send message:', data.message);
+                    alert('Failed to send message: ' + (data.message || 'Unknown error'));
+                    // Remove the message from UI if send failed
+                    const messages = messagesDiv.querySelectorAll('.message');
+                    if (messages.length > 0) {
+                        messages[messages.length - 1].remove();
+                    }
+                }
             } catch (error) {
                 console.error('Error sending message:', error);
                 alert('Error sending message. Please try again.');
+                // Remove the message from UI if send failed
+                const messagesDiv = document.getElementById('chatMessages');
+                const messages = messagesDiv.querySelectorAll('.message');
+                if (messages.length > 0) {
+                    messages[messages.length - 1].remove();
+                }
             }
         }
 

@@ -29,7 +29,12 @@ if (!$pdo) {
 }
 
 try {
-    $input = json_decode(file_get_contents('php://input'), true);
+    // Get data from POST (FormData) or JSON
+    $input = null;
+    $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+    if (strpos($contentType, 'application/json') !== false) {
+        $input = json_decode(file_get_contents('php://input'), true);
+    }
     
     $text = $input['text'] ?? $_POST['text'] ?? '';
     $conversationId = $input['conversationId'] ?? $_POST['conversationId'] ?? null;

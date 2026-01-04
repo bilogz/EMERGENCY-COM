@@ -1,8 +1,20 @@
 -- Chat System Database Tables
 -- Run this SQL script to create the necessary tables for the chat system
 
--- Conversations table
-CREATE TABLE IF NOT EXISTS `conversations` (
+-- Drop foreign key constraints first (if they exist)
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- Drop existing tables if they exist (in reverse order due to foreign keys)
+DROP TABLE IF EXISTS `chat_queue`;
+DROP TABLE IF EXISTS `chat_messages`;
+DROP TABLE IF EXISTS `messages`; -- In case old table exists
+DROP TABLE IF EXISTS `conversations`;
+
+-- Re-enable foreign key checks
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- Conversations table (must be created first)
+CREATE TABLE `conversations` (
   `conversation_id` INT(11) NOT NULL AUTO_INCREMENT,
   `user_id` VARCHAR(255) NOT NULL,
   `user_name` VARCHAR(255) NOT NULL,
@@ -23,8 +35,8 @@ CREATE TABLE IF NOT EXISTS `conversations` (
   KEY `idx_updated_at` (`updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Chat messages table
-CREATE TABLE IF NOT EXISTS `chat_messages` (
+-- Chat messages table (created after conversations)
+CREATE TABLE `chat_messages` (
   `message_id` INT(11) NOT NULL AUTO_INCREMENT,
   `conversation_id` INT(11) NOT NULL,
   `sender_id` VARCHAR(255) NOT NULL,
@@ -41,7 +53,7 @@ CREATE TABLE IF NOT EXISTS `chat_messages` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Chat queue table (for admin notifications)
-CREATE TABLE IF NOT EXISTS `chat_queue` (
+CREATE TABLE `chat_queue` (
   `queue_id` INT(11) NOT NULL AUTO_INCREMENT,
   `conversation_id` INT(11) NOT NULL,
   `user_id` VARCHAR(255) NOT NULL,
