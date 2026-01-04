@@ -323,13 +323,25 @@ $pageTitle = 'Two-Way Communication Interface';
                 element.classList.add('active');
             }
             
-            // Load messages
-            loadMessages(conversationId);
+            // Load messages (initial load)
+            lastMessageId = 0; // Reset for new conversation
+            loadMessages(conversationId, true);
         }
 
-        async function loadMessages(conversationId) {
+        async function loadMessages(conversationId, isInitialLoad = false) {
             const messagesDiv = document.getElementById('chatMessages');
-            messagesDiv.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">Loading messages...</p>';
+            if (!messagesDiv) {
+                console.error('Messages div not found');
+                return;
+            }
+            
+            // Only show loading on initial load when there are no messages
+            if (isInitialLoad && messagesDiv.querySelectorAll('.message').length === 0) {
+                const placeholder = messagesDiv.querySelector('p');
+                if (!placeholder || !placeholder.textContent.includes('Select a conversation')) {
+                    messagesDiv.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">Loading messages...</p>';
+                }
+            }
             
             try {
                 const response = await fetch(API_BASE + 'chat-get-messages.php?' + new URLSearchParams({
@@ -337,48 +349,105 @@ $pageTitle = 'Two-Way Communication Interface';
                     lastMessageId: lastMessageId
                 }));
                 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
-                if (data.success && data.messages) {
-                    messagesDiv.innerHTML = '';
-                    
-                    data.messages.forEach(msg => {
-                        if (msg.id > lastMessageId) {
-                            lastMessageId = msg.id;
+                if (data.success && data.messages && data.messages.length > 0) {
+                    // Remove loading/placeholder messages only on initial load
+                    if (isInitialLoad) {
+                        const loadingMsg = messagesDiv.querySelector('p');
+                        if (loadingMsg && (loadingMsg.textContent.includes('Loading') || loadingMsg.textContent.includes('Select a conversation'))) {
+                            loadingMsg.remove();
                         }
-                        addMessageToChat(msg.text, msg.senderType, msg.timestamp);
+                    }
+                    
+                    // Track existing message IDs to avoid duplicates
+                    const existingIds = new Set();
+                    messagesDiv.querySelectorAll('.message').forEach(msg => {
+                        const msgId = msg.getAttribute('data-message-id');
+                        if (msgId) {
+                            existingIds.add(parseInt(msgId));
+                        }
                     });
                     
-                    // Start polling for new messages
-                    if (!messagePollingInterval) {
+                    let newMessagesAdded = false;
+                    data.messages.forEach(msg => {
+                        // Only add if message ID is greater than lastMessageId and not already displayed
+                        if (msg.id > lastMessageId && !existingIds.has(msg.id)) {
+                            existingIds.add(msg.id);
+                            addMessageToChat(msg.text, msg.senderType, msg.timestamp, msg.id);
+                            lastMessageId = Math.max(lastMessageId, msg.id);
+                            newMessagesAdded = true;
+                        }
+                    });
+                    
+                    // Only scroll if new messages were added
+                    if (newMessagesAdded) {
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    }
+                    
+                    // Start polling for new messages (only if not already polling)
+                    if (!messagePollingInterval && currentConversationId) {
                         messagePollingInterval = setInterval(() => {
                             if (currentConversationId) {
-                                loadMessages(currentConversationId);
+                                loadMessages(currentConversationId, false); // Not initial load
                             }
                         }, 2000); // Poll every 2 seconds
                     }
+                } else if (data.success && (!data.messages || data.messages.length === 0)) {
+                    // Only show "No messages" on initial load if div is empty
+                    if (isInitialLoad && messagesDiv.querySelectorAll('.message').length === 0) {
+                        const loadingMsg = messagesDiv.querySelector('p');
+                        if (loadingMsg && loadingMsg.textContent.includes('Loading')) {
+                            loadingMsg.textContent = 'No messages yet';
+                            loadingMsg.style.color = 'var(--text-secondary)';
+                        } else if (!loadingMsg) {
+                            messagesDiv.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No messages yet</p>';
+                        }
+                    }
                 } else {
-                    messagesDiv.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No messages yet</p>';
+                    console.error('Failed to load messages:', data.message);
                 }
             } catch (error) {
                 console.error('Error loading messages:', error);
-                messagesDiv.innerHTML = '<p style="text-align: center; color: red; padding: 2rem;">Error loading messages</p>';
+                // Only show error on initial load if no messages exist
+                if (isInitialLoad && messagesDiv.querySelectorAll('.message').length === 0) {
+                    const loadingMsg = messagesDiv.querySelector('p');
+                    if (loadingMsg && loadingMsg.textContent.includes('Loading')) {
+                        loadingMsg.textContent = 'Error loading messages';
+                        loadingMsg.style.color = 'red';
+                    }
+                }
             }
         }
 
-        function addMessageToChat(text, senderType, timestamp) {
+        function addMessageToChat(text, senderType, timestamp, messageId = null) {
             const messagesDiv = document.getElementById('chatMessages');
             
-            // Remove placeholder messages
+            // Remove placeholder messages only if this is a new message being added
             const placeholders = messagesDiv.querySelectorAll('p');
             placeholders.forEach(p => {
-                if (p.textContent.includes('Select a conversation') || p.textContent.includes('Loading')) {
+                if (p.textContent.includes('Select a conversation') || (p.textContent.includes('Loading') && messagesDiv.querySelectorAll('.message').length > 0)) {
                     p.remove();
                 }
             });
             
+            // Check if message already exists (by ID or by content+time)
+            if (messageId) {
+                const existing = messagesDiv.querySelector(`.message[data-message-id="${messageId}"]`);
+                if (existing) {
+                    return; // Message already exists, don't add again
+                }
+            }
+            
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${senderType}`;
+            if (messageId) {
+                messageDiv.setAttribute('data-message-id', messageId);
+            }
             
             // Escape HTML to prevent XSS
             const escapeHtml = (str) => {
@@ -506,12 +575,14 @@ $pageTitle = 'Two-Way Communication Interface';
                 
                 if (data.success) {
                     console.log('Admin message sent successfully');
-                    // Reload conversations to update last message
-                    loadConversations();
-                    // Reload messages to get updated list
-                    if (currentConversationId) {
-                        loadMessages(currentConversationId);
+                    // Update lastMessageId if messageId is returned
+                    if (data.messageId) {
+                        lastMessageId = Math.max(lastMessageId, data.messageId);
                     }
+                    // Reload conversations to update last message (silently)
+                    loadConversations();
+                    // Don't reload messages - the message is already in UI
+                    // Polling will pick up any other new messages
                 } else {
                     console.error('Failed to send message:', data.message);
                     alert('Failed to send message: ' + (data.message || 'Unknown error'));

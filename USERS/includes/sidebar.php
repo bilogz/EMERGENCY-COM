@@ -1381,8 +1381,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Expose initFirebaseChat globally
     window.initFirebaseChat = initFirebaseChat;
     
-    function addMessageToChat(text, senderType, timestamp) {
+    function addMessageToChat(text, senderType, timestamp, messageId = null) {
         if (!chatMessages) return;
+        
+        // Check if message already exists (by ID)
+        if (messageId) {
+            const existing = chatMessages.querySelector(`.chat-message[data-message-id="${messageId}"]`);
+            if (existing) {
+                return; // Message already exists, don't add again
+            }
+        }
         
         // Remove system message if it exists and this is the first real message
         const systemMsg = chatMessages.querySelector('.chat-message-system');
@@ -1392,6 +1400,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const msg = document.createElement('div');
         msg.className = `chat-message chat-message-${senderType}`;
+        if (messageId) {
+            msg.setAttribute('data-message-id', messageId);
+        }
         
         const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
         const senderName = senderType === 'user' ? 'You' : 'Admin';

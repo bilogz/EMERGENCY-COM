@@ -94,7 +94,7 @@
     }
     
     // Load messages
-    async function loadMessages() {
+    async function loadMessages(isInitialLoad = false) {
         if (!conversationId) {
             conversationId = sessionStorage.getItem('conversation_id');
             if (!conversationId) {
@@ -119,26 +119,32 @@
                 // Track existing messages to avoid duplicates
                 const chatMessages = document.querySelector('.chat-messages');
                 if (chatMessages) {
-                    const existingTimes = new Set();
+                    // Track existing message IDs
+                    const existingIds = new Set();
                     chatMessages.querySelectorAll('.chat-message').forEach(msg => {
-                        const timeEl = msg.querySelector('small');
-                        if (timeEl) {
-                            existingTimes.add(timeEl.textContent.trim());
+                        const msgId = msg.getAttribute('data-message-id');
+                        if (msgId) {
+                            existingIds.add(parseInt(msgId));
                         }
                     });
                     
+                    let newMessagesAdded = false;
                     data.messages.forEach(msg => {
-                        if (msg.id > lastMessageId) {
-                            lastMessageId = msg.id;
-                        }
-                        
-                        // Check if message already exists
-                        const msgTime = new Date(msg.timestamp).toLocaleTimeString();
-                        if (!existingTimes.has(msgTime)) {
-                            existingTimes.add(msgTime);
-                            addMessageToChat(msg.text, msg.senderType, msg.timestamp);
+                        // Only add if message ID is greater than lastMessageId and not already displayed
+                        if (msg.id > lastMessageId && !existingIds.has(msg.id)) {
+                            existingIds.add(msg.id);
+                            if (window.addMessageToChat) {
+                                window.addMessageToChat(msg.text, msg.senderType, msg.timestamp, msg.id);
+                            }
+                            lastMessageId = Math.max(lastMessageId, msg.id);
+                            newMessagesAdded = true;
                         }
                     });
+                    
+                    // Only scroll if new messages were added
+                    if (newMessagesAdded && chatMessages) {
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    }
                 }
             }
         } catch (error) {
@@ -236,10 +242,10 @@
             clearInterval(pollingInterval);
         }
         
-        // Poll every 2 seconds for new messages
+        // Poll every 2 seconds for new messages (not initial load)
         pollingInterval = setInterval(() => {
             if (conversationId) {
-                loadMessages();
+                loadMessages(false); // Not initial load
             }
         }, 2000);
         
