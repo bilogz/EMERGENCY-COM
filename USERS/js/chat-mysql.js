@@ -141,6 +141,9 @@
                 
                 console.log('Conversation ready:', conversationId);
                 
+                // Reset lastMessageId for initial load to get all messages
+                lastMessageId = 0;
+                
                 // Load existing messages (initial load)
                 await loadMessages(true);
                 
@@ -207,6 +210,8 @@
             }
             
             if (data.success && data.messages && data.messages.length > 0) {
+                console.log(`Loading ${data.messages.length} messages (isInitialLoad: ${isInitialLoad}, lastMessageId: ${lastMessageId})`);
+                
                 // Track existing messages to avoid duplicates
                 const chatMessages = document.querySelector('.chat-messages');
                 if (chatMessages) {
@@ -231,17 +236,24 @@
                             if (window.addMessageToChat) {
                                 // Pass admin name if available (for admin messages)
                                 const adminName = (msg.senderType === 'admin' && msg.senderName) ? msg.senderName : null;
+                                console.log(`Adding message: ${msg.senderType} - "${msg.text}" (ID: ${msg.id}, Admin: ${adminName || 'N/A'})`);
                                 window.addMessageToChat(msg.text, msg.senderType, msg.timestamp, msg.id, adminName);
+                            } else {
+                                console.warn('addMessageToChat function not available');
                             }
                             lastMessageId = Math.max(lastMessageId, msg.id);
                             newMessagesAdded = true;
+                        } else {
+                            console.log(`Skipping message ${msg.id} (already displayed or not new)`);
                         }
                     });
                     
                     // Only scroll if new messages were added
                     if (newMessagesAdded && chatMessages) {
                         chatMessages.scrollTop = chatMessages.scrollHeight;
-                        console.log('Loaded', newMessagesAdded ? 'new' : 'no', 'messages. Total messages in conversation:', data.messages.length);
+                        console.log(`Loaded ${newMessagesAdded ? 'new' : 'no'} messages. Total messages in conversation: ${data.messages.length}, lastMessageId now: ${lastMessageId}`);
+                    } else {
+                        console.log('No new messages to display');
                     }
                 } else {
                     console.warn('Chat messages container not found when loading messages');
@@ -254,6 +266,8 @@
                     handleConversationClosed(data.closedBy);
                     return;
                 }
+            } else if (!data.success) {
+                console.error('Failed to load messages:', data.message || 'Unknown error');
             } else if (!data.success) {
                 // API returned error - check if conversation is closed
                 if (data.conversationStatus === 'closed') {
@@ -670,9 +684,11 @@
                     conversationId = data.conversationId;
                     sessionStorage.setItem('conversation_id', conversationId);
                 }
-                // Update last message ID
+                // Update last message ID - but don't skip admin messages that might have been sent
                 if (data.messageId) {
-                    lastMessageId = Math.max(lastMessageId, parseInt(data.messageId));
+                    const newMessageId = parseInt(data.messageId);
+                    lastMessageId = Math.max(lastMessageId, newMessageId);
+                    console.log('Updated lastMessageId to:', lastMessageId);
                 }
                 
                 // Immediately add the sent message to the chat UI
@@ -683,6 +699,11 @@
                 } else {
                     console.warn('addMessageToChat function not available, message will appear after polling');
                 }
+                
+                // After sending, do a quick reload to get any admin messages that might have arrived
+                setTimeout(() => {
+                    loadMessages(false);
+                }, 500);
                 
                 return true;
             } else {

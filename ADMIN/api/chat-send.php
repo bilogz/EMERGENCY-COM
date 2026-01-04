@@ -39,9 +39,9 @@ try {
     $text = $input['text'] ?? $_POST['text'] ?? '';
     $conversationId = $input['conversationId'] ?? $_POST['conversationId'] ?? null;
     
-    // Get admin ID - ensure it's an integer if possible, otherwise use string
-    $adminId = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : (isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 'admin');
-    $adminName = isset($_SESSION['admin_name']) ? $_SESSION['admin_name'] : (isset($_SESSION['user_name']) ? $_SESSION['user_name'] : 'Admin');
+    // Get admin ID and name from session
+    $adminId = $_SESSION['admin_user_id'] ?? $_SESSION['admin_id'] ?? $_SESSION['user_id'] ?? 'admin';
+    $adminName = $_SESSION['admin_username'] ?? $_SESSION['admin_name'] ?? $_SESSION['user_name'] ?? 'Admin';
     
     // Convert conversationId to integer if it's numeric
     if (is_numeric($conversationId)) {

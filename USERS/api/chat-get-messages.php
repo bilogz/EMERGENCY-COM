@@ -67,22 +67,42 @@ try {
         $closedBy = null;
     }
     
-    // Get messages newer than lastMessageId
-    $stmt = $pdo->prepare("
-        SELECT 
-            message_id,
-            conversation_id,
-            sender_id,
-            sender_name,
-            sender_type,
-            message_text,
-            created_at,
-            is_read
-        FROM chat_messages
-        WHERE conversation_id = ? AND message_id > ?
-        ORDER BY created_at ASC
-    ");
-    $stmt->execute([$conversationId, $lastMessageId]);
+    // Get messages - if lastMessageId is 0, get all messages (initial load), otherwise get only new ones
+    if ($lastMessageId == 0) {
+        // Initial load - get ALL messages for this conversation
+        $stmt = $pdo->prepare("
+            SELECT 
+                message_id,
+                conversation_id,
+                sender_id,
+                sender_name,
+                sender_type,
+                message_text,
+                created_at,
+                is_read
+            FROM chat_messages
+            WHERE conversation_id = ?
+            ORDER BY created_at ASC
+        ");
+        $stmt->execute([$conversationId]);
+    } else {
+        // Polling - get only messages newer than lastMessageId
+        $stmt = $pdo->prepare("
+            SELECT 
+                message_id,
+                conversation_id,
+                sender_id,
+                sender_name,
+                sender_type,
+                message_text,
+                created_at,
+                is_read
+            FROM chat_messages
+            WHERE conversation_id = ? AND message_id > ?
+            ORDER BY created_at ASC
+        ");
+        $stmt->execute([$conversationId, $lastMessageId]);
+    }
     $messages = $stmt->fetchAll();
     
     // Format messages - include sender_name for admin messages
