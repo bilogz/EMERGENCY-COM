@@ -330,7 +330,7 @@
             const closedMsg = document.createElement('div');
             closedMsg.className = 'chat-message chat-message-system chat-message-closed';
             closedMsg.style.cssText = 'background: rgba(255, 193, 7, 0.15); border-left: 4px solid #ffc107; padding: 1rem; margin: 1rem 0; border-radius: 4px;';
-            closedMsg.innerHTML = '<strong style="color: #856404;">System:</strong> <span style="color: #856404;">This conversation has been closed by an administrator. You can start a new conversation by typing a message below.</span>';
+            closedMsg.innerHTML = '<strong style="color: #856404;">System:</strong> <span style="color: #856404;">This conversation has been closed. Click "Start New Conversation" to begin a new chat.</span>';
             chatMessages.appendChild(closedMsg);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
@@ -345,40 +345,49 @@
             statusText.textContent = '';
         }
         
-        // Enable input but with special placeholder - allow typing to start new conversation
+        // Hide chat interface and show user info form OR show "Start New Conversation" button
+        const chatInterface = document.getElementById('chatInterface');
+        const userInfoForm = document.getElementById('chatUserInfoForm');
+        const startNewBtn = document.getElementById('startNewConversationBtn');
+        const chatCloseBtn = document.getElementById('chatCloseBtn');
+        
+        // Disable input and send button
         const chatInput = document.getElementById('chatInput');
         const chatSendBtn = document.getElementById('chatSendBtn');
         if (chatInput) {
-            chatInput.disabled = false;
-            chatInput.placeholder = 'Type a message to start a new conversation...';
-            chatInput.style.cursor = 'text';
-            chatInput.style.opacity = '1';
-            chatInput.value = ''; // Clear any existing text
-            
-            // Add event listener to reset chat when user starts typing
-            const handleInput = function() {
-                if (chatInput.value.trim().length > 0) {
-                    // User is typing - reset chat for new conversation
-                    resetChatForNewConversation();
-                    chatInput.removeEventListener('input', handleInput);
-                    chatInput.removeEventListener('focus', handleInput);
-                }
-            };
-            
-            // Remove old listeners if any
-            chatInput.removeEventListener('input', handleInput);
-            chatInput.removeEventListener('focus', handleInput);
-            
-            // Add new listeners
-            chatInput.addEventListener('input', handleInput);
-            chatInput.addEventListener('focus', handleInput);
+            chatInput.disabled = true;
+            chatInput.placeholder = 'Conversation closed. Start a new conversation to continue.';
+            chatInput.value = '';
         }
         if (chatSendBtn) {
-            chatSendBtn.disabled = false;
-            chatSendBtn.textContent = 'Send';
-            chatSendBtn.style.opacity = '1';
-            chatSendBtn.style.cursor = 'pointer';
+            chatSendBtn.disabled = true;
         }
+        
+        // Hide close button and show "Start New Conversation" button
+        if (chatCloseBtn) {
+            chatCloseBtn.style.display = 'none';
+        }
+        if (startNewBtn) {
+            startNewBtn.style.display = 'inline-flex';
+            startNewBtn.onclick = function() {
+                startNewConversation();
+            };
+        }
+        
+        // Option: Show user info form again (alternative approach)
+        // Uncomment below if you want to show the form instead of the button
+        /*
+        if (userInfoForm && chatInterface) {
+            chatInterface.style.display = 'none';
+            userInfoForm.style.display = 'block';
+            // Clear stored info to force re-entry
+            localStorage.removeItem('guest_info_provided');
+            sessionStorage.removeItem('user_name');
+            sessionStorage.removeItem('user_phone');
+            sessionStorage.removeItem('user_location');
+            sessionStorage.removeItem('user_concern');
+        }
+        */
         
         // Reset chat initialization flag to allow new conversation
         isInitialized = false;
@@ -387,8 +396,8 @@
         console.log('Conversation closed - chat interface refreshed, ready for new conversation');
     }
     
-    // Reset chat for new conversation
-    function resetChatForNewConversation() {
+    // Start new conversation
+    function startNewConversation() {
         // Clear the closed handler flag
         window.conversationClosedHandled = false;
         
@@ -423,6 +432,16 @@
             }
         }
         
+        // Hide "Start New Conversation" button and show close button
+        const startNewBtn = document.getElementById('startNewConversationBtn');
+        const chatCloseBtn = document.getElementById('chatCloseBtn');
+        if (startNewBtn) {
+            startNewBtn.style.display = 'none';
+        }
+        if (chatCloseBtn) {
+            chatCloseBtn.style.display = 'inline-flex';
+        }
+        
         // Re-enable input and send button
         const chatInput = document.getElementById('chatInput');
         const chatSendBtn = document.getElementById('chatSendBtn');
@@ -439,7 +458,19 @@
         isInitialized = false;
         window.chatInitialized = false;
         
-        console.log('Chat reset for new conversation');
+        // Re-initialize chat to create new conversation
+        initChat().then((success) => {
+            if (success) {
+                console.log('New conversation started');
+            }
+        });
+        
+        console.log('Starting new conversation');
+    }
+    
+    // Reset chat for new conversation (kept for backward compatibility)
+    function resetChatForNewConversation() {
+        startNewConversation();
     }
     
     // Send message
@@ -654,6 +685,8 @@
     window.addMessageToChat = addMessageToChat;
     window.stopChatPolling = stopPolling;
     window.resetChatForNewConversation = resetChatForNewConversation;
+    window.startNewConversation = startNewConversation;
+    window.handleConversationClosed = handleConversationClosed;
     
     // Auto-initialize when DOM is ready
     if (document.readyState === 'loading') {

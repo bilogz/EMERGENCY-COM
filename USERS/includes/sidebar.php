@@ -166,7 +166,10 @@ include __DIR__ . '/guest-monitoring-notice.php';
                     <input type="text" id="chatInput" placeholder="Type your message..." autocomplete="off">
                     <button type="button" id="chatSendBtn" class="btn btn-primary">Send</button>
                     <button type="button" id="chatCloseBtn" class="btn btn-secondary" style="margin-left: 0.5rem;" title="Close this conversation">
-                        <i class="fas fa-times"></i> Close
+                        <i class="fas fa-times"></i> Close Chat
+                    </button>
+                    <button type="button" id="startNewConversationBtn" class="btn btn-primary" style="margin-left: 0.5rem; display: none;" title="Start a new conversation">
+                        <i class="fas fa-plus"></i> Start New Conversation
                     </button>
                 </div>
             </div>
@@ -1762,7 +1765,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     e.stopPropagation();
                     e.stopImmediatePropagation();
                     
-                    if (!confirm('Are you sure you want to close this conversation? You won\'t be able to send messages after closing.')) {
+                    if (!confirm('Are you sure you want to close this conversation? This will close the conversation on both your side and the admin side. You will need to start a new conversation to continue chatting.')) {
                         return false;
                     }
                     
@@ -1789,19 +1792,32 @@ document.addEventListener('DOMContentLoaded', function() {
                         const data = await response.json();
                         
                         if (data.success) {
-                            alert('Conversation closed successfully.');
-                            // Disable input and send button
-                            const chatInput = document.getElementById('chatInput');
-                            const chatSendBtn = document.getElementById('chatSendBtn');
-                            if (chatInput) {
-                                chatInput.disabled = true;
-                                chatInput.placeholder = 'This conversation is closed';
+                            alert('Conversation closed successfully. The conversation has been closed on both your side and the admin side.');
+                            
+                            // Use the handleConversationClosed function to properly refresh
+                            if (window.handleConversationClosed) {
+                                window.handleConversationClosed();
+                            } else {
+                                // Fallback: Disable input and send button
+                                const chatInput = document.getElementById('chatInput');
+                                const chatSendBtn = document.getElementById('chatSendBtn');
+                                if (chatInput) {
+                                    chatInput.disabled = true;
+                                    chatInput.placeholder = 'This conversation is closed';
+                                }
+                                if (chatSendBtn) {
+                                    chatSendBtn.disabled = true;
+                                }
+                                freshBtn.disabled = true;
+                                freshBtn.textContent = 'Closed';
+                                
+                                // Show "Start New Conversation" button
+                                const startNewBtn = document.getElementById('startNewConversationBtn');
+                                if (startNewBtn) {
+                                    startNewBtn.style.display = 'inline-flex';
+                                    freshBtn.style.display = 'none';
+                                }
                             }
-                            if (chatSendBtn) {
-                                chatSendBtn.disabled = true;
-                            }
-                            freshBtn.disabled = true;
-                            freshBtn.textContent = 'Closed';
                             
                             // Stop polling
                             if (window.stopChatPolling) {
@@ -1810,13 +1826,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         } else {
                             alert('Failed to close conversation: ' + (data.message || 'Unknown error'));
                             freshBtn.disabled = false;
-                            freshBtn.innerHTML = '<i class="fas fa-times"></i> Close';
+                            freshBtn.innerHTML = '<i class="fas fa-times"></i> Close Chat';
                         }
                     } catch (error) {
                         console.error('Error closing conversation:', error);
                         alert('Error closing conversation. Please try again.');
                         freshBtn.disabled = false;
-                        freshBtn.innerHTML = '<i class="fas fa-times"></i> Close';
+                        freshBtn.innerHTML = '<i class="fas fa-times"></i> Close Chat';
                     }
                     
                     return false;
@@ -1829,6 +1845,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // Attach handlers immediately
             attachSendButtonHandlers();
             attachCloseButtonHandler();
+            
+            // Initialize "Start New Conversation" button
+            const startNewBtn = document.getElementById('startNewConversationBtn');
+            if (startNewBtn) {
+                startNewBtn.onclick = function() {
+                    if (window.startNewConversation) {
+                        window.startNewConversation();
+                    } else if (window.resetChatForNewConversation) {
+                        window.resetChatForNewConversation();
+                    }
+                };
+            }
             
             // Also attach when modal opens (in case elements weren't ready)
             if (chatModal) {
