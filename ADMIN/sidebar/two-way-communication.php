@@ -14,6 +14,7 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 }
 
 $pageTitle = 'Two-Way Communication Interface';
+$adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -40,76 +41,204 @@ $pageTitle = 'Two-Way Communication Interface';
         }
         .conversations-list {
             background: var(--card-bg);
-            border-radius: 8px;
+            border-radius: 12px;
             padding: 1rem;
             overflow-y: auto;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        .conversations-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .conversations-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .conversations-list::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+        .conversations-list::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
         }
         .conversation-item {
             padding: 1rem;
             border-bottom: 1px solid var(--border-color);
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.2s ease;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
         }
         .conversation-item:hover {
             background: var(--hover-bg);
+            transform: translateX(4px);
         }
         .conversation-item.active {
             background: var(--primary-color);
             color: white;
+            box-shadow: 0 2px 8px rgba(76, 138, 137, 0.3);
         }
         .chat-window {
             display: flex;
             flex-direction: column;
             background: var(--card-bg);
-            border-radius: 8px;
+            border-radius: 12px;
             overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
         .chat-header {
-            padding: 1rem;
+            padding: 1.25rem 1.5rem;
             border-bottom: 1px solid var(--border-color);
             background: var(--primary-color);
             color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        .chat-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .chat-header small {
+            display: block;
+            margin-top: 0.25rem;
+            opacity: 0.9;
+            font-size: 0.85rem;
         }
         .chat-messages {
             flex: 1;
-            padding: 1rem;
+            padding: 1.5rem;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.5rem;
+            background: linear-gradient(to bottom, var(--bg-color) 0%, var(--card-bg) 100%);
+            scroll-behavior: smooth;
+        }
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
         }
         .message {
             display: flex;
-            gap: 0.5rem;
-            max-width: 70%;
+            gap: 0.75rem;
+            max-width: 75%;
+            margin-bottom: 1rem;
+            animation: fadeIn 0.3s ease-in;
         }
-        .message.sent {
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .message.admin {
             align-self: flex-end;
             flex-direction: row-reverse;
         }
-        .message.received {
+        .message.user {
             align-self: flex-start;
         }
-        .message-content {
-            padding: 0.75rem 1rem;
-            border-radius: 12px;
-            background: var(--border-color);
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            object-fit: cover;
+            border: 2px solid var(--border-color);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        .message.sent .message-content {
+        .message.admin .message-avatar {
+            border-color: var(--primary-color);
+        }
+        .message-content-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        .message-content {
+            padding: 0.875rem 1.125rem;
+            border-radius: 18px;
+            background: var(--border-color);
+            color: var(--text-color);
+            word-wrap: break-word;
+            line-height: 1.5;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        .message.admin .message-content {
             background: var(--primary-color);
             color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .message.user .message-content {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-bottom-left-radius: 4px;
+        }
+        .message-time {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            padding: 0 0.5rem;
+            margin-top: 0.25rem;
+        }
+        .message.admin .message-time {
+            text-align: right;
+        }
+        .message.user .message-time {
+            text-align: left;
         }
         .chat-input {
-            padding: 1rem;
+            padding: 1.25rem;
             border-top: 1px solid var(--border-color);
             display: flex;
-            gap: 0.5rem;
+            gap: 0.75rem;
+            background: var(--card-bg);
+            align-items: center;
         }
         .chat-input input {
             flex: 1;
-            padding: 0.75rem;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
+            padding: 0.875rem 1.125rem;
+            border: 2px solid var(--border-color);
+            border-radius: 24px;
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+        .chat-input input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
+        }
+        .chat-input input:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .chat-input .btn {
+            border-radius: 24px;
+            padding: 0.875rem 1.5rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .chat-input .btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        .chat-input .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
     </style>
 </head>
@@ -178,6 +307,9 @@ $pageTitle = 'Two-Way Communication Interface';
                                 <button class="btn btn-primary" id="sendButton" disabled>
                                     <i class="fas fa-paper-plane"></i> Send
                                 </button>
+                                <button class="btn btn-secondary" id="closeConversationBtn" style="display: none;" title="Close this conversation">
+                                    <i class="fas fa-times"></i> Close
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -189,6 +321,8 @@ $pageTitle = 'Two-Way Communication Interface';
     <!-- MySQL Chat System -->
     <script>
         const API_BASE = '../api/';
+        const ADMIN_USERNAME = <?php echo json_encode($adminUsername); ?>;
+        const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=4c8a89&color=fff&size=128`;
         let currentConversationId = null;
         let lastMessageId = 0;
         let conversationPollingInterval = null;
@@ -362,17 +496,40 @@ $pageTitle = 'Two-Way Communication Interface';
             
             const messageInput = document.getElementById('messageInput');
             const sendButton = document.getElementById('sendButton');
+            const closeBtn = document.getElementById('closeConversationBtn');
+            
+            // Check if conversation is closed
+            const isClosed = typeof conversation === 'object' && conversation.status === 'closed';
             
             if (messageInput) {
-                messageInput.disabled = false;
-                messageInput.style.pointerEvents = 'auto';
-                messageInput.style.cursor = 'text';
+                messageInput.disabled = isClosed;
+                messageInput.style.pointerEvents = isClosed ? 'none' : 'auto';
+                messageInput.style.cursor = isClosed ? 'not-allowed' : 'text';
+                if (isClosed) {
+                    messageInput.placeholder = 'This conversation is closed';
+                } else {
+                    messageInput.placeholder = 'Type a message...';
+                }
             }
             
             if (sendButton) {
-                sendButton.disabled = false;
-                sendButton.style.pointerEvents = 'auto';
-                sendButton.style.cursor = 'pointer';
+                sendButton.disabled = isClosed;
+                sendButton.style.pointerEvents = isClosed ? 'none' : 'auto';
+                sendButton.style.cursor = isClosed ? 'not-allowed' : 'pointer';
+            }
+            
+            // Show/hide close button based on status
+            if (closeBtn) {
+                if (isClosed) {
+                    closeBtn.style.display = 'inline-flex';
+                    closeBtn.disabled = true;
+                    closeBtn.innerHTML = '<i class="fas fa-check"></i> Closed';
+                } else {
+                    closeBtn.style.display = 'inline-flex';
+                    closeBtn.disabled = false;
+                    closeBtn.innerHTML = '<i class="fas fa-times"></i> Close';
+                    attachCloseButtonHandler();
+                }
             }
             
             // Update active conversation
@@ -386,6 +543,79 @@ $pageTitle = 'Two-Way Communication Interface';
             // Load messages (initial load)
             lastMessageId = 0; // Reset for new conversation
             loadMessages(conversationId, true);
+        }
+        
+        function attachCloseButtonHandler() {
+            const closeBtn = document.getElementById('closeConversationBtn');
+            if (!closeBtn) return;
+            
+            // Remove old listeners
+            const newCloseBtn = closeBtn.cloneNode(true);
+            closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+            const freshCloseBtn = document.getElementById('closeConversationBtn');
+            
+            if (!freshCloseBtn) return;
+            
+            freshCloseBtn.style.display = 'inline-flex';
+            freshCloseBtn.style.pointerEvents = 'auto';
+            freshCloseBtn.style.cursor = 'pointer';
+            freshCloseBtn.disabled = false;
+            
+            freshCloseBtn.onclick = async function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (!confirm('Are you sure you want to close this conversation? The user will not be able to send messages after closing.')) {
+                    return false;
+                }
+                
+                try {
+                    freshCloseBtn.disabled = true;
+                    freshCloseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Closing...';
+                    
+                    const response = await fetch(API_BASE + 'chat-close.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            conversationId: currentConversationId
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert('Conversation closed successfully.');
+                        // Disable input and send button
+                        const messageInput = document.getElementById('messageInput');
+                        const sendButton = document.getElementById('sendButton');
+                        if (messageInput) {
+                            messageInput.disabled = true;
+                            messageInput.placeholder = 'This conversation is closed';
+                        }
+                        if (sendButton) {
+                            sendButton.disabled = true;
+                        }
+                        freshCloseBtn.disabled = true;
+                        freshCloseBtn.innerHTML = '<i class="fas fa-check"></i> Closed';
+                        
+                        // Reload conversations to update status
+                        loadConversations(false);
+                    } else {
+                        alert('Failed to close conversation: ' + (data.message || 'Unknown error'));
+                        freshCloseBtn.disabled = false;
+                        freshCloseBtn.innerHTML = '<i class="fas fa-times"></i> Close';
+                    }
+                } catch (error) {
+                    console.error('Error closing conversation:', error);
+                    alert('Error closing conversation. Please try again.');
+                    freshCloseBtn.disabled = false;
+                    freshCloseBtn.innerHTML = '<i class="fas fa-times"></i> Close';
+                }
+                
+                return false;
+            };
         }
 
         async function loadMessages(conversationId, isInitialLoad = false) {
@@ -438,7 +668,7 @@ $pageTitle = 'Two-Way Communication Interface';
                         // Only add if message ID is greater than lastMessageId and not already displayed
                         if (msg.id > lastMessageId && !existingIds.has(msg.id)) {
                             existingIds.add(msg.id);
-                            addMessageToChat(msg.text, msg.senderType, msg.timestamp, msg.id);
+                            addMessageToChat(msg.text, msg.senderType, msg.timestamp, msg.id, msg.senderName);
                             lastMessageId = Math.max(lastMessageId, msg.id);
                             newMessagesAdded = true;
                         }
@@ -484,7 +714,7 @@ $pageTitle = 'Two-Way Communication Interface';
             }
         }
 
-        function addMessageToChat(text, senderType, timestamp, messageId = null) {
+        function addMessageToChat(text, senderType, timestamp, messageId = null, senderName = null) {
             const messagesDiv = document.getElementById('chatMessages');
             
             // Remove placeholder messages only if this is a new message being added
@@ -504,7 +734,9 @@ $pageTitle = 'Two-Way Communication Interface';
             }
             
             const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${senderType}`;
+            // Normalize senderType: 'admin' maps to 'admin', everything else maps to 'user'
+            const normalizedType = (senderType === 'admin' || senderType === 'sent') ? 'admin' : 'user';
+            messageDiv.className = `message ${normalizedType}`;
             if (messageId) {
                 messageDiv.setAttribute('data-message-id', messageId);
             }
@@ -516,10 +748,40 @@ $pageTitle = 'Two-Way Communication Interface';
                 return div.innerHTML;
             };
             
-            const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+            // Format time
+            const time = timestamp ? new Date(timestamp).toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+            }) : new Date().toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+            });
+            
+            // Get avatar - admin uses ADMIN_AVATAR, user uses sender name or conversation name
+            let avatarUrl;
+            let avatarName;
+            if (normalizedType === 'admin') {
+                avatarUrl = ADMIN_AVATAR;
+                avatarName = ADMIN_USERNAME;
+            } else {
+                // Use senderName from API if available, otherwise try to get from chat header
+                if (senderName) {
+                    avatarName = senderName;
+                } else {
+                    const chatUserName = document.getElementById('chatUserName');
+                    avatarName = chatUserName ? chatUserName.textContent.replace(/GUEST|Emergency/gi, '').trim() : 'User';
+                }
+                avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(avatarName)}&background=6c757d&color=fff&size=128`;
+            }
+            
             messageDiv.innerHTML = `
-                <div class="message-content">${escapeHtml(text)}</div>
-                <small>${time}</small>
+                <img src="${avatarUrl}" alt="${escapeHtml(avatarName)}" class="message-avatar">
+                <div class="message-content-wrapper">
+                    <div class="message-content">${escapeHtml(text)}</div>
+                    <div class="message-time">${time}</div>
+                </div>
             `;
             messagesDiv.appendChild(messageDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -609,7 +871,7 @@ $pageTitle = 'Two-Way Communication Interface';
                 }
                 
                 // Add to UI immediately
-                addMessageToChat(message, 'admin', Date.now());
+                addMessageToChat(message, 'admin', Date.now(), null, ADMIN_USERNAME);
                 messageInput.value = '';
 
                 // Send to MySQL via API

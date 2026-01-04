@@ -60,6 +60,17 @@ try {
         exit;
     }
     
+    // Check if conversation is closed
+    $stmt = $pdo->prepare("SELECT status FROM conversations WHERE conversation_id = ?");
+    $stmt->execute([$conversationId]);
+    $conversation = $stmt->fetch();
+    
+    if ($conversation && $conversation['status'] === 'closed') {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'This conversation is closed.']);
+        exit;
+    }
+    
     // Start transaction
     $pdo->beginTransaction();
     

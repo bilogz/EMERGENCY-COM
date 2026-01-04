@@ -165,6 +165,9 @@ include __DIR__ . '/guest-monitoring-notice.php';
                 <div class="chat-input-row" id="chatForm">
                     <input type="text" id="chatInput" placeholder="Type your message..." autocomplete="off">
                     <button type="button" id="chatSendBtn" class="btn btn-primary">Send</button>
+                    <button type="button" id="chatCloseBtn" class="btn btn-secondary" style="margin-left: 0.5rem;" title="Close this conversation">
+                        <i class="fas fa-times"></i> Close
+                    </button>
                 </div>
             </div>
         </div>
@@ -1103,39 +1106,83 @@ document.addEventListener('DOMContentLoaded', function() {
                     chatInput.value = '';
                 }
                 
-                // Use MySQL chat system
+                // Use MySQL chat system - try both function names
+                let success = false;
                 if (window.sendChatMessageMySQL) {
-                    const success = await window.sendChatMessageMySQL(text);
-                    if (success) {
-                        console.log('Message sent successfully');
-                    } else {
-                        console.error('Failed to send message');
-                        // Remove the message from UI if send failed
-                        const messages = document.querySelectorAll('.chat-message');
-                        if (messages.length > 0) {
-                            messages[messages.length - 1].remove();
-                        }
-                    }
+                    success = await window.sendChatMessageMySQL(text);
+                } else if (window.sendMessage && typeof window.sendMessage === 'function') {
+                    // Fallback to sendMessage if available
+                    success = await window.sendMessage(text);
                 } else {
                     console.error('MySQL chat system not available');
                     alert('Chat system is not ready. Please refresh the page.');
+                    // Remove the message from UI if send failed
+                    const messages = document.querySelectorAll('.chat-message');
+                    if (messages.length > 0) {
+                        messages[messages.length - 1].remove();
+                    }
+                    return;
+                }
+                
+                if (success) {
+                    console.log('Message sent successfully');
+                } else {
+                    console.error('Failed to send message');
+                    // Remove the message from UI if send failed
+                    const messages = document.querySelectorAll('.chat-message');
+                    if (messages.length > 0) {
+                        messages[messages.length - 1].remove();
+                    }
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
                 alert('Failed to send message. Please try again.');
             } finally {
-                // Re-enable send button
+                // Re-enable send button (check if conversation is closed)
+                const conversationId = sessionStorage.getItem('conversation_id');
                 if (chatSendBtn) {
-                    chatSendBtn.disabled = false;
-                    chatSendBtn.textContent = 'Send';
-                }
-                
-                // Keep focus on input
-                setTimeout(() => {
-                    if (chatInput) {
-                        chatInput.focus();
+                    if (conversationId) {
+                        // Quick check if conversation is closed
+                        fetch('../USERS/api/chat-get-conversation.php?conversationId=' + conversationId)
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data.success && data.status === 'closed') {
+                                    chatSendBtn.disabled = true;
+                                    chatSendBtn.textContent = 'Closed';
+                                    if (chatInput) {
+                                        chatInput.disabled = true;
+                                        chatInput.placeholder = 'This conversation is closed';
+                                    }
+                                } else {
+                                    chatSendBtn.disabled = false;
+                                    chatSendBtn.textContent = 'Send';
+                                    setTimeout(() => {
+                                        if (chatInput) {
+                                            chatInput.focus();
+                                        }
+                                    }, 100);
+                                }
+                            })
+                            .catch(() => {
+                                // If check fails, just re-enable
+                                chatSendBtn.disabled = false;
+                                chatSendBtn.textContent = 'Send';
+                                setTimeout(() => {
+                                    if (chatInput) {
+                                        chatInput.focus();
+                                    }
+                                }, 100);
+                            });
+                    } else {
+                        chatSendBtn.disabled = false;
+                        chatSendBtn.textContent = 'Send';
+                        setTimeout(() => {
+                            if (chatInput) {
+                                chatInput.focus();
+                            }
+                        }, 100);
                     }
-                }, 100);
+                }
             }
             }
             
@@ -1217,10 +1264,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     e.stopPropagation();
                     e.stopImmediatePropagation();
                     console.log('Send button clicked');
+                    // Try both function names for compatibility
                     if (window.sendChatMessage) {
                         window.sendChatMessage();
+                    } else if (window.sendChatMessageMySQL) {
+                        const input = document.getElementById('chatInput');
+                        const text = input ? input.value.trim() : '';
+                        if (text) {
+                            window.sendChatMessageMySQL(text);
+                        }
                     } else {
                         console.error('sendChatMessage function not available');
+                        alert('Chat system is not ready. Please refresh the page.');
                     }
                     return false;
                 };
@@ -1229,8 +1284,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('Send button touched');
+                    // Try both function names for compatibility
                     if (window.sendChatMessage) {
                         window.sendChatMessage();
+                    } else if (window.sendChatMessageMySQL) {
+                        const input = document.getElementById('chatInput');
+                        const text = input ? input.value.trim() : '';
+                        if (text) {
+                            window.sendChatMessageMySQL(text);
+                        }
                     }
                 }, { passive: false });
                 
@@ -1252,8 +1314,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         e.preventDefault();
                         e.stopPropagation();
                         console.log('Enter key pressed');
+                        // Try both function names for compatibility
                         if (window.sendChatMessage) {
                             window.sendChatMessage();
+                        } else if (window.sendChatMessageMySQL) {
+                            const text = this.value.trim();
+                            if (text) {
+                                window.sendChatMessageMySQL(text);
+                            }
                         }
                     }
                 });
@@ -1268,8 +1336,101 @@ document.addEventListener('DOMContentLoaded', function() {
                 return true;
             }
             
+            // Function to attach close button handler
+            function attachCloseButtonHandler() {
+                const closeBtn = document.getElementById('chatCloseBtn');
+                if (!closeBtn) {
+                    console.log('Close button not found');
+                    return false;
+                }
+                
+                // Remove old listeners by cloning
+                const newBtn = closeBtn.cloneNode(true);
+                closeBtn.parentNode.replaceChild(newBtn, closeBtn);
+                const freshBtn = document.getElementById('chatCloseBtn');
+                
+                if (!freshBtn) {
+                    console.error('Failed to get fresh close button');
+                    return false;
+                }
+                
+                freshBtn.style.pointerEvents = 'auto';
+                freshBtn.style.cursor = 'pointer';
+                freshBtn.style.touchAction = 'manipulation';
+                freshBtn.disabled = false;
+                
+                freshBtn.onclick = async function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    
+                    if (!confirm('Are you sure you want to close this conversation? You won\'t be able to send messages after closing.')) {
+                        return false;
+                    }
+                    
+                    const conversationId = sessionStorage.getItem('conversation_id');
+                    if (!conversationId) {
+                        alert('No active conversation to close.');
+                        return false;
+                    }
+                    
+                    try {
+                        freshBtn.disabled = true;
+                        freshBtn.textContent = 'Closing...';
+                        
+                        const response = await fetch('../USERS/api/chat-close.php', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                conversationId: conversationId
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            alert('Conversation closed successfully.');
+                            // Disable input and send button
+                            const chatInput = document.getElementById('chatInput');
+                            const chatSendBtn = document.getElementById('chatSendBtn');
+                            if (chatInput) {
+                                chatInput.disabled = true;
+                                chatInput.placeholder = 'This conversation is closed';
+                            }
+                            if (chatSendBtn) {
+                                chatSendBtn.disabled = true;
+                            }
+                            freshBtn.disabled = true;
+                            freshBtn.textContent = 'Closed';
+                            
+                            // Stop polling
+                            if (window.stopChatPolling) {
+                                window.stopChatPolling();
+                            }
+                        } else {
+                            alert('Failed to close conversation: ' + (data.message || 'Unknown error'));
+                            freshBtn.disabled = false;
+                            freshBtn.innerHTML = '<i class="fas fa-times"></i> Close';
+                        }
+                    } catch (error) {
+                        console.error('Error closing conversation:', error);
+                        alert('Error closing conversation. Please try again.');
+                        freshBtn.disabled = false;
+                        freshBtn.innerHTML = '<i class="fas fa-times"></i> Close';
+                    }
+                    
+                    return false;
+                };
+                
+                console.log('Close button handler attached');
+                return true;
+            }
+            
             // Attach handlers immediately
             attachSendButtonHandlers();
+            attachCloseButtonHandler();
             
             // Also attach when modal opens (in case elements weren't ready)
             if (chatModal) {
@@ -1280,6 +1441,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 // Retry after a short delay
                                 setTimeout(attachSendButtonHandlers, 200);
                             }
+                            attachCloseButtonHandler();
                         }, 50);
                     }
                 });

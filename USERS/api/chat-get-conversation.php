@@ -14,6 +14,7 @@ if (!$pdo) {
 }
 
 try {
+    $conversationId = $_GET['conversationId'] ?? null;
     $userId = $_GET['userId'] ?? $_POST['userId'] ?? null;
     $userName = $_GET['userName'] ?? $_POST['userName'] ?? 'Guest User';
     $userEmail = $_GET['userEmail'] ?? $_POST['userEmail'] ?? null;
@@ -21,6 +22,24 @@ try {
     $userLocation = $_GET['userLocation'] ?? $_POST['userLocation'] ?? null;
     $userConcern = $_GET['userConcern'] ?? $_POST['userConcern'] ?? null;
     $isGuest = isset($_GET['isGuest']) ? (bool)$_GET['isGuest'] : (isset($_POST['isGuest']) ? (bool)$_POST['isGuest'] : true);
+    
+    // If conversationId is provided, just return its status
+    if ($conversationId && !$userId) {
+        $stmt = $pdo->prepare("SELECT conversation_id, status FROM conversations WHERE conversation_id = ?");
+        $stmt->execute([$conversationId]);
+        $conversation = $stmt->fetch();
+        
+        if ($conversation) {
+            echo json_encode([
+                'success' => true,
+                'conversationId' => $conversation['conversation_id'],
+                'status' => $conversation['status'] ?? 'active'
+            ]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Conversation not found']);
+        }
+        exit;
+    }
     
     if (empty($userId)) {
         http_response_code(400);
