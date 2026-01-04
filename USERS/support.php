@@ -64,7 +64,7 @@ $current = 'support.php';
                         <div class="card">
                             <h4 data-translate="support.dispatch.title">Contact Dispatch</h4>
                             <p data-translate="support.dispatch.desc">Reach emergency dispatch or your local incident commander.</p>
-                            <button class="btn btn-secondary" data-translate="support.dispatch.btn">Contact Now</button>
+                            <button class="btn btn-secondary" id="contactNowBtn" data-translate="support.dispatch.btn">Contact Now</button>
                         </div>
                         <div class="card">
                             <h4 data-translate="support.audit.title">Audit & History</h4>
@@ -82,6 +82,65 @@ $current = 'support.php';
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Contact Now button - open chat
+            const contactNowBtn = document.getElementById('contactNowBtn');
+            if (contactNowBtn) {
+                contactNowBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Open chat if available
+                    if (window.openChat) {
+                        window.openChat();
+                    } else if (window.chatFab) {
+                        window.chatFab.click();
+                    } else {
+                        // Fallback: scroll to top and show message
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        const chatBtn = document.getElementById('chatFab');
+                        if (chatBtn) {
+                            chatBtn.click();
+                        }
+                    }
+                });
+                
+                // Ensure button is clickable
+                contactNowBtn.style.pointerEvents = 'auto';
+                contactNowBtn.style.cursor = 'pointer';
+                contactNowBtn.style.touchAction = 'manipulation';
+            }
+            
+            // Ensure theme toggle buttons are clickable
+            const themeToggleBtns = document.querySelectorAll('.theme-toggle-btn');
+            themeToggleBtns.forEach(btn => {
+                btn.style.pointerEvents = 'auto';
+                btn.style.cursor = 'pointer';
+                btn.style.touchAction = 'manipulation';
+                
+                // Add click handler if not already present
+                if (!btn.hasAttribute('data-handler-attached')) {
+                    btn.setAttribute('data-handler-attached', 'true');
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const theme = this.getAttribute('data-theme');
+                        if (theme && window.setTheme) {
+                            window.setTheme(theme);
+                        }
+                    }, true);
+                }
+            });
+            
+            // Ensure chat button is clickable
+            const chatBtn = document.getElementById('chatFab');
+            if (chatBtn) {
+                chatBtn.style.pointerEvents = 'auto';
+                chatBtn.style.cursor = 'pointer';
+                chatBtn.style.touchAction = 'manipulation';
+            }
+        });
+    </script>
 </body>
 </html>
 

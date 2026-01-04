@@ -78,3 +78,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Make it globally accessible
 window.ThemeManager = ThemeManager;
+
+// Global setTheme function for easy access
+window.setTheme = function(theme) {
+    if (window.themeManager) {
+        window.themeManager.applyTheme(theme);
+    } else {
+        // Fallback if themeManager not initialized yet
+        const root = document.documentElement;
+        if (theme === 'system') {
+            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            root.setAttribute('data-theme', systemTheme);
+        } else {
+            root.setAttribute('data-theme', theme);
+        }
+        localStorage.setItem('theme', theme);
+    }
+};
