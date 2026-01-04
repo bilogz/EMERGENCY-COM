@@ -635,12 +635,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     chatSendBtn.textContent = 'Send';
                 }
                 
+                // Clear any old conversation ID before initializing new chat
+                sessionStorage.removeItem('conversation_id');
+                if (window.stopChatPolling) {
+                    window.stopChatPolling();
+                }
+                
+                // Reset chat initialization flags
+                if (window.chatInitialized !== undefined) {
+                    window.chatInitialized = false;
+                }
+                
                 // Initialize MySQL chat with the provided info
                 if (window.initChatMySQL) {
                     try {
                         const success = await window.initChatMySQL();
                         if (success) {
-                            console.log('Chat initialized after form submission');
+                            console.log('Chat initialized after form submission - new conversation created');
                             // Attach send button handlers
                             setTimeout(() => {
                                 if (window.attachSendButtonHandlers) {
@@ -1792,31 +1803,38 @@ document.addEventListener('DOMContentLoaded', function() {
                         const data = await response.json();
                         
                         if (data.success) {
-                            alert('Conversation closed successfully. The conversation has been closed on both your side and the admin side.');
+                            alert('Conversation closed successfully. The conversation has been closed on both your side and the admin side. Please select a category to start a new conversation.');
                             
-                            // Use the handleConversationClosed function to properly refresh
+                            // Use the handleConversationClosed function to properly refresh and show form
                             if (window.handleConversationClosed) {
                                 window.handleConversationClosed();
                             } else {
-                                // Fallback: Disable input and send button
+                                // Fallback: Show user info form
+                                const chatInterface = document.getElementById('chatInterface');
+                                const userInfoForm = document.getElementById('chatUserInfoForm');
+                                if (userInfoForm && chatInterface) {
+                                    chatInterface.style.display = 'none';
+                                    userInfoForm.style.display = 'block';
+                                    
+                                    // Clear concern to force re-selection
+                                    localStorage.removeItem('guest_concern');
+                                    sessionStorage.removeItem('user_concern');
+                                    const concernSelect = document.getElementById('userConcernSelect');
+                                    if (concernSelect) {
+                                        concernSelect.value = '';
+                                    }
+                                }
+                                
+                                // Disable input and send button
                                 const chatInput = document.getElementById('chatInput');
                                 const chatSendBtn = document.getElementById('chatSendBtn');
                                 if (chatInput) {
                                     chatInput.disabled = true;
-                                    chatInput.placeholder = 'This conversation is closed';
                                 }
                                 if (chatSendBtn) {
                                     chatSendBtn.disabled = true;
                                 }
-                                freshBtn.disabled = true;
-                                freshBtn.textContent = 'Closed';
-                                
-                                // Show "Start New Conversation" button
-                                const startNewBtn = document.getElementById('startNewConversationBtn');
-                                if (startNewBtn) {
-                                    startNewBtn.style.display = 'inline-flex';
-                                    freshBtn.style.display = 'none';
-                                }
+                                freshBtn.style.display = 'none';
                             }
                             
                             // Stop polling

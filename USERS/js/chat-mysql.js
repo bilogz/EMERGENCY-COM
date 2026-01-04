@@ -330,7 +330,7 @@
             const closedMsg = document.createElement('div');
             closedMsg.className = 'chat-message chat-message-system chat-message-closed';
             closedMsg.style.cssText = 'background: rgba(255, 193, 7, 0.15); border-left: 4px solid #ffc107; padding: 1rem; margin: 1rem 0; border-radius: 4px;';
-            closedMsg.innerHTML = '<strong style="color: #856404;">System:</strong> <span style="color: #856404;">This conversation has been closed. Click "Start New Conversation" to begin a new chat.</span>';
+            closedMsg.innerHTML = '<strong style="color: #856404;">System:</strong> <span style="color: #856404;">This conversation has been closed. Please select a category below to start a new conversation.</span>';
             chatMessages.appendChild(closedMsg);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
@@ -345,49 +345,70 @@
             statusText.textContent = '';
         }
         
-        // Hide chat interface and show user info form OR show "Start New Conversation" button
+        // Automatically show user info form to select category again
         const chatInterface = document.getElementById('chatInterface');
         const userInfoForm = document.getElementById('chatUserInfoForm');
         const startNewBtn = document.getElementById('startNewConversationBtn');
         const chatCloseBtn = document.getElementById('chatCloseBtn');
         
-        // Disable input and send button
+        // Hide chat interface and show user info form
+        if (userInfoForm && chatInterface) {
+            chatInterface.style.display = 'none';
+            userInfoForm.style.display = 'block';
+            
+            // Clear stored concern/category to force re-selection
+            localStorage.removeItem('guest_concern');
+            sessionStorage.removeItem('user_concern');
+            
+            // Clear the concern select dropdown
+            const concernSelect = document.getElementById('userConcernSelect');
+            if (concernSelect) {
+                concernSelect.value = '';
+            }
+            
+            // Optionally clear all fields to force complete re-entry
+            // Or keep name/contact/location and only clear concern
+            // For now, we'll keep other fields but clear concern
+            const nameInput = document.getElementById('userNameInput');
+            const contactInput = document.getElementById('userContactInput');
+            const locationInput = document.getElementById('userLocationInput');
+            
+            // Keep name, contact, and location if they exist, but clear concern
+            // This way user only needs to select category again
+            if (nameInput && !nameInput.value) {
+                const storedName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
+                if (storedName) nameInput.value = storedName;
+            }
+            if (contactInput && !contactInput.value) {
+                const storedContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
+                if (storedContact) contactInput.value = storedContact;
+            }
+            if (locationInput && !locationInput.value) {
+                const storedLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
+                if (storedLocation) locationInput.value = storedLocation;
+            }
+            
+            console.log('Showing user info form - user must select category again');
+        }
+        
+        // Hide buttons
+        if (chatCloseBtn) {
+            chatCloseBtn.style.display = 'none';
+        }
+        if (startNewBtn) {
+            startNewBtn.style.display = 'none';
+        }
+        
+        // Disable input and send button (they're hidden anyway)
         const chatInput = document.getElementById('chatInput');
         const chatSendBtn = document.getElementById('chatSendBtn');
         if (chatInput) {
             chatInput.disabled = true;
-            chatInput.placeholder = 'Conversation closed. Start a new conversation to continue.';
             chatInput.value = '';
         }
         if (chatSendBtn) {
             chatSendBtn.disabled = true;
         }
-        
-        // Hide close button and show "Start New Conversation" button
-        if (chatCloseBtn) {
-            chatCloseBtn.style.display = 'none';
-        }
-        if (startNewBtn) {
-            startNewBtn.style.display = 'inline-flex';
-            startNewBtn.onclick = function() {
-                startNewConversation();
-            };
-        }
-        
-        // Option: Show user info form again (alternative approach)
-        // Uncomment below if you want to show the form instead of the button
-        /*
-        if (userInfoForm && chatInterface) {
-            chatInterface.style.display = 'none';
-            userInfoForm.style.display = 'block';
-            // Clear stored info to force re-entry
-            localStorage.removeItem('guest_info_provided');
-            sessionStorage.removeItem('user_name');
-            sessionStorage.removeItem('user_phone');
-            sessionStorage.removeItem('user_location');
-            sessionStorage.removeItem('user_concern');
-        }
-        */
         
         // Reset chat initialization flag to allow new conversation
         isInitialized = false;
