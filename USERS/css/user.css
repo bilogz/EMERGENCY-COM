@@ -1424,7 +1424,24 @@ textarea:focus {
 
 .chat-hint {
     font-size: 0.85rem;
-    color: var(--text-muted);
+    color: var(--text-muted) !important;
+}
+
+.chat-modal-body {
+    color: var(--text-color) !important;
+}
+
+.chat-modal-body p,
+.chat-modal-body label,
+.chat-modal-body input,
+.chat-modal-body select,
+.chat-modal-body button {
+    color: var(--text-color) !important;
+}
+
+.chat-modal-body input::placeholder {
+    color: var(--text-muted) !important;
+    opacity: 0.7;
 }
 
 .chat-status-indicator {
@@ -1484,6 +1501,7 @@ textarea:focus {
 .chat-message {
     font-size: 0.9rem;
     padding: 0.4rem 0.5rem;
+    color: var(--text-color) !important;
 }
 
 .chat-message + .chat-message {
@@ -1492,6 +1510,27 @@ textarea:focus {
 
 .chat-message-user {
     text-align: right;
+}
+
+.chat-message-admin {
+    text-align: left;
+}
+
+.chat-message-system {
+    text-align: center;
+    color: var(--text-secondary) !important;
+    font-style: italic;
+}
+
+.chat-message strong {
+    color: var(--text-color) !important;
+}
+
+.chat-message small {
+    color: var(--text-muted) !important;
+    display: block;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
 }
 
 .chat-input-row {
@@ -1552,6 +1591,53 @@ textarea:focus {
 
 [data-theme="dark"] .chat-messages {
     background: rgba(255,255,255,0.03);
+}
+
+[data-theme="dark"] .chat-modal-body {
+    color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] .chat-modal-body p,
+[data-theme="dark"] .chat-modal-body label,
+[data-theme="dark"] .chat-modal-body input,
+[data-theme="dark"] .chat-modal-body select,
+[data-theme="dark"] .chat-modal-body button,
+[data-theme="dark"] .chat-modal-body span {
+    color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] .chat-modal-body input,
+[data-theme="dark"] .chat-modal-body select {
+    background: #1f2228 !important;
+    border-color: #313543 !important;
+    color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] .chat-modal-body input::placeholder {
+    color: #888 !important;
+    opacity: 0.7;
+}
+
+[data-theme="dark"] .chat-message {
+    color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] .chat-message strong {
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .chat-message small {
+    color: #aaa !important;
+}
+
+[data-theme="dark"] .chat-hint {
+    color: #aaa !important;
+}
+
+[data-theme="dark"] .chat-status-indicator {
+    background: rgba(255, 193, 7, 0.15) !important;
+    color: #ffc107 !important;
+    border-left-color: #ffc107 !important;
 }
 
 [data-theme="dark"] .chat-fab {

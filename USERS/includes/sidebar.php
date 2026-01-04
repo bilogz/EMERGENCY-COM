@@ -254,9 +254,20 @@ document.addEventListener('DOMContentLoaded', function() {
         if (window.initFirebaseChat && !window.chatInitialized) {
             window.initFirebaseChat().then(() => {
                 console.log('Firebase chat initialized');
+                // Attach send button handlers after initialization
+                setTimeout(() => {
+                    if (window.attachSendButtonHandlers) {
+                        window.attachSendButtonHandlers();
+                    }
+                }, 200);
             }).catch(err => {
                 console.error('Failed to initialize Firebase chat:', err);
             });
+        } else if (window.attachSendButtonHandlers) {
+            // If already initialized, attach handlers immediately
+            setTimeout(() => {
+                window.attachSendButtonHandlers();
+            }, 100);
         }
         
         // Close modal when clicking outside (on backdrop) - only add once
@@ -534,9 +545,20 @@ document.addEventListener('DOMContentLoaded', function() {
             if (window.initFirebaseChat && !window.chatInitialized) {
                 window.initFirebaseChat().then(() => {
                     console.log('Firebase chat initialized');
+                    // Attach send button handlers after initialization
+                    setTimeout(() => {
+                        if (window.attachSendButtonHandlers) {
+                            window.attachSendButtonHandlers();
+                        }
+                    }, 200);
                 }).catch(err => {
                     console.error('Failed to initialize Firebase chat:', err);
                 });
+            } else if (window.attachSendButtonHandlers) {
+                // If already initialized, attach handlers immediately
+                setTimeout(() => {
+                    window.attachSendButtonHandlers();
+                }, 100);
             }
             
             console.log('Modal should be visible now');
@@ -1093,6 +1115,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Make sendChatMessage available globally
             window.sendChatMessage = sendChatMessage;
             
+            // Make attachSendButtonHandlers available globally
+            window.attachSendButtonHandlers = attachSendButtonHandlers;
+            
             // Function to attach send button handlers
             function attachSendButtonHandlers() {
                 const sendBtn = document.getElementById('chatSendBtn');
@@ -1260,7 +1285,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
         const senderName = senderType === 'user' ? 'You' : 'Admin';
         
-        msg.innerHTML = `<strong>${senderName}:</strong> ${text} <small style="display: block; font-size: 0.8em; opacity: 0.7; margin-top: 0.25rem;">${time}</small>`;
+        // Escape HTML to prevent XSS
+        const escapeHtml = (str) => {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        };
+        
+        msg.innerHTML = `<strong style="color: var(--text-color) !important;">${escapeHtml(senderName)}:</strong> <span style="color: var(--text-color) !important;">${escapeHtml(text)}</span> <small style="display: block; font-size: 0.8em; opacity: 0.7; margin-top: 0.25rem; color: var(--text-muted) !important;">${time}</small>`;
         chatMessages.appendChild(msg);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }

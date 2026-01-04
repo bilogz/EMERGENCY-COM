@@ -298,20 +298,34 @@ $pageTitle = 'Two-Way Communication Interface';
             const messagesDiv = document.getElementById('chatMessages');
             messagesDiv.innerHTML = '';
             
+            const loadedMessageIds = new Set();
+            
             // Load existing messages
             messagesRef.once('value', (snapshot) => {
                 if (snapshot.exists()) {
                     const messages = snapshot.val();
-                    Object.values(messages).forEach(msg => {
+                    // Sort messages by timestamp
+                    const sortedMessages = Object.entries(messages).sort((a, b) => {
+                        const timeA = a[1].timestamp || 0;
+                        const timeB = b[1].timestamp || 0;
+                        return timeA - timeB;
+                    });
+                    
+                    sortedMessages.forEach(([msgId, msg]) => {
+                        loadedMessageIds.add(msgId);
                         addMessageToChat(msg.text, msg.senderType, msg.timestamp);
                     });
                 }
             });
             
-            // Listen for new messages
+            // Listen for new messages (real-time)
             messagesListener = messagesRef.on('child_added', (snapshot) => {
-                const message = snapshot.val();
-                addMessageToChat(message.text, message.senderType, message.timestamp);
+                const messageId = snapshot.key;
+                if (!loadedMessageIds.has(messageId)) {
+                    loadedMessageIds.add(messageId);
+                    const message = snapshot.val();
+                    addMessageToChat(message.text, message.senderType, message.timestamp);
+                }
             });
         }
 
