@@ -693,6 +693,8 @@ document.addEventListener('DOMContentLoaded', function() {
             window.firebaseApp = firebase.initializeApp(firebaseConfig);
         }
         const database = firebase.database();
+        // Make database globally accessible
+        window.chatDatabase = database;
         
         // Get user info from PHP session or localStorage
         let userId = sessionStorage.getItem('user_id');
@@ -853,6 +855,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Store conversation ID for later use
         sessionStorage.setItem('conversation_id', conversationId);
+        window.currentConversationId = conversationId;
         
         // Continue with chat initialization
         continueChatInitialization(database, conversationId, userId, userName, userEmail, userPhone, isGuest, userLocation, userConcern);
@@ -1054,10 +1057,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     read: false
                 };
                 
-                const messageRef = database.ref(`messages/${conversationId}`).push(messageData);
+                // Get database reference (use global or local)
+                const db = window.chatDatabase || database;
+                if (!db) {
+                    console.error('Database not available');
+                    alert('Chat database is not ready. Please refresh the page.');
+                    if (chatSendBtn) {
+                        chatSendBtn.disabled = false;
+                        chatSendBtn.textContent = 'Send';
+                    }
+                    return;
+                }
+                
+                console.log('Sending message to conversation:', messageConversationId);
+                const messageRef = db.ref(`messages/${messageConversationId}`).push(messageData);
                 
                 // Update conversation with user info
-                database.ref(`conversations/${conversationId}`).update({
+                db.ref(`conversations/${messageConversationId}`).update({
                     lastMessage: text,
                     lastMessageTime: firebase.database.ServerValue.TIMESTAMP,
                     updatedAt: firebase.database.ServerValue.TIMESTAMP,
@@ -1072,8 +1088,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 
                 // Add to chat queue for admin with full user info
-                database.ref('chat_queue').push({
-                    conversationId: conversationId,
+                db.ref('chat_queue').push({
+                    conversationId: messageConversationId,
                     userId: userId,
                     userName: userName,
                     userEmail: userEmail || null,
@@ -1259,6 +1275,9 @@ document.addEventListener('DOMContentLoaded', function() {
             window.chatInitialized = true;
             
             console.log('Firebase chat initialization complete');
+            console.log('Conversation ID:', conversationId);
+            console.log('Database available:', !!database);
+            console.log('Global database available:', !!window.chatDatabase);
             
             // Re-attach button handlers after initialization
             setTimeout(() => {

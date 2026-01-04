@@ -210,20 +210,30 @@ $pageTitle = 'Two-Way Communication Interface';
         let messagesListener = null;
 
         function loadConversations() {
-            const conversationsRef = database.ref('conversations').orderByChild('updatedAt');
+            const conversationsRef = database.ref('conversations');
             const list = document.getElementById('conversationsList');
+            
+            console.log('Loading conversations...');
             
             conversationsRef.on('value', (snapshot) => {
                 list.innerHTML = '';
                 
                 if (!snapshot.exists()) {
+                    console.log('No conversations found');
                     list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No conversations yet</p>';
                     return;
                 }
                 
                 const conversations = snapshot.val();
+                console.log('Found conversations:', Object.keys(conversations).length);
+                
+                // Sort by updatedAt (most recent first), fallback to createdAt
                 const sortedConversations = Object.entries(conversations)
-                    .sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0));
+                    .sort((a, b) => {
+                        const timeA = a[1].updatedAt || a[1].createdAt || 0;
+                        const timeB = b[1].updatedAt || b[1].createdAt || 0;
+                        return timeB - timeA;
+                    });
                 
                 sortedConversations.forEach(([convId, conv]) => {
                     const item = document.createElement('div');
