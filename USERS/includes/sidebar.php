@@ -212,35 +212,37 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Chat modal behaviour - keep it open until user closes it
     function openChat() {
-        if (!chatModal) {
-            console.error('Chat modal not found');
-            // Try to find it again
-            const modal = document.getElementById('chatModal');
-            if (modal) {
-                console.log('Found modal on retry');
-                modal.classList.add('chat-modal-open');
-                modal.setAttribute('aria-hidden', 'false');
-                modal.style.display = 'flex';
-                modal.style.visibility = 'visible';
-                modal.style.opacity = '1';
-                modal.style.pointerEvents = 'auto';
-                document.body.style.overflow = 'hidden';
-                return;
-            }
+        // Always get fresh reference to modal
+        let modal = document.getElementById('chatModal');
+        if (!modal) {
+            console.error('Chat modal not found in DOM');
             alert('Chat is not available. Please refresh the page.');
             return;
         }
         
-        console.log('Opening chat modal...');
-        // Force show the modal
-        chatModal.style.display = 'flex';
-        chatModal.style.visibility = 'visible';
-        chatModal.style.opacity = '1';
-        chatModal.style.pointerEvents = 'auto';
-        chatModal.style.zIndex = '99999';
-        chatModal.classList.add('chat-modal-open');
-        chatModal.setAttribute('aria-hidden', 'false');
+        console.log('Opening chat modal...', modal);
+        
+        // Force show the modal with all necessary styles
+        modal.style.cssText = `
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            z-index: 99999 !important;
+        `;
+        modal.classList.add('chat-modal-open');
+        modal.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        
+        // Ensure content is visible
+        const content = modal.querySelector('.chat-modal-content');
+        if (content) {
+            content.style.cssText = `
+                pointer-events: auto !important;
+                z-index: 100000 !important;
+                display: flex !important;
+            `;
+        }
         
         // Check if user info form should be shown
         checkAndShowUserInfoForm();
@@ -437,73 +439,141 @@ document.addEventListener('DOMContentLoaded', function() {
     // Expose openChat globally so it can be called from other pages
     window.openChat = openChat;
     window.closeChat = closeChatWithFlag;
+    
+    // Also expose a simple test function
+    window.testChatModal = function() {
+        const modal = document.getElementById('chatModal');
+        if (modal) {
+            console.log('Modal found, testing display...');
+            modal.style.cssText = 'display: flex !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; z-index: 99999 !important; position: fixed !important; inset: 0 !important;';
+            modal.classList.add('chat-modal-open');
+            document.body.style.overflow = 'hidden';
+            console.log('Modal should be visible now');
+            return true;
+        } else {
+            console.error('Modal not found in DOM');
+            return false;
+        }
+    };
 
     // Chat button is now in auth-icons, ensure it's clickable
-    if (chatFab) {
-        // Remove any existing listeners and add fresh one
-        const newChatFab = chatFab.cloneNode(true);
-        chatFab.parentNode.replaceChild(newChatFab, chatFab);
-        const freshChatFab = document.getElementById('chatFab');
-        
-        if (freshChatFab) {
-            // Ensure it's a button, not a link
-            freshChatFab.type = 'button';
-            freshChatFab.style.pointerEvents = 'auto';
-            freshChatFab.style.cursor = 'pointer';
-            freshChatFab.style.touchAction = 'manipulation';
-            
-            // Debug: Check if modal exists
-            console.log('Chat button found:', freshChatFab);
-            console.log('Chat modal exists:', !!chatModal);
-            
-            freshChatFab.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                console.log('Chat button clicked - opening modal');
-                openChat();
-                
-                // Verify modal is visible after a short delay
-                setTimeout(() => {
-                    if (chatModal) {
-                        const isVisible = chatModal.classList.contains('chat-modal-open') && 
-                                        chatModal.style.display === 'flex' &&
-                                        chatModal.style.visibility === 'visible';
-                        console.log('Modal visibility check:', isVisible);
-                        if (!isVisible) {
-                            console.warn('Modal not visible, forcing display...');
-                            chatModal.style.display = 'flex';
-                            chatModal.style.visibility = 'visible';
-                            chatModal.style.opacity = '1';
-                            chatModal.classList.add('chat-modal-open');
-                        }
-                    }
-                }, 100);
-            }, false);
-            
-            // Also add touch event for mobile
-            freshChatFab.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                console.log('Chat button touched - opening modal');
-                openChat();
-            }, false);
-            
-            // Keyboard support
-            freshChatFab.setAttribute('tabindex', '0');
-            freshChatFab.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    openChat();
-                }
-            });
-        } else {
-            console.error('Chat button not found after cloning');
+    // Use event delegation for more reliability
+    function setupChatButton() {
+        const chatButton = document.getElementById('chatFab');
+        if (!chatButton) {
+            console.error('Chat button (#chatFab) not found in DOM');
+            // Retry after a short delay
+            setTimeout(setupChatButton, 500);
+            return;
         }
-    } else {
-        console.error('Chat button (chatFab) not found in DOM');
+        
+        console.log('Chat button found, setting up...');
+        
+        // Remove all existing listeners by cloning
+        const newButton = chatButton.cloneNode(true);
+        chatButton.parentNode.replaceChild(newButton, chatButton);
+        const freshButton = document.getElementById('chatFab');
+        
+        if (!freshButton) {
+            console.error('Failed to get fresh button after cloning');
+            return;
+        }
+        
+        freshButton.type = 'button';
+        freshButton.style.pointerEvents = 'auto';
+        freshButton.style.cursor = 'pointer';
+        freshButton.style.touchAction = 'manipulation';
+        
+        // Simple, direct click handler
+        freshButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            console.log('=== CHAT BUTTON CLICKED ===');
+            
+            // Get modal directly
+            const modal = document.getElementById('chatModal');
+            console.log('Modal element:', modal);
+            
+            if (!modal) {
+                console.error('Modal not found!');
+                alert('Chat modal not found. Please refresh the page.');
+                return;
+            }
+            
+            // Force show modal
+            console.log('Showing modal...');
+            modal.style.cssText = `
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                pointer-events: auto !important;
+                z-index: 99999 !important;
+                background: rgba(0,0,0,0.5) !important;
+                align-items: center !important;
+                justify-content: center !important;
+                padding: 1rem !important;
+            `;
+            modal.classList.add('chat-modal-open');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            
+            // Ensure content is visible
+            const content = modal.querySelector('.chat-modal-content');
+            if (content) {
+                content.style.cssText = `
+                    pointer-events: auto !important;
+                    z-index: 100000 !important;
+                    display: flex !important;
+                `;
+            }
+            
+            // Check and show user info form
+            checkAndShowUserInfoForm();
+            attachUserInfoFormHandler();
+            
+            // Initialize Firebase if needed
+            if (window.initFirebaseChat && !window.chatInitialized) {
+                window.initFirebaseChat().then(() => {
+                    console.log('Firebase chat initialized');
+                }).catch(err => {
+                    console.error('Failed to initialize Firebase chat:', err);
+                });
+            }
+            
+            console.log('Modal should be visible now');
+        }, true); // Use capture phase
+        
+        // Touch handler for mobile
+        freshButton.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Chat button touched');
+            freshButton.click(); // Trigger click
+        }, { passive: false, capture: true });
+        
+        // Keyboard support
+        freshButton.setAttribute('tabindex', '0');
+        freshButton.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                freshButton.click();
+            }
+        });
+        
+        console.log('Chat button setup complete');
     }
+    
+    // Setup chat button
+    setupChatButton();
+    
+    // Also try to setup after a delay in case DOM wasn't ready
+    setTimeout(setupChatButton, 1000);
 
     if (chatCloseBtn) {
         chatCloseBtn.addEventListener('click', closeChatWithFlag);
