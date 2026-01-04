@@ -228,27 +228,52 @@ $pageTitle = 'Two-Way Communication Interface';
                 sortedConversations.forEach(([convId, conv]) => {
                     const item = document.createElement('div');
                     item.className = 'conversation-item';
+                    const guestBadge = conv.isGuest ? '<span style="background: #ff9800; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem;">GUEST</span>' : '';
+                    const concernBadge = conv.userConcern ? `<span style="background: #2196f3; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; text-transform: capitalize;">${conv.userConcern}</span>` : '';
+                    const userInfo = [];
+                    if (conv.userPhone) userInfo.push(`<i class="fas fa-phone"></i> ${conv.userPhone}`);
+                    if (conv.userLocation) userInfo.push(`<i class="fas fa-map-marker-alt"></i> ${conv.userLocation}`);
+                    const userInfoHtml = userInfo.length > 0 ? `<div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">${userInfo.join(' | ')}</div>` : '';
                     item.innerHTML = `
-                        <strong>${conv.userName || 'Unknown User'}</strong>
+                        <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                            <strong>${conv.userName || 'Unknown User'}</strong>${guestBadge}${concernBadge}
+                        </div>
                         <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: var(--text-secondary);">
                             ${conv.lastMessage || 'No messages yet'}
                         </p>
-                        <small style="color: var(--text-secondary);">
+                        ${userInfoHtml}
+                        <small style="color: var(--text-secondary); display: block; margin-top: 0.5rem;">
                             ${conv.lastMessageTime ? new Date(conv.lastMessageTime).toLocaleString() : ''}
                         </small>
                     `;
                     item.addEventListener('click', function() {
-                        openConversation(convId, conv.userName || 'Unknown User', this);
+                        openConversation(convId, conv, this);
                     });
                     list.appendChild(item);
                 });
             });
         }
 
-        function openConversation(conversationId, userName, element) {
+        function openConversation(conversationId, conversation, element) {
             currentConversationId = conversationId;
-            document.getElementById('chatUserName').textContent = userName;
-            document.getElementById('chatUserStatus').textContent = 'Online';
+            const userName = typeof conversation === 'string' ? conversation : (conversation.userName || 'Unknown User');
+            const userNameEl = document.getElementById('chatUserName');
+            const userStatusEl = document.getElementById('chatUserStatus');
+            
+            const guestBadge = (typeof conversation === 'object' && conversation.isGuest) ? ' <span style="background: #ff9800; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem;">GUEST</span>' : '';
+            const concernBadge = (typeof conversation === 'object' && conversation.userConcern) ? ` <span style="background: #2196f3; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: capitalize;">${conversation.userConcern}</span>` : '';
+            userNameEl.innerHTML = userName + guestBadge + concernBadge;
+            
+            // Show user info
+            const userInfo = [];
+            if (typeof conversation === 'object') {
+                if (conversation.userEmail) userInfo.push(`Email: ${conversation.userEmail}`);
+                if (conversation.userPhone) userInfo.push(`Phone: ${conversation.userPhone}`);
+                if (conversation.userLocation) userInfo.push(`Location: ${conversation.userLocation}`);
+                if (conversation.userConcern) userInfo.push(`Concern: ${conversation.userConcern}`);
+            }
+            userStatusEl.textContent = userInfo.length > 0 ? userInfo.join(' | ') : 'Online';
+            
             document.getElementById('messageInput').disabled = false;
             document.getElementById('sendButton').disabled = false;
             
