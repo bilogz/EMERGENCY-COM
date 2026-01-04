@@ -235,9 +235,9 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.style.overflow = 'hidden'; // Prevent background scrolling
         
         // Ensure content is visible
-        const content = modal.querySelector('.chat-modal-content');
-        if (content) {
-            content.style.cssText = `
+        const modalContent = modal.querySelector('.chat-modal-content');
+        if (modalContent) {
+            modalContent.style.cssText = `
                 pointer-events: auto !important;
                 z-index: 100000 !important;
                 display: flex !important;
@@ -247,12 +247,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if user info form should be shown
         checkAndShowUserInfoForm();
         
-        // Ensure content is clickable
-        const content = chatModal.querySelector('.chat-modal-content');
-        if (content) {
-            content.style.pointerEvents = 'auto';
-            content.style.zIndex = '100000';
-        }
+        // Attach form handler if needed (for anonymous users)
+        attachUserInfoFormHandler();
         
         // Attach form handler if needed (for anonymous users)
         attachUserInfoFormHandler();
@@ -524,9 +520,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.style.overflow = 'hidden';
             
             // Ensure content is visible
-            const content = modal.querySelector('.chat-modal-content');
-            if (content) {
-                content.style.cssText = `
+            const modalContentEl = modal.querySelector('.chat-modal-content');
+            if (modalContentEl) {
+                modalContentEl.style.cssText = `
                     pointer-events: auto !important;
                     z-index: 100000 !important;
                     display: flex !important;
@@ -601,10 +597,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Ensure pointer events are enabled when modal is open
                         chatModal.style.pointerEvents = 'auto';
                         chatModal.style.zIndex = '9999';
-                        const content = chatModal.querySelector('.chat-modal-content');
-                        if (content) {
-                            content.style.pointerEvents = 'auto';
-                            content.style.zIndex = '10000';
+                        const chatContent = chatModal.querySelector('.chat-modal-content');
+                        if (chatContent) {
+                            chatContent.style.pointerEvents = 'auto';
+                            chatContent.style.zIndex = '10000';
                         }
                     }
                 }
