@@ -403,6 +403,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         item = document.createElement('div');
                         item.className = 'conversation-item';
                         item.setAttribute('data-conversation-id', convId);
+                        // Store full conversation object for later use
+                        item._conversationData = conv;
                         item.style.cursor = 'pointer';
                         item.style.pointerEvents = 'auto';
                         item.style.touchAction = 'manipulation';
@@ -412,8 +414,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                             e.preventDefault();
                             e.stopPropagation();
                             e.stopImmediatePropagation();
-                            console.log('Conversation clicked:', convId, conv);
-                            openConversation(convId, conv, this);
+                            const convData = this._conversationData || conv;
+                            console.log('Conversation clicked:', convId, convData);
+                            openConversation(convId, convData, this);
                             return false;
                         });
                         
@@ -421,11 +424,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         item.addEventListener('touchend', function(e) {
                             e.preventDefault();
                             e.stopPropagation();
+                            const convData = this._conversationData || conv;
                             console.log('Conversation touched:', convId);
-                            openConversation(convId, conv, this);
+                            openConversation(convId, convData, this);
                         }, { passive: false });
                         
                         list.appendChild(item);
+                    } else {
+                        // Update stored conversation data
+                        item._conversationData = conv;
                     }
                     
                     // Update item content (only if changed to avoid flicker)
@@ -434,6 +441,23 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     const userInfo = [];
                     if (conv.userPhone) userInfo.push(`<i class="fas fa-phone"></i> ${conv.userPhone}`);
                     if (conv.userLocation) userInfo.push(`<i class="fas fa-map-marker-alt"></i> ${conv.userLocation}`);
+                    
+                    // Add device info to list item
+                    if (conv.deviceInfo) {
+                        const deviceParts = [];
+                        if (conv.deviceInfo.device_type) deviceParts.push(conv.deviceInfo.device_type);
+                        if (conv.deviceInfo.os) deviceParts.push(conv.deviceInfo.os);
+                        if (conv.deviceInfo.browser) deviceParts.push(conv.deviceInfo.browser);
+                        if (deviceParts.length > 0) {
+                            userInfo.push(`<i class="fas fa-mobile-alt"></i> ${deviceParts.join(' - ')}`);
+                        }
+                    }
+                    
+                    // Add IP address to list item
+                    if (conv.ipAddress) {
+                        userInfo.push(`<i class="fas fa-network-wired"></i> ${conv.ipAddress}`);
+                    }
+                    
                     const userInfoHtml = userInfo.length > 0 ? `<div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary-1);">${userInfo.join(' | ')}</div>` : '';
                     
                     const newContent = `
@@ -485,6 +509,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         function openConversation(conversationId, conversation, element) {
             console.log('Opening conversation:', conversationId, conversation);
+            console.log('Conversation device info:', conversation?.deviceInfo);
+            console.log('Conversation IP address:', conversation?.ipAddress);
             currentConversationId = conversationId;
             lastMessageId = 0; // Reset message ID when opening new conversation
             
@@ -509,20 +535,34 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (conversation.userLocation) userInfo.push(`Location: ${conversation.userLocation}`);
                 if (conversation.userConcern) userInfo.push(`Concern: ${conversation.userConcern}`);
                 
-                // Add device info
-                if (conversation.deviceInfo) {
+                // Add device info - check both deviceInfo and device_info (for compatibility)
+                const deviceInfo = conversation.deviceInfo || conversation.device_info;
+                if (deviceInfo) {
                     const deviceParts = [];
-                    if (conversation.deviceInfo.device_type) deviceParts.push(conversation.deviceInfo.device_type);
-                    if (conversation.deviceInfo.os) deviceParts.push(conversation.deviceInfo.os);
-                    if (conversation.deviceInfo.browser) deviceParts.push(conversation.deviceInfo.browser);
+                    // Handle both object and string formats
+                    if (typeof deviceInfo === 'string') {
+                        try {
+                            const parsed = JSON.parse(deviceInfo);
+                            if (parsed.device_type) deviceParts.push(parsed.device_type);
+                            if (parsed.os) deviceParts.push(parsed.os);
+                            if (parsed.browser) deviceParts.push(parsed.browser);
+                        } catch (e) {
+                            console.warn('Failed to parse device info:', e);
+                        }
+                    } else if (typeof deviceInfo === 'object') {
+                        if (deviceInfo.device_type) deviceParts.push(deviceInfo.device_type);
+                        if (deviceInfo.os) deviceParts.push(deviceInfo.os);
+                        if (deviceInfo.browser) deviceParts.push(deviceInfo.browser);
+                    }
                     if (deviceParts.length > 0) {
                         userInfo.push(`Device: ${deviceParts.join(' - ')}`);
                     }
                 }
                 
-                // Add IP address
-                if (conversation.ipAddress) {
-                    userInfo.push(`IP: ${conversation.ipAddress}`);
+                // Add IP address - check both ipAddress and ip_address (for compatibility)
+                const ipAddress = conversation.ipAddress || conversation.ip_address;
+                if (ipAddress) {
+                    userInfo.push(`IP: ${ipAddress}`);
                 }
             }
             userStatusEl.textContent = userInfo.length > 0 ? userInfo.join(' | ') : 'Online';
