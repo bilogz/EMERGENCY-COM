@@ -104,7 +104,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
 </div>
 
 <!-- Floating chat button and modal -->
-<button class="chat-fab" id="chatFab" aria-label="Open chat">
+<button class="chat-fab" id="chatFab" aria-label="Open chat" title="Any concerns? Contact support">
     <i class="fas fa-comments"></i>
     <span class="chat-tooltip" id="chatTooltip">Any concerns? Contact support</span>
 </button>
