@@ -132,8 +132,8 @@
                 
                 console.log('Conversation ready:', conversationId);
                 
-                // Load existing messages
-                await loadMessages();
+                // Load existing messages (initial load)
+                await loadMessages(true);
                 
                 // Start polling for new messages
                 startPolling();
@@ -190,8 +190,12 @@
                     
                     let newMessagesAdded = false;
                     data.messages.forEach(msg => {
-                        // Only add if message ID is greater than lastMessageId and not already displayed
-                        if (msg.id > lastMessageId && !existingIds.has(msg.id)) {
+                        // For initial load, load all messages. For polling, only load new ones.
+                        const shouldAdd = isInitialLoad 
+                            ? !existingIds.has(msg.id)  // Initial load: add if not already displayed
+                            : (msg.id > lastMessageId && !existingIds.has(msg.id)); // Polling: only new messages
+                        
+                        if (shouldAdd) {
                             existingIds.add(msg.id);
                             if (window.addMessageToChat) {
                                 window.addMessageToChat(msg.text, msg.senderType, msg.timestamp, msg.id);
@@ -204,8 +208,13 @@
                     // Only scroll if new messages were added
                     if (newMessagesAdded && chatMessages) {
                         chatMessages.scrollTop = chatMessages.scrollHeight;
+                        console.log('Loaded', newMessagesAdded ? 'new' : 'no', 'messages. Total messages in conversation:', data.messages.length);
                     }
+                } else {
+                    console.warn('Chat messages container not found when loading messages');
                 }
+            } else if (data.success && (!data.messages || data.messages.length === 0)) {
+                console.log('No messages in conversation yet');
             }
         } catch (error) {
             console.error('Error loading messages:', error);
@@ -306,8 +315,18 @@
                 }
                 // Update last message ID
                 if (data.messageId) {
-                    lastMessageId = data.messageId;
+                    lastMessageId = Math.max(lastMessageId, parseInt(data.messageId));
                 }
+                
+                // Immediately add the sent message to the chat UI
+                if (window.addMessageToChat) {
+                    const timestamp = new Date().toISOString();
+                    window.addMessageToChat(text.trim(), 'user', timestamp, data.messageId);
+                    console.log('Message added to chat UI immediately');
+                } else {
+                    console.warn('addMessageToChat function not available, message will appear after polling');
+                }
+                
                 return true;
             } else {
                 console.error('Failed to send message:', data.message);
@@ -346,22 +365,39 @@
     }
     
     // Add message to chat UI (this will be called from sidebar.php)
-    function addMessageToChat(text, senderType, timestamp) {
+    function addMessageToChat(text, senderType, timestamp, messageId = null) {
         const chatMessages = document.querySelector('.chat-messages');
-        if (!chatMessages) return;
-        
+        if (!chatMessages) {
+            console.warn('Chat messages container not found');
+            return;
+        }
+
+        // Check for duplicate messages by ID
+        if (messageId) {
+            const existingMsg = chatMessages.querySelector(`[data-message-id="${messageId}"]`);
+            if (existingMsg) {
+                console.log('Message already displayed, skipping:', messageId);
+                return;
+            }
+        }
+
         // Remove system message if this is the first real message
         const systemMsg = chatMessages.querySelector('.chat-message-system');
         if (systemMsg && (senderType === 'user' || senderType === 'admin')) {
             systemMsg.remove();
         }
-        
+
         const msg = document.createElement('div');
         msg.className = `chat-message chat-message-${senderType}`;
         
+        // Add message ID as data attribute to prevent duplicates
+        if (messageId) {
+            msg.setAttribute('data-message-id', messageId);
+        }
+
         const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
         const senderName = senderType === 'user' ? 'You' : 'Admin';
-        
+
         // Escape HTML
         const escapeHtml = (str) => {
             const div = document.createElement('div');
@@ -372,6 +408,8 @@
         msg.innerHTML = `<strong style="color: var(--text-color) !important;">${escapeHtml(senderName)}:</strong> <span style="color: var(--text-color) !important;">${escapeHtml(text)}</span> <small style="display: block; font-size: 0.8em; opacity: 0.7; margin-top: 0.25rem; color: var(--text-muted) !important;">${time}</small>`;
         chatMessages.appendChild(msg);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+        
+        console.log('Message added to UI:', { text, senderType, messageId });
     }
     
     // Expose functions globally
