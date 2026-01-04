@@ -194,9 +194,16 @@ $pageTitle = 'Two-Way Communication Interface';
         let conversationPollingInterval = null;
         let messagePollingInterval = null;
 
-        async function loadConversations() {
+        async function loadConversations(isInitialLoad = false) {
             const list = document.getElementById('conversationsList');
-            list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">Loading...</p>';
+            
+            // Only show loading on initial load
+            if (isInitialLoad) {
+                const existingItems = list.querySelectorAll('.conversation-item');
+                if (existingItems.length === 0) {
+                    list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">Loading...</p>';
+                }
+            }
             
             console.log('Loading conversations from MySQL...');
             
@@ -204,26 +211,81 @@ $pageTitle = 'Two-Way Communication Interface';
                 const response = await fetch(API_BASE + 'chat-get-conversations.php?status=active');
                 const data = await response.json();
                 
-                list.innerHTML = '';
-                
                 if (!data.success || !data.conversations || data.conversations.length === 0) {
-                    console.log('No conversations found');
-                    list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No conversations yet</p>';
+                    // Only show "No conversations" on initial load
+                    if (isInitialLoad) {
+                        list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No conversations yet</p>';
+                    }
                     return;
                 }
                 
                 console.log('Found conversations:', data.conversations.length);
                 
+                // Track existing conversation IDs
+                const existingIds = new Set();
+                const existingItems = list.querySelectorAll('.conversation-item');
+                existingItems.forEach(item => {
+                    const convId = item.getAttribute('data-conversation-id');
+                    if (convId) {
+                        existingIds.add(convId);
+                    }
+                });
+                
+                // Remove loading message if it exists
+                const loadingMsg = list.querySelector('p');
+                if (loadingMsg && loadingMsg.textContent.includes('Loading')) {
+                    loadingMsg.remove();
+                }
+                
+                // Track which conversations we've processed in this update
+                const processedIds = new Set();
+                
+                // Update or create conversation items
                 data.conversations.forEach(conv => {
-                    const item = document.createElement('div');
-                    item.className = 'conversation-item';
+                    const convId = String(conv.id || conv.conversation_id);
+                    processedIds.add(convId);
+                    
+                    let item = list.querySelector(`.conversation-item[data-conversation-id="${convId}"]`);
+                    
+                    if (!item) {
+                        // Create new item
+                        item = document.createElement('div');
+                        item.className = 'conversation-item';
+                        item.setAttribute('data-conversation-id', convId);
+                        item.style.cursor = 'pointer';
+                        item.style.pointerEvents = 'auto';
+                        item.style.touchAction = 'manipulation';
+                        
+                        // Add click handler
+                        item.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                            console.log('Conversation clicked:', convId, conv);
+                            openConversation(convId, conv, this);
+                            return false;
+                        });
+                        
+                        // Also handle touch events
+                        item.addEventListener('touchend', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('Conversation touched:', convId);
+                            openConversation(convId, conv, this);
+                        }, { passive: false });
+                        
+                        list.appendChild(item);
+                    }
+                    
+                    // Update item content (only if changed to avoid flicker)
                     const guestBadge = conv.isGuest ? '<span style="background: #ff9800; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem;">GUEST</span>' : '';
                     const concernBadge = conv.userConcern ? `<span style="background: #2196f3; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; text-transform: capitalize;">${conv.userConcern}</span>` : '';
                     const userInfo = [];
                     if (conv.userPhone) userInfo.push(`<i class="fas fa-phone"></i> ${conv.userPhone}`);
                     if (conv.userLocation) userInfo.push(`<i class="fas fa-map-marker-alt"></i> ${conv.userLocation}`);
                     const userInfoHtml = userInfo.length > 0 ? `<div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">${userInfo.join(' | ')}</div>` : '';
-                    item.innerHTML = `
+                    
+                    const newContent = `
                         <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
                             <strong>${conv.userName || 'Unknown User'}</strong>${guestBadge}${concernBadge}
                         </div>
@@ -235,40 +297,38 @@ $pageTitle = 'Two-Way Communication Interface';
                             ${conv.lastMessageTime ? new Date(conv.lastMessageTime).toLocaleString() : ''}
                         </small>
                     `;
-                    // Add click handler with proper event handling
-                    item.style.cursor = 'pointer';
-                    item.style.pointerEvents = 'auto';
-                    item.style.touchAction = 'manipulation';
-                    const convId = conv.id || conv.conversation_id; // API returns 'id'
-                    item.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        e.stopImmediatePropagation();
-                        console.log('Conversation clicked:', convId, conv);
-                        openConversation(convId, conv, this);
-                        return false;
-                    });
                     
-                    // Also handle touch events
-                    item.addEventListener('touchend', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('Conversation touched:', convId);
-                        openConversation(convId, conv, this);
-                    }, { passive: false });
-                    list.appendChild(item);
+                    // Only update if content changed
+                    if (item.innerHTML.trim() !== newContent.trim()) {
+                        item.innerHTML = newContent;
+                    }
                 });
+                
+                // Remove conversations that no longer exist (only if not currently active)
+                if (!isInitialLoad) {
+                    existingItems.forEach(item => {
+                        const convId = item.getAttribute('data-conversation-id');
+                        if (convId && !processedIds.has(convId)) {
+                            // Don't remove if it's the active conversation
+                            if (!item.classList.contains('active')) {
+                                item.remove();
+                            }
+                        }
+                    });
+                }
                 
                 // Start polling for new conversations (only if not already polling)
                 if (!conversationPollingInterval) {
                     conversationPollingInterval = setInterval(() => {
-                        // Only reload if no conversation is open or if we want to update the list
-                        loadConversations();
+                        loadConversations(false); // Not initial load
                     }, 5000); // Poll every 5 seconds
                 }
             } catch (error) {
                 console.error('Error loading conversations:', error);
-                list.innerHTML = '<p style="text-align: center; color: red; padding: 2rem;">Error loading conversations</p>';
+                // Only show error on initial load
+                if (isInitialLoad) {
+                    list.innerHTML = '<p style="text-align: center; color: red; padding: 2rem;">Error loading conversations</p>';
+                }
             }
         }
 
@@ -579,8 +639,8 @@ $pageTitle = 'Two-Way Communication Interface';
                     if (data.messageId) {
                         lastMessageId = Math.max(lastMessageId, data.messageId);
                     }
-                    // Reload conversations to update last message (silently)
-                    loadConversations();
+                    // Reload conversations to update last message (silently, not initial load)
+                    loadConversations(false);
                     // Don't reload messages - the message is already in UI
                     // Polling will pick up any other new messages
                 } else {
@@ -615,7 +675,9 @@ $pageTitle = 'Two-Way Communication Interface';
         }
 
         // Load conversations on page load
-        document.addEventListener('DOMContentLoaded', loadConversations);
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConversations(true); // Initial load
+        });
     </script>
 </body>
 </html>
