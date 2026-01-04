@@ -6,7 +6,17 @@
 (function() {
     'use strict';
     
-    const API_BASE = 'api/';
+    // Get API base path - try to detect the correct path
+    let API_BASE = 'api/';
+    // If we're in a subdirectory, adjust the path
+    if (window.location.pathname.includes('/USERS/')) {
+        API_BASE = '../USERS/api/';
+    } else if (window.location.pathname.includes('/includes/')) {
+        API_BASE = '../api/';
+    } else {
+        API_BASE = 'api/';
+    }
+    console.log('API_BASE set to:', API_BASE);
     let conversationId = null;
     let lastMessageId = 0;
     let pollingInterval = null;
@@ -201,9 +211,16 @@
             formData.append('isGuest', isGuest ? '1' : '0');
             formData.append('conversationId', conversationId);
             
-            console.log('Sending to:', API_BASE + 'chat-send.php');
+            const apiUrl = API_BASE + 'chat-send.php';
+            console.log('Sending to:', apiUrl);
+            console.log('FormData contents:', {
+                text: text.trim(),
+                userId: userId,
+                userName: userName,
+                conversationId: conversationId
+            });
             
-            const response = await fetch(API_BASE + 'chat-send.php', {
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 body: formData
             });
@@ -211,10 +228,23 @@
             console.log('Response status:', response.status);
             
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorText = await response.text();
+                console.error('HTTP error response:', errorText);
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
             }
             
-            const data = await response.json();
+            const responseText = await response.text();
+            console.log('Response text:', responseText);
+            
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (e) {
+                console.error('Failed to parse JSON response:', e);
+                console.error('Response was:', responseText);
+                throw new Error('Invalid JSON response from server: ' + responseText.substring(0, 100));
+            }
+            
             console.log('Response data:', data);
             
             if (data.success) {

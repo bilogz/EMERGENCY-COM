@@ -1222,11 +1222,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Make sendChatMessage available globally
-            window.sendChatMessage = sendChatMessage;
-            
-            // Also add a check to prevent sending if form is not filled
             const originalSendChatMessage = sendChatMessage;
-            window.sendChatMessage = function() {
+            window.sendChatMessage = async function() {
                 // Check if user info is required and filled (for anonymous users)
                 const userId = sessionStorage.getItem('user_id');
                 const isLoggedIn = userId && 
@@ -1246,13 +1243,31 @@ document.addEventListener('DOMContentLoaded', function() {
                         alert('Please fill in all required information (Name, Contact, Location, and Concern) before sending a message.');
                         // Show the form
                         checkAndShowUserInfoForm();
-                        return;
+                        return false;
                     }
                 }
                 
                 // Call original function
-                return originalSendChatMessage();
+                return await originalSendChatMessage();
             };
+            
+            // Also ensure sendChatMessageMySQL is available as an alias
+            if (!window.sendChatMessageMySQL) {
+                window.sendChatMessageMySQL = async function(text) {
+                    console.log('sendChatMessageMySQL wrapper called with text:', text);
+                    // If text is provided, use it; otherwise get from input
+                    if (!text) {
+                        const input = document.getElementById('chatInput');
+                        text = input ? input.value.trim() : '';
+                    }
+                    if (!text) {
+                        console.warn('No text to send');
+                        return false;
+                    }
+                    // Call the sendChatMessage function which will handle validation
+                    return await window.sendChatMessage();
+                };
+            }
             
             // Make attachSendButtonHandlers available globally
             window.attachSendButtonHandlers = attachSendButtonHandlers;
@@ -1316,26 +1331,36 @@ document.addEventListener('DOMContentLoaded', function() {
                     freshBtn.textContent = 'Sending...';
                     
                     try {
-                        // Try sendChatMessage first (wrapper function), then sendChatMessageMySQL
-                        if (window.sendChatMessage) {
-                            console.log('Using sendChatMessage wrapper');
-                            await window.sendChatMessage();
-                        } else if (window.sendChatMessageMySQL) {
-                            console.log('Using sendChatMessageMySQL directly');
+                        // Directly call sendChatMessageMySQL if available
+                        if (window.sendChatMessageMySQL) {
+                            console.log('Calling sendChatMessageMySQL with text:', text);
                             const success = await window.sendChatMessageMySQL(text);
-                            if (!success) {
+                            console.log('sendChatMessageMySQL result:', success);
+                            
+                            if (success) {
+                                console.log('Message sent successfully');
+                                // Clear input on success
+                                if (input) {
+                                    input.value = '';
+                                }
+                            } else {
                                 console.error('Failed to send message');
                                 alert('Failed to send message. Please try again.');
-                                // Restore input
+                                // Restore input on failure
                                 if (input) {
                                     input.value = text;
                                 }
                             }
+                        } else if (window.sendChatMessage) {
+                            console.log('Using sendChatMessage wrapper');
+                            // Call the wrapper function
+                            await window.sendChatMessage();
                         } else {
                             console.error('No send function available');
                             console.log('Available functions:', {
                                 sendChatMessage: typeof window.sendChatMessage,
-                                sendChatMessageMySQL: typeof window.sendChatMessageMySQL
+                                sendChatMessageMySQL: typeof window.sendChatMessageMySQL,
+                                sendMessage: typeof window.sendMessage
                             });
                             alert('Chat system is not ready. Please refresh the page.');
                             // Restore input
@@ -1351,7 +1376,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             input.value = text;
                         }
                     } finally {
-                        // Re-enable button
+                        // Always re-enable button
                         freshBtn.disabled = false;
                         freshBtn.textContent = 'Send';
                     }
