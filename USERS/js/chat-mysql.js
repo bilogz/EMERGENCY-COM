@@ -161,6 +161,25 @@
                     chatInterface.style.display = 'block';
                 }
                 
+                // Ensure close button is always visible and enabled
+                const chatCloseBtn = document.getElementById('chatCloseBtn');
+                if (chatCloseBtn) {
+                    chatCloseBtn.style.display = 'inline-flex';
+                    chatCloseBtn.style.visibility = 'visible';
+                    chatCloseBtn.style.pointerEvents = 'auto';
+                    chatCloseBtn.style.cursor = 'pointer';
+                    chatCloseBtn.style.opacity = '1';
+                    chatCloseBtn.disabled = false;
+                    chatCloseBtn.removeAttribute('disabled');
+                    
+                    // Attach close button handler
+                    if (window.attachCloseButtonHandler) {
+                        setTimeout(() => {
+                            window.attachCloseButtonHandler();
+                        }, 100);
+                    }
+                }
+                
                 return true;
             } else {
                 console.error('Failed to get/create conversation:', data.message);
@@ -252,6 +271,13 @@
                     if (newMessagesAdded && chatMessages) {
                         chatMessages.scrollTop = chatMessages.scrollHeight;
                         console.log(`Loaded ${newMessagesAdded ? 'new' : 'no'} messages. Total messages in conversation: ${data.messages.length}, lastMessageId now: ${lastMessageId}`);
+                        
+                        // Ensure close button handler is attached after admin replies
+                        if (window.attachCloseButtonHandler) {
+                            setTimeout(() => {
+                                window.attachCloseButtonHandler();
+                            }, 100);
+                        }
                     } else {
                         console.log('No new messages to display');
                     }

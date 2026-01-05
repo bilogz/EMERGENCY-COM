@@ -2047,10 +2047,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     return false;
                 }
                 
+                // Always ensure button is visible and enabled
+                freshBtn.style.display = 'inline-flex';
+                freshBtn.style.visibility = 'visible';
                 freshBtn.style.pointerEvents = 'auto';
                 freshBtn.style.cursor = 'pointer';
                 freshBtn.style.touchAction = 'manipulation';
+                freshBtn.style.opacity = '1';
                 freshBtn.disabled = false;
+                freshBtn.removeAttribute('disabled');
                 
                 freshBtn.onclick = async function(e) {
                     e.preventDefault();
@@ -2147,9 +2152,43 @@ document.addEventListener('DOMContentLoaded', function() {
                 return true;
             }
             
+            // Make attachCloseButtonHandler globally available
+            window.attachCloseButtonHandler = attachCloseButtonHandler;
+            
+            // Function to ensure close button is always available
+            function ensureCloseButtonAvailable() {
+                const closeBtn = document.getElementById('chatCloseBtn');
+                if (closeBtn) {
+                    // Always ensure button is visible and enabled
+                    closeBtn.style.display = 'inline-flex';
+                    closeBtn.style.visibility = 'visible';
+                    closeBtn.style.pointerEvents = 'auto';
+                    closeBtn.style.cursor = 'pointer';
+                    closeBtn.style.opacity = '1';
+                    closeBtn.disabled = false;
+                    closeBtn.removeAttribute('disabled');
+                    
+                    // Re-attach handler if needed
+                    if (window.attachCloseButtonHandler) {
+                        window.attachCloseButtonHandler();
+                    }
+                }
+            }
+            
+            // Make ensureCloseButtonAvailable globally available
+            window.ensureCloseButtonAvailable = ensureCloseButtonAvailable;
+            
             // Attach handlers immediately
             attachSendButtonHandlers();
             attachCloseButtonHandler();
+            
+            // Periodically ensure close button is available (in case it gets disabled)
+            setInterval(() => {
+                const chatInterface = document.getElementById('chatInterface');
+                if (chatInterface && chatInterface.style.display !== 'none') {
+                    ensureCloseButtonAvailable();
+                }
+            }, 2000);
             
             // Initialize "Start New Conversation" button
             const startNewBtn = document.getElementById('startNewConversationBtn');
@@ -2247,6 +2286,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 statusIndicator.style.display = 'none';
                             }
                         }, 3000);
+                        // Ensure close button is always available after admin replies
+                        if (window.attachCloseButtonHandler) {
+                            setTimeout(() => {
+                                window.attachCloseButtonHandler();
+                            }, 100);
+                        }
                         break;
                     default:
                         statusIndicator.style.display = 'none';
