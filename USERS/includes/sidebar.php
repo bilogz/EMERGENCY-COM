@@ -117,166 +117,30 @@ include __DIR__ . '/guest-monitoring-notice.php';
         <div class="chat-modal-body">
             <!-- User Info Form (shown for anonymous/guest users) -->
             <div class="chat-user-info-form" id="chatUserInfoForm" style="display: none;">
-                <h4 class="form-title">Please provide your information to start chatting</h4>
-                <form id="userInfoForm" class="modern-form">
-                    <div class="form-group modern-form-group">
-                        <label for="userNameInput" class="modern-label">Full Name <span class="required-asterisk">*</span></label>
-                        <input type="text" id="userNameInput" name="name" required placeholder="Enter your full name" class="modern-input">
+                <p class="chat-hint" style="margin-bottom: 1.25rem;">Please provide your information to start chatting</p>
+                <form id="userInfoForm" class="chat-form">
+                    <div class="chat-form-group">
+                        <label for="userNameInput">Full Name <span class="required-asterisk">*</span></label>
+                        <input type="text" id="userNameInput" name="name" required placeholder="Enter your full name" class="chat-form-input">
                     </div>
-                    <div class="form-group modern-form-group">
-                        <label for="userContactInput" class="modern-label">Contact Number <span class="required-asterisk">*</span></label>
-                        <input type="tel" id="userContactInput" name="contact" required placeholder="09XX XXX XXXX" class="modern-input">
+                    <div class="chat-form-group">
+                        <label for="userContactInput">Contact Number <span class="required-asterisk">*</span></label>
+                        <input type="tel" id="userContactInput" name="contact" required placeholder="09XX XXX XXXX" class="chat-form-input">
                     </div>
-                    <div class="form-group modern-form-group">
-                        <label for="userLocationInput" class="modern-label">Location <span class="required-asterisk">*</span></label>
-                        <select id="userLocationInput" name="location" required class="modern-select">
-                            <option value="">Select a barangay...</option>
-                            <option value="Alicia">Alicia</option>
-                            <option value="Amihan">Amihan</option>
-                            <option value="Apolonio Samson">Apolonio Samson</option>
-                            <option value="Bagong Pag-asa">Bagong Pag-asa</option>
-                            <option value="Bagong Silangan">Bagong Silangan</option>
-                            <option value="Bagumbayan">Bagumbayan</option>
-                            <option value="Bagumbuhay">Bagumbuhay</option>
-                            <option value="Bahay Toro">Bahay Toro</option>
-                            <option value="Balingasa">Balingasa</option>
-                            <option value="Balintawak">Balintawak</option>
-                            <option value="Balumbato">Balumbato</option>
-                            <option value="Batasan Hills">Batasan Hills</option>
-                            <option value="Bayanihan">Bayanihan</option>
-                            <option value="Blue Ridge A">Blue Ridge A</option>
-                            <option value="Blue Ridge B">Blue Ridge B</option>
-                            <option value="Botocan">Botocan</option>
-                            <option value="Bungad">Bungad</option>
-                            <option value="Camp Aguinaldo">Camp Aguinaldo</option>
-                            <option value="Capri">Capri</option>
-                            <option value="Central">Central</option>
-                            <option value="Claro">Claro</option>
-                            <option value="Commonwealth">Commonwealth</option>
-                            <option value="Culiat">Culiat</option>
-                            <option value="Damar">Damar</option>
-                            <option value="Damayan">Damayan</option>
-                            <option value="Damayang Lagi">Damayang Lagi</option>
-                            <option value="Del Monte">Del Monte</option>
-                            <option value="Diliman">Diliman</option>
-                            <option value="Dioquino Zobel">Dioquino Zobel</option>
-                            <option value="Don Manuel">Don Manuel</option>
-                            <option value="Doña Aurora">Doña Aurora</option>
-                            <option value="Doña Imelda">Doña Imelda</option>
-                            <option value="Doña Josefa">Doña Josefa</option>
-                            <option value="Duyan-duyan">Duyan-duyan</option>
-                            <option value="E. Rodriguez">E. Rodriguez</option>
-                            <option value="East Kamias">East Kamias</option>
-                            <option value="Escopa I">Escopa I</option>
-                            <option value="Escopa II">Escopa II</option>
-                            <option value="Escopa III">Escopa III</option>
-                            <option value="Escopa IV">Escopa IV</option>
-                            <option value="Fairview">Fairview</option>
-                            <option value="Greater Lagro">Greater Lagro</option>
-                            <option value="Gulod">Gulod</option>
-                            <option value="Holy Spirit">Holy Spirit</option>
-                            <option value="Horseshoe">Horseshoe</option>
-                            <option value="Immaculate Concepcion">Immaculate Concepcion</option>
-                            <option value="Kaligayahan">Kaligayahan</option>
-                            <option value="Kalusugan">Kalusugan</option>
-                            <option value="Kamuning">Kamuning</option>
-                            <option value="Katipunan">Katipunan</option>
-                            <option value="Kaunlaran">Kaunlaran</option>
-                            <option value="Kristong Hari">Kristong Hari</option>
-                            <option value="Krus na Ligas">Krus na Ligas</option>
-                            <option value="Laging Handa">Laging Handa</option>
-                            <option value="Libis">Libis</option>
-                            <option value="Lourdes">Lourdes</option>
-                            <option value="Loyola Heights">Loyola Heights</option>
-                            <option value="Maharlika">Maharlika</option>
-                            <option value="Malaya">Malaya</option>
-                            <option value="Mangga">Mangga</option>
-                            <option value="Manresa">Manresa</option>
-                            <option value="Mariana">Mariana</option>
-                            <option value="Mariblo">Mariblo</option>
-                            <option value="Marilag">Marilag</option>
-                            <option value="Masagana">Masagana</option>
-                            <option value="Masambong">Masambong</option>
-                            <option value="Matandang Balara">Matandang Balara</option>
-                            <option value="Milagrosa">Milagrosa</option>
-                            <option value="Nagkaisang Nayon">Nagkaisang Nayon</option>
-                            <option value="Nayon Kaunlaran">Nayon Kaunlaran</option>
-                            <option value="New Era">New Era</option>
-                            <option value="Novaliches Proper">Novaliches Proper</option>
-                            <option value="N.S. Amoranto">N.S. Amoranto</option>
-                            <option value="Obrero">Obrero</option>
-                            <option value="Old Capitol Site">Old Capitol Site</option>
-                            <option value="Paang Bundok">Paang Bundok</option>
-                            <option value="Pag-ibig sa Nayon">Pag-ibig sa Nayon</option>
-                            <option value="Paligsahan">Paligsahan</option>
-                            <option value="Paltok">Paltok</option>
-                            <option value="Pansol">Pansol</option>
-                            <option value="Paraiso">Paraiso</option>
-                            <option value="Pasong Putik Proper">Pasong Putik Proper</option>
-                            <option value="Pasong Tamo">Pasong Tamo</option>
-                            <option value="Payatas">Payatas</option>
-                            <option value="Phil-Am">Phil-Am</option>
-                            <option value="Pinyahan">Pinyahan</option>
-                            <option value="Project 6">Project 6</option>
-                            <option value="Quirino 2-A">Quirino 2-A</option>
-                            <option value="Quirino 2-B">Quirino 2-B</option>
-                            <option value="Quirino 2-C">Quirino 2-C</option>
-                            <option value="Quirino 3-A">Quirino 3-A</option>
-                            <option value="Quirino 3-B">Quirino 3-B</option>
-                            <option value="Ramon Magsaysay">Ramon Magsaysay</option>
-                            <option value="Roxas">Roxas</option>
-                            <option value="Sacred Heart">Sacred Heart</option>
-                            <option value="Saint Ignatius">Saint Ignatius</option>
-                            <option value="Saint Peter">Saint Peter</option>
-                            <option value="Salvacion">Salvacion</option>
-                            <option value="San Agustin">San Agustin</option>
-                            <option value="San Antonio">San Antonio</option>
-                            <option value="San Bartolome">San Bartolome</option>
-                            <option value="San Isidro">San Isidro</option>
-                            <option value="San Isidro Galas">San Isidro Galas</option>
-                            <option value="San Jose">San Jose</option>
-                            <option value="San Martin de Porres">San Martin de Porres</option>
-                            <option value="San Roque">San Roque</option>
-                            <option value="San Vicente">San Vicente</option>
-                            <option value="Sangandaan">Sangandaan</option>
-                            <option value="Santa Cruz">Santa Cruz</option>
-                            <option value="Santa Lucia">Santa Lucia</option>
-                            <option value="Santa Monica">Santa Monica</option>
-                            <option value="Santa Teresita">Santa Teresita</option>
-                            <option value="Santo Cristo">Santo Cristo</option>
-                            <option value="Santo Domingo">Santo Domingo</option>
-                            <option value="Santo Niño">Santo Niño</option>
-                            <option value="Santol">Santol</option>
-                            <option value="Sauyo">Sauyo</option>
-                            <option value="Sienna">Sienna</option>
-                            <option value="Sikatuna Village">Sikatuna Village</option>
-                            <option value="Silangan">Silangan</option>
-                            <option value="Socorro">Socorro</option>
-                            <option value="South Triangle">South Triangle</option>
-                            <option value="St. Ignatius">St. Ignatius</option>
-                            <option value="Tagumpay">Tagumpay</option>
-                            <option value="Talayan">Talayan</option>
-                            <option value="Talipapa">Talipapa</option>
-                            <option value="Tandang Sora">Tandang Sora</option>
-                            <option value="Tatalon">Tatalon</option>
-                            <option value="Teachers Village East">Teachers Village East</option>
-                            <option value="Teachers Village West">Teachers Village West</option>
-                            <option value="Ugong Norte">Ugong Norte</option>
-                            <option value="Unang Sigaw">Unang Sigaw</option>
-                            <option value="UP Campus">UP Campus</option>
-                            <option value="UP Village">UP Village</option>
-                            <option value="Valencia">Valencia</option>
-                            <option value="Vasra">Vasra</option>
-                            <option value="Veterans Village">Veterans Village</option>
-                            <option value="Villa Maria Clara">Villa Maria Clara</option>
-                            <option value="West Kamias">West Kamias</option>
-                            <option value="West Triangle">West Triangle</option>
-                            <option value="White Plains">White Plains</option>
-                        </select>
+                    <div class="chat-form-group">
+                        <label for="userLocationInput">Location <span class="required-asterisk">*</span></label>
+                        <div class="searchable-select-wrapper">
+                            <input type="text" id="userLocationSearch" class="chat-form-input searchable-select-input" placeholder="Search barangay..." autocomplete="off">
+                            <input type="hidden" id="userLocationInput" name="location" required>
+                            <div class="searchable-select-dropdown" id="locationDropdown" style="display: none;">
+                                <div class="searchable-select-list">
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group modern-form-group">
-                        <label for="userConcernSelect" class="modern-label">What is your concern? <span class="required-asterisk">*</span></label>
-                        <select id="userConcernSelect" name="concern" required class="modern-select">
+                    <div class="chat-form-group">
+                        <label for="userConcernSelect">What is your concern? <span class="required-asterisk">*</span></label>
+                        <select id="userConcernSelect" name="concern" required class="chat-form-select">
                             <option value="">Select a concern...</option>
                             <option value="emergency">Emergency</option>
                             <option value="medical">Medical Assistance</option>
@@ -288,7 +152,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
                             <option value="other">Other</option>
                         </select>
                     </div>
-                    <button type="submit" class="modern-submit-btn">Start Chat</button>
+                    <button type="submit" class="chat-form-submit">Start Chat</button>
                 </form>
             </div>
 
@@ -728,6 +592,9 @@ document.addEventListener('DOMContentLoaded', function() {
             chatInterface.style.display = 'none';
             console.log('Showing user info form (anonymous - REQUIRED)');
             
+            // Initialize searchable barangay dropdown
+            setTimeout(initSearchableBarangay, 100);
+            
             // Disable chat input if form is not filled
             const chatInput = document.getElementById('chatInput');
             const chatSendBtn = document.getElementById('chatSendBtn');
@@ -748,12 +615,170 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Function to attach user info form handler
+    // Barangay list for Quezon City
+    const barangayList = [
+        'Alicia', 'Amihan', 'Apolonio Samson', 'Bagong Pag-asa', 'Bagong Silangan',
+        'Bagumbayan', 'Bagumbuhay', 'Bahay Toro', 'Balingasa', 'Balintawak',
+        'Balumbato', 'Batasan Hills', 'Bayanihan', 'Blue Ridge A', 'Blue Ridge B',
+        'Botocan', 'Bungad', 'Camp Aguinaldo', 'Capri', 'Central',
+        'Claro', 'Commonwealth', 'Culiat', 'Damar', 'Damayan',
+        'Damayang Lagi', 'Del Monte', 'Diliman', 'Dioquino Zobel', 'Don Manuel',
+        'Doña Aurora', 'Doña Imelda', 'Doña Josefa', 'Duyan-duyan', 'E. Rodriguez',
+        'East Kamias', 'Escopa I', 'Escopa II', 'Escopa III', 'Escopa IV',
+        'Fairview', 'Greater Lagro', 'Gulod', 'Holy Spirit', 'Horseshoe',
+        'Immaculate Concepcion', 'Kaligayahan', 'Kalusugan', 'Kamuning', 'Katipunan',
+        'Kaunlaran', 'Kristong Hari', 'Krus na Ligas', 'Laging Handa', 'Libis',
+        'Lourdes', 'Loyola Heights', 'Maharlika', 'Malaya', 'Mangga',
+        'Manresa', 'Mariana', 'Mariblo', 'Marilag', 'Masagana',
+        'Masambong', 'Matandang Balara', 'Milagrosa', 'Nagkaisang Nayon', 'Nayon Kaunlaran',
+        'New Era', 'Novaliches Proper', 'N.S. Amoranto', 'Obrero', 'Old Capitol Site',
+        'Paang Bundok', 'Pag-ibig sa Nayon', 'Paligsahan', 'Paltok', 'Pansol',
+        'Paraiso', 'Pasong Putik Proper', 'Pasong Tamo', 'Payatas', 'Phil-Am',
+        'Pinyahan', 'Project 6', 'Quirino 2-A', 'Quirino 2-B', 'Quirino 2-C',
+        'Quirino 3-A', 'Quirino 3-B', 'Ramon Magsaysay', 'Roxas', 'Sacred Heart',
+        'Saint Ignatius', 'Saint Peter', 'Salvacion', 'San Agustin', 'San Antonio',
+        'San Bartolome', 'San Isidro', 'San Isidro Galas', 'San Jose', 'San Martin de Porres',
+        'San Roque', 'San Vicente', 'Sangandaan', 'Santa Cruz', 'Santa Lucia',
+        'Santa Monica', 'Santa Teresita', 'Santo Cristo', 'Santo Domingo', 'Santo Niño',
+        'Santol', 'Sauyo', 'Sienna', 'Sikatuna Village', 'Silangan',
+        'Socorro', 'South Triangle', 'St. Ignatius', 'Tagumpay', 'Talayan',
+        'Talipapa', 'Tandang Sora', 'Tatalon', 'Teachers Village East', 'Teachers Village West',
+        'Ugong Norte', 'Unang Sigaw', 'UP Campus', 'UP Village', 'Valencia',
+        'Vasra', 'Veterans Village', 'Villa Maria Clara', 'West Kamias', 'West Triangle',
+        'White Plains'
+    ];
+
+    // Initialize searchable barangay dropdown
+    function initSearchableBarangay() {
+        const searchInput = document.getElementById('userLocationSearch');
+        const hiddenInput = document.getElementById('userLocationInput');
+        const dropdown = document.getElementById('locationDropdown');
+        const dropdownList = dropdown ? dropdown.querySelector('.searchable-select-list') : null;
+        
+        if (!searchInput || !hiddenInput || !dropdown || !dropdownList) {
+            // Retry after a short delay if elements aren't ready
+            setTimeout(initSearchableBarangay, 100);
+            return;
+        }
+        
+        // Clear existing items if already initialized
+        if (dropdownList.querySelector('.searchable-select-item')) {
+            return; // Already initialized
+        }
+        
+        // Populate dropdown with barangays
+        barangayList.forEach(barangay => {
+            const item = document.createElement('div');
+            item.className = 'searchable-select-item';
+            item.textContent = barangay;
+            item.dataset.value = barangay;
+            dropdownList.appendChild(item);
+        });
+        
+        // Filter function
+        function filterBarangays(searchTerm) {
+            const items = dropdownList.querySelectorAll('.searchable-select-item');
+            const term = searchTerm.toLowerCase().trim();
+            let hasResults = false;
+            
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                if (text.includes(term)) {
+                    item.style.display = 'block';
+                    hasResults = true;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+            
+            return hasResults;
+        }
+        
+        // Show dropdown
+        function showDropdown() {
+            dropdown.style.display = 'block';
+            filterBarangays(searchInput.value);
+        }
+        
+        // Hide dropdown
+        function hideDropdown() {
+            setTimeout(() => {
+                dropdown.style.display = 'none';
+            }, 200);
+        }
+        
+        // Select barangay
+        function selectBarangay(barangay) {
+            searchInput.value = barangay;
+            hiddenInput.value = barangay;
+            hideDropdown();
+        }
+        
+        // Event listeners
+        searchInput.addEventListener('focus', showDropdown);
+        searchInput.addEventListener('input', function(e) {
+            const term = e.target.value;
+            if (term.trim()) {
+                showDropdown();
+            } else {
+                hiddenInput.value = '';
+            }
+        });
+        
+        // Click on dropdown item
+        dropdownList.addEventListener('click', function(e) {
+            const item = e.target.closest('.searchable-select-item');
+            if (item) {
+                selectBarangay(item.dataset.value);
+            }
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                hideDropdown();
+            }
+        });
+        
+        // Handle keyboard navigation
+        searchInput.addEventListener('keydown', function(e) {
+            const visibleItems = Array.from(dropdownList.querySelectorAll('.searchable-select-item:not([style*="display: none"])'));
+            const currentIndex = visibleItems.findIndex(item => item.classList.contains('selected'));
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const nextIndex = currentIndex < visibleItems.length - 1 ? currentIndex + 1 : 0;
+                visibleItems.forEach(item => item.classList.remove('selected'));
+                if (visibleItems[nextIndex]) {
+                    visibleItems[nextIndex].classList.add('selected');
+                    visibleItems[nextIndex].scrollIntoView({ block: 'nearest' });
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prevIndex = currentIndex > 0 ? currentIndex - 1 : visibleItems.length - 1;
+                visibleItems.forEach(item => item.classList.remove('selected'));
+                if (visibleItems[prevIndex]) {
+                    visibleItems[prevIndex].classList.add('selected');
+                    visibleItems[prevIndex].scrollIntoView({ block: 'nearest' });
+                }
+            } else if (e.key === 'Enter' && currentIndex >= 0) {
+                e.preventDefault();
+                selectBarangay(visibleItems[currentIndex].dataset.value);
+            } else if (e.key === 'Escape') {
+                hideDropdown();
+            }
+        });
+    }
+
     function attachUserInfoFormHandler() {
         const form = document.getElementById('userInfoForm');
         if (!form) {
             console.log('User info form not found, may not be needed');
             return;
         }
+        
+        // Initialize searchable barangay dropdown
+        initSearchableBarangay();
         
         // Remove old handler if exists
         const newForm = form.cloneNode(true);
@@ -1188,7 +1213,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 userInfoForm.style.display = 'block';
                 chatInterface.style.display = 'none';
                 
-                // Handle form submission
+                // Initialize searchable barangay dropdown
+            initSearchableBarangay();
+            
+            // Handle form submission
                 const form = document.getElementById('userInfoForm');
                 if (form) {
                     form.addEventListener('submit', async function(e) {
@@ -1999,6 +2027,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 if (userInfoForm && chatInterface) {
                                     chatInterface.style.display = 'none';
                                     userInfoForm.style.display = 'block';
+                                    
+                                    // Initialize searchable barangay dropdown
+                                    setTimeout(initSearchableBarangay, 100);
                                     
                                     // Clear concern to force re-selection
                                     localStorage.removeItem('guest_concern');
