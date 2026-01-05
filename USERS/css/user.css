@@ -66,7 +66,28 @@
     border-color: var(--primary-color, #8e44ad);
     box-shadow: 0 0 0 5px rgba(142, 68, 173, 0.2);
     transform: translateY(-2px);
-    background: #fefefe;
+    background: var(--card-bg, #fefefe);
+}
+
+/* Dark mode support for form inputs */
+[data-theme="dark"] .form-group input[type="text"],
+[data-theme="dark"] .form-group input[type="tel"],
+[data-theme="dark"] .form-group input[type="email"],
+[data-theme="dark"] .form-group select {
+    background: #1a1a1a;
+    border-color: #404040;
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .form-group input:focus,
+[data-theme="dark"] .form-group select:focus {
+    background: #1f1f1f;
+    border-color: #8e44ad;
+    box-shadow: 0 0 0 5px rgba(142, 68, 173, 0.3);
+}
+
+[data-theme="dark"] .form-group input::placeholder {
+    color: #6b7280;
 }
 
 .form-group input::placeholder {
@@ -825,6 +846,144 @@
     transform: scale(0.95);
 }
 
+/* User Dropdown Menu */
+.user-dropdown-container {
+    position: relative;
+}
+
+.user-dropdown-trigger {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+}
+
+.user-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 280px;
+    background: var(--card-bg, #ffffff);
+    border: 2px solid var(--card-border, #e5e7eb);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    z-index: 1400;
+    overflow: hidden;
+}
+
+[data-theme="dark"] .user-dropdown-menu {
+    background: #1a1a1a;
+    border-color: #404040;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.user-dropdown-header {
+    padding: 1.5rem;
+    text-align: center;
+    border-bottom: 1px solid var(--card-border, #e5e7eb);
+}
+
+[data-theme="dark"] .user-dropdown-header {
+    border-bottom-color: #404040;
+}
+
+.user-icon-large {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 1rem;
+    border-radius: 50%;
+    background: var(--primary-color, #8e44ad);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid var(--card-border, #e5e7eb);
+}
+
+.user-icon-large i {
+    font-size: 2.5rem;
+    color: #ffffff;
+}
+
+.user-info {
+    text-align: center;
+}
+
+.user-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-color, #171717);
+    margin-bottom: 0.5rem;
+}
+
+[data-theme="dark"] .user-name {
+    color: #e0e0e0;
+}
+
+.user-details {
+    font-size: 0.9rem;
+    color: var(--text-muted, #6b7280);
+    line-height: 1.4;
+}
+
+[data-theme="dark"] .user-details {
+    color: #9ca3af;
+}
+
+.user-dropdown-actions {
+    padding: 0.75rem;
+}
+
+.user-dropdown-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1rem;
+    color: var(--text-color, #171717);
+    text-decoration: none;
+    border-radius: 8px;
+    transition: background-color 0.2s ease;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border: none;
+    background: none;
+    width: 100%;
+    cursor: pointer;
+    text-align: left;
+}
+
+.user-dropdown-link:hover {
+    background: var(--surface-2, #f9fafb);
+}
+
+[data-theme="dark"] .user-dropdown-link {
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .user-dropdown-link:hover {
+    background: #2a2a2a;
+}
+
+.user-dropdown-link i {
+    font-size: 1rem;
+    margin-right: 0.75rem;
+}
+
+.user-logout-btn {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+.user-logout-btn:hover {
+    background: rgba(220, 53, 69, 0.1);
+}
+
+[data-theme="dark"] .user-logout-btn:hover {
+    background: rgba(220, 53, 69, 0.2);
+}
+
+.user-logout-btn i {
+    margin-left: auto;
+    margin-right: 0;
+}
+
 .auth-icon-link i {
     font-size: 1.6rem;
 }
@@ -1237,8 +1396,39 @@ textarea:focus {
     font-weight: 700;
     font-family: 'Courier New', monospace;
     padding: 1.5rem;
-    background: #f9fafb;
+    background: var(--card-bg, #f9fafb);
+    border: 3px solid var(--card-border, #d1d5db);
+    color: var(--text-color, #171717);
     border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+#otp:focus {
+    outline: none;
+    border-color: var(--primary-color, #8e44ad);
+    box-shadow: 0 0 0 5px rgba(142, 68, 173, 0.2);
+    background: var(--card-bg, #ffffff);
+}
+
+#otp::placeholder {
+    color: var(--text-muted, #9ca3af);
+}
+
+/* Dark mode support for OTP input */
+[data-theme="dark"] #otp {
+    background: #1a1a1a;
+    border-color: #404040;
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] #otp:focus {
+    background: #1f1f1f;
+    border-color: #8e44ad;
+    box-shadow: 0 0 0 5px rgba(142, 68, 173, 0.3);
+}
+
+[data-theme="dark"] #otp::placeholder {
+    color: #6b7280;
 }
 
 .modal {
@@ -1648,6 +1838,30 @@ textarea:focus {
     background: #1f2228 !important;
     border-color: #313543 !important;
     color: #e0e0e0 !important;
+}
+
+/* Dark mode support for verification code inputs in modals */
+[data-theme="dark"] #email_otp_login_code,
+[data-theme="dark"] #otp_login_code,
+[data-theme="dark"] #otp {
+    background: #1a1a1a !important;
+    border-color: #404040 !important;
+    color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] #email_otp_login_code:focus,
+[data-theme="dark"] #otp_login_code:focus,
+[data-theme="dark"] #otp:focus {
+    background: #1f1f1f !important;
+    border-color: #8e44ad !important;
+    box-shadow: 0 0 0 5px rgba(142, 68, 173, 0.3) !important;
+    color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] #email_otp_login_code::placeholder,
+[data-theme="dark"] #otp_login_code::placeholder,
+[data-theme="dark"] #otp::placeholder {
+    color: #6b7280 !important;
 }
 
 [data-theme="dark"] .chat-modal-body input::placeholder {

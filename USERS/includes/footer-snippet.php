@@ -83,3 +83,106 @@ if (!isset($assetBase)) {
     </div>
 </footer>
 
+<script>
+// User Dropdown Menu Toggle
+document.addEventListener('DOMContentLoaded', function() {
+    const userDropdownBtn = document.getElementById('userDropdownBtn');
+    const userDropdownMenu = document.getElementById('userDropdownMenu');
+    const userLogoutBtn = document.getElementById('userLogoutBtn');
+    
+    // Toggle dropdown
+    if (userDropdownBtn && userDropdownMenu) {
+        userDropdownBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const isVisible = userDropdownMenu.style.display === 'block';
+            userDropdownMenu.style.display = isVisible ? 'none' : 'block';
+            userDropdownBtn.setAttribute('aria-expanded', !isVisible);
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!userDropdownBtn.contains(e.target) && !userDropdownMenu.contains(e.target)) {
+                userDropdownMenu.style.display = 'none';
+                userDropdownBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+        
+        // Close dropdown on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && userDropdownMenu.style.display === 'block') {
+                userDropdownMenu.style.display = 'none';
+                userDropdownBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+    
+    // Handle logout
+    if (userLogoutBtn) {
+        userLogoutBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            
+            // Check if SweetAlert2 is available
+            if (typeof Swal === 'undefined') {
+                if (confirm('Are you sure you want to log out?')) {
+                    try {
+                        const response = await fetch('api/logout.php');
+                        const data = await response.json();
+                        if (data.success) {
+                            window.location.href = '<?= $basePath ?><?= $linkPrefix ?>login.php';
+                        }
+                    } catch (error) {
+                        console.error('Logout error:', error);
+                        alert('An error occurred while logging out. Please try again.');
+                    }
+                }
+                return;
+            }
+            
+            // Show confirmation
+            const result = await Swal.fire({
+                title: 'Log Out?',
+                text: 'Are you sure you want to log out?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, Log Out',
+                cancelButtonText: 'Cancel'
+            });
+            
+            if (result.isConfirmed) {
+                try {
+                    const response = await fetch('api/logout.php');
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Logged Out',
+                            text: 'You have been logged out successfully.',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            window.location.href = '<?= $basePath ?><?= $linkPrefix ?>login.php';
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: data.message || 'Failed to log out. Please try again.'
+                        });
+                    }
+                } catch (error) {
+                    console.error('Logout error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'An error occurred while logging out. Please try again.'
+                    });
+                }
+            }
+        });
+    }
+});
+</script>
+

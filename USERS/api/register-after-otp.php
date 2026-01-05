@@ -90,31 +90,51 @@ try {
     
     // Ensure optional columns exist (removed password - not needed for citizen accounts)
     $needed = [
-        'email' => "VARCHAR(255) DEFAULT NULL", 
-        'phone' => "VARCHAR(20) DEFAULT NULL", 
-        'barangay' => "VARCHAR(100) DEFAULT NULL", 
-        'house_number' => "VARCHAR(50) DEFAULT NULL", 
-        'street' => "VARCHAR(255) DEFAULT NULL",
-        'district' => "VARCHAR(50) DEFAULT NULL",
-        'nationality' => "VARCHAR(100) DEFAULT NULL"
+        'email' => "VARCHAR(255) DEFAULT NULL COMMENT 'Email address'", 
+        'phone' => "VARCHAR(20) DEFAULT NULL COMMENT 'Mobile phone number'", 
+        'barangay' => "VARCHAR(100) DEFAULT NULL COMMENT 'Barangay name'", 
+        'house_number' => "VARCHAR(50) DEFAULT NULL COMMENT 'House number'", 
+        'street' => "VARCHAR(255) DEFAULT NULL COMMENT 'Street name'",
+        'district' => "VARCHAR(50) DEFAULT NULL COMMENT 'District name'",
+        'nationality' => "VARCHAR(100) DEFAULT NULL COMMENT 'Nationality'",
+        'address' => "VARCHAR(500) DEFAULT NULL COMMENT 'Full address'"
     ];
+    
+    $missingColumns = [];
     foreach ($needed as $col => $def) {
         // Check if column exists using INFORMATION_SCHEMA (compatible with MariaDB)
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
-                               WHERE TABLE_SCHEMA = DATABASE() 
-                               AND TABLE_NAME = 'users' 
-                               AND COLUMN_NAME = ?");
-        $stmt->execute([$col]);
-        $colExists = $stmt->fetchColumn() > 0;
-        
-        if (!$colExists) {
-            try {
-                $pdo->exec("ALTER TABLE `users` ADD COLUMN `$col` $def");
-                error_log("Added column $col to users table");
-            } catch (PDOException $ae) {
-                error_log("Could not add column $col: " . $ae->getMessage());
+        try {
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+                                   WHERE TABLE_SCHEMA = DATABASE() 
+                                   AND TABLE_NAME = 'users' 
+                                   AND COLUMN_NAME = ?");
+            $stmt->execute([$col]);
+            $colExists = $stmt->fetchColumn() > 0;
+            
+            if (!$colExists) {
+                try {
+                    $pdo->exec("ALTER TABLE `users` ADD COLUMN `$col` $def");
+                    error_log("Added column $col to users table");
+                } catch (PDOException $ae) {
+                    $errorMsg = "Could not add column $col: " . $ae->getMessage();
+                    error_log($errorMsg);
+                    $missingColumns[] = $col;
+                }
             }
+        } catch (PDOException $e) {
+            $errorMsg = "Error checking column $col: " . $e->getMessage();
+            error_log($errorMsg);
+            $missingColumns[] = $col;
         }
+    }
+    
+    // If any columns are still missing, throw an error
+    if (!empty($missingColumns)) {
+        echo json_encode([
+            "success" => false,
+            "message" => "Database column missing: " . implode(", ", $missingColumns) . ". Please run: /USERS/api/fix-users-table.php"
+        ]);
+        exit();
     }
     
     // Build address string from components
@@ -131,39 +151,56 @@ try {
     
     // Insert new user (citizens only - login with phone + CAPTCHA)
     // Check if district column exists
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
-                           WHERE TABLE_SCHEMA = DATABASE() 
-                           AND TABLE_NAME = 'users' 
-                           AND COLUMN_NAME = 'district'");
-    $stmt->execute();
-    $hasDistrict = $stmt->fetchColumn() > 0;
-    
-    if ($hasDistrict) {
-        $insertSql = "INSERT INTO `users` (`name`, `email`, `phone`, `nationality`, `district`, `barangay`, `house_number`, `street`, `address`, `status`, `created_at`) VALUES (:name, :email, :phone, :nationality, :district, :barangay, :house_number, :street, :address, 'active', NOW())";
-        $params = [
-            ':name' => $name,
-            ':email' => $email,
-            ':phone' => $phoneNormalized,
-            ':nationality' => $nationality ?: null,
-            ':district' => $district ?: null,
-            ':barangay' => $barangay,
-            ':house_number' => $houseNumber,
-            ':street' => $street,
-            ':address' => $address
-        ];
-    } else {
-        $insertSql = "INSERT INTO `users` (`name`, `email`, `phone`, `nationality`, `barangay`, `house_number`, `street`, `address`, `status`, `created_at`) VALUES (:name, :email, :phone, :nationality, :barangay, :house_number, :street, :address, 'active', NOW())";
-        $params = [
-            ':name' => $name,
-            ':email' => $email,
-            ':phone' => $phoneNormalized,
-            ':nationality' => $nationality ?: null,
-            ':barangay' => $barangay,
-            ':house_number' => $houseNumber,
-            ':street' => $street,
-            ':address' => $address
-        ];
+    try {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+                               WHERE TABLE_SCHEMA = DATABASE() 
+                               AND TABLE_NAME = 'users' 
+                               AND COLUMN_NAME = 'district'");
+        $stmt->execute();
+        $hasDistrict = $stmt->fetchColumn() > 0;
+    } catch (PDOException $e) {
+        error_log("Error checking district column: " . $e->getMessage());
+        $hasDistrict = false;
     }
+    
+    // Build insert query dynamically based on available columns
+    $insertFields = ['name', 'email', 'phone', 'barangay', 'house_number', 'street', 'address', 'status', 'created_at'];
+    $insertValues = [':name', ':email', ':phone', ':barangay', ':house_number', ':street', ':address', "'active'", 'NOW()'];
+    $params = [
+        ':name' => $name,
+        ':email' => $email,
+        ':phone' => $phoneNormalized,
+        ':barangay' => $barangay,
+        ':house_number' => $houseNumber,
+        ':street' => $street,
+        ':address' => $address
+    ];
+    
+    // Add optional fields if columns exist
+    if ($hasDistrict) {
+        $insertFields[] = 'district';
+        $insertValues[] = ':district';
+        $params[':district'] = $district ?: null;
+    }
+    
+    // Check if nationality column exists and add it
+    try {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+                               WHERE TABLE_SCHEMA = DATABASE() 
+                               AND TABLE_NAME = 'users' 
+                               AND COLUMN_NAME = 'nationality'");
+        $stmt->execute();
+        $hasNationality = $stmt->fetchColumn() > 0;
+        if ($hasNationality) {
+            $insertFields[] = 'nationality';
+            $insertValues[] = ':nationality';
+            $params[':nationality'] = $nationality ?: null;
+        }
+    } catch (PDOException $e) {
+        error_log("Error checking nationality column: " . $e->getMessage());
+    }
+    
+    $insertSql = "INSERT INTO `users` (`" . implode("`, `", $insertFields) . "`) VALUES (" . implode(", ", $insertValues) . ")";
     $stmt = $pdo->prepare($insertSql);
     
     error_log("Attempting to register user: $name ($email) with phone: $phoneNormalized");
