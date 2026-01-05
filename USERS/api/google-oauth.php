@@ -177,34 +177,78 @@ try {
             $checkStmt->execute();
             $emailColumnExists = $checkStmt->rowCount() > 0;
             
-            // google_id column already checked and added above if needed
+            // Check if phone column exists and if it's required (NOT NULL)
+            $checkStmt = $pdo->prepare("SHOW COLUMNS FROM users WHERE Field = 'phone'");
+            $checkStmt->execute();
+            $phoneColumn = $checkStmt->fetch(PDO::FETCH_ASSOC);
+            $phoneColumnExists = $phoneColumn !== false;
+            $phoneRequired = $phoneColumnExists && ($phoneColumn['Null'] === 'NO' || $phoneColumn['Null'] === '');
+            
+            // Check if email_verified column exists
+            $checkStmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE 'email_verified'");
+            $checkStmt->execute();
+            $emailVerifiedExists = $checkStmt->rowCount() > 0;
+            
+            // If phone is required but we're setting it to NULL, try to make it nullable
+            if ($phoneRequired) {
+                try {
+                    $pdo->exec("ALTER TABLE users MODIFY COLUMN phone VARCHAR(20) DEFAULT NULL");
+                    error_log("Modified phone column to allow NULL for Google OAuth users");
+                    $phoneRequired = false; // Now it's nullable
+                } catch (PDOException $e) {
+                    error_log("Could not modify phone column: " . $e->getMessage());
+                    // If we can't make it nullable, we'll use an empty string
+                }
+            }
             
             // Generate a random password (user won't need it for Google login)
             $randomPassword = bin2hex(random_bytes(16));
             $hashedPassword = password_hash($randomPassword, PASSWORD_DEFAULT);
             
-            // Insert new user
-            if ($emailColumnExists && $googleIdColumnExists) {
-                $insertStmt = $pdo->prepare("
-                    INSERT INTO users (name, email, password, google_id, created_at) 
-                    VALUES (?, ?, ?, ?, NOW())
-                ");
-                $insertStmt->execute([$name, $email, $hashedPassword, $googleId]);
-            } else if ($emailColumnExists) {
-                $insertStmt = $pdo->prepare("
-                    INSERT INTO users (name, email, password, created_at) 
-                    VALUES (?, ?, ?, NOW())
-                ");
-                $insertStmt->execute([$name, $email, $hashedPassword]);
-            } else {
-                $insertStmt = $pdo->prepare("
-                    INSERT INTO users (name, password, created_at) 
-                    VALUES (?, ?, NOW())
-                ");
-                $insertStmt->execute([$name, $hashedPassword]);
+            // Build INSERT query with all available columns
+            $insertColumns = ['name'];
+            $insertValues = [$name];
+            
+            if ($emailColumnExists) {
+                $insertColumns[] = 'email';
+                $insertValues[] = $email;
             }
             
-            $newUserId = $pdo->lastInsertId();
+            if ($phoneColumnExists) {
+                $insertColumns[] = 'phone';
+                $insertValues[] = null; // Google OAuth doesn't provide phone
+            }
+            
+            $insertColumns[] = 'password';
+            $insertValues[] = $hashedPassword;
+            
+            if ($googleIdColumnExists && !empty($googleId)) {
+                $insertColumns[] = 'google_id';
+                $insertValues[] = $googleId;
+            }
+            
+            if ($emailVerifiedExists) {
+                $insertColumns[] = 'email_verified';
+                $insertValues[] = 1; // Google email is verified
+            }
+            
+            $insertColumns[] = 'created_at';
+            $insertValues[] = date('Y-m-d H:i:s');
+            
+            // Build the SQL query
+            $placeholders = str_repeat('?,', count($insertValues) - 1) . '?';
+            $sql = "INSERT INTO users (" . implode(', ', $insertColumns) . ") VALUES ($placeholders)";
+            
+            try {
+                $insertStmt = $pdo->prepare($sql);
+                $insertStmt->execute($insertValues);
+                $newUserId = $pdo->lastInsertId();
+            } catch (PDOException $e) {
+                error_log("INSERT failed. SQL: $sql");
+                error_log("Values: " . print_r($insertValues, true));
+                error_log("Error: " . $e->getMessage());
+                throw $e; // Re-throw to be caught by outer catch block
+            }
             
             // Update google_id if column exists and googleId is available
             if (!empty($googleId) && $googleIdColumnExists) {
