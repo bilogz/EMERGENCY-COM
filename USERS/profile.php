@@ -55,74 +55,101 @@ $current = 'profile.php';
         <div class="main-container">
             <div class="sub-container content-main">
                 <section class="page-content">
-                    <h2 data-translate="profile.settings.title">Your Settings</h2>
-                    <div class="cards-grid">
-                        <div class="card">
-                            <h4 data-translate="profile.contact.title">Contact Channels</h4>
-                            <p data-translate="profile.contact.desc">Update phone, email, and notification channels.</p>
-                            <button class="btn btn-primary" data-translate="profile.contact.btn">Manage Channels</button>
-                        </div>
-                        <div class="card">
-                            <h4 data-translate="profile.alerts.title">Alert Preferences</h4>
-                            <p data-translate="profile.alerts.desc">Choose categories: Weather, Earthquake, Bomb Threat, Health, and more.</p>
-                            <button class="btn btn-secondary" data-translate="profile.alerts.btn">Edit Preferences</button>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="page-content">
-                    <h2 data-translate="profile.language.title">Language Settings</h2>
-                    <p data-translate="profile.language.desc">Choose your preferred language. This will be used for alerts and interface text where available. Languages update automatically when new ones are added.</p>
+                    <h2>Edit Your Information</h2>
+                    <p>Update your personal information and contact details.</p>
                     
-                    <div class="info-box" style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem;">
-                        <i class="fas fa-info-circle" style="color: #2196f3;"></i>
-                        <strong>Auto-Detection:</strong> Your device language has been detected. You can change it below or use the language selector icon in the top-right corner.
-                    </div>
-                    
-                    <form class="auth-form" id="languageSettingsForm">
+                    <form class="auth-form" id="profileEditForm">
                         <div class="form-group">
-                            <label data-translate="profile.language.label">Preferred Language</label>
-                            <select name="preferred_language" id="preferredLanguageSelect" class="form-control">
-                                <option value="">Loading languages...</option>
-                            </select>
-                            <small class="form-text" style="margin-top: 0.5rem; color: #666;">
-                                <i class="fas fa-sync-alt"></i> Languages are updated in real-time. New languages will appear automatically.
-                            </small>
+                            <label for="edit_name">
+                                <i class="fas fa-user"></i> Full Name
+                            </label>
+                            <input type="text" id="edit_name" name="name" placeholder="Juan Dela Cruz" required>
                         </div>
+                        
                         <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="autoDetectLanguage" checked>
-                                <span>Auto-detect device language</span>
+                            <label for="edit_email">
+                                <i class="fas fa-envelope"></i> Email Address
                             </label>
-                            <small class="form-text" style="display: block; margin-top: 0.5rem; color: #666;">
-                                Automatically use your device's language when available
-                            </small>
+                            <input type="email" id="edit_email" name="email" placeholder="juan@example.com">
                         </div>
-                        <div class="form-group" style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 4px; margin-top: 1rem;">
-                            <label style="display: flex; align-items: center; margin-bottom: 0.5rem; font-weight: 600;">
-                                <input type="checkbox" id="autoTranslateEnabled" checked style="margin-right: 0.5rem;">
-                                <span><i class="fas fa-robot"></i> Enable AI Auto-Translation</span>
+                        
+                        <div class="form-group">
+                            <label for="edit_phone">
+                                <i class="fas fa-phone"></i> Mobile Number
                             </label>
-                            <small class="form-text" style="display: block; color: #666; margin-left: 1.5rem;">
-                                <i class="fas fa-info-circle"></i> When enabled, content will be automatically translated to your preferred language using AI. 
-                                Disable this if you prefer to view content in its original language (English/Filipino only).
-                            </small>
-                            <div style="margin-top: 0.75rem; margin-left: 1.5rem; padding: 0.5rem; background: white; border-radius: 4px; font-size: 12px;">
-                                <strong>Note:</strong> English and Filipino content is always available without AI translation. 
-                                Other languages use AI for natural, context-aware translations.
+                            <div class="input-with-prefix">
+                                <span class="prefix">+63</span>
+                                <input type="tel" id="edit_phone" name="phone" pattern="[0-9]{10}" maxlength="10" placeholder="9XXXXXXXXX" autocomplete="tel">
                             </div>
+                            <small class="form-hint">Enter your 10-digit mobile number (without spaces)</small>
                         </div>
-                        <button type="button" class="btn btn-primary" id="saveLanguageBtn" data-translate="profile.language.save">
-                            <i class="fas fa-save"></i> Save Language Settings
+                        
+                        <div class="form-group">
+                            <label for="edit_nationality">
+                                <i class="fas fa-flag"></i> Nationality
+                            </label>
+                            <input list="editNationalityList" id="edit_nationality" name="nationality" placeholder="Select nationality">
+                            <datalist id="editNationalityList">
+                                <option value="Filipino"></option>
+                                <option value="American"></option>
+                                <option value="Canadian"></option>
+                                <option value="British"></option>
+                                <option value="Australian"></option>
+                                <option value="Japanese"></option>
+                                <option value="Chinese"></option>
+                                <option value="Korean"></option>
+                                <option value="Indian"></option>
+                                <option value="German"></option>
+                            </datalist>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="edit_district">
+                                <i class="fas fa-map"></i> District (Quezon City)
+                            </label>
+                            <select id="edit_district" name="district">
+                                <option value="">Select District</option>
+                                <option value="1">District 1</option>
+                                <option value="2">District 2</option>
+                                <option value="3">District 3</option>
+                                <option value="4">District 4</option>
+                                <option value="5">District 5</option>
+                                <option value="6">District 6</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="edit_barangay">
+                                <i class="fas fa-map-marker-alt"></i> Barangay (Quezon City)
+                            </label>
+                            <input type="text" id="edit_barangay" name="barangay" placeholder="Type to search barangay..." autocomplete="off">
+                            <div id="editBarangaySuggestions" class="suggestions-dropdown" style="display: none;"></div>
+                            <small class="form-hint">Start typing to search for your barangay</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="edit_house_number">
+                                <i class="fas fa-home"></i> House / Unit No.
+                            </label>
+                            <input type="text" id="edit_house_number" name="house_number" placeholder="e.g. #123">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="edit_street">
+                                <i class="fas fa-road"></i> Street (Quezon City)
+                            </label>
+                            <input type="text" id="edit_street" name="street" placeholder="Enter your street name">
+                        </div>
+                        
+                        <div class="error-message" id="profileErrorMessage" style="display: none;">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span id="profileErrorText"></span>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" id="saveProfileBtn">
+                            <i class="fas fa-save"></i> Save Changes
                         </button>
                     </form>
-                    
-                    <div id="languageInfo" style="margin-top: 1.5rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
-                        <h3 style="font-size: 14px; margin-bottom: 0.5rem;">Current Language Information</h3>
-                        <div id="currentLanguageInfo" style="font-size: 13px; color: #666;">
-                            Loading...
-                        </div>
-                    </div>
                 </section>
             </div>
         </div>
@@ -150,193 +177,206 @@ $current = 'profile.php';
     </script>
     <script>
         document.addEventListener('DOMContentLoaded', async function () {
-            const selectDropdown = document.getElementById('preferredLanguageSelect');
-            const saveBtn = document.getElementById('saveLanguageBtn');
-            const autoDetectCheckbox = document.getElementById('autoDetectLanguage');
-            const autoTranslateCheckbox = document.getElementById('autoTranslateEnabled');
-            const languageInfo = document.getElementById('currentLanguageInfo');
+            const profileForm = document.getElementById('profileEditForm');
+            const saveBtn = document.getElementById('saveProfileBtn');
+            const errorMessage = document.getElementById('profileErrorMessage');
+            const errorText = document.getElementById('profileErrorText');
             
-            // Wait for language manager to initialize
-            if (typeof window.languageManager === 'undefined') {
-                await new Promise(resolve => {
-                    const checkInterval = setInterval(() => {
-                        if (typeof window.languageManager !== 'undefined') {
-                            clearInterval(checkInterval);
-                            resolve();
-                        }
-                    }, 100);
-                });
-            }
-            
-            const langManager = window.languageManager;
-            
-            // Load languages into dropdown
-            async function loadLanguagesIntoDropdown() {
-                if (!selectDropdown) return;
-                
-                selectDropdown.innerHTML = '<option value="">Select language...</option>';
-                
-                langManager.supportedLanguages.forEach(lang => {
-                    const option = document.createElement('option');
-                    option.value = lang.language_code;
-                    const displayText = lang.flag_emoji ? `${lang.flag_emoji} ${lang.language_name}` : lang.language_name;
-                    option.textContent = displayText;
-                    if (lang.language_code === langManager.currentLanguage) {
-                        option.selected = true;
-                    }
-                    selectDropdown.appendChild(option);
-                });
-            }
-            
-            // Update language info display
-            function updateLanguageInfo() {
-                if (!languageInfo) return;
-                
-                const currentLang = langManager.currentLanguage;
-                const langInfo = langManager.getLanguageInfo(currentLang);
-                const deviceLang = langManager.deviceLanguage;
-                
-                let infoHTML = `
-                    <strong>Current:</strong> ${langManager.getLanguageDisplay(currentLang)}<br>
-                `;
-                
-                if (langInfo && langInfo.native_name && langInfo.native_name !== langInfo.language_name) {
-                    infoHTML += `<strong>Native Name:</strong> ${langInfo.native_name}<br>`;
-                }
-                
-                if (deviceLang && deviceLang !== currentLang) {
-                    infoHTML += `<strong>Device Language:</strong> ${langManager.getLanguageDisplay(deviceLang)}<br>`;
-                }
-                
-                infoHTML += `<strong>Total Languages:</strong> ${langManager.supportedLanguages.length} available`;
-                
-                languageInfo.innerHTML = infoHTML;
-            }
-            
-            // Load languages
-            await loadLanguagesIntoDropdown();
-            updateLanguageInfo();
-            
-            // Load user preferences from API
-            async function loadUserPreferences() {
+            // Load current user data
+            async function loadUserData() {
                 try {
-                    const response = await fetch('api/user-language-preference.php?action=get');
+                    const response = await fetch('api/get-user-profile.php');
                     if (response.ok) {
                         const data = await response.json();
-                        if (data.success) {
-                            // Set auto-translate checkbox
-                            if (autoTranslateCheckbox && data.auto_translate_enabled !== undefined) {
-                                autoTranslateCheckbox.checked = data.auto_translate_enabled;
-                                // Also save to localStorage for guest users
-                                localStorage.setItem('auto_translate_enabled', data.auto_translate_enabled ? 'true' : 'false');
+                        if (data.success && data.user) {
+                            const user = data.user;
+                            
+                            // Populate form fields
+                            if (document.getElementById('edit_name')) {
+                                document.getElementById('edit_name').value = user.name || '';
+                            }
+                            if (document.getElementById('edit_email')) {
+                                document.getElementById('edit_email').value = user.email || '';
+                            }
+                            if (document.getElementById('edit_phone')) {
+                                const phone = user.phone || '';
+                                // Remove +63 prefix if present
+                                document.getElementById('edit_phone').value = phone.replace(/^\+63/, '');
+                            }
+                            if (document.getElementById('edit_nationality')) {
+                                document.getElementById('edit_nationality').value = user.nationality || '';
+                            }
+                            if (document.getElementById('edit_district')) {
+                                document.getElementById('edit_district').value = user.district || '';
+                            }
+                            if (document.getElementById('edit_barangay')) {
+                                document.getElementById('edit_barangay').value = user.barangay || '';
+                            }
+                            if (document.getElementById('edit_house_number')) {
+                                document.getElementById('edit_house_number').value = user.house_number || '';
+                            }
+                            if (document.getElementById('edit_street')) {
+                                document.getElementById('edit_street').value = user.street || '';
                             }
                         }
                     }
                 } catch (error) {
-                    console.error('Error loading user preferences:', error);
-                    // Fallback to localStorage
-                    if (autoTranslateCheckbox) {
-                        const autoTranslateEnabled = localStorage.getItem('auto_translate_enabled') !== 'false';
-                        autoTranslateCheckbox.checked = autoTranslateEnabled;
-                    }
+                    console.error('Error loading user data:', error);
                 }
             }
             
-            // Set auto-detect checkbox
-            if (autoDetectCheckbox) {
-                const autoDetectEnabled = localStorage.getItem('auto_detect_language') !== 'false';
-                autoDetectCheckbox.checked = autoDetectEnabled;
+            // Load barangay suggestions (similar to signup)
+            function setupBarangaySuggestions() {
+                const districtSelect = document.getElementById('edit_district');
+                const barangayInput = document.getElementById('edit_barangay');
+                const suggestionsDiv = document.getElementById('editBarangaySuggestions');
                 
-                autoDetectCheckbox.addEventListener('change', function() {
-                    localStorage.setItem('auto_detect_language', this.checked ? 'true' : 'false');
+                if (!districtSelect || !barangayInput || !suggestionsDiv) return;
+                
+                districtSelect.addEventListener('change', function() {
+                    if (this.value) {
+                        barangayInput.disabled = false;
+                        barangayInput.placeholder = 'Type to search barangay...';
+                    } else {
+                        barangayInput.disabled = true;
+                        barangayInput.value = '';
+                        barangayInput.placeholder = 'Select district first, then type to search barangay...';
+                    }
                 });
-            }
-            
-            // Load preferences
-            await loadUserPreferences();
-            
-            // Listen for language updates
-            document.addEventListener('languagesUpdated', async () => {
-                await loadLanguagesIntoDropdown();
-                updateLanguageInfo();
-            });
-            
-            // Save language
-            if (saveBtn) {
-                saveBtn.addEventListener('click', async function () {
-                    if (!selectDropdown) return;
-                    const lang = selectDropdown.value;
-                    
-                    if (!lang) {
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Please select a language',
-                            text: 'You must select a language before saving.'
-                        });
+                
+                barangayInput.addEventListener('input', async function() {
+                    const query = this.value.trim();
+                    if (query.length < 2) {
+                        suggestionsDiv.style.display = 'none';
                         return;
                     }
                     
                     try {
-                        // Save language preference
-                        await langManager.setLanguage(lang);
-                        
-                        // Update auto-detect setting
-                        if (autoDetectCheckbox) {
-                            localStorage.setItem('auto_detect_language', autoDetectCheckbox.checked ? 'true' : 'false');
-                        }
-                        
-                        // Save auto-translate preference
-                        if (autoTranslateCheckbox) {
-                            const autoTranslateEnabled = autoTranslateCheckbox.checked;
-                            localStorage.setItem('auto_translate_enabled', autoTranslateEnabled ? 'true' : 'false');
-                            
-                            // Save to server
-                            try {
-                                await fetch('api/user-language-preference.php?action=set', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        language: lang,
-                                        auto_translate_enabled: autoTranslateEnabled
-                                    })
-                                });
-                            } catch (error) {
-                                console.error('Error saving auto-translate preference:', error);
+                        const response = await fetch('api/get-barangays.php');
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.barangays) {
+                                const filtered = data.barangays.filter(b => 
+                                    b.toLowerCase().includes(query.toLowerCase())
+                                ).slice(0, 10);
+                                
+                                if (filtered.length > 0) {
+                                    suggestionsDiv.innerHTML = filtered.map(b => 
+                                        `<div class="suggestion-item">${b}</div>`
+                                    ).join('');
+                                    suggestionsDiv.style.display = 'block';
+                                    
+                                    // Add click handlers
+                                    suggestionsDiv.querySelectorAll('.suggestion-item').forEach(item => {
+                                        item.addEventListener('click', function() {
+                                            barangayInput.value = this.textContent;
+                                            suggestionsDiv.style.display = 'none';
+                                        });
+                                    });
+                                } else {
+                                    suggestionsDiv.style.display = 'none';
+                                }
                             }
                         }
-                        
-                        updateLanguageInfo();
-                        
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Settings Saved',
-                            html: `
-                                <div style="text-align: left;">
-                                    <p><strong>Language:</strong> ${langManager.getLanguageDisplay(lang)}</p>
-                                    <p><strong>AI Auto-Translation:</strong> ${autoTranslateCheckbox.checked ? 'Enabled' : 'Disabled'}</p>
-                                </div>
-                            `,
-                            timer: 3000,
-                            showConfirmButton: false
-                        });
                     } catch (error) {
-                        console.error('Error saving preferences:', error);
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: 'Failed to save preferences. Please try again.'
-                        });
+                        console.error('Error loading barangays:', error);
+                    }
+                });
+                
+                // Hide suggestions when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!barangayInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                        suggestionsDiv.style.display = 'none';
                     }
                 });
             }
             
-            // Update info when language changes
-            document.addEventListener('languageChanged', () => {
-                if (selectDropdown) {
-                    selectDropdown.value = langManager.currentLanguage;
+            // Handle form submission
+            if (profileForm) {
+                profileForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    // Hide error message
+                    if (errorMessage) {
+                        errorMessage.style.display = 'none';
+                    }
+                    
+                    // Disable save button
+                    if (saveBtn) {
+                        saveBtn.disabled = true;
+                        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                    }
+                    
+                    // Get form data
+                    const formData = {
+                        name: document.getElementById('edit_name').value.trim(),
+                        email: document.getElementById('edit_email').value.trim(),
+                        phone: document.getElementById('edit_phone').value.trim(),
+                        nationality: document.getElementById('edit_nationality').value.trim(),
+                        district: document.getElementById('edit_district').value,
+                        barangay: document.getElementById('edit_barangay').value.trim(),
+                        house_number: document.getElementById('edit_house_number').value.trim(),
+                        street: document.getElementById('edit_street').value.trim()
+                    };
+                    
+                    // Validate
+                    if (!formData.name) {
+                        showError('Name is required.');
+                        enableSaveButton();
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch('api/update-user-profile.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(formData)
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Profile Updated',
+                                text: 'Your profile has been updated successfully!',
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                            
+                            // Reload page after a short delay to show updated data
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 2000);
+                        } else {
+                            showError(data.message || 'Failed to update profile. Please try again.');
+                            enableSaveButton();
+                        }
+                    } catch (error) {
+                        console.error('Error updating profile:', error);
+                        showError('An error occurred. Please try again.');
+                        enableSaveButton();
+                    }
+                });
+            }
+            
+            function showError(message) {
+                if (errorMessage && errorText) {
+                    errorText.textContent = message;
+                    errorMessage.style.display = 'flex';
                 }
-                updateLanguageInfo();
-            });
+            }
+            
+            function enableSaveButton() {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                }
+            }
+            
+            // Initialize
+            await loadUserData();
+            setupBarangaySuggestions();
         });
     </script>
 </body>

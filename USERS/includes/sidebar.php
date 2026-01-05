@@ -60,14 +60,6 @@ include __DIR__ . '/guest-monitoring-notice.php';
                             <span>Alerts</span>
                         </a>
                     </li>
-                    <?php if ($showProfile): ?>
-                    <li class="sidebar-menu-item">
-                        <a href="<?= $basePath ?><?= $linkPrefix ?>profile.php" class="sidebar-link <?= $current === 'profile.php' ? 'active' : '' ?>">
-                            <i class="fas fa-user-cog"></i>
-                            <span>Profile</span>
-                        </a>
-                    </li>
-                    <?php endif; ?>
                     <li class="sidebar-menu-item">
                         <a href="<?= $basePath ?><?= $linkPrefix ?>support.php" class="sidebar-link <?= $current === 'support.php' ? 'active' : '' ?>">
                             <i class="fas fa-life-ring"></i>
@@ -101,9 +93,45 @@ include __DIR__ . '/guest-monitoring-notice.php';
     <button class="auth-icon-link" id="chatFab" title="Any concerns? Contact support" aria-label="Open chat">
         <i class="fas fa-comments"></i>
     </button>
-    <a href="<?= $basePath ?><?= $linkPrefix ?>login.php" class="auth-icon-link" title="Login / Sign Up">
-        <i class="fas fa-user-circle"></i>
-    </a>
+    <?php if ($showProfile): ?>
+        <div class="user-dropdown-container">
+            <button class="auth-icon-link user-dropdown-trigger" id="userDropdownBtn" title="User Menu" aria-label="User Menu" aria-expanded="false">
+                <i class="fas fa-user-circle"></i>
+            </button>
+            <div class="user-dropdown-menu" id="userDropdownMenu" style="display: none;">
+                <div class="user-dropdown-header">
+                    <div class="user-icon-large">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name"><?php echo htmlspecialchars($_SESSION['user_name'] ?? 'User'); ?></div>
+                        <div class="user-details">
+                            <?php if (!empty($_SESSION['user_email'])): ?>
+                                <span><?php echo htmlspecialchars($_SESSION['user_email']); ?></span>
+                            <?php endif; ?>
+                            <?php if (!empty($_SESSION['user_phone'])): ?>
+                                <?php if (!empty($_SESSION['user_email'])): ?> / <?php endif; ?>
+                                <span><?php echo htmlspecialchars($_SESSION['user_phone']); ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <div class="user-dropdown-actions">
+                    <a href="<?= $basePath ?><?= $linkPrefix ?>profile.php" class="user-dropdown-link">
+                        <i class="fas fa-edit"></i> Edit Information
+                    </a>
+                    <button class="user-dropdown-link user-logout-btn" id="userLogoutBtn">
+                        <span>Log Out</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    <?php else: ?>
+        <a href="<?= $basePath ?><?= $linkPrefix ?>login.php" class="auth-icon-link" title="Login / Sign Up">
+            <i class="fas fa-user-circle"></i>
+        </a>
+    <?php endif; ?>
 </div>
 
 <div class="chat-modal" id="chatModal" aria-hidden="true">
