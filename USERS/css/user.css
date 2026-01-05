@@ -1551,8 +1551,9 @@ textarea:focus {
 }
 
 .chat-form-submit:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+    background: #6b7280 !important;
 }
 
 /* Searchable Select Styles */

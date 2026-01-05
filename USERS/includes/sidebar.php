@@ -152,7 +152,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
                             <option value="other">Other</option>
                         </select>
                     </div>
-                    <button type="submit" class="chat-form-submit">Start Chat</button>
+                    <button type="submit" class="chat-form-submit" disabled>Start Chat</button>
                 </form>
             </div>
 
@@ -592,8 +592,11 @@ document.addEventListener('DOMContentLoaded', function() {
             chatInterface.style.display = 'none';
             console.log('Showing user info form (anonymous - REQUIRED)');
             
-            // Initialize searchable barangay dropdown
-            setTimeout(initSearchableBarangay, 100);
+            // Initialize searchable barangay dropdown and form validation
+            setTimeout(() => {
+                initSearchableBarangay();
+                setupFormValidation();
+            }, 150);
             
             // Disable chat input if form is not filled
             const chatInput = document.getElementById('chatInput');
@@ -697,7 +700,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show dropdown
         function showDropdown() {
             dropdown.style.display = 'block';
-            filterBarangays(searchInput.value);
+            const searchTerm = searchInput.value.trim();
+            if (searchTerm) {
+                filterBarangays(searchTerm);
+            } else {
+                // Show all items if no search term
+                const items = dropdownList.querySelectorAll('.searchable-select-item');
+                items.forEach(item => {
+                    item.style.display = 'block';
+                });
+            }
         }
         
         // Hide dropdown
@@ -712,6 +724,8 @@ document.addEventListener('DOMContentLoaded', function() {
             searchInput.value = barangay;
             hiddenInput.value = barangay;
             hideDropdown();
+            // Trigger validation after selection
+            hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
         // Event listeners
@@ -769,6 +783,55 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    // Setup form validation to enable/disable submit button
+    function setupFormValidation() {
+        const nameInput = document.getElementById('userNameInput');
+        const contactInput = document.getElementById('userContactInput');
+        const locationInput = document.getElementById('userLocationInput');
+        const concernSelect = document.getElementById('userConcernSelect');
+        const submitBtn = document.querySelector('.chat-form-submit');
+        
+        if (!nameInput || !contactInput || !locationInput || !concernSelect || !submitBtn) {
+            setTimeout(setupFormValidation, 100);
+            return;
+        }
+        
+        function validateForm() {
+            const name = nameInput.value.trim();
+            const contact = contactInput.value.trim();
+            const location = locationInput.value.trim();
+            const concern = concernSelect.value;
+            
+            if (name && contact && location && concern) {
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+                submitBtn.style.cursor = 'pointer';
+            } else {
+                submitBtn.disabled = true;
+                submitBtn.style.opacity = '0.6';
+                submitBtn.style.cursor = 'not-allowed';
+            }
+        }
+        
+        // Initial validation
+        validateForm();
+        
+        // Add event listeners
+        nameInput.addEventListener('input', validateForm);
+        contactInput.addEventListener('input', validateForm);
+        locationInput.addEventListener('change', validateForm);
+        concernSelect.addEventListener('change', validateForm);
+        
+        // Also listen to location search input changes
+        const locationSearch = document.getElementById('userLocationSearch');
+        if (locationSearch) {
+            locationSearch.addEventListener('input', function() {
+                // Validate when location is selected
+                setTimeout(validateForm, 100);
+            });
+        }
+    }
 
     function attachUserInfoFormHandler() {
         const form = document.getElementById('userInfoForm');
@@ -776,9 +839,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('User info form not found, may not be needed');
             return;
         }
-        
-        // Initialize searchable barangay dropdown
-        initSearchableBarangay();
         
         // Remove old handler if exists
         const newForm = form.cloneNode(true);
@@ -989,6 +1049,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check and show user info form
             checkAndShowUserInfoForm();
             attachUserInfoFormHandler();
+            
+            // Initialize searchable dropdown and validation after modal opens
+            setTimeout(() => {
+                initSearchableBarangay();
+                setupFormValidation();
+            }, 200);
             
             // Initialize MySQL chat if needed
             if (window.initChatMySQL && !window.chatInitialized) {
@@ -1213,8 +1279,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 userInfoForm.style.display = 'block';
                 chatInterface.style.display = 'none';
                 
-                // Initialize searchable barangay dropdown
-            initSearchableBarangay();
+                // Initialize searchable barangay dropdown and form validation
+            setTimeout(() => {
+                initSearchableBarangay();
+                setupFormValidation();
+            }, 150);
             
             // Handle form submission
                 const form = document.getElementById('userInfoForm');
@@ -2028,8 +2097,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                     chatInterface.style.display = 'none';
                                     userInfoForm.style.display = 'block';
                                     
-                                    // Initialize searchable barangay dropdown
-                                    setTimeout(initSearchableBarangay, 100);
+                                    // Initialize searchable barangay dropdown and form validation
+                                    setTimeout(() => {
+                                        initSearchableBarangay();
+                                        setupFormValidation();
+                                    }, 150);
                                     
                                     // Clear concern to force re-selection
                                     localStorage.removeItem('guest_concern');
