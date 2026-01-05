@@ -117,23 +117,166 @@ include __DIR__ . '/guest-monitoring-notice.php';
         <div class="chat-modal-body">
             <!-- User Info Form (shown for anonymous/guest users) -->
             <div class="chat-user-info-form" id="chatUserInfoForm" style="display: none;">
-                <h4 style="margin: 0 0 1rem 0; font-size: 1rem;">Please provide your information to start chatting</h4>
-                <form id="userInfoForm">
-                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                        <label for="userNameInput" style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 500;">Full Name *</label>
-                        <input type="text" id="userNameInput" name="name" required placeholder="Enter your full name" style="width: 100%; padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid var(--card-border);">
+                <h4 class="form-title">Please provide your information to start chatting</h4>
+                <form id="userInfoForm" class="modern-form">
+                    <div class="form-group modern-form-group">
+                        <label for="userNameInput" class="modern-label">Full Name <span class="required-asterisk">*</span></label>
+                        <input type="text" id="userNameInput" name="name" required placeholder="Enter your full name" class="modern-input">
                     </div>
-                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                        <label for="userContactInput" style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 500;">Contact Number *</label>
-                        <input type="tel" id="userContactInput" name="contact" required placeholder="09XX XXX XXXX" style="width: 100%; padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid var(--card-border);">
+                    <div class="form-group modern-form-group">
+                        <label for="userContactInput" class="modern-label">Contact Number <span class="required-asterisk">*</span></label>
+                        <input type="tel" id="userContactInput" name="contact" required placeholder="09XX XXX XXXX" class="modern-input">
                     </div>
-                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                        <label for="userLocationInput" style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 500;">Location *</label>
-                        <input type="text" id="userLocationInput" name="location" required placeholder="Your current location or address" style="width: 100%; padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid var(--card-border);">
+                    <div class="form-group modern-form-group">
+                        <label for="userLocationInput" class="modern-label">Location <span class="required-asterisk">*</span></label>
+                        <select id="userLocationInput" name="location" required class="modern-select">
+                            <option value="">Select a barangay...</option>
+                            <option value="Alicia">Alicia</option>
+                            <option value="Amihan">Amihan</option>
+                            <option value="Apolonio Samson">Apolonio Samson</option>
+                            <option value="Bagong Pag-asa">Bagong Pag-asa</option>
+                            <option value="Bagong Silangan">Bagong Silangan</option>
+                            <option value="Bagumbayan">Bagumbayan</option>
+                            <option value="Bagumbuhay">Bagumbuhay</option>
+                            <option value="Bahay Toro">Bahay Toro</option>
+                            <option value="Balingasa">Balingasa</option>
+                            <option value="Balintawak">Balintawak</option>
+                            <option value="Balumbato">Balumbato</option>
+                            <option value="Batasan Hills">Batasan Hills</option>
+                            <option value="Bayanihan">Bayanihan</option>
+                            <option value="Blue Ridge A">Blue Ridge A</option>
+                            <option value="Blue Ridge B">Blue Ridge B</option>
+                            <option value="Botocan">Botocan</option>
+                            <option value="Bungad">Bungad</option>
+                            <option value="Camp Aguinaldo">Camp Aguinaldo</option>
+                            <option value="Capri">Capri</option>
+                            <option value="Central">Central</option>
+                            <option value="Claro">Claro</option>
+                            <option value="Commonwealth">Commonwealth</option>
+                            <option value="Culiat">Culiat</option>
+                            <option value="Damar">Damar</option>
+                            <option value="Damayan">Damayan</option>
+                            <option value="Damayang Lagi">Damayang Lagi</option>
+                            <option value="Del Monte">Del Monte</option>
+                            <option value="Diliman">Diliman</option>
+                            <option value="Dioquino Zobel">Dioquino Zobel</option>
+                            <option value="Don Manuel">Don Manuel</option>
+                            <option value="Doña Aurora">Doña Aurora</option>
+                            <option value="Doña Imelda">Doña Imelda</option>
+                            <option value="Doña Josefa">Doña Josefa</option>
+                            <option value="Duyan-duyan">Duyan-duyan</option>
+                            <option value="E. Rodriguez">E. Rodriguez</option>
+                            <option value="East Kamias">East Kamias</option>
+                            <option value="Escopa I">Escopa I</option>
+                            <option value="Escopa II">Escopa II</option>
+                            <option value="Escopa III">Escopa III</option>
+                            <option value="Escopa IV">Escopa IV</option>
+                            <option value="Fairview">Fairview</option>
+                            <option value="Greater Lagro">Greater Lagro</option>
+                            <option value="Gulod">Gulod</option>
+                            <option value="Holy Spirit">Holy Spirit</option>
+                            <option value="Horseshoe">Horseshoe</option>
+                            <option value="Immaculate Concepcion">Immaculate Concepcion</option>
+                            <option value="Kaligayahan">Kaligayahan</option>
+                            <option value="Kalusugan">Kalusugan</option>
+                            <option value="Kamuning">Kamuning</option>
+                            <option value="Katipunan">Katipunan</option>
+                            <option value="Kaunlaran">Kaunlaran</option>
+                            <option value="Kristong Hari">Kristong Hari</option>
+                            <option value="Krus na Ligas">Krus na Ligas</option>
+                            <option value="Laging Handa">Laging Handa</option>
+                            <option value="Libis">Libis</option>
+                            <option value="Lourdes">Lourdes</option>
+                            <option value="Loyola Heights">Loyola Heights</option>
+                            <option value="Maharlika">Maharlika</option>
+                            <option value="Malaya">Malaya</option>
+                            <option value="Mangga">Mangga</option>
+                            <option value="Manresa">Manresa</option>
+                            <option value="Mariana">Mariana</option>
+                            <option value="Mariblo">Mariblo</option>
+                            <option value="Marilag">Marilag</option>
+                            <option value="Masagana">Masagana</option>
+                            <option value="Masambong">Masambong</option>
+                            <option value="Matandang Balara">Matandang Balara</option>
+                            <option value="Milagrosa">Milagrosa</option>
+                            <option value="Nagkaisang Nayon">Nagkaisang Nayon</option>
+                            <option value="Nayon Kaunlaran">Nayon Kaunlaran</option>
+                            <option value="New Era">New Era</option>
+                            <option value="Novaliches Proper">Novaliches Proper</option>
+                            <option value="N.S. Amoranto">N.S. Amoranto</option>
+                            <option value="Obrero">Obrero</option>
+                            <option value="Old Capitol Site">Old Capitol Site</option>
+                            <option value="Paang Bundok">Paang Bundok</option>
+                            <option value="Pag-ibig sa Nayon">Pag-ibig sa Nayon</option>
+                            <option value="Paligsahan">Paligsahan</option>
+                            <option value="Paltok">Paltok</option>
+                            <option value="Pansol">Pansol</option>
+                            <option value="Paraiso">Paraiso</option>
+                            <option value="Pasong Putik Proper">Pasong Putik Proper</option>
+                            <option value="Pasong Tamo">Pasong Tamo</option>
+                            <option value="Payatas">Payatas</option>
+                            <option value="Phil-Am">Phil-Am</option>
+                            <option value="Pinyahan">Pinyahan</option>
+                            <option value="Project 6">Project 6</option>
+                            <option value="Quirino 2-A">Quirino 2-A</option>
+                            <option value="Quirino 2-B">Quirino 2-B</option>
+                            <option value="Quirino 2-C">Quirino 2-C</option>
+                            <option value="Quirino 3-A">Quirino 3-A</option>
+                            <option value="Quirino 3-B">Quirino 3-B</option>
+                            <option value="Ramon Magsaysay">Ramon Magsaysay</option>
+                            <option value="Roxas">Roxas</option>
+                            <option value="Sacred Heart">Sacred Heart</option>
+                            <option value="Saint Ignatius">Saint Ignatius</option>
+                            <option value="Saint Peter">Saint Peter</option>
+                            <option value="Salvacion">Salvacion</option>
+                            <option value="San Agustin">San Agustin</option>
+                            <option value="San Antonio">San Antonio</option>
+                            <option value="San Bartolome">San Bartolome</option>
+                            <option value="San Isidro">San Isidro</option>
+                            <option value="San Isidro Galas">San Isidro Galas</option>
+                            <option value="San Jose">San Jose</option>
+                            <option value="San Martin de Porres">San Martin de Porres</option>
+                            <option value="San Roque">San Roque</option>
+                            <option value="San Vicente">San Vicente</option>
+                            <option value="Sangandaan">Sangandaan</option>
+                            <option value="Santa Cruz">Santa Cruz</option>
+                            <option value="Santa Lucia">Santa Lucia</option>
+                            <option value="Santa Monica">Santa Monica</option>
+                            <option value="Santa Teresita">Santa Teresita</option>
+                            <option value="Santo Cristo">Santo Cristo</option>
+                            <option value="Santo Domingo">Santo Domingo</option>
+                            <option value="Santo Niño">Santo Niño</option>
+                            <option value="Santol">Santol</option>
+                            <option value="Sauyo">Sauyo</option>
+                            <option value="Sienna">Sienna</option>
+                            <option value="Sikatuna Village">Sikatuna Village</option>
+                            <option value="Silangan">Silangan</option>
+                            <option value="Socorro">Socorro</option>
+                            <option value="South Triangle">South Triangle</option>
+                            <option value="St. Ignatius">St. Ignatius</option>
+                            <option value="Tagumpay">Tagumpay</option>
+                            <option value="Talayan">Talayan</option>
+                            <option value="Talipapa">Talipapa</option>
+                            <option value="Tandang Sora">Tandang Sora</option>
+                            <option value="Tatalon">Tatalon</option>
+                            <option value="Teachers Village East">Teachers Village East</option>
+                            <option value="Teachers Village West">Teachers Village West</option>
+                            <option value="Ugong Norte">Ugong Norte</option>
+                            <option value="Unang Sigaw">Unang Sigaw</option>
+                            <option value="UP Campus">UP Campus</option>
+                            <option value="UP Village">UP Village</option>
+                            <option value="Valencia">Valencia</option>
+                            <option value="Vasra">Vasra</option>
+                            <option value="Veterans Village">Veterans Village</option>
+                            <option value="Villa Maria Clara">Villa Maria Clara</option>
+                            <option value="West Kamias">West Kamias</option>
+                            <option value="West Triangle">West Triangle</option>
+                            <option value="White Plains">White Plains</option>
+                        </select>
                     </div>
-                    <div class="form-group" style="margin-bottom: 1rem;">
-                        <label for="userConcernSelect" style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 500;">What is your concern? *</label>
-                        <select id="userConcernSelect" name="concern" required style="width: 100%; padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid var(--card-border);">
+                    <div class="form-group modern-form-group">
+                        <label for="userConcernSelect" class="modern-label">What is your concern? <span class="required-asterisk">*</span></label>
+                        <select id="userConcernSelect" name="concern" required class="modern-select">
                             <option value="">Select a concern...</option>
                             <option value="emergency">Emergency</option>
                             <option value="medical">Medical Assistance</option>
@@ -145,7 +288,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
                             <option value="other">Other</option>
                         </select>
                     </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.65rem;">Start Chat</button>
+                    <button type="submit" class="modern-submit-btn">Start Chat</button>
                 </form>
             </div>
 

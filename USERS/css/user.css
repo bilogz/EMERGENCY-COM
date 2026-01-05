@@ -1326,7 +1326,9 @@ textarea:focus {
     left: 0 !important;
     right: 0 !important;
     bottom: 0 !important;
-    background: rgba(0,0,0,0.5) !important;
+    background: rgba(0,0,0,0.6) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     display: none !important;
     align-items: center;
     justify-content: center;
@@ -1334,7 +1336,7 @@ textarea:focus {
     z-index: 99999 !important;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
+    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.4s ease;
     visibility: hidden;
     overflow-y: auto;
 }
@@ -1350,16 +1352,18 @@ textarea:focus {
     left: 0 !important;
     right: 0 !important;
     bottom: 0 !important;
-    background: rgba(0,0,0,0.5) !important;
+    background: rgba(0,0,0,0.6) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     z-index: 99999 !important;
 }
 
 .chat-modal-content {
     width: 100%;
-    max-width: 500px;
+    max-width: 520px;
     background: var(--card-bg);
-    border-radius: 16px;
-    box-shadow: 0 18px 40px rgba(0,0,0,0.5);
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05);
     border: 1px solid var(--card-border);
     display: flex;
     flex-direction: column;
@@ -1368,16 +1372,18 @@ textarea:focus {
     z-index: 100000 !important;
     pointer-events: auto !important;
     margin: auto;
-    animation: slideUp 0.3s ease;
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
 }
 
 @keyframes slideUp {
     from {
-        transform: translateY(20px);
+        transform: translateY(30px) scale(0.95);
         opacity: 0;
     }
     to {
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
         opacity: 1;
     }
 }
@@ -1386,31 +1392,46 @@ textarea:focus {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.85rem 1rem;
+    padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--card-border);
     pointer-events: auto;
     position: relative;
     z-index: 10001;
+    background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.01) 100%);
 }
 
 .chat-modal-header h3 {
     margin: 0;
-    font-size: 1rem;
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
 }
 
 .chat-close-btn {
     border: none;
-    background: transparent;
+    background: rgba(255,255,255,0.05);
     cursor: pointer;
     color: inherit;
     font-size: 1.1rem;
     pointer-events: auto;
     z-index: 10002;
     position: relative;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.chat-close-btn:hover {
+    background: rgba(255,255,255,0.1);
+    transform: scale(1.05);
 }
 
 .chat-modal-body {
-    padding: 0.75rem 1rem 1rem;
+    padding: 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -1442,6 +1463,122 @@ textarea:focus {
 .chat-modal-body input::placeholder {
     color: var(--text-muted) !important;
     opacity: 0.7;
+}
+
+/* Modern Form Styles */
+.modern-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.form-title {
+    margin: 0 0 1.5rem 0 !important;
+    font-size: 1.05rem !important;
+    font-weight: 500 !important;
+    color: var(--text-color) !important;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+}
+
+.modern-form-group {
+    margin-bottom: 0 !important;
+    position: relative;
+}
+
+.modern-label {
+    display: block !important;
+    margin-bottom: 0.5rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    color: var(--text-color) !important;
+    letter-spacing: -0.01em;
+}
+
+.required-asterisk {
+    color: #ef4444;
+    margin-left: 2px;
+}
+
+.modern-input,
+.modern-select {
+    width: 100% !important;
+    padding: 0.75rem 1rem !important;
+    border-radius: 12px !important;
+    border: 2px solid var(--card-border) !important;
+    background: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    font-size: 0.95rem !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    outline: none !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.modern-input:focus,
+.modern-select:focus {
+    border-color: var(--primary-color, #8b5cf6) !important;
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1), 0 2px 8px rgba(0,0,0,0.15) !important;
+    transform: translateY(-1px);
+    background: var(--card-bg) !important;
+}
+
+.modern-input:hover:not(:focus),
+.modern-select:hover:not(:focus) {
+    border-color: rgba(139, 92, 246, 0.5) !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12) !important;
+}
+
+.modern-input::placeholder {
+    color: var(--text-muted) !important;
+    opacity: 0.6 !important;
+}
+
+.modern-select {
+    cursor: pointer !important;
+    appearance: none !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 1rem center !important;
+    padding-right: 2.5rem !important;
+}
+
+.modern-select option {
+    background: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    padding: 0.5rem !important;
+}
+
+.modern-submit-btn {
+    width: 100% !important;
+    padding: 0.875rem 1.5rem !important;
+    background: linear-gradient(135deg, var(--primary-color, #8b5cf6) 0%, #7c3aed 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 12px !important;
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3), 0 2px 4px rgba(0,0,0,0.1) !important;
+    letter-spacing: -0.01em;
+    margin-top: 0.5rem;
+}
+
+.modern-submit-btn:hover:not(:disabled) {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4), 0 4px 8px rgba(0,0,0,0.15) !important;
+    background: linear-gradient(135deg, #9d6af7 0%, #8b4ef0 100%) !important;
+}
+
+.modern-submit-btn:active:not(:disabled) {
+    transform: translateY(0) !important;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3), 0 1px 2px rgba(0,0,0,0.1) !important;
+}
+
+.modern-submit-btn:disabled {
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
 }
 
 .chat-status-indicator {
@@ -1655,6 +1792,34 @@ textarea:focus {
     opacity: 0.7;
 }
 
+[data-theme="dark"] .modern-input,
+[data-theme="dark"] .modern-select {
+    background: #1f2228 !important;
+    border-color: #313543 !important;
+    color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] .modern-input:focus,
+[data-theme="dark"] .modern-select:focus {
+    border-color: #8b5cf6 !important;
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15), 0 2px 8px rgba(0,0,0,0.3) !important;
+    background: #252830 !important;
+}
+
+[data-theme="dark"] .modern-input:hover:not(:focus),
+[data-theme="dark"] .modern-select:hover:not(:focus) {
+    border-color: rgba(139, 92, 246, 0.6) !important;
+}
+
+[data-theme="dark"] .modern-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23aaa' d='M6 9L1 4h10z'/%3E%3C/svg%3E") !important;
+}
+
+[data-theme="dark"] .modern-select option {
+    background: #1f2228 !important;
+    color: #e0e0e0 !important;
+}
+
 [data-theme="dark"] .chat-message {
     color: #e0e0e0 !important;
 }
@@ -1738,6 +1903,26 @@ textarea:focus {
     .chat-user-info-form input,
     .chat-user-info-form select {
         font-size: 16px; /* Prevents zoom on iOS */
+    }
+    
+    .modern-form {
+        gap: 1rem;
+    }
+    
+    .form-title {
+        font-size: 0.95rem !important;
+        margin-bottom: 1.25rem !important;
+    }
+    
+    .modern-input,
+    .modern-select {
+        padding: 0.7rem 0.9rem !important;
+        font-size: 16px !important;
+    }
+    
+    .modern-submit-btn {
+        padding: 0.8rem 1.25rem !important;
+        font-size: 0.95rem !important;
     }
     
     .chat-input-row {
