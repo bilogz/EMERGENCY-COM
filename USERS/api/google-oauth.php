@@ -201,11 +201,8 @@ try {
                 }
             }
             
-            // Generate a random password (user won't need it for Google login)
-            $randomPassword = bin2hex(random_bytes(16));
-            $hashedPassword = password_hash($randomPassword, PASSWORD_DEFAULT);
-            
             // Build INSERT query with all available columns
+            // Note: Password is NOT required for Google OAuth users
             $insertColumns = ['name'];
             $insertValues = [$name];
             
@@ -219,34 +216,41 @@ try {
                 $insertValues[] = null; // Google OAuth doesn't provide phone
             }
             
-            $insertColumns[] = 'password';
-            $insertValues[] = $hashedPassword;
-            
+            // Add google_id if available
             if ($googleIdColumnExists && !empty($googleId)) {
                 $insertColumns[] = 'google_id';
                 $insertValues[] = $googleId;
             }
             
+            // Mark email as verified since Google emails are verified
             if ($emailVerifiedExists) {
                 $insertColumns[] = 'email_verified';
-                $insertValues[] = 1; // Google email is verified
+                $insertValues[] = 1;
             }
             
+            // Add created_at with NOW() function
             $insertColumns[] = 'created_at';
-            $insertValues[] = date('Y-m-d H:i:s');
             
-            // Build the SQL query
-            $placeholders = str_repeat('?,', count($insertValues) - 1) . '?';
-            $sql = "INSERT INTO users (" . implode(', ', $insertColumns) . ") VALUES ($placeholders)";
+            // Build the SQL query - use NOW() for created_at instead of placeholder
+            $placeholders = array_fill(0, count($insertValues), '?');
+            $placeholders[] = 'NOW()'; // Add NOW() for created_at
+            $sql = "INSERT INTO users (" . implode(', ', $insertColumns) . ") VALUES (" . implode(', ', $placeholders) . ")";
             
             try {
                 $insertStmt = $pdo->prepare($sql);
                 $insertStmt->execute($insertValues);
                 $newUserId = $pdo->lastInsertId();
+                
+                if (!$newUserId) {
+                    throw new PDOException("Failed to get last insert ID");
+                }
             } catch (PDOException $e) {
                 error_log("INSERT failed. SQL: $sql");
+                error_log("Columns: " . implode(', ', $insertColumns));
                 error_log("Values: " . print_r($insertValues, true));
-                error_log("Error: " . $e->getMessage());
+                error_log("Error Code: " . $e->getCode());
+                error_log("Error Message: " . $e->getMessage());
+                error_log("Error Info: " . print_r($insertStmt->errorInfo() ?? [], true));
                 throw $e; // Re-throw to be caught by outer catch block
             }
             
