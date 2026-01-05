@@ -37,7 +37,38 @@ if ($action === 'list') {
             $params[] = $status;
         }
         
-        $query .= " ORDER BY sent_at DESC LIMIT 500";
+        // Pagination parameters
+        $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        $limit = isset($_GET['limit']) ? min(500, max(10, (int)$_GET['limit'])) : 100; // Default 100, max 500
+        $offset = ($page - 1) * $limit;
+        
+        // Get total count for pagination (before adding LIMIT)
+        $countQuery = "SELECT COUNT(*) FROM notification_logs WHERE 1=1";
+        $countParams = [];
+        if (!empty($dateFrom)) {
+            $countQuery .= " AND DATE(sent_at) >= ?";
+            $countParams[] = $dateFrom;
+        }
+        if (!empty($dateTo)) {
+            $countQuery .= " AND DATE(sent_at) <= ?";
+            $countParams[] = $dateTo;
+        }
+        if (!empty($channel)) {
+            $countQuery .= " AND channel = ?";
+            $countParams[] = $channel;
+        }
+        if (!empty($status)) {
+            $countQuery .= " AND status = ?";
+            $countParams[] = $status;
+        }
+        
+        $countStmt = $pdo->prepare($countQuery);
+        $countStmt->execute($countParams);
+        $totalCount = $countStmt->fetchColumn();
+        
+        $query .= " ORDER BY sent_at DESC LIMIT ? OFFSET ?";
+        $params[] = $limit;
+        $params[] = $offset;
         
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
@@ -45,7 +76,13 @@ if ($action === 'list') {
         
         echo json_encode([
             'success' => true,
-            'logs' => $logs
+            'logs' => $logs,
+            'pagination' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => (int)$totalCount,
+                'total_pages' => (int)ceil($totalCount / $limit)
+            ]
         ]);
     } catch (PDOException $e) {
         error_log("List Audit Trail Error: " . $e->getMessage());

@@ -60,36 +60,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 } elseif ($action === 'list') {
     try {
-        $stmt = $pdo->query("
-            SELECT s.*, u.name, u.email, u.phone,
-                   SUBSTRING_INDEX(SUBSTRING_INDEX(s.categories, ',', numbers.n), ',', -1) as category
+        // Pagination parameters
+        $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        $limit = isset($_GET['limit']) ? min(100, max(10, (int)$_GET['limit'])) : 50; // Default 50, max 100
+        $offset = ($page - 1) * $limit;
+        
+        // Get total count for pagination
+        $totalCount = $pdo->query("SELECT COUNT(*) FROM subscriptions WHERE status = 'active'")->fetchColumn();
+        
+        // Simplified query without complex JOIN (better performance)
+        $stmt = $pdo->prepare("
+            SELECT s.*, u.name, u.email, u.phone
             FROM subscriptions s
             LEFT JOIN users u ON u.id = s.user_id
             WHERE s.status = 'active'
+            ORDER BY s.created_at DESC
+            LIMIT ? OFFSET ?
         ");
+        $stmt->execute([$limit, $offset]);
         $subscribers = $stmt->fetchAll();
         
-        // Group by subscriber and combine categories/channels
-        $grouped = [];
+        // Format subscribers
+        $formatted = [];
         foreach ($subscribers as $sub) {
-            $id = $sub['id'];
-            if (!isset($grouped[$id])) {
-                $grouped[$id] = [
-                    'id' => $sub['id'],
-                    'name' => $sub['name'],
-                    'email' => $sub['email'],
-                    'phone' => $sub['phone'],
-                    'categories' => $sub['categories'] ? explode(',', $sub['categories']) : [],
-                    'channels' => $sub['channels'] ? explode(',', $sub['channels']) : [],
-                    'language' => $sub['preferred_language'],
-                    'status' => $sub['status']
-                ];
-            }
+            $formatted[] = [
+                'id' => $sub['id'],
+                'name' => $sub['name'],
+                'email' => $sub['email'],
+                'phone' => $sub['phone'],
+                'categories' => $sub['categories'] ? explode(',', $sub['categories']) : [],
+                'channels' => $sub['channels'] ? explode(',', $sub['channels']) : [],
+                'language' => $sub['preferred_language'],
+                'status' => $sub['status']
+            ];
         }
         
         echo json_encode([
             'success' => true,
-            'subscribers' => array_values($grouped)
+            'subscribers' => $formatted,
+            'pagination' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => (int)$totalCount,
+                'total_pages' => (int)ceil($totalCount / $limit)
+            ]
         ]);
     } catch (PDOException $e) {
         error_log("List Subscribers Error: " . $e->getMessage());

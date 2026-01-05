@@ -468,9 +468,19 @@ $pageTitle = 'Dashboard';
                 });
         }
 
+        let notificationsChartInstance = null;
+        let channelsChartInstance = null;
+        
         function loadNotificationsChart(data) {
-            const ctx = document.getElementById('notificationsChart').getContext('2d');
-            new Chart(ctx, {
+            const ctx = document.getElementById('notificationsChart');
+            if (!ctx) return;
+            
+            // Destroy existing chart if it exists
+            if (notificationsChartInstance) {
+                notificationsChartInstance.destroy();
+            }
+            
+            notificationsChartInstance = new Chart(ctx.getContext('2d'), {
                 type: 'line',
                 data: {
                     labels: data.labels || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -501,8 +511,15 @@ $pageTitle = 'Dashboard';
         }
 
         function loadChannelsChart(data) {
-            const ctx = document.getElementById('channelsChart').getContext('2d');
-            new Chart(ctx, {
+            const ctx = document.getElementById('channelsChart');
+            if (!ctx) return;
+            
+            // Destroy existing chart if it exists
+            if (channelsChartInstance) {
+                channelsChartInstance.destroy();
+            }
+            
+            channelsChartInstance = new Chart(ctx.getContext('2d'), {
                 type: 'doughnut',
                 data: {
                     labels: data.labels || ['SMS', 'Email', 'PA System'],

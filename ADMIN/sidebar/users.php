@@ -173,6 +173,64 @@ $pageTitle = 'User Management';
             color: white;
         }
         
+        /* Pagination Styles */
+        .pagination-container {
+            margin-top: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .pagination {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .pagination-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color-1);
+            background: var(--card-bg-1);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: var(--text-color-1);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .pagination-btn:hover:not(:disabled) {
+            background: var(--primary-color-1);
+            border-color: var(--primary-color-1);
+            color: white;
+        }
+        
+        .pagination-btn.active {
+            background: var(--primary-color-1);
+            border-color: var(--primary-color-1);
+            color: white;
+        }
+        
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .pagination-ellipsis {
+            padding: 0.5rem;
+            color: var(--text-secondary-1);
+        }
+        
+        .pagination-info {
+            color: var(--text-secondary-1);
+            font-size: 0.875rem;
+        }
+        
         .btn-add {
             display: flex;
             align-items: center;
@@ -920,6 +978,11 @@ $pageTitle = 'User Management';
                         <div class="users-cards-container" id="usersCardsContainer">
                             <!-- Cards will be inserted here by JavaScript -->
                         </div>
+                        
+                        <!-- Pagination Container -->
+                        <div class="pagination-container" id="paginationContainer">
+                            <!-- Pagination controls will be inserted here by JavaScript -->
+                        </div>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -1101,13 +1164,27 @@ $pageTitle = 'User Management';
             setTimeout(setupButtons, 100);
         });
         
-        function loadUsers() {
-            fetch('../api/user-management.php?action=list')
+        // Pagination state
+        let currentPage = 1;
+        let totalPages = 1;
+        let pageSize = 50;
+        
+        function loadUsers(page = 1) {
+            currentPage = page;
+            fetch(`../api/user-management.php?action=list&page=${page}&limit=${pageSize}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         users = data.users;
                         updateStats(data.stats);
+                        
+                        // Update pagination info
+                        if (data.pagination) {
+                            currentPage = data.pagination.page;
+                            totalPages = data.pagination.total_pages;
+                            updatePaginationControls();
+                        }
+                        
                         renderUsers(users);
                     } else {
                         showError(data.message || 'Failed to load users');
@@ -1118,6 +1195,54 @@ $pageTitle = 'User Management';
                     showError('Failed to load users. Please try again.');
                 });
         }
+        
+        function updatePaginationControls() {
+            const paginationContainer = document.getElementById('paginationContainer');
+            if (!paginationContainer) return;
+            
+            if (totalPages <= 1) {
+                paginationContainer.innerHTML = '';
+                return;
+            }
+            
+            let paginationHTML = '<div class="pagination">';
+            
+            // Previous button
+            paginationHTML += `<button class="pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="loadUsers(${currentPage - 1})">
+                <i class="fas fa-chevron-left"></i> Previous
+            </button>`;
+            
+            // Page numbers
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(totalPages, currentPage + 2);
+            
+            if (startPage > 1) {
+                paginationHTML += `<button class="pagination-btn" onclick="loadUsers(1)">1</button>`;
+                if (startPage > 2) paginationHTML += '<span class="pagination-ellipsis">...</span>';
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHTML += `<button class="pagination-btn ${i === currentPage ? 'active' : ''}" onclick="loadUsers(${i})">${i}</button>`;
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) paginationHTML += '<span class="pagination-ellipsis">...</span>';
+                paginationHTML += `<button class="pagination-btn" onclick="loadUsers(${totalPages})">${totalPages}</button>`;
+            }
+            
+            // Next button
+            paginationHTML += `<button class="pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="loadUsers(${currentPage + 1})">
+                Next <i class="fas fa-chevron-right"></i>
+            </button>`;
+            
+            paginationHTML += '</div>';
+            paginationHTML += `<div class="pagination-info">Page ${currentPage} of ${totalPages}</div>`;
+            
+            paginationContainer.innerHTML = paginationHTML;
+        }
+        
+        // Make loadUsers available globally
+        window.loadUsers = loadUsers;
         
         function updateStats(stats) {
             document.getElementById('totalAdmins').textContent = stats.admins || 0;
@@ -1242,6 +1367,8 @@ $pageTitle = 'User Management';
         }
         
         function filterUsers() {
+            // Note: With pagination, filtering should ideally be done server-side
+            // For now, we'll filter the current page results client-side
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             
             let filtered = users.filter(user => {

@@ -42,15 +42,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     if ($action === 'list') {
         try {
-            // Get all users from admin_user table
-            $stmt = $pdo->query("
+            // Pagination parameters
+            $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+            $limit = isset($_GET['limit']) ? min(100, max(10, (int)$_GET['limit'])) : 50; // Default 50, max 100
+            $offset = ($page - 1) * $limit;
+            
+            // Get total count for pagination
+            $totalCount = $pdo->query("SELECT COUNT(*) FROM admin_user")->fetchColumn();
+            
+            // Get paginated users from admin_user table
+            $stmt = $pdo->prepare("
                 SELECT id, name, email, role, status, created_at, last_login 
                 FROM admin_user 
                 ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
             ");
+            $stmt->execute([$limit, $offset]);
             $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
-            // Calculate stats
+            // Calculate stats (from all users, not just current page)
             $stats = [
                 'admins' => 0,
                 'staff' => 0,
@@ -58,24 +68,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 'inactive' => 0
             ];
             
-            foreach ($users as $user) {
-                if ($user['role'] === 'admin' || $user['role'] === 'super_admin') {
-                    $stats['admins']++;
-                } elseif ($user['role'] === 'staff') {
-                    $stats['staff']++;
-                }
-                
-                if ($user['status'] === 'pending_approval') {
-                    $stats['pending']++;
-                } elseif ($user['status'] === 'inactive') {
-                    $stats['inactive']++;
-                }
+            $statsStmt = $pdo->query("
+                SELECT 
+                    SUM(CASE WHEN role IN ('admin', 'super_admin') THEN 1 ELSE 0 END) as admins,
+                    SUM(CASE WHEN role = 'staff' THEN 1 ELSE 0 END) as staff,
+                    SUM(CASE WHEN status = 'pending_approval' THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as inactive
+                FROM admin_user
+            ");
+            $statsRow = $statsStmt->fetch(PDO::FETCH_ASSOC);
+            if ($statsRow) {
+                $stats['admins'] = (int)$statsRow['admins'];
+                $stats['staff'] = (int)$statsRow['staff'];
+                $stats['pending'] = (int)$statsRow['pending'];
+                $stats['inactive'] = (int)$statsRow['inactive'];
             }
             
             echo json_encode([
                 'success' => true,
                 'users' => $users,
-                'stats' => $stats
+                'stats' => $stats,
+                'pagination' => [
+                    'page' => $page,
+                    'limit' => $limit,
+                    'total' => (int)$totalCount,
+                    'total_pages' => (int)ceil($totalCount / $limit)
+                ]
             ]);
         } catch (PDOException $e) {
             error_log('User list error: ' . $e->getMessage());

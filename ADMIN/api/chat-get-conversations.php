@@ -25,6 +25,16 @@ if (!$pdo) {
 try {
     $status = $_GET['status'] ?? 'active';
     
+    // Pagination parameters
+    $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+    $limit = isset($_GET['limit']) ? min(100, max(10, (int)$_GET['limit'])) : 50; // Default 50, max 100
+    $offset = ($page - 1) * $limit;
+    
+    // Get total count for pagination
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM conversations WHERE status = ?");
+    $countStmt->execute([$status]);
+    $totalCount = $countStmt->fetchColumn();
+    
     $stmt = $pdo->prepare("
         SELECT 
             conversation_id,
@@ -47,8 +57,9 @@ try {
         FROM conversations 
         WHERE status = ?
         ORDER BY updated_at DESC
+        LIMIT ? OFFSET ?
     ");
-    $stmt->execute([$status]);
+    $stmt->execute([$status, $limit, $offset]);
     $conversations = $stmt->fetchAll();
     
     // Format conversations
@@ -82,7 +93,13 @@ try {
     
     echo json_encode([
         'success' => true,
-        'conversations' => $formattedConversations
+        'conversations' => $formattedConversations,
+        'pagination' => [
+            'page' => $page,
+            'limit' => $limit,
+            'total' => (int)$totalCount,
+            'total_pages' => (int)ceil($totalCount / $limit)
+        ]
     ]);
     
 } catch (PDOException $e) {
