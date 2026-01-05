@@ -128,9 +128,9 @@ include __DIR__ . '/guest-monitoring-notice.php';
                         <input type="tel" id="userContactInput" name="contact" required placeholder="09XX XXX XXXX" class="chat-form-input">
                     </div>
                     <div class="chat-form-group">
-                        <label for="userLocationInput">Location <span class="required-asterisk">*</span></label>
+                        <label for="userLocationSearch">Location <span class="required-asterisk">*</span></label>
                         <div class="searchable-select-wrapper">
-                            <input type="text" id="userLocationSearch" class="chat-form-input searchable-select-input" placeholder="Search barangay..." autocomplete="off">
+                            <input type="text" id="userLocationSearch" class="chat-form-input searchable-select-input" placeholder="Search barangay..." autocomplete="off" aria-label="Location">
                             <input type="hidden" id="userLocationInput" name="location" required>
                             <div class="searchable-select-dropdown" id="locationDropdown" style="display: none;">
                                 <div class="searchable-select-list">

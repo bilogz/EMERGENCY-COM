@@ -1473,15 +1473,20 @@ textarea:focus {
 }
 
 .chat-form-group {
+    margin-bottom: 1rem;
+}
+
+.chat-form-group:last-of-type {
     margin-bottom: 0;
 }
 
 .chat-form-group label {
     display: block;
-    margin-bottom: 0.4rem;
-    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
     font-weight: 500;
     color: var(--text-color) !important;
+    line-height: 1.4;
 }
 
 .required-asterisk {
@@ -1522,6 +1527,11 @@ textarea:focus {
     padding-right: 2.25rem;
 }
 
+.chat-form-select:focus {
+    border-color: var(--primary-color, #8b5cf6) !important;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1) !important;
+}
+
 .chat-form-select option {
     background: var(--card-bg);
     color: var(--text-color);
@@ -1551,19 +1561,35 @@ textarea:focus {
 }
 
 .chat-form-submit:disabled {
-    opacity: 0.6 !important;
+    opacity: 0.5 !important;
     cursor: not-allowed !important;
     background: #6b7280 !important;
+    transform: none !important;
+}
+
+.chat-form-submit:disabled:hover {
+    background: #6b7280 !important;
+    transform: none !important;
 }
 
 /* Searchable Select Styles */
 .searchable-select-wrapper {
     position: relative;
+    margin-top: 0;
+}
+
+.chat-form-group .searchable-select-wrapper {
+    margin-top: 0;
 }
 
 .searchable-select-input {
     width: 100%;
     padding-right: 2.5rem;
+}
+
+.searchable-select-input:focus {
+    border-color: var(--primary-color, #8b5cf6) !important;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1) !important;
 }
 
 .searchable-select-dropdown {
