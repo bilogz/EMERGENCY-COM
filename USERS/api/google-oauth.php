@@ -14,6 +14,16 @@ if (file_exists(__DIR__ . '/db_connect.php')) {
     require_once '../../ADMIN/api/db_connect.php';
 }
 
+// Check if database connection was successful
+if (!isset($pdo) || $pdo === null) {
+    echo json_encode([
+        "success" => false,
+        "message" => "Database connection failed. Please check your database configuration.",
+        "error_code" => "DB_CONNECTION_FAILED"
+    ]);
+    exit();
+}
+
 // Load Google OAuth credentials
 // First try .env file (preferred), then fall back to config.local.php
 $googleClientId = null;
@@ -102,26 +112,40 @@ try {
             exit();
         }
         
-        // Check if user exists by email or Google ID
-        $stmt = $pdo->prepare("SELECT id, name, email, phone FROM users WHERE email = ? OR google_id = ? LIMIT 1");
-        $stmt->execute([$email, $googleId]);
+        // Check if google_id column exists BEFORE using it in query
+        $checkStmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE 'google_id'");
+        $checkStmt->execute();
+        $googleIdColumnExists = $checkStmt->rowCount() > 0;
+        
+        // Add google_id column if it doesn't exist
+        if (!$googleIdColumnExists) {
+            try {
+                $pdo->exec("ALTER TABLE users ADD COLUMN google_id VARCHAR(255) NULL UNIQUE COMMENT 'Google OAuth user ID'");
+                $googleIdColumnExists = true;
+                error_log("Added google_id column to users table");
+            } catch (PDOException $e) {
+                error_log("Could not add google_id column: " . $e->getMessage());
+            }
+        }
+        
+        // Check if user exists by email or Google ID (only if column exists and googleId is provided)
+        if ($googleIdColumnExists && !empty($googleId)) {
+            $stmt = $pdo->prepare("SELECT id, name, email, phone, google_id FROM users WHERE email = ? OR google_id = ? LIMIT 1");
+            $stmt->execute([$email, $googleId]);
+        } else {
+            $stmt = $pdo->prepare("SELECT id, name, email, phone FROM users WHERE email = ? LIMIT 1");
+            $stmt->execute([$email]);
+        }
         $user = $stmt->fetch();
         
         if ($user) {
             // Update Google ID if not set
-            if (!empty($googleId)) {
-                // Check if google_id column exists
-                $checkStmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE 'google_id'");
-                $checkStmt->execute();
-                $googleIdColumnExists = $checkStmt->rowCount() > 0;
-                
-                if ($googleIdColumnExists && empty($user['google_id'])) {
-                    try {
-                        $updateStmt = $pdo->prepare("UPDATE users SET google_id = ? WHERE id = ?");
-                        $updateStmt->execute([$googleId, $user['id']]);
-                    } catch (PDOException $e) {
-                        error_log("Could not update google_id: " . $e->getMessage());
-                    }
+            if (!empty($googleId) && $googleIdColumnExists && empty($user['google_id'] ?? null)) {
+                try {
+                    $updateStmt = $pdo->prepare("UPDATE users SET google_id = ? WHERE id = ?");
+                    $updateStmt->execute([$googleId, $user['id']]);
+                } catch (PDOException $e) {
+                    error_log("Could not update google_id: " . $e->getMessage());
                 }
             }
             
@@ -153,19 +177,7 @@ try {
             $checkStmt->execute();
             $emailColumnExists = $checkStmt->rowCount() > 0;
             
-            // Check if google_id column exists
-            $checkStmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE 'google_id'");
-            $checkStmt->execute();
-            $googleIdColumnExists = $checkStmt->rowCount() > 0;
-            
-            // Add google_id column if it doesn't exist
-            if (!$googleIdColumnExists) {
-                try {
-                    $pdo->exec("ALTER TABLE users ADD COLUMN google_id VARCHAR(255) NULL UNIQUE");
-                } catch (PDOException $e) {
-                    error_log("Could not add google_id column: " . $e->getMessage());
-                }
-            }
+            // google_id column already checked and added above if needed
             
             // Generate a random password (user won't need it for Google login)
             $randomPassword = bin2hex(random_bytes(16));
@@ -235,15 +247,29 @@ try {
     
 } catch (PDOException $e) {
     error_log("Google OAuth PDO Exception: " . $e->getMessage());
+    error_log("Stack trace: " . $e->getTraceAsString());
+    // Show detailed error in development, generic message in production
+    $errorMessage = "Database error occurred. Please try again.";
+    if (defined('DEBUG_MODE') && DEBUG_MODE) {
+        $errorMessage .= " Error: " . $e->getMessage();
+    }
     echo json_encode([
         "success" => false,
-        "message" => "Database error occurred. Please try again."
+        "message" => $errorMessage,
+        "error_code" => "DB_ERROR"
     ]);
 } catch (Exception $e) {
     error_log("Google OAuth General Exception: " . $e->getMessage());
+    error_log("Stack trace: " . $e->getTraceAsString());
+    // Show detailed error in development, generic message in production
+    $errorMessage = "Server error occurred. Please try again.";
+    if (defined('DEBUG_MODE') && DEBUG_MODE) {
+        $errorMessage .= " Error: " . $e->getMessage();
+    }
     echo json_encode([
         "success" => false,
-        "message" => "Server error occurred. Please try again."
+        "message" => $errorMessage,
+        "error_code" => "SERVER_ERROR"
     ]);
 }
 ?>
