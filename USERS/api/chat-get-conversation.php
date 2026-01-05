@@ -29,17 +29,29 @@ try {
     $deviceInfo = formatDeviceInfoForDB();
     $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
     
-    // If conversationId is provided, just return its status
+    // If conversationId is provided, just return its status and who closed it
     if ($conversationId && !$userId) {
-        $stmt = $pdo->prepare("SELECT conversation_id, status FROM conversations WHERE conversation_id = ?");
+        // Query without closed_by column (it may not exist in all databases)
+        $stmt = $pdo->prepare("
+            SELECT conversation_id, status, last_message 
+            FROM conversations 
+            WHERE conversation_id = ?
+        ");
         $stmt->execute([$conversationId]);
         $conversation = $stmt->fetch();
         
         if ($conversation) {
+            // Extract admin name from last_message if it contains "Closed by"
+            $closedBy = null;
+            if (isset($conversation['last_message']) && $conversation['last_message'] && strpos($conversation['last_message'], 'Closed by') === 0) {
+                $closedBy = str_replace('Closed by ', '', $conversation['last_message']);
+            }
+            
             echo json_encode([
                 'success' => true,
                 'conversationId' => $conversation['conversation_id'],
-                'status' => $conversation['status'] ?? 'active'
+                'status' => $conversation['status'] ?? 'active',
+                'closedBy' => $closedBy
             ]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Conversation not found']);
@@ -53,32 +65,95 @@ try {
         exit;
     }
     
-    // Check if user has an active conversation
-    $stmt = $pdo->prepare("
-        SELECT 
-            conversation_id,
-            user_id,
-            user_name,
-            user_email,
-            user_phone,
-            user_location,
-            user_concern,
-            is_guest,
-            device_info,
-            ip_address,
-            user_agent,
-            status,
-            last_message,
-            last_message_time,
-            created_at,
-            updated_at
-        FROM conversations 
-        WHERE user_id = ? AND status = 'active' 
-        ORDER BY updated_at DESC 
-        LIMIT 1
-    ");
-    $stmt->execute([$userId]);
-    $conversation = $stmt->fetch();
+    // For anonymous/guest users, find conversation by user_id first, then device/IP
+    // For registered users, find by user_id
+    if ($isGuest) {
+        // First, try to find by user_id (most reliable for same user)
+        $stmt = $pdo->prepare("
+            SELECT 
+                conversation_id,
+                user_id,
+                user_name,
+                user_email,
+                user_phone,
+                user_location,
+                user_concern,
+                is_guest,
+                device_info,
+                ip_address,
+                user_agent,
+                status,
+                last_message,
+                last_message_time,
+                created_at,
+                updated_at
+            FROM conversations 
+            WHERE user_id = ? 
+              AND status = 'active' 
+            ORDER BY updated_at DESC 
+            LIMIT 1
+        ");
+        $stmt->execute([$userId]);
+        $conversation = $stmt->fetch();
+        
+        // If not found by user_id, try device/IP as fallback
+        if (!$conversation) {
+            $stmt = $pdo->prepare("
+                SELECT 
+                    conversation_id,
+                    user_id,
+                    user_name,
+                    user_email,
+                    user_phone,
+                    user_location,
+                    user_concern,
+                    is_guest,
+                    device_info,
+                    ip_address,
+                    user_agent,
+                    status,
+                    last_message,
+                    last_message_time,
+                    created_at,
+                    updated_at
+                FROM conversations 
+                WHERE ip_address = ? 
+                  AND device_info = ? 
+                  AND status = 'active' 
+                ORDER BY updated_at DESC 
+                LIMIT 1
+            ");
+            $stmt->execute([$ipAddress, $deviceInfo]);
+            $conversation = $stmt->fetch();
+        }
+    } else {
+        // Registered user - find by user_id
+        $stmt = $pdo->prepare("
+            SELECT 
+                conversation_id,
+                user_id,
+                user_name,
+                user_email,
+                user_phone,
+                user_location,
+                user_concern,
+                is_guest,
+                device_info,
+                ip_address,
+                user_agent,
+                status,
+                last_message,
+                last_message_time,
+                created_at,
+                updated_at
+            FROM conversations 
+            WHERE user_id = ? AND status = 'active' 
+            ORDER BY updated_at DESC 
+            LIMIT 1
+        ");
+        $stmt->execute([$userId]);
+        $conversation = $stmt->fetch();
+    }
     
     if ($conversation) {
         // Parse device info if available

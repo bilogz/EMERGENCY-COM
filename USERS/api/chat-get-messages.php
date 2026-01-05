@@ -16,7 +16,7 @@ if (!$pdo) {
 try {
     $conversationId = $_GET['conversationId'] ?? null;
     $userId = $_GET['userId'] ?? null;
-    $lastMessageId = $_GET['lastMessageId'] ?? 0;
+    $lastMessageId = isset($_GET['lastMessageId']) ? (int)$_GET['lastMessageId'] : 0;
     
     if (empty($conversationId) && empty($userId)) {
         http_response_code(400);
@@ -43,37 +43,74 @@ try {
         }
     }
     
-    // Get conversation status
-    $stmt = $pdo->prepare("SELECT status FROM conversations WHERE conversation_id = ?");
+    // Get conversation status and who closed it
+    // Query without closed_by column (it may not exist in all databases)
+    $stmt = $pdo->prepare("
+        SELECT status, last_message 
+        FROM conversations 
+        WHERE conversation_id = ?
+    ");
     $stmt->execute([$conversationId]);
     $conversation = $stmt->fetch();
-    $conversationStatus = $conversation ? $conversation['status'] : 'active';
     
-    // Get messages newer than lastMessageId
-    $stmt = $pdo->prepare("
-        SELECT 
-            message_id,
-            conversation_id,
-            sender_id,
-            sender_name,
-            sender_type,
-            message_text,
-            created_at,
-            is_read
-        FROM chat_messages
-        WHERE conversation_id = ? AND message_id > ?
-        ORDER BY created_at ASC
-    ");
-    $stmt->execute([$conversationId, $lastMessageId]);
+    if ($conversation) {
+        $conversationStatus = $conversation['status'] ?? 'active';
+        
+        // Extract admin name from last_message if it contains "Closed by"
+        $closedBy = null;
+        if (isset($conversation['last_message']) && $conversation['last_message'] && strpos($conversation['last_message'], 'Closed by') === 0) {
+            $closedBy = str_replace('Closed by ', '', $conversation['last_message']);
+        }
+    } else {
+        $conversationStatus = 'closed';
+        $closedBy = null;
+    }
+    
+    // Get messages - if lastMessageId is 0, get all messages (initial load), otherwise get only new ones
+    if ($lastMessageId == 0) {
+        // Initial load - get ALL messages for this conversation
+        $stmt = $pdo->prepare("
+            SELECT 
+                message_id,
+                conversation_id,
+                sender_id,
+                sender_name,
+                sender_type,
+                message_text,
+                created_at,
+                is_read
+            FROM chat_messages
+            WHERE conversation_id = ?
+            ORDER BY created_at ASC
+        ");
+        $stmt->execute([$conversationId]);
+    } else {
+        // Polling - get only messages newer than lastMessageId
+        $stmt = $pdo->prepare("
+            SELECT 
+                message_id,
+                conversation_id,
+                sender_id,
+                sender_name,
+                sender_type,
+                message_text,
+                created_at,
+                is_read
+            FROM chat_messages
+            WHERE conversation_id = ? AND message_id > ?
+            ORDER BY created_at ASC
+        ");
+        $stmt->execute([$conversationId, $lastMessageId]);
+    }
     $messages = $stmt->fetchAll();
     
-    // Format messages
+    // Format messages - include sender_name for admin messages
     $formattedMessages = array_map(function($msg) {
         return [
             'id' => $msg['message_id'],
             'conversationId' => $msg['conversation_id'],
             'senderId' => $msg['sender_id'],
-            'senderName' => $msg['sender_name'],
+            'senderName' => $msg['sender_name'] ?? null, // Include admin name
             'senderType' => $msg['sender_type'],
             'text' => $msg['message_text'],
             'timestamp' => strtotime($msg['created_at']) * 1000, // Convert to milliseconds
@@ -85,12 +122,26 @@ try {
         'success' => true,
         'messages' => $formattedMessages,
         'conversationId' => $conversationId,
-        'conversationStatus' => $conversationStatus
+        'conversationStatus' => $conversationStatus,
+        'closedBy' => $closedBy ?? null
     ]);
     
 } catch (PDOException $e) {
     error_log('Chat get messages error: ' . $e->getMessage());
+    error_log('Stack trace: ' . $e->getTraceAsString());
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Failed to retrieve messages']);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'Failed to retrieve messages',
+        'error' => $e->getMessage()
+    ]);
+} catch (Exception $e) {
+    error_log('Chat get messages general error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'Failed to retrieve messages',
+        'error' => $e->getMessage()
+    ]);
 }
 

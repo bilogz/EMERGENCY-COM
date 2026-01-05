@@ -55,7 +55,7 @@ try {
         exit;
     }
     
-    // Check if conversation is closed
+    // Check if conversation is closed - only check if conversationId is provided
     if (!empty($conversationId)) {
         $stmt = $pdo->prepare("SELECT status FROM conversations WHERE conversation_id = ?");
         $stmt->execute([$conversationId]);
@@ -66,6 +66,9 @@ try {
             echo json_encode(['success' => false, 'message' => 'This conversation is closed. You cannot send messages.']);
             exit;
         }
+    } else {
+        // If no conversationId, this is a new conversation - allow it
+        // The conversation will be created below
     }
     
     // Start transaction
@@ -73,16 +76,47 @@ try {
     
     // Get or create conversation
     if (empty($conversationId)) {
-        // Check if user has an active conversation
-        $stmt = $pdo->prepare("
-            SELECT conversation_id 
-            FROM conversations 
-            WHERE user_id = ? AND status = 'active' 
-            ORDER BY updated_at DESC 
-            LIMIT 1
-        ");
-        $stmt->execute([$userId]);
-        $existingConv = $stmt->fetch();
+        // For anonymous/guest users, find conversation by user_id first, then device/IP
+        // For registered users, find by user_id
+        if ($isGuest) {
+            // First, try to find by user_id (most reliable for same user)
+            $stmt = $pdo->prepare("
+                SELECT conversation_id 
+                FROM conversations 
+                WHERE user_id = ? 
+                  AND status = 'active' 
+                ORDER BY updated_at DESC 
+                LIMIT 1
+            ");
+            $stmt->execute([$userId]);
+            $existingConv = $stmt->fetch();
+            
+            // If not found by user_id, try device/IP as fallback
+            if (!$existingConv) {
+                $stmt = $pdo->prepare("
+                    SELECT conversation_id 
+                    FROM conversations 
+                    WHERE ip_address = ? 
+                      AND device_info = ? 
+                      AND status = 'active' 
+                    ORDER BY updated_at DESC 
+                    LIMIT 1
+                ");
+                $stmt->execute([$ipAddress, $deviceInfo]);
+                $existingConv = $stmt->fetch();
+            }
+        } else {
+            // Registered user - find by user_id
+            $stmt = $pdo->prepare("
+                SELECT conversation_id 
+                FROM conversations 
+                WHERE user_id = ? AND status = 'active' 
+                ORDER BY updated_at DESC 
+                LIMIT 1
+            ");
+            $stmt->execute([$userId]);
+            $existingConv = $stmt->fetch();
+        }
         
         if ($existingConv) {
             $conversationId = $existingConv['conversation_id'];

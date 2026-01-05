@@ -145,23 +145,30 @@ include __DIR__ . '/guest-monitoring-notice.php';
         <div class="chat-modal-body">
             <!-- User Info Form (shown for anonymous/guest users) -->
             <div class="chat-user-info-form" id="chatUserInfoForm" style="display: none;">
-                <h4 style="margin: 0 0 1rem 0; font-size: 1rem;">Please provide your information to start chatting</h4>
-                <form id="userInfoForm">
-                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                        <label for="userNameInput" style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 500;">Full Name *</label>
-                        <input type="text" id="userNameInput" name="name" required placeholder="Enter your full name" style="width: 100%; padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid var(--card-border);">
+                <p class="chat-hint" style="margin-bottom: 1.25rem;">Please provide your information to start chatting</p>
+                <form id="userInfoForm" class="chat-form">
+                    <div class="chat-form-group">
+                        <label for="userNameInput">Full Name <span class="required-asterisk">*</span></label>
+                        <input type="text" id="userNameInput" name="name" required placeholder="Enter your full name" class="chat-form-input">
                     </div>
-                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                        <label for="userContactInput" style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 500;">Contact Number *</label>
-                        <input type="tel" id="userContactInput" name="contact" required placeholder="09XX XXX XXXX" style="width: 100%; padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid var(--card-border);">
+                    <div class="chat-form-group">
+                        <label for="userContactInput">Contact Number <span class="required-asterisk">*</span></label>
+                        <input type="tel" id="userContactInput" name="contact" required placeholder="09XX XXX XXXX" class="chat-form-input">
                     </div>
-                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                        <label for="userLocationInput" style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 500;">Location *</label>
-                        <input type="text" id="userLocationInput" name="location" required placeholder="Your current location or address" style="width: 100%; padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid var(--card-border);">
+                    <div class="chat-form-group">
+                        <label for="userLocationSearch">Location <span class="required-asterisk">*</span></label>
+                        <div class="searchable-select-wrapper">
+                            <input type="text" id="userLocationSearch" class="chat-form-input searchable-select-input" placeholder="Search barangay..." autocomplete="off" aria-label="Location">
+                            <input type="hidden" id="userLocationInput" name="location" required>
+                            <div class="searchable-select-dropdown" id="locationDropdown" style="display: none;">
+                                <div class="searchable-select-list">
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group" style="margin-bottom: 1rem;">
-                        <label for="userConcernSelect" style="display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 500;">What is your concern? *</label>
-                        <select id="userConcernSelect" name="concern" required style="width: 100%; padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid var(--card-border);">
+                    <div class="chat-form-group">
+                        <label for="userConcernSelect">What is your concern? <span class="required-asterisk">*</span></label>
+                        <select id="userConcernSelect" name="concern" required class="chat-form-select">
                             <option value="">Select a concern...</option>
                             <option value="emergency">Emergency</option>
                             <option value="medical">Medical Assistance</option>
@@ -173,7 +180,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
                             <option value="other">Other</option>
                         </select>
                     </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.65rem;">Start Chat</button>
+                    <button type="submit" class="chat-form-submit" disabled>Start Chat</button>
                 </form>
             </div>
 
@@ -194,10 +201,33 @@ include __DIR__ . '/guest-monitoring-notice.php';
                     <input type="text" id="chatInput" placeholder="Type your message..." autocomplete="off">
                     <button type="button" id="chatSendBtn" class="btn btn-primary">Send</button>
                     <button type="button" id="chatCloseBtn" class="btn btn-secondary" style="margin-left: 0.5rem;" title="Close this conversation">
-                        <i class="fas fa-times"></i> Close
+                        <i class="fas fa-times"></i> Close Chat
+                    </button>
+                    <button type="button" id="startNewConversationBtn" class="btn btn-primary" style="margin-left: 0.5rem; display: none;" title="Start a new conversation">
+                        <i class="fas fa-plus"></i> Start New Conversation
                     </button>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Conversation Closed Notification Modal -->
+<div class="conversation-closed-modal" id="conversationClosedModal" style="display: none;">
+    <div class="conversation-closed-modal-content">
+        <div class="conversation-closed-modal-header">
+            <div class="conversation-closed-icon">
+                <i class="fas fa-info-circle"></i>
+            </div>
+            <h3>Conversation Closed</h3>
+        </div>
+        <div class="conversation-closed-modal-body">
+            <p id="conversationClosedMessage">
+                The chat was closed by the administrator. If there's another concern, please start a new chat.
+            </p>
+        </div>
+        <div class="conversation-closed-modal-footer">
+            <button type="button" class="conversation-closed-btn" id="conversationClosedOkBtn">OK</button>
         </div>
     </div>
 </div>
@@ -481,8 +511,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Attach form handler if needed (for anonymous users)
         attachUserInfoFormHandler();
         
-        // Initialize MySQL chat if not already done
-        if (window.initChatMySQL && !window.chatInitialized) {
+        // Initialize MySQL chat if not already done AND form is not showing
+        const userInfoForm = document.getElementById('chatUserInfoForm');
+        const isFormShowing = userInfoForm && userInfoForm.style.display !== 'none' && userInfoForm.style.display !== '';
+        
+        if (!isFormShowing && window.initChatMySQL && !window.chatInitialized) {
             window.initChatMySQL().then((success) => {
                 if (success) {
                     console.log('MySQL chat initialized');
@@ -496,11 +529,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }).catch(err => {
                 console.error('Failed to initialize MySQL chat:', err);
             });
-        } else if (window.attachSendButtonHandlers) {
+        } else if (!isFormShowing && window.attachSendButtonHandlers) {
             // If already initialized, attach handlers immediately
             setTimeout(() => {
                 window.attachSendButtonHandlers();
             }, 100);
+        } else if (isFormShowing) {
+            console.log('Form is showing, skipping auto-initialization to prevent loop');
         }
         
         // Close modal when clicking outside (on backdrop) - only add once
@@ -536,6 +571,11 @@ document.addEventListener('DOMContentLoaded', function() {
         chatModal.style.opacity = '0';
         chatModal.style.pointerEvents = 'none';
         document.body.style.overflow = ''; // Restore scrolling
+        
+        // Stop polling when modal is closed
+        if (window.stopChatPolling) {
+            window.stopChatPolling();
+        }
     }
     
     // Store original closeChat before overriding
@@ -553,11 +593,33 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to check and show user info form for anonymous users
     function checkAndShowUserInfoForm() {
+        // Don't check if form was just submitted (prevents loop)
+        if (window.formJustSubmitted) {
+            console.log('Form just submitted, skipping form check to prevent loop');
+            return;
+        }
+        
         const userInfoForm = document.getElementById('chatUserInfoForm');
         const chatInterface = document.getElementById('chatInterface');
         
         if (!userInfoForm || !chatInterface) {
             console.warn('User info form or chat interface not found');
+            return;
+        }
+        
+        // Don't show form if chat is already initialized and has an active conversation
+        const conversationId = sessionStorage.getItem('conversation_id');
+        if (window.chatInitialized && conversationId && !window.conversationClosedHandled) {
+            console.log('Chat already initialized with active conversation, not showing form');
+            // Ensure chat interface is shown
+            userInfoForm.style.display = 'none';
+            chatInterface.style.display = 'block';
+            return;
+        }
+        
+        // Don't show form if conversation was just closed (handleConversationClosed handles this)
+        if (window.conversationClosedHandled) {
+            console.log('Conversation closed handler is active, not showing form via checkAndShowUserInfoForm');
             return;
         }
         
@@ -577,6 +639,12 @@ document.addEventListener('DOMContentLoaded', function() {
             userInfoForm.style.display = 'block';
             chatInterface.style.display = 'none';
             console.log('Showing user info form (anonymous - REQUIRED)');
+            
+            // Initialize searchable barangay dropdown and form validation
+            setTimeout(() => {
+                initSearchableBarangay();
+                setupFormValidation();
+            }, 150);
             
             // Disable chat input if form is not filled
             const chatInput = document.getElementById('chatInput');
@@ -598,6 +666,221 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Function to attach user info form handler
+    // Barangay list for Quezon City
+    const barangayList = [
+        'Alicia', 'Amihan', 'Apolonio Samson', 'Bagong Pag-asa', 'Bagong Silangan',
+        'Bagumbayan', 'Bagumbuhay', 'Bahay Toro', 'Balingasa', 'Balintawak',
+        'Balumbato', 'Batasan Hills', 'Bayanihan', 'Blue Ridge A', 'Blue Ridge B',
+        'Botocan', 'Bungad', 'Camp Aguinaldo', 'Capri', 'Central',
+        'Claro', 'Commonwealth', 'Culiat', 'Damar', 'Damayan',
+        'Damayang Lagi', 'Del Monte', 'Diliman', 'Dioquino Zobel', 'Don Manuel',
+        'Doña Aurora', 'Doña Imelda', 'Doña Josefa', 'Duyan-duyan', 'E. Rodriguez',
+        'East Kamias', 'Escopa I', 'Escopa II', 'Escopa III', 'Escopa IV',
+        'Fairview', 'Greater Lagro', 'Gulod', 'Holy Spirit', 'Horseshoe',
+        'Immaculate Concepcion', 'Kaligayahan', 'Kalusugan', 'Kamuning', 'Katipunan',
+        'Kaunlaran', 'Kristong Hari', 'Krus na Ligas', 'Laging Handa', 'Libis',
+        'Lourdes', 'Loyola Heights', 'Maharlika', 'Malaya', 'Mangga',
+        'Manresa', 'Mariana', 'Mariblo', 'Marilag', 'Masagana',
+        'Masambong', 'Matandang Balara', 'Milagrosa', 'Nagkaisang Nayon', 'Nayon Kaunlaran',
+        'New Era', 'Novaliches Proper', 'N.S. Amoranto', 'Obrero', 'Old Capitol Site',
+        'Paang Bundok', 'Pag-ibig sa Nayon', 'Paligsahan', 'Paltok', 'Pansol',
+        'Paraiso', 'Pasong Putik Proper', 'Pasong Tamo', 'Payatas', 'Phil-Am',
+        'Pinyahan', 'Project 6', 'Quirino 2-A', 'Quirino 2-B', 'Quirino 2-C',
+        'Quirino 3-A', 'Quirino 3-B', 'Ramon Magsaysay', 'Roxas', 'Sacred Heart',
+        'Saint Ignatius', 'Saint Peter', 'Salvacion', 'San Agustin', 'San Antonio',
+        'San Bartolome', 'San Isidro', 'San Isidro Galas', 'San Jose', 'San Martin de Porres',
+        'San Roque', 'San Vicente', 'Sangandaan', 'Santa Cruz', 'Santa Lucia',
+        'Santa Monica', 'Santa Teresita', 'Santo Cristo', 'Santo Domingo', 'Santo Niño',
+        'Santol', 'Sauyo', 'Sienna', 'Sikatuna Village', 'Silangan',
+        'Socorro', 'South Triangle', 'St. Ignatius', 'Tagumpay', 'Talayan',
+        'Talipapa', 'Tandang Sora', 'Tatalon', 'Teachers Village East', 'Teachers Village West',
+        'Ugong Norte', 'Unang Sigaw', 'UP Campus', 'UP Village', 'Valencia',
+        'Vasra', 'Veterans Village', 'Villa Maria Clara', 'West Kamias', 'West Triangle',
+        'White Plains'
+    ];
+
+    // Initialize searchable barangay dropdown
+    function initSearchableBarangay() {
+        const searchInput = document.getElementById('userLocationSearch');
+        const hiddenInput = document.getElementById('userLocationInput');
+        const dropdown = document.getElementById('locationDropdown');
+        const dropdownList = dropdown ? dropdown.querySelector('.searchable-select-list') : null;
+        
+        if (!searchInput || !hiddenInput || !dropdown || !dropdownList) {
+            // Retry after a short delay if elements aren't ready
+            setTimeout(initSearchableBarangay, 100);
+            return;
+        }
+        
+        // Clear existing items if already initialized
+        if (dropdownList.querySelector('.searchable-select-item')) {
+            return; // Already initialized
+        }
+        
+        // Populate dropdown with barangays
+        barangayList.forEach(barangay => {
+            const item = document.createElement('div');
+            item.className = 'searchable-select-item';
+            item.textContent = barangay;
+            item.dataset.value = barangay;
+            dropdownList.appendChild(item);
+        });
+        
+        // Filter function
+        function filterBarangays(searchTerm) {
+            const items = dropdownList.querySelectorAll('.searchable-select-item');
+            const term = searchTerm.toLowerCase().trim();
+            let hasResults = false;
+            
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                if (text.includes(term)) {
+                    item.style.display = 'block';
+                    hasResults = true;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+            
+            return hasResults;
+        }
+        
+        // Show dropdown
+        function showDropdown() {
+            dropdown.style.display = 'block';
+            const searchTerm = searchInput.value.trim();
+            if (searchTerm) {
+                filterBarangays(searchTerm);
+            } else {
+                // Show all items if no search term
+                const items = dropdownList.querySelectorAll('.searchable-select-item');
+                items.forEach(item => {
+                    item.style.display = 'block';
+                });
+            }
+        }
+        
+        // Hide dropdown
+        function hideDropdown() {
+            setTimeout(() => {
+                dropdown.style.display = 'none';
+            }, 200);
+        }
+        
+        // Select barangay
+        function selectBarangay(barangay) {
+            searchInput.value = barangay;
+            hiddenInput.value = barangay;
+            hideDropdown();
+            // Trigger validation after selection
+            hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        
+        // Event listeners
+        searchInput.addEventListener('focus', showDropdown);
+        searchInput.addEventListener('input', function(e) {
+            const term = e.target.value;
+            if (term.trim()) {
+                showDropdown();
+            } else {
+                hiddenInput.value = '';
+            }
+        });
+        
+        // Click on dropdown item
+        dropdownList.addEventListener('click', function(e) {
+            const item = e.target.closest('.searchable-select-item');
+            if (item) {
+                selectBarangay(item.dataset.value);
+            }
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                hideDropdown();
+            }
+        });
+        
+        // Handle keyboard navigation
+        searchInput.addEventListener('keydown', function(e) {
+            const visibleItems = Array.from(dropdownList.querySelectorAll('.searchable-select-item:not([style*="display: none"])'));
+            const currentIndex = visibleItems.findIndex(item => item.classList.contains('selected'));
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const nextIndex = currentIndex < visibleItems.length - 1 ? currentIndex + 1 : 0;
+                visibleItems.forEach(item => item.classList.remove('selected'));
+                if (visibleItems[nextIndex]) {
+                    visibleItems[nextIndex].classList.add('selected');
+                    visibleItems[nextIndex].scrollIntoView({ block: 'nearest' });
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prevIndex = currentIndex > 0 ? currentIndex - 1 : visibleItems.length - 1;
+                visibleItems.forEach(item => item.classList.remove('selected'));
+                if (visibleItems[prevIndex]) {
+                    visibleItems[prevIndex].classList.add('selected');
+                    visibleItems[prevIndex].scrollIntoView({ block: 'nearest' });
+                }
+            } else if (e.key === 'Enter' && currentIndex >= 0) {
+                e.preventDefault();
+                selectBarangay(visibleItems[currentIndex].dataset.value);
+            } else if (e.key === 'Escape') {
+                hideDropdown();
+            }
+        });
+    }
+    
+    // Setup form validation to enable/disable submit button
+    function setupFormValidation() {
+        const nameInput = document.getElementById('userNameInput');
+        const contactInput = document.getElementById('userContactInput');
+        const locationInput = document.getElementById('userLocationInput');
+        const concernSelect = document.getElementById('userConcernSelect');
+        const submitBtn = document.querySelector('.chat-form-submit');
+        
+        if (!nameInput || !contactInput || !locationInput || !concernSelect || !submitBtn) {
+            setTimeout(setupFormValidation, 100);
+            return;
+        }
+        
+        function validateForm() {
+            const name = nameInput.value.trim();
+            const contact = contactInput.value.trim();
+            const location = locationInput.value.trim();
+            const concern = concernSelect.value;
+            
+            if (name && contact && location && concern) {
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+                submitBtn.style.cursor = 'pointer';
+            } else {
+                submitBtn.disabled = true;
+                submitBtn.style.opacity = '0.6';
+                submitBtn.style.cursor = 'not-allowed';
+            }
+        }
+        
+        // Initial validation
+        validateForm();
+        
+        // Add event listeners
+        nameInput.addEventListener('input', validateForm);
+        contactInput.addEventListener('input', validateForm);
+        locationInput.addEventListener('change', validateForm);
+        concernSelect.addEventListener('change', validateForm);
+        
+        // Also listen to location search input changes
+        const locationSearch = document.getElementById('userLocationSearch');
+        if (locationSearch) {
+            locationSearch.addEventListener('input', function() {
+                // Validate when location is selected
+                setTimeout(validateForm, 100);
+            });
+        }
+    }
+
     function attachUserInfoFormHandler() {
         const form = document.getElementById('userInfoForm');
         if (!form) {
@@ -660,12 +943,32 @@ document.addEventListener('DOMContentLoaded', function() {
                     chatSendBtn.textContent = 'Send';
                 }
                 
+                // Clear any old conversation ID before initializing new chat
+                sessionStorage.removeItem('conversation_id');
+                if (window.stopChatPolling) {
+                    window.stopChatPolling();
+                }
+                
+                // Reset chat initialization flags
+                if (window.chatInitialized !== undefined) {
+                    window.chatInitialized = false;
+                }
+                
+                // Set a flag to prevent form from showing again after submission
+                window.formJustSubmitted = true;
+                // Clear the closed handler flag since we're starting fresh
+                window.conversationClosedHandled = false;
+                
                 // Initialize MySQL chat with the provided info
                 if (window.initChatMySQL) {
                     try {
                         const success = await window.initChatMySQL();
                         if (success) {
-                            console.log('Chat initialized after form submission');
+                            console.log('Chat initialized after form submission - new conversation created');
+                            // Clear form submission flag after successful initialization
+                            setTimeout(() => {
+                                window.formJustSubmitted = false;
+                            }, 1000);
                             // Attach send button handlers
                             setTimeout(() => {
                                 if (window.attachSendButtonHandlers) {
@@ -794,6 +1097,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check and show user info form
             checkAndShowUserInfoForm();
             attachUserInfoFormHandler();
+            
+            // Initialize searchable dropdown and validation after modal opens
+            setTimeout(() => {
+                initSearchableBarangay();
+                setupFormValidation();
+            }, 200);
             
             // Initialize MySQL chat if needed
             if (window.initChatMySQL && !window.chatInitialized) {
@@ -1018,7 +1327,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 userInfoForm.style.display = 'block';
                 chatInterface.style.display = 'none';
                 
-                // Handle form submission
+                // Initialize searchable barangay dropdown and form validation
+            setTimeout(() => {
+                initSearchableBarangay();
+                setupFormValidation();
+            }, 150);
+            
+            // Handle form submission
                 const form = document.getElementById('userInfoForm');
                 if (form) {
                     form.addEventListener('submit', async function(e) {
@@ -1780,17 +2095,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     return false;
                 }
                 
+                // Always ensure button is visible and enabled
+                freshBtn.style.display = 'inline-flex';
+                freshBtn.style.visibility = 'visible';
                 freshBtn.style.pointerEvents = 'auto';
                 freshBtn.style.cursor = 'pointer';
                 freshBtn.style.touchAction = 'manipulation';
+                freshBtn.style.opacity = '1';
                 freshBtn.disabled = false;
+                freshBtn.removeAttribute('disabled');
                 
                 freshBtn.onclick = async function(e) {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
                     
-                    if (!confirm('Are you sure you want to close this conversation? You won\'t be able to send messages after closing.')) {
+                    if (!confirm('Are you sure you want to close this conversation? This will close the conversation on both your side and the admin side. You will need to start a new conversation to continue chatting.')) {
                         return false;
                     }
                     
@@ -1817,19 +2137,45 @@ document.addEventListener('DOMContentLoaded', function() {
                         const data = await response.json();
                         
                         if (data.success) {
-                            alert('Conversation closed successfully.');
-                            // Disable input and send button
-                            const chatInput = document.getElementById('chatInput');
-                            const chatSendBtn = document.getElementById('chatSendBtn');
-                            if (chatInput) {
-                                chatInput.disabled = true;
-                                chatInput.placeholder = 'This conversation is closed';
+                            alert('Conversation closed successfully. The conversation has been closed on both your side and the admin side. Please select a category to start a new conversation.');
+                            
+                            // Use the handleConversationClosed function to properly refresh and show form
+                            if (window.handleConversationClosed) {
+                                window.handleConversationClosed();
+                            } else {
+                                // Fallback: Show user info form
+                                const chatInterface = document.getElementById('chatInterface');
+                                const userInfoForm = document.getElementById('chatUserInfoForm');
+                                if (userInfoForm && chatInterface) {
+                                    chatInterface.style.display = 'none';
+                                    userInfoForm.style.display = 'block';
+                                    
+                                    // Initialize searchable barangay dropdown and form validation
+                                    setTimeout(() => {
+                                        initSearchableBarangay();
+                                        setupFormValidation();
+                                    }, 150);
+                                    
+                                    // Clear concern to force re-selection
+                                    localStorage.removeItem('guest_concern');
+                                    sessionStorage.removeItem('user_concern');
+                                    const concernSelect = document.getElementById('userConcernSelect');
+                                    if (concernSelect) {
+                                        concernSelect.value = '';
+                                    }
+                                }
+                                
+                                // Disable input and send button
+                                const chatInput = document.getElementById('chatInput');
+                                const chatSendBtn = document.getElementById('chatSendBtn');
+                                if (chatInput) {
+                                    chatInput.disabled = true;
+                                }
+                                if (chatSendBtn) {
+                                    chatSendBtn.disabled = true;
+                                }
+                                freshBtn.style.display = 'none';
                             }
-                            if (chatSendBtn) {
-                                chatSendBtn.disabled = true;
-                            }
-                            freshBtn.disabled = true;
-                            freshBtn.textContent = 'Closed';
                             
                             // Stop polling
                             if (window.stopChatPolling) {
@@ -1838,13 +2184,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         } else {
                             alert('Failed to close conversation: ' + (data.message || 'Unknown error'));
                             freshBtn.disabled = false;
-                            freshBtn.innerHTML = '<i class="fas fa-times"></i> Close';
+                            freshBtn.innerHTML = '<i class="fas fa-times"></i> Close Chat';
                         }
                     } catch (error) {
                         console.error('Error closing conversation:', error);
                         alert('Error closing conversation. Please try again.');
                         freshBtn.disabled = false;
-                        freshBtn.innerHTML = '<i class="fas fa-times"></i> Close';
+                        freshBtn.innerHTML = '<i class="fas fa-times"></i> Close Chat';
                     }
                     
                     return false;
@@ -1854,9 +2200,55 @@ document.addEventListener('DOMContentLoaded', function() {
                 return true;
             }
             
+            // Make attachCloseButtonHandler globally available
+            window.attachCloseButtonHandler = attachCloseButtonHandler;
+            
+            // Function to ensure close button is always available
+            function ensureCloseButtonAvailable() {
+                const closeBtn = document.getElementById('chatCloseBtn');
+                if (closeBtn) {
+                    // Always ensure button is visible and enabled
+                    closeBtn.style.display = 'inline-flex';
+                    closeBtn.style.visibility = 'visible';
+                    closeBtn.style.pointerEvents = 'auto';
+                    closeBtn.style.cursor = 'pointer';
+                    closeBtn.style.opacity = '1';
+                    closeBtn.disabled = false;
+                    closeBtn.removeAttribute('disabled');
+                    
+                    // Re-attach handler if needed
+                    if (window.attachCloseButtonHandler) {
+                        window.attachCloseButtonHandler();
+                    }
+                }
+            }
+            
+            // Make ensureCloseButtonAvailable globally available
+            window.ensureCloseButtonAvailable = ensureCloseButtonAvailable;
+            
             // Attach handlers immediately
             attachSendButtonHandlers();
             attachCloseButtonHandler();
+            
+            // Periodically ensure close button is available (in case it gets disabled)
+            setInterval(() => {
+                const chatInterface = document.getElementById('chatInterface');
+                if (chatInterface && chatInterface.style.display !== 'none') {
+                    ensureCloseButtonAvailable();
+                }
+            }, 2000);
+            
+            // Initialize "Start New Conversation" button
+            const startNewBtn = document.getElementById('startNewConversationBtn');
+            if (startNewBtn) {
+                startNewBtn.onclick = function() {
+                    if (window.startNewConversation) {
+                        window.startNewConversation();
+                    } else if (window.resetChatForNewConversation) {
+                        window.resetChatForNewConversation();
+                    }
+                };
+            }
             
             // Also attach when modal opens (in case elements weren't ready)
             if (chatModal) {
@@ -1942,6 +2334,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 statusIndicator.style.display = 'none';
                             }
                         }, 3000);
+                        // Ensure close button is always available after admin replies
+                        if (window.attachCloseButtonHandler) {
+                            setTimeout(() => {
+                                window.attachCloseButtonHandler();
+                            }, 100);
+                        }
                         break;
                     default:
                         statusIndicator.style.display = 'none';

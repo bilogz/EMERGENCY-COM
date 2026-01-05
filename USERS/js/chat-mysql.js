@@ -53,6 +53,12 @@
         const userConcern = sessionStorage.getItem('user_concern') || localStorage.getItem('guest_concern') || null;
         const isGuest = !sessionStorage.getItem('user_id') || userId.startsWith('guest_');
         
+        // If concern is missing, don't initialize - let the form handle it
+        if (isGuest && !userConcern) {
+            console.log('Concern/category not provided - form should be shown');
+            return false;
+        }
+        
         // Store user ID if not set
         if (!sessionStorage.getItem('user_id')) {
             sessionStorage.setItem('user_id', userId);
@@ -130,7 +136,13 @@
                 sessionStorage.setItem('conversation_id', conversationId);
                 window.currentConversationId = conversationId;
                 
+                // Clear closed handler flag since we have a new active conversation
+                window.conversationClosedHandled = false;
+                
                 console.log('Conversation ready:', conversationId);
+                
+                // Reset lastMessageId for initial load to get all messages
+                lastMessageId = 0;
                 
                 // Load existing messages (initial load)
                 await loadMessages(true);
@@ -140,6 +152,33 @@
                 
                 isInitialized = true;
                 window.chatInitialized = true;
+                
+                // Ensure chat interface is shown (not form)
+                const chatInterface = document.getElementById('chatInterface');
+                const userInfoForm = document.getElementById('chatUserInfoForm');
+                if (chatInterface && userInfoForm) {
+                    userInfoForm.style.display = 'none';
+                    chatInterface.style.display = 'block';
+                }
+                
+                // Ensure close button is always visible and enabled
+                const chatCloseBtn = document.getElementById('chatCloseBtn');
+                if (chatCloseBtn) {
+                    chatCloseBtn.style.display = 'inline-flex';
+                    chatCloseBtn.style.visibility = 'visible';
+                    chatCloseBtn.style.pointerEvents = 'auto';
+                    chatCloseBtn.style.cursor = 'pointer';
+                    chatCloseBtn.style.opacity = '1';
+                    chatCloseBtn.disabled = false;
+                    chatCloseBtn.removeAttribute('disabled');
+                    
+                    // Attach close button handler
+                    if (window.attachCloseButtonHandler) {
+                        setTimeout(() => {
+                            window.attachCloseButtonHandler();
+                        }, 100);
+                    }
+                }
                 
                 return true;
             } else {
@@ -175,14 +214,23 @@
             
             const data = await response.json();
             
-            // Check if conversation is closed
-            if (data.success && data.conversationStatus === 'closed') {
-                console.log('Conversation is closed, refreshing chat interface');
-                handleConversationClosed();
+            // Check if conversation is closed - check this FIRST before processing messages
+            if (data.conversationStatus === 'closed') {
+                console.log('Conversation is closed (detected in loadMessages), refreshing chat interface immediately');
+                handleConversationClosed(data.closedBy);
+                return;
+            }
+            
+            // Also check if success is false but status indicates closed
+            if (!data.success && data.conversationStatus === 'closed') {
+                console.log('Conversation is closed (detected via API error), refreshing chat interface');
+                handleConversationClosed(data.closedBy);
                 return;
             }
             
             if (data.success && data.messages && data.messages.length > 0) {
+                console.log(`Loading ${data.messages.length} messages (isInitialLoad: ${isInitialLoad}, lastMessageId: ${lastMessageId})`);
+                
                 // Track existing messages to avoid duplicates
                 const chatMessages = document.querySelector('.chat-messages');
                 if (chatMessages) {
@@ -205,35 +253,120 @@
                         if (shouldAdd) {
                             existingIds.add(msg.id);
                             if (window.addMessageToChat) {
-                                window.addMessageToChat(msg.text, msg.senderType, msg.timestamp, msg.id);
+                                // Pass admin name if available (for admin messages)
+                                const adminName = (msg.senderType === 'admin' && msg.senderName) ? msg.senderName : null;
+                                console.log(`Adding message: ${msg.senderType} - "${msg.text}" (ID: ${msg.id}, Admin: ${adminName || 'N/A'})`);
+                                window.addMessageToChat(msg.text, msg.senderType, msg.timestamp, msg.id, adminName);
+                            } else {
+                                console.warn('addMessageToChat function not available');
                             }
                             lastMessageId = Math.max(lastMessageId, msg.id);
                             newMessagesAdded = true;
+                        } else {
+                            console.log(`Skipping message ${msg.id} (already displayed or not new)`);
                         }
                     });
                     
                     // Only scroll if new messages were added
                     if (newMessagesAdded && chatMessages) {
                         chatMessages.scrollTop = chatMessages.scrollHeight;
-                        console.log('Loaded', newMessagesAdded ? 'new' : 'no', 'messages. Total messages in conversation:', data.messages.length);
+                        console.log(`Loaded ${newMessagesAdded ? 'new' : 'no'} messages. Total messages in conversation: ${data.messages.length}, lastMessageId now: ${lastMessageId}`);
+                        
+                        // Ensure close button handler is attached after admin replies
+                        if (window.attachCloseButtonHandler) {
+                            setTimeout(() => {
+                                window.attachCloseButtonHandler();
+                            }, 100);
+                        }
+                    } else {
+                        console.log('No new messages to display');
                     }
                 } else {
                     console.warn('Chat messages container not found when loading messages');
                 }
             } else if (data.success && (!data.messages || data.messages.length === 0)) {
                 console.log('No messages in conversation yet');
+                // Even if no messages, check status in case conversation was closed
+                if (data.conversationStatus === 'closed') {
+                    console.log('Conversation is closed (detected during empty message check)');
+                    handleConversationClosed(data.closedBy);
+                    return;
+                }
+            } else if (!data.success) {
+                console.error('Failed to load messages:', data.message || 'Unknown error');
+            } else if (!data.success) {
+                // API returned error - check if conversation is closed
+                if (data.conversationStatus === 'closed') {
+                    console.log('Conversation is closed (detected via API error)');
+                    handleConversationClosed(data.closedBy);
+                    return;
+                }
+                // For other errors, also check status directly
+                checkConversationStatus();
             }
         } catch (error) {
             console.error('Error loading messages:', error);
+            // On error, try to check conversation status directly
+            if (conversationId) {
+                checkConversationStatus();
+            }
+        }
+    }
+    
+    // Check conversation status directly
+    async function checkConversationStatus() {
+        if (!conversationId) {
+            conversationId = sessionStorage.getItem('conversation_id');
+            if (!conversationId) {
+                return;
+            }
+        }
+        
+        // Skip if already handling closed
+        if (window.conversationClosedHandled) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(API_BASE + 'chat-get-conversation.php?' + new URLSearchParams({
+                conversationId: conversationId
+            }));
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.status === 'closed') {
+                    console.log('Conversation status check: closed - refreshing immediately');
+                    handleConversationClosed(data.closedBy);
+                } else if (data.success && data.status === 'active') {
+                    // Reset the closed handler flag if conversation is active again
+                    window.conversationClosedHandled = false;
+                }
+            } else if (response.status === 404 || response.status === 400) {
+                // Conversation not found - might be closed or deleted
+                console.log('Conversation not found - treating as closed');
+                handleConversationClosed(null);
+            }
+        } catch (error) {
+            console.error('Error checking conversation status:', error);
         }
     }
     
     // Handle conversation closed by admin
-    function handleConversationClosed() {
+    function handleConversationClosed(closedByAdmin = null) {
+        // Prevent multiple calls
+        if (window.conversationClosedHandled) {
+            console.log('Conversation close already handled, skipping');
+            return;
+        }
+        window.conversationClosedHandled = true;
+        
+        console.log('Handling conversation closed - showing notification modal');
+        
         // Stop polling
         stopPolling();
         
         // Clear conversation ID
+        const oldConversationId = conversationId;
         conversationId = null;
         sessionStorage.removeItem('conversation_id');
         window.currentConversationId = null;
@@ -241,50 +374,204 @@
         // Reset last message ID
         lastMessageId = 0;
         
-        // Show closed message in chat
-        const chatMessages = document.querySelector('.chat-messages');
-        if (chatMessages) {
-            // Check if closed message already exists
-            const existingClosedMsg = chatMessages.querySelector('.chat-message-closed');
-            if (!existingClosedMsg) {
-                const closedMsg = document.createElement('div');
-                closedMsg.className = 'chat-message chat-message-system chat-message-closed';
-                closedMsg.style.cssText = 'background: rgba(255, 193, 7, 0.15); border-left: 4px solid #ffc107; padding: 1rem; margin: 1rem 0; border-radius: 4px;';
-                closedMsg.innerHTML = '<strong style="color: #856404;">System:</strong> <span style="color: #856404;">This conversation has been closed by an administrator. You can start a new conversation by typing a message below.</span>';
-                chatMessages.appendChild(closedMsg);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
+        // Reset initialization flags
+        isInitialized = false;
+        window.chatInitialized = false;
+        
+        // Helper function for escaping HTML
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
         }
         
-        // Enable input but with special placeholder - allow typing to start new conversation
-        const chatInput = document.getElementById('chatInput');
-        const chatSendBtn = document.getElementById('chatSendBtn');
-        if (chatInput) {
-            chatInput.disabled = false;
-            chatInput.placeholder = 'This conversation is closed. Type a message to start a new conversation...';
-            chatInput.style.cursor = 'text';
+        // Show notification modal instead of in-chat message
+        const closedModal = document.getElementById('conversationClosedModal');
+        const closedMessage = document.getElementById('conversationClosedMessage');
+        const closedOkBtn = document.getElementById('conversationClosedOkBtn');
+        
+        if (closedModal && closedMessage) {
+            // Set message text
+            let messageText = 'The chat was closed by the administrator.';
+            if (closedByAdmin) {
+                messageText = `The chat was closed by the administrator: <strong>${escapeHtml(closedByAdmin)}</strong>.`;
+            }
+            messageText += ' If there\'s another concern, please start a new chat.';
             
-            // Add event listener to reset chat when user starts typing
-            const handleInput = function() {
-                if (chatInput.value.trim().length > 0) {
-                    // User is typing - reset chat for new conversation
-                    resetChatForNewConversation();
-                    chatInput.removeEventListener('input', handleInput);
-                    chatInput.removeEventListener('focus', handleInput);
+            closedMessage.innerHTML = messageText;
+            
+            // Function to hide modal and show form
+            function hideModalAndShowForm() {
+                closedModal.classList.remove('show');
+                setTimeout(() => {
+                    closedModal.style.display = 'none';
+                }, 300);
+                showUserInfoFormAfterClose();
+            }
+            
+            // Show modal
+            closedModal.style.display = 'flex';
+            setTimeout(() => {
+                closedModal.classList.add('show');
+            }, 10);
+            
+            // Handle OK button click
+            if (closedOkBtn) {
+                // Remove old listeners
+                const newBtn = closedOkBtn.cloneNode(true);
+                closedOkBtn.parentNode.replaceChild(newBtn, closedOkBtn);
+                const freshOkBtn = document.getElementById('conversationClosedOkBtn');
+                
+                freshOkBtn.onclick = function() {
+                    hideModalAndShowForm();
+                };
+            }
+            
+            // Close modal when clicking outside (on backdrop)
+            closedModal.onclick = function(e) {
+                if (e.target === closedModal) {
+                    hideModalAndShowForm();
                 }
             };
             
-            // Remove old listeners if any
-            chatInput.removeEventListener('input', handleInput);
-            chatInput.removeEventListener('focus', handleInput);
+            // Close modal on Escape key
+            const escapeHandler = function(e) {
+                if (e.key === 'Escape' && closedModal.classList.contains('show')) {
+                    hideModalAndShowForm();
+                    document.removeEventListener('keydown', escapeHandler);
+                }
+            };
+            document.addEventListener('keydown', escapeHandler);
+        } else {
+            // Fallback: if modal doesn't exist, show alert and continue
+            let alertMessage = 'The chat was closed by the administrator.';
+            if (closedByAdmin) {
+                alertMessage = `The chat was closed by the administrator: ${closedByAdmin}.`;
+            }
+            alertMessage += ' If there\'s another concern, please start a new chat.';
+            alert(alertMessage);
+            showUserInfoFormAfterClose();
+        }
+        
+        // Function to show user info form after modal is closed
+        function showUserInfoFormAfterClose() {
+            // Clear and refresh chat messages (without closed message)
+            const chatMessages = document.querySelector('.chat-messages');
+            if (chatMessages) {
+                // Clear ALL existing messages completely
+                chatMessages.innerHTML = '';
+                
+                // Add only system message
+                const systemMsg = document.createElement('div');
+                systemMsg.className = 'chat-message chat-message-system';
+                systemMsg.innerHTML = '<strong>System:</strong> For life-threatening emergencies, call 911 or the Quezon City emergency hotlines immediately.';
+                chatMessages.appendChild(systemMsg);
+            }
             
-            // Add new listeners
-            chatInput.addEventListener('input', handleInput);
-            chatInput.addEventListener('focus', handleInput);
+            // Clear status indicator
+        const statusIndicator = document.getElementById('chatStatusIndicator');
+        if (statusIndicator) {
+            statusIndicator.style.display = 'none';
+        }
+        const statusText = document.getElementById('chatStatusText');
+        if (statusText) {
+            statusText.textContent = '';
+        }
+        
+        // Automatically show user info form to select category again
+        const chatInterface = document.getElementById('chatInterface');
+        const userInfoForm = document.getElementById('chatUserInfoForm');
+        const startNewBtn = document.getElementById('startNewConversationBtn');
+        const chatCloseBtn = document.getElementById('chatCloseBtn');
+        
+        // Hide chat interface and show user info form
+        if (userInfoForm && chatInterface) {
+            chatInterface.style.display = 'none';
+            userInfoForm.style.display = 'block';
+            
+            // Clear stored concern/category to force re-selection
+            localStorage.removeItem('guest_concern');
+            sessionStorage.removeItem('user_concern');
+            
+            // Clear the concern select dropdown
+            const concernSelect = document.getElementById('userConcernSelect');
+            if (concernSelect) {
+                concernSelect.value = '';
+            }
+            
+            // Optionally clear all fields to force complete re-entry
+            // Or keep name/contact/location and only clear concern
+            // For now, we'll keep other fields but clear concern
+            const nameInput = document.getElementById('userNameInput');
+            const contactInput = document.getElementById('userContactInput');
+            const locationInput = document.getElementById('userLocationInput');
+            
+            // Keep name, contact, and location if they exist, but clear concern
+            // This way user only needs to select category again
+            if (nameInput && !nameInput.value) {
+                const storedName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
+                if (storedName) nameInput.value = storedName;
+            }
+            if (contactInput && !contactInput.value) {
+                const storedContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
+                if (storedContact) contactInput.value = storedContact;
+            }
+            if (locationInput && !locationInput.value) {
+                const storedLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
+                if (storedLocation) locationInput.value = storedLocation;
+            }
+            
+            console.log('Showing user info form - user must select category again');
+        }
+        
+        // Hide buttons
+        if (chatCloseBtn) {
+            chatCloseBtn.style.display = 'none';
+        }
+        if (startNewBtn) {
+            startNewBtn.style.display = 'none';
+        }
+        
+        // Disable input and send button (they're hidden anyway)
+        const chatInput = document.getElementById('chatInput');
+        const chatSendBtn = document.getElementById('chatSendBtn');
+        if (chatInput) {
+            chatInput.disabled = true;
+            chatInput.value = '';
         }
         if (chatSendBtn) {
-            chatSendBtn.disabled = false;
-            chatSendBtn.textContent = 'Send';
+            chatSendBtn.disabled = true;
+        }
+        
+        // Allow modal to be closed after refresh - enable header close button
+        const chatModal = document.getElementById('chatModal');
+        const modalHeaderCloseBtn = chatModal ? chatModal.querySelector('.chat-modal-header .chat-close-btn') : null;
+        if (modalHeaderCloseBtn) {
+            modalHeaderCloseBtn.style.display = 'block';
+            modalHeaderCloseBtn.style.pointerEvents = 'auto';
+            modalHeaderCloseBtn.style.cursor = 'pointer';
+            modalHeaderCloseBtn.style.opacity = '1';
+            modalHeaderCloseBtn.disabled = false;
+            
+            // Ensure close handler is attached
+            if (!modalHeaderCloseBtn.hasAttribute('data-close-handler-attached')) {
+                modalHeaderCloseBtn.setAttribute('data-close-handler-attached', 'true');
+                modalHeaderCloseBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (window.closeChat || window.closeChatWithFlag) {
+                        (window.closeChatWithFlag || window.closeChat)();
+                    } else {
+                        // Fallback close
+                        if (chatModal) {
+                            chatModal.style.display = 'none';
+                            chatModal.classList.remove('chat-modal-open');
+                            document.body.style.overflow = '';
+                        }
+                    }
+                });
+            }
         }
         
         // Reset chat initialization flag to allow new conversation
@@ -292,10 +579,14 @@
         window.chatInitialized = false;
         
         console.log('Conversation closed - chat interface refreshed, ready for new conversation');
+        }
     }
     
-    // Reset chat for new conversation
-    function resetChatForNewConversation() {
+    // Start new conversation
+    function startNewConversation() {
+        // Clear the closed handler flag
+        window.conversationClosedHandled = false;
+        
         // Clear conversation ID
         conversationId = null;
         sessionStorage.removeItem('conversation_id');
@@ -303,6 +594,10 @@
         
         // Reset last message ID
         lastMessageId = 0;
+        
+        // Reset initialization flags
+        isInitialized = false;
+        window.chatInitialized = false;
         
         // Clear chat messages (except system message)
         const chatMessages = document.querySelector('.chat-messages');
@@ -327,6 +622,16 @@
             }
         }
         
+        // Hide "Start New Conversation" button and show close button
+        const startNewBtn = document.getElementById('startNewConversationBtn');
+        const chatCloseBtn = document.getElementById('chatCloseBtn');
+        if (startNewBtn) {
+            startNewBtn.style.display = 'none';
+        }
+        if (chatCloseBtn) {
+            chatCloseBtn.style.display = 'inline-flex';
+        }
+        
         // Re-enable input and send button
         const chatInput = document.getElementById('chatInput');
         const chatSendBtn = document.getElementById('chatSendBtn');
@@ -343,7 +648,19 @@
         isInitialized = false;
         window.chatInitialized = false;
         
-        console.log('Chat reset for new conversation');
+        // Re-initialize chat to create new conversation
+        initChat().then((success) => {
+            if (success) {
+                console.log('New conversation started');
+            }
+        });
+        
+        console.log('Starting new conversation');
+    }
+    
+    // Reset chat for new conversation (kept for backward compatibility)
+    function resetChatForNewConversation() {
+        startNewConversation();
     }
     
     // Send message
@@ -447,9 +764,11 @@
                     conversationId = data.conversationId;
                     sessionStorage.setItem('conversation_id', conversationId);
                 }
-                // Update last message ID
+                // Update last message ID - but don't skip admin messages that might have been sent
                 if (data.messageId) {
-                    lastMessageId = Math.max(lastMessageId, parseInt(data.messageId));
+                    const newMessageId = parseInt(data.messageId);
+                    lastMessageId = Math.max(lastMessageId, newMessageId);
+                    console.log('Updated lastMessageId to:', lastMessageId);
                 }
                 
                 // Immediately add the sent message to the chat UI
@@ -460,6 +779,11 @@
                 } else {
                     console.warn('addMessageToChat function not available, message will appear after polling');
                 }
+                
+                // After sending, do a quick reload to get any admin messages that might have arrived
+                setTimeout(() => {
+                    loadMessages(false);
+                }, 500);
                 
                 return true;
             } else {
@@ -480,14 +804,20 @@
             clearInterval(pollingInterval);
         }
         
-        // Poll every 2 seconds for new messages (not initial load)
+        // Poll every 1.5 seconds for new messages and status (not initial load)
+        // More frequent polling to detect closed conversations faster
         pollingInterval = setInterval(() => {
             if (conversationId) {
-                loadMessages(false); // Not initial load
+                // Always check status first, then load messages
+                checkConversationStatus();
+                loadMessages(false); // Not initial load - this will check status too
+            } else {
+                // If no conversation ID, try to check status anyway
+                checkConversationStatus();
             }
-        }, 2000);
+        }, 1500); // Poll every 1.5 seconds for faster detection
         
-        console.log('Started polling for messages');
+        console.log('Started polling for messages and conversation status');
     }
     
     // Stop polling
@@ -499,7 +829,7 @@
     }
     
     // Add message to chat UI (this will be called from sidebar.php)
-    function addMessageToChat(text, senderType, timestamp, messageId = null) {
+    function addMessageToChat(text, senderType, timestamp, messageId = null, senderName = null) {
         const chatMessages = document.querySelector('.chat-messages');
         if (!chatMessages) {
             console.warn('Chat messages container not found');
@@ -530,20 +860,23 @@
         }
 
         const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
-        const senderName = senderType === 'user' ? 'You' : 'Admin';
+        
+        // Get sender name - for admin messages, use provided admin name or default to "Admin"
+        let displayName = senderType === 'user' ? 'You' : (senderName || 'Admin');
 
         // Escape HTML
         const escapeHtml = (str) => {
+            if (!str) return '';
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
         };
         
-        msg.innerHTML = `<strong style="color: var(--text-color) !important;">${escapeHtml(senderName)}:</strong> <span style="color: var(--text-color) !important;">${escapeHtml(text)}</span> <small style="display: block; font-size: 0.8em; opacity: 0.7; margin-top: 0.25rem; color: var(--text-muted) !important;">${time}</small>`;
+        msg.innerHTML = `<strong style="color: var(--text-color) !important;">${escapeHtml(displayName)}:</strong> <span style="color: var(--text-color) !important;">${escapeHtml(text)}</span> <small style="display: block; font-size: 0.8em; opacity: 0.7; margin-top: 0.25rem; color: var(--text-muted) !important;">${time}</small>`;
         chatMessages.appendChild(msg);
         chatMessages.scrollTop = chatMessages.scrollHeight;
         
-        console.log('Message added to UI:', { text, senderType, messageId });
+        console.log('Message added to UI:', { text, senderType, messageId, senderName: displayName });
     }
     
     // Expose functions globally
@@ -552,6 +885,8 @@
     window.addMessageToChat = addMessageToChat;
     window.stopChatPolling = stopPolling;
     window.resetChatForNewConversation = resetChatForNewConversation;
+    window.startNewConversation = startNewConversation;
+    window.handleConversationClosed = handleConversationClosed;
     
     // Auto-initialize when DOM is ready
     if (document.readyState === 'loading') {
