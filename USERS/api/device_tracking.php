@@ -119,3 +119,4 @@ function formatDeviceInfoForDB($userAgent = null) {
     ], JSON_UNESCAPED_UNICODE);
 }
 
+
