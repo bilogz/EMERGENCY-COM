@@ -184,6 +184,26 @@ include __DIR__ . '/guest-monitoring-notice.php';
     </div>
 </div>
 
+<!-- Conversation Closed Notification Modal -->
+<div class="conversation-closed-modal" id="conversationClosedModal" style="display: none;">
+    <div class="conversation-closed-modal-content">
+        <div class="conversation-closed-modal-header">
+            <div class="conversation-closed-icon">
+                <i class="fas fa-info-circle"></i>
+            </div>
+            <h3>Conversation Closed</h3>
+        </div>
+        <div class="conversation-closed-modal-body">
+            <p id="conversationClosedMessage">
+                The chat was closed by the administrator. If there's another concern, please start a new chat.
+            </p>
+        </div>
+        <div class="conversation-closed-modal-footer">
+            <button type="button" class="conversation-closed-btn" id="conversationClosedOkBtn">OK</button>
+        </div>
+    </div>
+</div>
+
 <!-- MySQL Chat System -->
 <script>
 // Determine correct path for chat-mysql.js based on current location

@@ -360,7 +360,7 @@
         }
         window.conversationClosedHandled = true;
         
-        console.log('Handling conversation closed - clearing all messages and resetting');
+        console.log('Handling conversation closed - showing notification modal');
         
         // Stop polling
         stopPolling();
@@ -378,36 +378,6 @@
         isInitialized = false;
         window.chatInitialized = false;
         
-        // Clear and refresh chat messages
-        const chatMessages = document.querySelector('.chat-messages');
-        if (chatMessages) {
-            // Clear ALL existing messages completely
-            chatMessages.innerHTML = '';
-            
-            // Add system message
-            const systemMsg = document.createElement('div');
-            systemMsg.className = 'chat-message chat-message-system';
-            systemMsg.innerHTML = '<strong>System:</strong> For life-threatening emergencies, call 911 or the Quezon City emergency hotlines immediately.';
-            chatMessages.appendChild(systemMsg);
-            
-            // Add closed message with admin name if available
-            const closedMsg = document.createElement('div');
-            closedMsg.className = 'chat-message chat-message-system chat-message-closed';
-            closedMsg.style.cssText = 'background: rgba(255, 193, 7, 0.15); border-left: 4px solid #ffc107; padding: 1rem; margin: 1rem 0; border-radius: 4px;';
-            
-            let closedMessageText = 'This conversation has been closed.';
-            if (closedByAdmin) {
-                closedMessageText += ` Closed by administrator: <strong>${escapeHtml(closedByAdmin)}</strong>.`;
-            } else {
-                closedMessageText += ' Closed by an administrator.';
-            }
-            closedMessageText += ' Please select a category below to start a new conversation.';
-            
-            closedMsg.innerHTML = `<strong style="color: #856404;">System:</strong> <span style="color: #856404;">${closedMessageText}</span>`;
-            chatMessages.appendChild(closedMsg);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-        
         // Helper function for escaping HTML
         function escapeHtml(str) {
             if (!str) return '';
@@ -416,7 +386,90 @@
             return div.innerHTML;
         }
         
-        // Clear status indicator
+        // Show notification modal instead of in-chat message
+        const closedModal = document.getElementById('conversationClosedModal');
+        const closedMessage = document.getElementById('conversationClosedMessage');
+        const closedOkBtn = document.getElementById('conversationClosedOkBtn');
+        
+        if (closedModal && closedMessage) {
+            // Set message text
+            let messageText = 'The chat was closed by the administrator.';
+            if (closedByAdmin) {
+                messageText = `The chat was closed by the administrator: <strong>${escapeHtml(closedByAdmin)}</strong>.`;
+            }
+            messageText += ' If there\'s another concern, please start a new chat.';
+            
+            closedMessage.innerHTML = messageText;
+            
+            // Function to hide modal and show form
+            function hideModalAndShowForm() {
+                closedModal.classList.remove('show');
+                setTimeout(() => {
+                    closedModal.style.display = 'none';
+                }, 300);
+                showUserInfoFormAfterClose();
+            }
+            
+            // Show modal
+            closedModal.style.display = 'flex';
+            setTimeout(() => {
+                closedModal.classList.add('show');
+            }, 10);
+            
+            // Handle OK button click
+            if (closedOkBtn) {
+                // Remove old listeners
+                const newBtn = closedOkBtn.cloneNode(true);
+                closedOkBtn.parentNode.replaceChild(newBtn, closedOkBtn);
+                const freshOkBtn = document.getElementById('conversationClosedOkBtn');
+                
+                freshOkBtn.onclick = function() {
+                    hideModalAndShowForm();
+                };
+            }
+            
+            // Close modal when clicking outside (on backdrop)
+            closedModal.onclick = function(e) {
+                if (e.target === closedModal) {
+                    hideModalAndShowForm();
+                }
+            };
+            
+            // Close modal on Escape key
+            const escapeHandler = function(e) {
+                if (e.key === 'Escape' && closedModal.classList.contains('show')) {
+                    hideModalAndShowForm();
+                    document.removeEventListener('keydown', escapeHandler);
+                }
+            };
+            document.addEventListener('keydown', escapeHandler);
+        } else {
+            // Fallback: if modal doesn't exist, show alert and continue
+            let alertMessage = 'The chat was closed by the administrator.';
+            if (closedByAdmin) {
+                alertMessage = `The chat was closed by the administrator: ${closedByAdmin}.`;
+            }
+            alertMessage += ' If there\'s another concern, please start a new chat.';
+            alert(alertMessage);
+            showUserInfoFormAfterClose();
+        }
+        
+        // Function to show user info form after modal is closed
+        function showUserInfoFormAfterClose() {
+            // Clear and refresh chat messages (without closed message)
+            const chatMessages = document.querySelector('.chat-messages');
+            if (chatMessages) {
+                // Clear ALL existing messages completely
+                chatMessages.innerHTML = '';
+                
+                // Add only system message
+                const systemMsg = document.createElement('div');
+                systemMsg.className = 'chat-message chat-message-system';
+                systemMsg.innerHTML = '<strong>System:</strong> For life-threatening emergencies, call 911 or the Quezon City emergency hotlines immediately.';
+                chatMessages.appendChild(systemMsg);
+            }
+            
+            // Clear status indicator
         const statusIndicator = document.getElementById('chatStatusIndicator');
         if (statusIndicator) {
             statusIndicator.style.display = 'none';
@@ -526,6 +579,7 @@
         window.chatInitialized = false;
         
         console.log('Conversation closed - chat interface refreshed, ready for new conversation');
+        }
     }
     
     // Start new conversation
