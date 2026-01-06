@@ -211,22 +211,34 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             color: var(--primary-color-1);
         }
 
-        .password-toggle {
-            position: absolute;
-            right: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            color: var(--text-secondary-1);
-            cursor: pointer;
-            font-size: 16px;
-            padding: 0.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: color 0.3s ease;
-        }
+        
+        .input-wrapper {
+    position: relative;
+}
+
+            .password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 1rem;
+    transform: translateY(-50%);
+    background: transparent;
+    border: 0;
+    color: var(--text-secondary-1);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transition: color 0.3s ease;
+}
+
+.password-toggle:hover {
+    color: var(--primary-color-1);
+}
+
+        
 
         .password-toggle:hover {
             color: var(--primary-color-1);
@@ -570,43 +582,53 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             <span id="errorText"></span>
         </div>
 
-        <form class="login-form" id="loginForm">
-            <div class="form-group">
-                <label for="email" class="form-label">
-                    <i class="fas fa-envelope"></i>
-                    Email Address
-                </label>
-                <input 
-                    type="email" 
-                    id="email" 
-                    name="email" 
-                    class="form-control" 
-                    placeholder="admin@example.com" 
-                    required 
-                    autocomplete="email"
-                >
-                <i class="fas fa-envelope input-icon"></i>
-            </div>
+        <div class="form-group">
+    <label for="email" class="form-label">
+        <i class="fas fa-envelope"></i>
+        Email Address
+    </label>
+
+    <div class="input-wrapper">
+        <input 
+            type="email" 
+            id="email" 
+            name="email" 
+            class="form-control" 
+            placeholder="admin@example.com" 
+            required 
+            autocomplete="email"
+        >
+        <i class="fas fa-envelope input-icon"></i>
+    </div>
+</div>
 
             <div class="form-group">
-                <label for="password" class="form-label">
-                    <i class="fas fa-lock"></i>
-                    Password
-                </label>
-                <input 
-                    type="password" 
-                    id="password" 
-                    name="password" 
-                    class="form-control" 
-                    placeholder="Enter your password" 
-                    required 
-                    autocomplete="current-password"
-                >
-                <i class="fas fa-lock input-icon"></i>
-                <button type="button" class="password-toggle" id="passwordToggle" aria-label="Toggle password visibility">
-                    <i class="fas fa-eye"></i>
-                </button>
-            </div>
+    <label for="password" class="form-label">
+        <i class="fas fa-lock"></i>
+        Password
+    </label>
+
+    <div class="input-wrapper">
+        <input 
+            type="password" 
+            id="password" 
+            name="password" 
+            class="form-control" 
+            placeholder="Enter your password" 
+            required 
+            autocomplete="current-password"
+        >
+        <i class="fas fa-lock input-icon"></i>
+
+        <button type="button"
+                class="password-toggle"
+                id="passwordToggle"
+                aria-label="Toggle password visibility">
+            <i class="fas fa-eye"></i>
+        </button>
+    </div>
+</div>
+
 
             <!-- Google reCAPTCHA v3 (invisible - no checkbox needed) -->
             <input type="hidden" id="recaptchaResponse" name="recaptcha_response">

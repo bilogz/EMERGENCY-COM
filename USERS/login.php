@@ -44,6 +44,7 @@ $assetBase = '../ADMIN/header/';
     <main class="main-content">
         <div class="main-container">
             <div class="sub-container content-main">
+                <div class="auth-page">
                 <section class="page-content">
                     <h2 data-translate="login.title">User Login</h2>
                     <p class="login-instruction" data-translate="login.instruction">Log in using your registered contact number and full name.</p>
@@ -270,6 +271,7 @@ $assetBase = '../ADMIN/header/';
                         </a>
                     </div>
                 </section>
+                </div>
             </div>
         </div>
     </main>
@@ -1294,6 +1296,9 @@ $assetBase = '../ADMIN/header/';
             }, 1000);
         });
     </script>
+
+    
+
 </body>
 </html>
 
