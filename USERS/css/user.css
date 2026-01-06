@@ -9,6 +9,27 @@
     margin: 0 auto;
 }
 
+.auth-page .page-content {
+    width: 100%;
+    max-width: 500px;         /* Increased for senior readability */
+    margin: 0 auto;           /* Forces it to the middle */
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 3rem;            /* Generous spacing */
+    box-shadow: var(--card-shadow);
+    border: 3px solid var(--card-border);
+}
+
+/* Login card */
+.page-content {
+    width: 100%;
+    max-width: 420px;   /* perfect desktop width */
+    background: #fff;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+
 [data-theme="dark"] .auth-form {
     background: #1a1a1a;
     border-color: #404040;
@@ -246,11 +267,14 @@
    Clean, User-Friendly Design
    =================================== */
 
-.main-content {
-    background: linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0));
-    width: 100%;
-    min-height: 100vh;
-}
+   .main-content {
+    
+        width: 100%;
+        margin-left: 0 !important; /* Forces the content to ignore sidebar width on center calculations */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
 
 /* Action buttons container - Desktop */
 .action-buttons {
@@ -1943,6 +1967,17 @@ textarea:focus {
     border-top: 1px solid var(--card-border);
 }
 
+.main-container, 
+.footer-main {
+    width: 100%;
+    max-width: 1200px; /* Standard wide-screen limit */
+    margin: 0 auto;    /* Horizontal centering */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
 .conversation-closed-btn {
     padding: 0.75rem 1.5rem;
     background: var(--primary-color, #8b5cf6);
@@ -2358,6 +2393,7 @@ textarea:focus {
 
 .page-content {
     margin: 2.5rem 0;
+    margin-bottom: 20px;
 }
 
 .page-content h2 {
@@ -2377,11 +2413,26 @@ textarea:focus {
     gap: 1.25rem;
 }
 
+.footer-main {
+    padding: 2rem 1rem;
+    text-align: center;
+    border-top: 1px solid var(--card-border);
+    margin-top: auto; /* Pushes footer to bottom of page */
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Ensure the sub-elements inside the footer also center */
+.footer-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
 /* Desktop - 2 columns max for better readability */
 @media (min-width: 1024px) {
-    .cards-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 1.5rem;
+    .main-content {
+         margin-left: 250px;  <-- REMOVE OR COMMENT THIS OUT */
     }
 }
 
