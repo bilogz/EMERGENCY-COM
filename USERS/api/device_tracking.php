@@ -120,3 +120,4 @@ function formatDeviceInfoForDB($userAgent = null) {
 }
 
 
+
