@@ -2599,6 +2599,8 @@ textarea:focus {
     flex-direction: column;
     gap: 0.5rem;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+    text-align: left !important;
+    color: var(--text-color);
 }
 
 .card:hover {
@@ -2613,24 +2615,27 @@ textarea:focus {
 .card h3,
 .card h4 {
     margin: 0;
-    text-align: center !important;
+    text-align: left !important;
+    color: var(--text-color);
 }
 
 .card p {
     margin: 0;
-    color: var(--text-muted);
-    text-align: center !important;
+    color: var(--text-color);
+    text-align: left !important;
 }
 
 .card ol,
 .card ul {
-    text-align: center !important;
-    list-style-position: inside;
-    display: inline-block;
+    text-align: left !important;
+    list-style-position: outside;
+    display: block;
+    padding-left: 1.5rem;
 }
 
 .card li {
-    text-align: center !important;
+    text-align: left !important;
+    color: var(--text-color);
 }
 
 .card .btn {
@@ -2654,6 +2659,19 @@ textarea:focus {
 .content-main div,
 .content-main section {
     text-align: center !important;
+}
+
+/* Exception: Cards inside content-main should have left-aligned text */
+.content-main .card,
+.content-main .card * {
+    text-align: left !important;
+}
+
+.content-main .card h3,
+.content-main .card h4,
+.content-main .card h5,
+.content-main .card h6 {
+    text-align: left !important;
 }
 
 /* Exception for form inputs */
@@ -2751,8 +2769,8 @@ textarea:focus {
     --card-bg: #1f2937;
     --card-border: #374151;
     --card-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
-    --text-muted: #d1d5db;
-    --text-color: #f3f4f6;
+    --text-muted: #e5e7eb;
+    --text-color: #ffffff;
     --surface-1: #111827;
     --border-subtle: #374151;
 }
@@ -2769,6 +2787,22 @@ textarea:focus {
     background: var(--card-bg);
     border-color: var(--card-border);
     box-shadow: var(--card-shadow);
+    color: var(--text-color) !important;
+}
+
+[data-theme="dark"] .card h3,
+[data-theme="dark"] .card h4,
+[data-theme="dark"] .card h5,
+[data-theme="dark"] .card h6 {
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .card p {
+    color: #e5e7eb !important;
+}
+
+[data-theme="dark"] .card li {
+    color: #e5e7eb !important;
 }
 
 [data-theme="dark"] .page-content p {
@@ -4398,13 +4432,14 @@ body .card p,
 body .card li,
 body .card ol,
 body .card ul {
-    text-align: center !important;
+    text-align: left !important;
 }
 
 body .emergency-guide-list,
 body .emergency-guide-list li {
-    text-align: center !important;
-    list-style-position: inside;
+    text-align: left !important;
+    list-style-position: outside;
+    padding-left: 1.5rem;
 }
 
 /* Keep form inputs left-aligned for readability */
