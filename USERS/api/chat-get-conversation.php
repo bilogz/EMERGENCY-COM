@@ -12,6 +12,28 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
+// Register shutdown function FIRST to catch fatal errors early
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        ob_clean();
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+        }
+        error_log('Fatal error in chat-get-conversation.php: ' . $error['message'] . ' in ' . $error['file'] . ' on line ' . $error['line']);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Internal server error',
+            'error' => 'A fatal error occurred: ' . $error['message']
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (ob_get_level() > 0) {
+            ob_end_flush();
+        }
+        exit;
+    }
+});
+
 // Helper function to send JSON response and exit - MUST be defined before use
 function sendJsonResponse($data, $statusCode = 200) {
     // Clean any previous output
@@ -38,11 +60,34 @@ if (!headers_sent()) {
     header('Content-Type: application/json');
 }
 
+// Load required files with better error handling
+$dbConnectFile = __DIR__ . '/db_connect.php';
+$deviceTrackingFile = __DIR__ . '/device_tracking.php';
+
+if (!file_exists($dbConnectFile)) {
+    error_log('ERROR: db_connect.php not found at: ' . $dbConnectFile);
+    sendJsonResponse([
+        'success' => false,
+        'message' => 'Database configuration file not found',
+        'error' => 'db_connect.php missing'
+    ], 500);
+}
+
+if (!file_exists($deviceTrackingFile)) {
+    error_log('ERROR: device_tracking.php not found at: ' . $deviceTrackingFile);
+    sendJsonResponse([
+        'success' => false,
+        'message' => 'Device tracking file not found',
+        'error' => 'device_tracking.php missing'
+    ], 500);
+}
+
 try {
-    require_once __DIR__ . '/db_connect.php';
-    require_once __DIR__ . '/device_tracking.php';
-} catch (Exception $e) {
+    require_once $dbConnectFile;
+    require_once $deviceTrackingFile;
+} catch (Throwable $e) {
     error_log('Error loading required files: ' . $e->getMessage());
+    error_log('Stack trace: ' . $e->getTraceAsString());
     sendJsonResponse([
         'success' => false, 
         'message' => 'Failed to load required files',
@@ -51,13 +96,18 @@ try {
 }
 
 if (!$pdo) {
-    sendJsonResponse(['success' => false, 'message' => 'Database connection failed'], 500);
+    error_log('ERROR: $pdo is null or false after requiring db_connect.php');
+    sendJsonResponse([
+        'success' => false, 
+        'message' => 'Database connection failed',
+        'error' => 'PDO connection not available'
+    ], 500);
 }
 
 // Check if conversations table exists
 try {
     $stmt = $pdo->query("SHOW TABLES LIKE 'conversations'");
-    $tableExists = $stmt->fetch() !== false;
+    $tableExists = $stmt->fetch(PDO::FETCH_ASSOC) !== false;
     if (!$tableExists) {
         error_log('ERROR: conversations table does not exist');
         sendJsonResponse([
@@ -81,7 +131,7 @@ function hasDeviceTrackingColumns($pdo) {
     if ($hasColumns === null) {
         try {
             $stmt = $pdo->query("SHOW COLUMNS FROM conversations LIKE 'device_info'");
-            $hasColumns = $stmt->fetch() !== false;
+            $hasColumns = $stmt->fetch(PDO::FETCH_ASSOC) !== false;
         } catch (Exception $e) {
             error_log('Error checking device columns: ' . $e->getMessage());
             $hasColumns = false;
@@ -109,13 +159,24 @@ try {
     try {
         $hasDeviceColumns = hasDeviceTrackingColumns($pdo);
         if ($hasDeviceColumns && function_exists('getClientIP') && function_exists('formatDeviceInfoForDB')) {
-            $ipAddress = getClientIP();
-            $deviceInfo = formatDeviceInfoForDB();
-            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+            try {
+                $ipAddress = getClientIP();
+                $deviceInfo = formatDeviceInfoForDB();
+                $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+            } catch (Exception $deviceError) {
+                error_log('Error getting device info: ' . $deviceError->getMessage());
+                $hasDeviceColumns = false;
+                $ipAddress = null;
+                $deviceInfo = null;
+                $userAgent = null;
+            }
         }
     } catch (Exception $e) {
-        error_log('Error getting device info: ' . $e->getMessage());
+        error_log('Error checking device columns: ' . $e->getMessage());
         $hasDeviceColumns = false;
+        $ipAddress = null;
+        $deviceInfo = null;
+        $userAgent = null;
     }
     
     // If conversationId is provided, just return its status and who closed it
@@ -127,7 +188,7 @@ try {
             WHERE conversation_id = ?
         ");
         $stmt->execute([$conversationId]);
-        $conversation = $stmt->fetch();
+        $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if ($conversation) {
             // Extract admin name from last_message if it contains "Closed by"
@@ -191,7 +252,7 @@ try {
             
             $stmt = $pdo->prepare($sql);
             $stmt->execute([$userId]);
-            $conversation = $stmt->fetch();
+            $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
             
             // If not found by user_id, try device/IP as fallback (only if columns exist)
             if (!$conversation && $hasDeviceColumns && $ipAddress && $deviceInfo) {
@@ -221,7 +282,7 @@ try {
                     LIMIT 1";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([$ipAddress, $deviceInfo]);
-                $conversation = $stmt->fetch();
+                $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
             }
         } else {
             // Registered user - find by user_id
@@ -256,7 +317,7 @@ try {
             
             $stmt = $pdo->prepare($sql);
             $stmt->execute([$userId]);
-            $conversation = $stmt->fetch();
+            $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
         }
     } catch (PDOException $e) {
         error_log('Error fetching conversation: ' . $e->getMessage());
@@ -284,7 +345,7 @@ try {
                 LIMIT 1
             ");
             $stmt->execute([$userId]);
-            $conversation = $stmt->fetch();
+            $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
             $hasDeviceColumns = false; // Disable device columns for this request
         } catch (PDOException $e2) {
             error_log('Fallback query also failed: ' . $e2->getMessage());
