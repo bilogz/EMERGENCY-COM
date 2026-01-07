@@ -82,7 +82,7 @@ $assetBase = 'ADMIN/header/';
                         <i class="fas fa-phone"></i>
                         <span data-translate="home.emergency.call">Call for Emergency</span>
                     </a>
-                    <a href="USERS/downloads/emergency-com.apk" class="app-download-btn" id="apkDownloadBtn" download aria-label="Download APK">
+                    <a href="USERS/downloads/emergency-comms-app.apk" class="app-download-btn" id="apkDownloadBtn" download="emergency-comms-app.apk" aria-label="Download APK">
                         <i class="fas fa-mobile-alt"></i>
                         <div class="app-btn-text">
                             <span class="app-btn-large" data-translate="home.download.download">Download APK</span>
