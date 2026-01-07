@@ -2532,24 +2532,22 @@ textarea:focus {
 }
 /* Desktop - 2 columns max for better readability */
 @media (min-width: 1024px) {
+    /* Allow sidebar margin on desktop - content starts after sidebar */
     .main-content {
-        margin-left: 0 !important; /* Content should not be offset by sidebar */
+        margin-left: var(--sidebar-width-1, 280px) !important;
         text-align: center !important;
-        width: 100% !important;
-        max-width: 100% !important;
+        width: calc(100% - var(--sidebar-width-1, 280px)) !important;
+        max-width: calc(100% - var(--sidebar-width-1, 280px)) !important;
     }
     
-    /* Override admin sidebar.css desktop margin-left */
-    body .main-content {
-        margin-left: 0 !important;
-        padding-left: 0 !important;
-    }
-    
-    /* Ensure containers are centered */
+    /* Ensure containers are centered within the available space */
     body .main-container {
         margin-left: auto !important;
         margin-right: auto !important;
+        max-width: 1200px !important;
         text-align: center !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
     }
     
     body .sub-container {
@@ -4406,26 +4404,29 @@ body .sub-container select {
 
 /* ===================================
    DESKTOP-SPECIFIC OVERRIDES (min-width: 1024px)
-   Override admin sidebar.css desktop margin-left rules
+   Content starts after sidebar, but containers are centered within available space
    =================================== */
 @media (min-width: 1024px) {
-    /* Override admin sidebar.css line 331-334 that sets margin-left: 280px */
+    /* Allow sidebar margin - content starts after sidebar */
     body .main-content {
-        margin-left: 0 !important;
+        margin-left: var(--sidebar-width-1, 280px) !important;
         padding-left: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
+        width: calc(100% - var(--sidebar-width-1, 280px)) !important;
+        max-width: calc(100% - var(--sidebar-width-1, 280px)) !important;
     }
     
     /* Override collapsed sidebar margin */
     body .main-content.sidebar-collapsed-margin {
-        margin-left: 0 !important;
+        margin-left: var(--sidebar-collapsed-width-1, 70px) !important;
+        width: calc(100% - var(--sidebar-collapsed-width-1, 70px)) !important;
+        max-width: calc(100% - var(--sidebar-collapsed-width-1, 70px)) !important;
     }
     
-    /* Ensure all containers are centered on desktop */
+    /* Ensure all containers are centered within the available space */
     body .main-container {
         margin-left: auto !important;
         margin-right: auto !important;
+        max-width: 1200px !important;
         padding-left: 2rem !important;
         padding-right: 2rem !important;
         text-align: center !important;
