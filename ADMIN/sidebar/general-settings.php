@@ -14,6 +14,21 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 }
 
 $pageTitle = 'General Settings';
+
+// Determine the base API path - try multiple methods for reliability
+// Method 1: Use PHP_SELF (works with most server configs)
+$scriptPath = $_SERVER['PHP_SELF'] ?? '';
+if ($scriptPath) {
+    $apiBasePath = dirname(dirname($scriptPath)) . '/api/';
+    $apiBasePath = str_replace('//', '/', $apiBasePath);
+    // Ensure it starts with / for absolute path
+    if (substr($apiBasePath, 0, 1) !== '/') {
+        $apiBasePath = '/' . $apiBasePath;
+    }
+} else {
+    // Fallback: Use hardcoded path (works if structure is standard)
+    $apiBasePath = '/ADMIN/api/';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -860,6 +875,9 @@ $pageTitle = 'General Settings';
         // API KEY MANAGEMENT FUNCTIONS
         // ===================================
         
+        // Use PHP-generated base path to ensure correct API endpoint
+        const apiBase = '<?php echo $apiBasePath; ?>';
+        
         let apiKeysData = [];
         let pendingChanges = [];
 
@@ -882,7 +900,7 @@ $pageTitle = 'General Settings';
         }
 
         function loadApiKeys() {
-            fetch('../api/api-key-management.php?action=getKeys')
+            fetch(apiBase + 'api-key-management.php?action=getKeys')
                 .then(response => {
                     // Check if response is ok (status 200-299)
                     if (!response.ok) {
@@ -1072,7 +1090,7 @@ $pageTitle = 'General Settings';
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             btn.disabled = true;
 
-            fetch('../api/api-key-management.php?action=testKey', {
+            fetch(apiBase + 'api-key-management.php?action=testKey', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ key_value: keyValue })
@@ -1119,7 +1137,7 @@ $pageTitle = 'General Settings';
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending OTP...';
             btn.disabled = true;
 
-            fetch('../api/api-key-management.php?action=requestOTP', {
+            fetch(apiBase + 'api-key-management.php?action=requestOTP', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -1208,7 +1226,7 @@ $pageTitle = 'General Settings';
                 }
             });
 
-            fetch('../api/api-key-management.php?action=verifyAndSaveKeys', {
+            fetch(apiBase + 'api-key-management.php?action=verifyAndSaveKeys', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1275,7 +1293,7 @@ $pageTitle = 'General Settings';
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
             btn.disabled = true;
 
-            fetch('../api/api-key-management.php?action=syncFromConfig', {
+            fetch(apiBase + 'api-key-management.php?action=syncFromConfig', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
