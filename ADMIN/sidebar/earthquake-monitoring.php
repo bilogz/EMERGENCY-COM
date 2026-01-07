@@ -324,6 +324,9 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                         <div class="stat-card">
                             <h3>Last Update</h3>
                             <div class="stat-value" style="font-size: 1rem;" id="lastUpdate">-</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary-1); margin-top: 0.25rem;" id="realtimeIndicator">
+                                <i class="fas fa-circle" style="color: #4CAF50; font-size: 0.5rem;"></i> Real-time active
+                            </div>
                         </div>
                     </div>
                     
@@ -398,8 +401,10 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         let minMagnitude = 2.5;
         let realtimeEnabled = true;
         let realtimeInterval = null;
+        let recentCheckInterval = null;
         let lastUpdateTime = null;
         let lastEarthquakeCount = 0;
+        let lastRecentEarthquakeIds = new Set();
         
         // Initialize map
         function initMap() {
@@ -500,6 +505,11 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                     if (data.features && data.features.length > 0) {
                         earthquakeData = data.features;
                         
+                        // Track earthquake IDs for real-time detection
+                        lastRecentEarthquakeIds = new Set(data.features.map(f => 
+                            f.id || f.properties.code || `${f.properties.time}_${f.geometry.coordinates[0]}_${f.geometry.coordinates[1]}`
+                        ));
+                        
                         data.features.forEach(feature => {
                             const [lon, lat] = feature.geometry.coordinates;
                             const mag = feature.properties.mag || 0;
@@ -595,7 +605,8 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             document.getElementById('totalEvents').textContent = totalEvents;
             document.getElementById('majorEvents').textContent = majorEvents;
             document.getElementById('latestMagnitude').textContent = latestMag;
-            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            const updateTime = new Date().toLocaleTimeString();
+            document.getElementById('lastUpdate').textContent = realtimeEnabled ? `${updateTime} (Real-time)` : updateTime;
         }
         
         // Show earthquake information panel
@@ -663,13 +674,25 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             if (realtimeInterval) {
                 clearInterval(realtimeInterval);
             }
+            if (recentCheckInterval) {
+                clearInterval(recentCheckInterval);
+            }
             
             if (realtimeEnabled) {
-                // Update every 2 minutes (120000 ms)
+                // Full data refresh every 2 minutes (120000 ms) - for historical data
                 realtimeInterval = setInterval(() => {
-                    console.log('Auto-refreshing earthquake data...');
+                    console.log('Auto-refreshing full earthquake data...');
                     loadEarthquakeData();
                 }, 120000); // 2 minutes
+                
+                // Check for NEW earthquakes every 30 seconds (30000 ms) - TRUE REAL-TIME
+                recentCheckInterval = setInterval(() => {
+                    console.log('Checking for new earthquakes (real-time)...');
+                    checkRecentEarthquakes();
+                }, 30000); // 30 seconds - TRUE REAL-TIME
+                
+                // Initial recent check
+                setTimeout(() => checkRecentEarthquakes(), 5000);
                 
                 updateRealtimeStatus(true);
             }
@@ -680,7 +703,127 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 clearInterval(realtimeInterval);
                 realtimeInterval = null;
             }
+            if (recentCheckInterval) {
+                clearInterval(recentCheckInterval);
+                recentCheckInterval = null;
+            }
             updateRealtimeStatus(false);
+        }
+        
+        // Check for recent earthquakes (last hour) - TRUE REAL-TIME
+        function checkRecentEarthquakes() {
+            const philippinesBounds = {
+                minLat: 4.5,
+                maxLat: 21.0,
+                minLon: 116.0,
+                maxLon: 127.0
+            };
+            
+            // Check last 1 hour for NEW earthquakes
+            const startTime = new Date();
+            startTime.setHours(startTime.getHours() - 1);
+            const endTime = new Date();
+            
+            const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${startTime.toISOString()}&endtime=${endTime.toISOString()}&minmagnitude=${minMagnitude}&maxlatitude=${philippinesBounds.maxLat}&minlatitude=${philippinesBounds.minLat}&maxlongitude=${philippinesBounds.maxLon}&minlongitude=${philippinesBounds.minLon}`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.features && data.features.length > 0) {
+                        const currentIds = new Set(data.features.map(f => f.id || f.properties.code || `${f.properties.time}_${f.geometry.coordinates[0]}_${f.geometry.coordinates[1]}`));
+                        
+                        // Find new earthquakes
+                        const newEarthquakes = data.features.filter(f => {
+                            const id = f.id || f.properties.code || `${f.properties.time}_${f.geometry.coordinates[0]}_${f.geometry.coordinates[1]}`;
+                            return !lastRecentEarthquakeIds.has(id);
+                        });
+                        
+                        if (newEarthquakes.length > 0) {
+                            console.log(`🚨 NEW EARTHQUAKES DETECTED: ${newEarthquakes.length}`);
+                            
+                            // Add new markers to map
+                            newEarthquakes.forEach(feature => {
+                                const [lon, lat] = feature.geometry.coordinates;
+                                const mag = feature.properties.mag || 0;
+                                const place = feature.properties.place || 'Unknown';
+                                const time = new Date(feature.properties.time);
+                                const depth = feature.geometry.coordinates[2] || 0;
+                                
+                                // Determine marker color based on magnitude
+                                let color = '#4CAF50'; // Green - minor (2.5-4.0)
+                                if (mag >= 5.0) color = '#FF5722'; // Red - major (5.0+)
+                                else if (mag >= 4.5) color = '#FF9800'; // Orange - moderate (4.5-5.0)
+                                else if (mag >= 4.0) color = '#FFC107'; // Yellow - light (4.0-4.5)
+                                
+                                // Create custom icon with pulsing animation for new earthquakes
+                                const iconSize = Math.max(20, Math.min(50, mag * 8));
+                                const icon = L.divIcon({
+                                    className: 'earthquake-marker',
+                                    html: `<div style="background:${color};width:${iconSize}px;height:${iconSize}px;border-radius:50%;border:3px solid white;box-shadow:0 0 10px ${color}, 0 0 20px ${color};animation:pulse 2s infinite;"></div>`,
+                                    iconSize: [iconSize, iconSize],
+                                    iconAnchor: [iconSize/2, iconSize/2]
+                                });
+                                
+                                // Create marker
+                                const marker = L.marker([lat, lon], { icon: icon });
+                                
+                                // Popup with earthquake details
+                                const timeAgo = getTimeAgo(time);
+                                marker.bindPopup(`
+                                    <div style="min-width:200px;">
+                                        <div style="background:${color};color:white;padding:0.5rem;border-radius:4px;margin-bottom:10px;font-weight:bold;">
+                                            🆕 NEW EARTHQUAKE
+                                        </div>
+                                        <h3 style="margin:0 0 10px 0;color:${color};">
+                                            <i class="fas fa-mountain"></i> Magnitude ${mag.toFixed(1)}
+                                        </h3>
+                                        <p style="margin:5px 0;"><strong>Location:</strong> ${place}</p>
+                                        <p style="margin:5px 0;"><strong>Depth:</strong> ${depth.toFixed(1)} km</p>
+                                        <p style="margin:5px 0;"><strong>Time:</strong> ${time.toLocaleString()}</p>
+                                        <p style="margin:5px 0;font-size:0.9em;color:#666;">${timeAgo}</p>
+                                        <p style="margin:10px 0 0 0;font-size:0.85em;color:#999;">
+                                            <i class="fas fa-info-circle"></i> Data from USGS Earthquake Hazards Program
+                                        </p>
+                                    </div>
+                                `);
+                                
+                                marker.addTo(map);
+                                earthquakeMarkers.push(marker);
+                                
+                                // Add to earthquake data
+                                earthquakeData.push(feature);
+                                
+                                // Auto-open popup for significant earthquakes
+                                if (mag >= 4.0) {
+                                    setTimeout(() => marker.openPopup(), 1000);
+                                }
+                            });
+                            
+                            // Update statistics
+                            updateStatistics(earthquakeData);
+                            
+                            // Show notification
+                            const significantNew = newEarthquakes.filter(f => (f.properties.mag || 0) >= 4.0);
+                            if (significantNew.length > 0) {
+                                showNewEarthquakeNotification(significantNew.length);
+                                
+                                // Auto-trigger AI analysis for significant new earthquakes
+                                setTimeout(() => analyzeEarthquakeImpact(earthquakeData), 2000);
+                            } else {
+                                showNewEarthquakeNotification(newEarthquakes.length, false);
+                            }
+                            
+                            // Update last update time
+                            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString() + ' (Real-time)';
+                        }
+                        
+                        // Update tracked IDs
+                        lastRecentEarthquakeIds = currentIds;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking recent earthquakes:', error);
+                });
         }
         
         function toggleRealtime() {
@@ -699,16 +842,25 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         function updateRealtimeStatus(enabled) {
             const statusEl = document.getElementById('realtimeStatus');
             const iconEl = document.querySelector('#realtimeToggleBtn i');
+            const indicatorEl = document.getElementById('realtimeIndicator');
             
             if (enabled) {
                 statusEl.textContent = 'Real-time ON';
                 if (iconEl) {
                     iconEl.style.color = '#4CAF50';
                 }
+                if (indicatorEl) {
+                    indicatorEl.innerHTML = '<i class="fas fa-circle" style="color: #4CAF50; font-size: 0.5rem;"></i> Real-time active (checks every 30s)';
+                    indicatorEl.style.color = '#4CAF50';
+                }
             } else {
                 statusEl.textContent = 'Real-time OFF';
                 if (iconEl) {
                     iconEl.style.color = '#999';
+                }
+                if (indicatorEl) {
+                    indicatorEl.innerHTML = '<i class="fas fa-circle" style="color: #999; font-size: 0.5rem;"></i> Real-time disabled';
+                    indicatorEl.style.color = '#999';
                 }
             }
         }
@@ -729,36 +881,57 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             lastUpdateTime = new Date();
         }
         
-        function showNewEarthquakeNotification(count) {
+        function showNewEarthquakeNotification(count, isSignificant = true) {
+            // Remove any existing notifications
+            const existing = document.querySelector('.earthquake-notification');
+            if (existing) existing.remove();
+            
             // Create a temporary notification
             const notification = document.createElement('div');
+            notification.className = 'earthquake-notification';
             notification.style.cssText = `
                 position: fixed;
                 top: 20px;
                 right: 20px;
-                background: #FF5722;
+                background: ${isSignificant ? '#FF5722' : '#2196F3'};
                 color: white;
                 padding: 1rem 1.5rem;
                 border-radius: 8px;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.3);
                 z-index: 10000;
                 animation: slideIn 0.3s ease-out;
+                cursor: pointer;
+                max-width: 300px;
             `;
             notification.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <i class="fas fa-exclamation-triangle"></i>
+                    <i class="fas fa-${isSignificant ? 'exclamation-triangle' : 'info-circle'}" style="font-size: 1.5rem;"></i>
                     <div>
-                        <strong>${count} New Significant Earthquake${count > 1 ? 's' : ''} Detected!</strong>
-                        <div style="font-size: 0.9em; margin-top: 0.25rem;">AI analysis available</div>
+                        <strong>${count} New Earthquake${count > 1 ? 's' : ''} Detected!</strong>
+                        <div style="font-size: 0.9em; margin-top: 0.25rem;">
+                            ${isSignificant ? '🚨 Significant event - AI analysis available' : 'Real-time update'}
+                        </div>
+                        <div style="font-size: 0.8em; margin-top: 0.25rem; opacity: 0.9;">
+                            <i class="fas fa-clock"></i> ${new Date().toLocaleTimeString()}
+                        </div>
                     </div>
                 </div>
             `;
+            
+            // Click to show AI analysis
+            if (isSignificant) {
+                notification.onclick = () => {
+                    showAIAnalytics();
+                    notification.remove();
+                };
+            }
+            
             document.body.appendChild(notification);
             
             setTimeout(() => {
                 notification.style.animation = 'slideOut 0.3s ease-out';
-                setTimeout(() => notification.remove(), 300);
-            }, 5000);
+                setTimeout(() => notification.remove(), isSignificant ? 8000 : 5000);
+            }, isSignificant ? 8000 : 5000);
         }
         
         // AI Analytics Functions
@@ -829,11 +1002,21 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             const contentEl = document.getElementById('aiAnalyticsContent');
             
             // Handle raw response if JSON parsing failed
-            if (analysis.raw_response) {
+            if (analysis.raw_response || typeof analysis === 'string') {
                 contentEl.innerHTML = `
                     <div style="padding: 1rem;">
                         <h4 style="margin-top: 0;">Analysis:</h4>
-                        <div style="white-space: pre-wrap; line-height: 1.6;">${analysis.overall_assessment}</div>
+                        <div style="white-space: pre-wrap; line-height: 1.6; background: var(--card-bg-1); padding: 1rem; border-radius: 4px;">${typeof analysis === 'string' ? analysis : (analysis.overall_assessment || 'No analysis available')}</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Ensure analysis is an object
+            if (!analysis || typeof analysis !== 'object') {
+                contentEl.innerHTML = `
+                    <div style="padding: 1rem; color: var(--error-color, #F44336);">
+                        <i class="fas fa-exclamation-circle"></i> Invalid analysis format received.
                     </div>
                 `;
                 return;
@@ -946,6 +1129,13 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 @keyframes slideOut {
                     from { transform: translateX(0); opacity: 1; }
                     to { transform: translateX(100%); opacity: 0; }
+                }
+                @keyframes pulse {
+                    0%, 100% { transform: scale(1); opacity: 1; }
+                    50% { transform: scale(1.1); opacity: 0.8; }
+                }
+                .earthquake-marker {
+                    animation: pulse 2s infinite;
                 }
             `;
             document.head.appendChild(style);

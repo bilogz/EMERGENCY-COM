@@ -235,13 +235,32 @@ function callGeminiAI($apiKey, $prompt) {
         $result = json_decode($response, true);
         
         if (isset($result['candidates'][0]['content']['parts'][0]['text'])) {
-            $content = $result['candidates'][0]['content']['parts'][0]['text'];
+            $content = trim($result['candidates'][0]['content']['parts'][0]['text']);
             
-            // Try to extract JSON from response
+            // Remove markdown code blocks if present
+            $content = preg_replace('/```json\s*/i', '', $content);
+            $content = preg_replace('/```\s*/', '', $content);
+            $content = trim($content);
+            
+            // Try multiple JSON extraction methods
+            $jsonContent = null;
+            
+            // Method 1: Try parsing the entire content as JSON
+            $jsonContent = json_decode($content, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($jsonContent)) {
+                return [
+                    'success' => true,
+                    'content' => $jsonContent,
+                    'raw' => $content
+                ];
+            }
+            
+            // Method 2: Extract JSON object from text (handles text before/after JSON)
             $jsonMatch = [];
-            if (preg_match('/\{[\s\S]*\}/', $content, $jsonMatch)) {
+            // Match JSON object that might span multiple lines
+            if (preg_match('/\{[\s\S]*?\}/', $content, $jsonMatch)) {
                 $jsonContent = json_decode($jsonMatch[0], true);
-                if (json_last_error() === JSON_ERROR_NONE) {
+                if (json_last_error() === JSON_ERROR_NONE && is_array($jsonContent)) {
                     return [
                         'success' => true,
                         'content' => $jsonContent,
@@ -250,7 +269,33 @@ function callGeminiAI($apiKey, $prompt) {
                 }
             }
             
-            // If JSON extraction failed, return formatted text
+            // Method 3: Try to find JSON between first { and last }
+            $firstBrace = strpos($content, '{');
+            $lastBrace = strrpos($content, '}');
+            if ($firstBrace !== false && $lastBrace !== false && $lastBrace > $firstBrace) {
+                $jsonStr = substr($content, $firstBrace, $lastBrace - $firstBrace + 1);
+                $jsonContent = json_decode($jsonStr, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($jsonContent)) {
+                    return [
+                        'success' => true,
+                        'content' => $jsonContent,
+                        'raw' => $content
+                    ];
+                }
+            }
+            
+            // If JSON extraction failed, try to parse as structured text
+            // Extract key-value pairs manually
+            $parsed = parseStructuredResponse($content);
+            if (!empty($parsed)) {
+                return [
+                    'success' => true,
+                    'content' => $parsed,
+                    'raw' => $content
+                ];
+            }
+            
+            // Last resort: return as text
             return [
                 'success' => true,
                 'content' => [
@@ -268,6 +313,41 @@ function callGeminiAI($apiKey, $prompt) {
         'success' => false,
         'error' => $lastError ?? 'Unknown error'
     ];
+}
+
+/**
+ * Parse structured response when JSON parsing fails
+ */
+function parseStructuredResponse($text) {
+    $result = [];
+    
+    // Try to extract overall_assessment
+    if (preg_match('/overall[_\s]?assessment["\']?\s*[:=]\s*["\']?([^"\']+)["\']?/i', $text, $matches)) {
+        $result['overall_assessment'] = trim($matches[1]);
+    }
+    
+    // Try to extract risk_level
+    if (preg_match('/risk[_\s]?level["\']?\s*[:=]\s*["\']?(low|moderate|high|critical)["\']?/i', $text, $matches)) {
+        $result['risk_level'] = strtolower($matches[1]);
+    }
+    
+    // Try to extract arrays (immediate_impacts, potential_hazards, etc.)
+    $arrayFields = ['immediate_impacts', 'potential_hazards', 'recommendations', 'affected_areas'];
+    foreach ($arrayFields as $field) {
+        $pattern = '/' . preg_quote($field, '/') . '["\']?\s*[:=]\s*\[(.*?)\]/is';
+        if (preg_match($pattern, $text, $matches)) {
+            $items = [];
+            // Extract quoted strings
+            if (preg_match_all('/["\']([^"\']+)["\']/', $matches[1], $itemMatches)) {
+                $items = $itemMatches[1];
+            }
+            if (!empty($items)) {
+                $result[$field] = $items;
+            }
+        }
+    }
+    
+    return !empty($result) ? $result : null;
 }
 
 /**
