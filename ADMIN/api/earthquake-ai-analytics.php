@@ -238,16 +238,24 @@ function analyzeEarthquakeImpact() {
         
         // Get API key for analysis
         $apiKey = null;
+        $backupApiKey = null;
         try {
             // Check if function exists
             if (!function_exists('getGeminiApiKey')) {
                 throw new Exception('getGeminiApiKey function not found. secure-api-config.php may not be loaded correctly.');
             }
             
-            $apiKey = getGeminiApiKey('analysis');
+            // Try earthquake-specific key first, then analysis, then default
+            $apiKey = getGeminiApiKey('earthquake');
+            if (empty($apiKey)) {
+                $apiKey = getGeminiApiKey('analysis');
+            }
             if (empty($apiKey)) {
                 $apiKey = getGeminiApiKey('default');
             }
+            
+            // Get backup key for quota exceeded scenarios
+            $backupApiKey = getGeminiApiKey('analysis_backup');
         } catch (ParseError $e) {
             error_log('Parse error getting Gemini API key: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine());
             $apiKey = null;
@@ -356,8 +364,8 @@ function analyzeEarthquakeImpact() {
         // Build AI prompt
         $prompt = buildAnalysisPrompt($earthquakeSummary, $quezonCityLat, $quezonCityLon);
         
-        // Call Gemini AI
-        $analysis = callGeminiAI($apiKey, $prompt);
+        // Call Gemini AI with backup key support
+        $analysis = callGeminiAI($apiKey, $prompt, $backupApiKey);
         
         if ($analysis['success']) {
             ob_clean(); // Clean output buffer but keep it active
@@ -471,8 +479,11 @@ function buildAnalysisPrompt($earthquakes, $qcLat, $qcLon) {
 
 /**
  * Call Gemini AI API
+ * @param string $apiKey Primary API key
+ * @param string $prompt The prompt to send
+ * @param string|null $backupApiKey Optional backup API key to use if quota exceeded
  */
-function callGeminiAI($apiKey, $prompt) {
+function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
     try {
         $model = getGeminiModel();
     } catch (Exception $e) {
@@ -547,9 +558,64 @@ function callGeminiAI($apiKey, $prompt) {
                 $errorMessage = isset($errorResponse['error']['message']) 
                     ? $errorResponse['error']['message'] 
                     : substr($response, 0, 200);
-                $lastError = "HTTP Error {$httpCode}: " . $errorMessage;
-                error_log("Gemini API HTTP error ({$version}): {$httpCode} - " . $errorMessage);
-                continue;
+                
+                // Check if error is quota-related and retry with backup key
+                $isQuotaError = stripos($errorMessage, 'quota') !== false || 
+                              stripos($errorMessage, 'exceeded') !== false ||
+                              stripos($errorMessage, 'billing') !== false ||
+                              $httpCode === 429;
+                
+                // If quota error and backup key available, try with backup key
+                if ($isQuotaError && !empty($backupApiKey) && $apiKey !== $backupApiKey) {
+                    error_log("Quota exceeded detected, retrying with backup API key");
+                    
+                    // Retry with backup key
+                    $url = "https://generativelanguage.googleapis.com/{$version}/models/{$model}:generateContent?key=" . urlencode($backupApiKey);
+                    $ch = curl_init($url);
+                    if ($ch === false) {
+                        $lastError = "Failed to initialize cURL for backup key";
+                        continue;
+                    }
+                    
+                    curl_setopt_array($ch, [
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_POST => true,
+                        CURLOPT_POSTFIELDS => json_encode($data),
+                        CURLOPT_HTTPHEADER => [
+                            'Content-Type: application/json'
+                        ],
+                        CURLOPT_TIMEOUT => 30,
+                        CURLOPT_CONNECTTIMEOUT => 10
+                    ]);
+                    
+                    $response = curl_exec($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    $curlError = curl_error($ch);
+                    curl_close($ch);
+                    
+                    if ($curlError) {
+                        $lastError = "cURL Error with backup key: " . $curlError;
+                        error_log("Gemini API cURL error with backup key ({$version}): " . $curlError);
+                        continue;
+                    }
+                    
+                    if ($httpCode !== 200) {
+                        $errorResponse = json_decode($response, true);
+                        $errorMessage = isset($errorResponse['error']['message']) 
+                            ? $errorResponse['error']['message'] 
+                            : substr($response, 0, 200);
+                        $lastError = "HTTP Error {$httpCode} (backup key): " . $errorMessage;
+                        error_log("Gemini API HTTP error with backup key ({$version}): {$httpCode} - " . $errorMessage);
+                        continue;
+                    }
+                    
+                    error_log("Successfully used backup API key after quota exceeded");
+                    // Continue to parse response below
+                } else {
+                    $lastError = "HTTP Error {$httpCode}: " . $errorMessage;
+                    error_log("Gemini API HTTP error ({$version}): {$httpCode} - " . $errorMessage);
+                    continue;
+                }
             }
             
             // Parse response

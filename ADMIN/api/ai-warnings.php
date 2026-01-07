@@ -1388,6 +1388,7 @@ function getWeatherAnalysis() {
 
         // Get API key - prefer analysis key for analysis functions
         $apiKey = null;
+        $backupApiKey = null;
         try {
             if (function_exists('getGeminiApiKey')) {
                 $apiKey = getGeminiApiKey('analysis');
@@ -1399,6 +1400,11 @@ function getWeatherAnalysis() {
                     if (!empty($apiKey)) {
                         error_log("Found AI_API_KEY from config (fallback)");
                     }
+                }
+                // Get backup key for quota exceeded scenarios
+                $backupApiKey = getGeminiApiKey('analysis_backup');
+                if (!empty($backupApiKey)) {
+                    error_log("Found AI_API_KEY_ANALYSIS_BACKUP from config");
                 }
             } else {
                 error_log("getGeminiApiKey function not found!");
@@ -1539,10 +1545,62 @@ Keep recommendations practical and actionable for public safety. Risk level shou
             } else {
                 $errorMsg = "HTTP $httpCode: Empty response from server";
             }
-            error_log("Gemini API error in getWeatherAnalysis: HTTP $httpCode - $errorMsg");
-            http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'Failed to generate analysis: ' . $errorMsg]);
-            return;
+            
+            // Check if error is quota-related and retry with backup key
+            $isQuotaError = stripos($errorMsg, 'quota') !== false || 
+                          stripos($errorMsg, 'exceeded') !== false ||
+                          stripos($errorMsg, 'billing') !== false ||
+                          $httpCode === 429;
+            
+            if ($isQuotaError && !empty($backupApiKey) && $apiKey !== $backupApiKey) {
+                error_log("Quota exceeded detected, retrying with backup API key");
+                
+                // Retry with backup key
+                $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . urlencode($backupApiKey);
+                $ch = curl_init($url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Content-Type: application/json'
+                ]);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+                
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlError = curl_error($ch);
+                curl_close($ch);
+                
+                if ($curlError) {
+                    error_log("CURL Error with backup key: " . $curlError);
+                    http_response_code(500);
+                    echo json_encode(['success' => false, 'message' => 'Network error: ' . $curlError]);
+                    return;
+                }
+                
+                if ($httpCode !== 200) {
+                    $errorData = json_decode($response, true);
+                    $errorMsg = 'Unknown error';
+                    if (isset($errorData['error']['message'])) {
+                        $errorMsg = $errorData['error']['message'];
+                    } elseif (!empty($response)) {
+                        $errorMsg = "HTTP $httpCode: " . substr($response, 0, 100);
+                    } else {
+                        $errorMsg = "HTTP $httpCode: Empty response from server";
+                    }
+                    error_log("Gemini API error with backup key: HTTP $httpCode - $errorMsg");
+                    http_response_code(500);
+                    echo json_encode(['success' => false, 'message' => 'Failed to generate analysis: ' . $errorMsg]);
+                    return;
+                }
+                
+                error_log("Successfully used backup API key after quota exceeded");
+            } else {
+                error_log("Gemini API error in getWeatherAnalysis: HTTP $httpCode - $errorMsg");
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Failed to generate analysis: ' . $errorMsg]);
+                return;
+            }
         }
 
         $responseData = json_decode($response, true);

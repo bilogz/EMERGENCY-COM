@@ -43,6 +43,14 @@ function getGeminiApiKey($purpose = 'default') {
             $secureConfig = @require $secureConfigFile;
             if (is_array($secureConfig)) {
                 // Check for purpose-specific key first
+                if ($purpose === 'earthquake' && !empty($secureConfig['AI_API_KEY_EARTHQUAKE'])) {
+                    error_log("Found AI_API_KEY_EARTHQUAKE in config");
+                    return $secureConfig['AI_API_KEY_EARTHQUAKE'];
+                }
+                if ($purpose === 'analysis_backup' && !empty($secureConfig['AI_API_KEY_ANALYSIS_BACKUP'])) {
+                    error_log("Found AI_API_KEY_ANALYSIS_BACKUP in config");
+                    return $secureConfig['AI_API_KEY_ANALYSIS_BACKUP'];
+                }
                 if ($purpose === 'analysis' && !empty($secureConfig['AI_API_KEY_ANALYSIS'])) {
                     error_log("Found AI_API_KEY_ANALYSIS in config");
                     return $secureConfig['AI_API_KEY_ANALYSIS'];
