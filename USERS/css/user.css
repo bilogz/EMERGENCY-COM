@@ -2535,6 +2535,33 @@ textarea:focus {
     .main-content {
         margin-left: 0 !important; /* Content should not be offset by sidebar */
         text-align: center !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Override admin sidebar.css desktop margin-left */
+    body .main-content {
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+    }
+    
+    /* Ensure containers are centered */
+    body .main-container {
+        margin-left: auto !important;
+        margin-right: auto !important;
+        text-align: center !important;
+    }
+    
+    body .sub-container {
+        margin-left: auto !important;
+        margin-right: auto !important;
+        text-align: center !important;
+    }
+    
+    body .content-main {
+        margin-left: auto !important;
+        margin-right: auto !important;
+        text-align: center !important;
     }
 }
 
@@ -4375,5 +4402,58 @@ body .sub-container input:not([type="submit"]):not([type="button"]):not([type="r
 body .sub-container textarea,
 body .sub-container select {
     text-align: left !important;
+}
+
+/* ===================================
+   DESKTOP-SPECIFIC OVERRIDES (min-width: 1024px)
+   Override admin sidebar.css desktop margin-left rules
+   =================================== */
+@media (min-width: 1024px) {
+    /* Override admin sidebar.css line 331-334 that sets margin-left: 280px */
+    body .main-content {
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Override collapsed sidebar margin */
+    body .main-content.sidebar-collapsed-margin {
+        margin-left: 0 !important;
+    }
+    
+    /* Ensure all containers are centered on desktop */
+    body .main-container {
+        margin-left: auto !important;
+        margin-right: auto !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+        text-align: center !important;
+    }
+    
+    body .sub-container {
+        margin-left: auto !important;
+        margin-right: auto !important;
+        text-align: center !important;
+    }
+    
+    body .content-main {
+        margin-left: auto !important;
+        margin-right: auto !important;
+        text-align: center !important;
+    }
+    
+    body .page-content {
+        margin-left: auto !important;
+        margin-right: auto !important;
+        text-align: center !important;
+    }
+    
+    /* Ensure cards grid is centered */
+    body .cards-grid {
+        margin-left: auto !important;
+        margin-right: auto !important;
+        justify-content: center !important;
+    }
 }
 
