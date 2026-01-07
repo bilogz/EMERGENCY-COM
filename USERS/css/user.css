@@ -24,10 +24,17 @@
 .page-content {
     width: 100%;
     max-width: 420px;   /* perfect desktop width */
-    background: #fff;
+    background: var(--card-bg, #fff);
     border-radius: 12px;
     padding: 2rem;
     box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+
+[data-theme="dark"] .page-content {
+    background: #1f2937 !important;
+    border: 1px solid #374151 !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+    color: #ffffff !important;
 }
 
 [data-theme="dark"] .auth-form {
@@ -2813,10 +2820,10 @@ textarea:focus {
 }
 
 [data-theme="dark"] .card {
-    background: var(--card-bg);
-    border-color: var(--card-border);
-    box-shadow: var(--card-shadow);
-    color: var(--text-color) !important;
+    background: #1f2937 !important;
+    border-color: #374151 !important;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5) !important;
+    color: #ffffff !important;
 }
 
 [data-theme="dark"] .card h3,
@@ -2832,6 +2839,60 @@ textarea:focus {
 
 [data-theme="dark"] .card li {
     color: #e5e7eb !important;
+}
+
+[data-theme="dark"] .card span,
+[data-theme="dark"] .card div {
+    color: #e5e7eb !important;
+}
+
+[data-theme="dark"] .card ol,
+[data-theme="dark"] .card ul {
+    color: #e5e7eb !important;
+}
+
+/* Ensure cards inside content-main also have dark backgrounds */
+[data-theme="dark"] .content-main .card,
+[data-theme="dark"] .main-container .card,
+[data-theme="dark"] .sub-container .card {
+    background: #1f2937 !important;
+    border-color: #374151 !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .content-main .card p,
+[data-theme="dark"] .content-main .card li,
+[data-theme="dark"] .content-main .card span,
+[data-theme="dark"] .content-main .card div,
+[data-theme="dark"] .main-container .card p,
+[data-theme="dark"] .main-container .card li,
+[data-theme="dark"] .main-container .card span,
+[data-theme="dark"] .main-container .card div,
+[data-theme="dark"] .sub-container .card p,
+[data-theme="dark"] .sub-container .card li,
+[data-theme="dark"] .sub-container .card span,
+[data-theme="dark"] .sub-container .card div {
+    color: #e5e7eb !important;
+}
+
+/* Force dark backgrounds for any white background elements in dark mode */
+[data-theme="dark"] .main-content div[style*="background"]:not(.hero-section):not(.home-hero),
+[data-theme="dark"] .main-content section[style*="background"]:not(.hero-section):not(.home-hero) {
+    background: #1f2937 !important;
+}
+
+/* Ensure any div or section that looks like a card gets dark background */
+[data-theme="dark"] .main-content > div:not(.hero-section):not(.home-hero):not(.main-container),
+[data-theme="dark"] .main-content > section:not(.hero-section):not(.home-hero) {
+    background: transparent !important;
+}
+
+/* But cards specifically should have dark background */
+[data-theme="dark"] .main-content .card,
+[data-theme="dark"] .main-content div.card,
+[data-theme="dark"] .main-content section.card {
+    background: #1f2937 !important;
+    color: #ffffff !important;
 }
 
 [data-theme="dark"] .page-content p {
