@@ -355,11 +355,31 @@ function analyzeEarthquakeImpact() {
             }
         }
         
-        // Sort by magnitude (highest first) and limit to top 10 most significant
+        // Prioritize earthquakes near Quezon City (within 300km)
+        // Sort by: 1) Distance from Quezon City (closer first), 2) Magnitude (higher first)
         usort($earthquakeSummary, function($a, $b) {
-            return $b['magnitude'] <=> $a['magnitude'];
+            // If both are within 300km, prioritize by distance first, then magnitude
+            $aNearby = $a['distance_km'] <= 300;
+            $bNearby = $b['distance_km'] <= 300;
+            
+            if ($aNearby && $bNearby) {
+                // Both nearby - sort by distance first, then magnitude
+                if (abs($a['distance_km'] - $b['distance_km']) < 10) {
+                    return $b['magnitude'] <=> $a['magnitude'];
+                }
+                return $a['distance_km'] <=> $b['distance_km'];
+            } elseif ($aNearby && !$bNearby) {
+                return -1; // A is nearby, prioritize it
+            } elseif (!$aNearby && $bNearby) {
+                return 1; // B is nearby, prioritize it
+            } else {
+                // Neither nearby - sort by magnitude
+                return $b['magnitude'] <=> $a['magnitude'];
+            }
         });
-        $earthquakeSummary = array_slice($earthquakeSummary, 0, 10);
+        
+        // Limit to top 15 earthquakes (prioritizing those near Quezon City)
+        $earthquakeSummary = array_slice($earthquakeSummary, 0, 15);
         
         // Build AI prompt
         $prompt = buildAnalysisPrompt($earthquakeSummary, $quezonCityLat, $quezonCityLon);
@@ -436,9 +456,9 @@ function analyzeEarthquakeImpact() {
  * Build AI analysis prompt
  */
 function buildAnalysisPrompt($earthquakes, $qcLat, $qcLon) {
-    $prompt = "You are an expert seismologist and disaster risk assessment specialist analyzing earthquake impacts on Quezon City, Philippines.\n\n";
-    $prompt .= "Quezon City Coordinates: Latitude {$qcLat}, Longitude {$qcLon}\n\n";
-    $prompt .= "Recent Earthquakes in the Philippines Region:\n";
+    $prompt = "You are an expert seismologist and disaster risk assessment specialist analyzing earthquake impacts SPECIFICALLY FOR QUEZON CITY, Philippines.\n\n";
+    $prompt .= "IMPORTANT: Focus your analysis exclusively on how these earthquakes affect Quezon City. Quezon City Coordinates: Latitude {$qcLat}, Longitude {$qcLon}\n\n";
+    $prompt .= "Recent Earthquakes (prioritized by proximity to Quezon City):\n";
     
     foreach ($earthquakes as $i => $eq) {
         $prompt .= sprintf(
@@ -454,9 +474,15 @@ function buildAnalysisPrompt($earthquakes, $qcLat, $qcLon) {
         );
     }
     
-    $prompt .= "\nPlease provide a comprehensive analysis in JSON format with the following structure:\n";
+    $prompt .= "\nCRITICAL: All analysis must be SPECIFIC TO QUEZON CITY. Focus on:\n";
+    $prompt .= "- How these earthquakes specifically impact Quezon City residents and infrastructure\n";
+    $prompt .= "- Quezon City's specific geographic and geological context\n";
+    $prompt .= "- Local fault lines and seismic risks affecting Quezon City\n";
+    $prompt .= "- Quezon City's building codes, soil conditions, and vulnerability\n\n";
+    
+    $prompt .= "Please provide a comprehensive analysis in JSON format with the following structure:\n";
     $prompt .= "{\n";
-    $prompt .= "  \"overall_assessment\": \"Brief overall risk assessment for Quezon City\",\n";
+    $prompt .= "  \"overall_assessment\": \"Brief overall risk assessment SPECIFICALLY FOR QUEZON CITY (not general Philippines)\",\n";
     $prompt .= "  \"immediate_impacts\": [\"List of immediate impacts if any\"],\n";
     $prompt .= "  \"potential_hazards\": [\"List of potential hazards (ground shaking, liquefaction, landslides, tsunamis, etc.)\"],\n";
     $prompt .= "  \"risk_level\": \"low|moderate|high|critical\",\n";

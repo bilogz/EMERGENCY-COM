@@ -285,6 +285,78 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             color: var(--text-color-1);
         }
         
+        [data-theme="dark"] .qc-risk-content {
+            background: rgba(30, 30, 40, 0.95);
+            color: var(--text-color-1);
+        }
+        
+        [data-theme="dark"] .qc-risk-item {
+            background: rgba(40, 40, 50, 0.8);
+            border-left-color: var(--primary-color-1);
+        }
+        
+        [data-theme="dark"] .qc-risk-item-content h4 {
+            color: var(--text-color-1);
+        }
+        
+        [data-theme="dark"] .qc-risk-item-content p {
+            color: var(--text-secondary-1);
+        }
+        
+        [data-theme="dark"] .stat-card {
+            background: var(--card-bg-1);
+        }
+        
+        [data-theme="dark"] .stat-card-last-earthquake {
+            background: var(--card-bg-1);
+        }
+        
+        [data-theme="dark"] .earthquake-control-btn {
+            background: rgba(40, 40, 50, 0.95);
+            color: var(--text-color-1);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        [data-theme="dark"] .earthquake-control-btn:hover {
+            background: rgba(50, 50, 60, 0.95);
+        }
+        
+        [data-theme="dark"] .earthquake-info {
+            background: var(--card-bg-1);
+            color: var(--text-color-1);
+        }
+        
+        [data-theme="dark"] .earthquake-info-content p {
+            color: var(--text-color-1);
+        }
+        
+        [data-theme="dark"] .ai-analytics-content {
+            background: var(--card-bg-1);
+            color: var(--text-color-1);
+        }
+        
+        [data-theme="dark"] .hazard-item {
+            background: rgba(40, 40, 50, 0.8);
+            color: var(--text-color-1);
+        }
+        
+        [data-theme="dark"] .recommendation-item {
+            background: rgba(30, 58, 95, 0.8);
+            color: var(--text-color-1);
+        }
+        
+        [data-theme="dark"] .stat-card .stat-value {
+            color: var(--primary-color-1);
+        }
+        
+        [data-theme="dark"] .stat-card-last-earthquake .stat-value {
+            color: var(--text-color-1);
+        }
+        
+        [data-theme="dark"] .qc-risk-alert-panel {
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        
         .qc-risk-item {
             display: flex;
             align-items: flex-start;
@@ -562,10 +634,13 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                     <div class="ai-analytics-panel" id="aiAnalyticsPanel" style="display: none;">
                         <div class="ai-analytics-header">
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <i class="fas fa-robot" style="color: var(--primary-color-1);"></i>
-                                <h3 style="margin: 0;">AI Impact Analysis for Quezon City</h3>
+                                <i class="fas fa-map-marker-alt" style="color: var(--primary-color-1);"></i>
+                                <div>
+                                    <h3 style="margin: 0;">AI Impact Analysis for Quezon City</h3>
+                                    <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem; opacity: 0.9;">Focused analysis on Quezon City area</p>
+                                </div>
                             </div>
-                            <button onclick="document.getElementById('aiAnalyticsPanel').style.display='none'" style="background:none;border:none;color:inherit;cursor:pointer;font-size:1.5rem;line-height:1;">×</button>
+                            <button onclick="document.getElementById('aiAnalyticsPanel').style.display='none'" style="background:none;border:none;color:inherit;cursor:pointer;font-size:1.5rem;line-height:1;opacity:0.8;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">×</button>
                         </div>
                         <div class="ai-analytics-content" id="aiAnalyticsContent">
                             <div style="text-align: center; padding: 2rem;">
@@ -598,10 +673,6 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             <button id="filterBtn" class="earthquake-control-btn" title="Filter by Magnitude">
                                 <i class="fas fa-filter"></i>
                                 <span>Filter</span>
-                            </button>
-                            <button id="aiAnalyticsBtn" class="earthquake-control-btn" title="AI Impact Analysis" onclick="showAIAnalytics()">
-                                <i class="fas fa-robot"></i>
-                                <span>AI Analysis</span>
                             </button>
                             <button id="realtimeToggleBtn" class="earthquake-control-btn active" title="Toggle Real-time Updates" onclick="toggleRealtime()">
                                 <i class="fas fa-circle" style="color: #4CAF50; font-size: 0.7rem;"></i>
@@ -1687,19 +1758,58 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             contentEl.innerHTML = `
                 <div style="text-align: center; padding: 2rem;">
                     <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--primary-color-1);"></i>
-                    <p>Analyzing earthquake impacts on Quezon City...</p>
-                    <p style="font-size: 0.9em; color: var(--text-secondary-1); margin-top: 0.5rem;">This may take a few seconds</p>
+                    <p>Analyzing earthquake impacts specifically for Quezon City...</p>
+                    <p style="font-size: 0.9em; color: var(--text-secondary-1); margin-top: 0.5rem;">Focusing on earthquakes affecting Quezon City area</p>
                 </div>
             `;
             
-            // Prepare earthquake data for API
-            const eqData = earthquakes.map(feature => ({
+            // Quezon City coordinates
+            const qcLat = 14.6488;
+            const qcLon = 121.0509;
+            
+            // Filter and prioritize earthquakes near Quezon City (within 300km)
+            // Sort by: 1) Distance from QC (closer first), 2) Magnitude (higher first)
+            const earthquakesWithDistance = earthquakes.map(feature => {
+                const [lon, lat] = feature.geometry.coordinates;
+                const distance = calculateDistanceKm(lat, lon, qcLat, qcLon);
+                return {
+                    ...feature,
+                    distanceFromQC: distance
+                };
+            });
+            
+            // Prioritize earthquakes within 300km of Quezon City
+            const nearbyEarthquakes = earthquakesWithDistance
+                .filter(eq => eq.distanceFromQC <= 300)
+                .sort((a, b) => {
+                    // First sort by distance (closer first), then by magnitude (higher first)
+                    if (Math.abs(a.distanceFromQC - b.distanceFromQC) < 10) {
+                        return (b.properties.mag || 0) - (a.properties.mag || 0);
+                    }
+                    return a.distanceFromQC - b.distanceFromQC;
+                });
+            
+            // If we have nearby earthquakes, use them; otherwise use all but prioritize by magnitude
+            const earthquakesToAnalyze = nearbyEarthquakes.length > 0 
+                ? nearbyEarthquakes.slice(0, 15) // Top 15 nearby earthquakes
+                : earthquakesWithDistance
+                    .sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0))
+                    .slice(0, 10); // Top 10 by magnitude if none nearby
+            
+            // Prepare earthquake data for API - focusing on Quezon City impact
+            const eqData = earthquakesToAnalyze.map(feature => ({
                 lat: feature.geometry.coordinates[1],
                 lon: feature.geometry.coordinates[0],
                 magnitude: feature.properties.mag || 0,
                 depth: feature.geometry.coordinates[2] || 0,
                 place: feature.properties.place || 'Unknown',
-                time: feature.properties.time
+                time: feature.properties.time,
+                distanceFromQC: feature.distanceFromQC || calculateDistanceKm(
+                    feature.geometry.coordinates[1],
+                    feature.geometry.coordinates[0],
+                    qcLat,
+                    qcLon
+                )
             }));
             
             fetch('../api/earthquake-ai-analytics.php?action=analyze', {
