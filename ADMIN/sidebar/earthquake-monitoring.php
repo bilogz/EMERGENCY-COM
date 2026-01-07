@@ -141,6 +141,20 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         .earthquake-marker {
             background: transparent !important;
             border: none !important;
+            pointer-events: auto !important;
+        }
+        
+        .earthquake-marker div {
+            pointer-events: auto !important;
+            cursor: pointer !important;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
+        /* Ensure markers are visible on map */
+        .leaflet-marker-icon {
+            z-index: 1000 !important;
         }
         
         .earthquake-stats {
@@ -546,17 +560,23 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             else if (mag >= 4.5) color = '#FF9800'; // Orange - moderate (4.5-5.0)
                             else if (mag >= 4.0) color = '#FFC107'; // Yellow - light (4.0-4.5)
                             
-                            // Create custom icon
-                            const iconSize = Math.max(20, Math.min(50, mag * 8));
+                            // Create custom icon with more visible styling
+                            const iconSize = Math.max(25, Math.min(60, mag * 10)); // Larger default size
+                            const borderWidth = mag >= 5.0 ? 4 : 3; // Thicker border for major earthquakes
+                            
                             const icon = L.divIcon({
                                 className: 'earthquake-marker',
-                                html: `<div style="background:${color};width:${iconSize}px;height:${iconSize}px;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`,
+                                html: `<div style="background:${color};width:${iconSize}px;height:${iconSize}px;border-radius:50%;border:${borderWidth}px solid white;box-shadow:0 0 8px ${color}, 0 0 16px ${color}, 0 2px 8px rgba(0,0,0,0.5);position:relative;z-index:1000;"></div>`,
                                 iconSize: [iconSize, iconSize],
-                                iconAnchor: [iconSize/2, iconSize/2]
+                                iconAnchor: [iconSize/2, iconSize/2],
+                                popupAnchor: [0, -iconSize/2]
                             });
                             
-                            // Create marker
-                            const marker = L.marker([lat, lon], { icon: icon });
+                            // Create marker with higher z-index
+                            const marker = L.marker([lat, lon], { 
+                                icon: icon,
+                                zIndexOffset: mag * 100 // Higher z-index for larger magnitudes
+                            });
                             
                             // Check if earthquake is near known volcanoes (especially Albay/Mayon)
                             const isNearVolcano = checkIfNearVolcano(lat, lon);
@@ -583,8 +603,14 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                                 </div>
                             `);
                             
+                            // Add marker to map and verify it was added
                             marker.addTo(map);
                             earthquakeMarkers.push(marker);
+                            
+                            // Debug: Log marker creation
+                            if (earthquakeMarkers.length <= 5) { // Log first 5 for debugging
+                                console.log(`Marker added: Mag ${mag.toFixed(1)} at ${lat.toFixed(4)}, ${lon.toFixed(4)} - Color: ${color}, Size: ${iconSize}px`);
+                            }
                         });
                         
                         // Update statistics
@@ -592,6 +618,64 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                         
                         // Show info panel
                         showEarthquakeInfo(data.features.length);
+                        
+                        // Debug: Verify markers are on map
+                        console.log(`✅ Total markers created: ${earthquakeMarkers.length}`);
+                        let markerCount = 0;
+                        map.eachLayer(layer => {
+                            if (layer instanceof L.Marker) {
+                                markerCount++;
+                            }
+                        });
+                        console.log(`✅ Markers on map: ${markerCount}`);
+                        
+                        // Show marker summary by color
+                        const colorCounts = {
+                            green: earthquakeMarkers.filter(m => {
+                                const icon = m.options.icon;
+                                return icon && icon.options.html.includes('#4CAF50');
+                            }).length,
+                            yellow: earthquakeMarkers.filter(m => {
+                                const icon = m.options.icon;
+                                return icon && icon.options.html.includes('#FFC107');
+                            }).length,
+                            orange: earthquakeMarkers.filter(m => {
+                                const icon = m.options.icon;
+                                return icon && icon.options.html.includes('#FF9800');
+                            }).length,
+                            red: earthquakeMarkers.filter(m => {
+                                const icon = m.options.icon;
+                                return icon && icon.options.html.includes('#FF5722');
+                            }).length
+                        };
+                        console.log('Marker colors:', colorCounts);
+                        
+                        // Force map refresh to ensure markers are visible
+                        setTimeout(() => {
+                            if (map) {
+                                map.invalidateSize();
+                                // Pan slightly to trigger marker visibility
+                                const currentCenter = map.getCenter();
+                                map.setView(currentCenter, map.getZoom(), { animate: false });
+                                
+                                // Verify markers are still there after refresh
+                                setTimeout(() => {
+                                    let afterRefreshCount = 0;
+                                    map.eachLayer(layer => {
+                                        if (layer instanceof L.Marker) afterRefreshCount++;
+                                    });
+                                    console.log(`✅ Markers after refresh: ${afterRefreshCount}`);
+                                    if (afterRefreshCount === 0 && earthquakeMarkers.length > 0) {
+                                        console.error('❌ ERROR: Markers disappeared after refresh! Re-adding...');
+                                        earthquakeMarkers.forEach(marker => {
+                                            if (!map.hasLayer(marker)) {
+                                                marker.addTo(map);
+                                            }
+                                        });
+                                    }
+                                }, 100);
+                            }
+                        }, 500);
                         
                         // Check for new earthquakes and trigger AI analysis if significant
                         checkForNewEarthquakes(data.features);
@@ -604,10 +688,12 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                         }
                     } else {
                         // No earthquakes found - but DON'T clear existing markers
-                        console.warn('No earthquakes found in response, keeping existing markers');
+                        console.warn('⚠️ No earthquakes found in response, keeping existing markers');
+                        console.log(`Current markers on map: ${earthquakeMarkers.length}`);
                         if (earthquakeData.length === 0) {
                             // Only show alert if we have no data at all
                             updateStatistics([]);
+                            console.error('❌ No earthquake data available. Check API connection.');
                         }
                     }
                     
@@ -883,16 +969,21 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                                 else if (mag >= 4.0) color = '#FFC107'; // Yellow - light (4.0-4.5)
                                 
                                 // Create custom icon with pulsing animation for new earthquakes
-                                const iconSize = Math.max(20, Math.min(50, mag * 8));
+                                const iconSize = Math.max(25, Math.min(60, mag * 10)); // Larger size
+                                const borderWidth = mag >= 5.0 ? 4 : 3;
                                 const icon = L.divIcon({
                                     className: 'earthquake-marker',
-                                    html: `<div style="background:${color};width:${iconSize}px;height:${iconSize}px;border-radius:50%;border:3px solid white;box-shadow:0 0 10px ${color}, 0 0 20px ${color};animation:pulse 2s infinite;"></div>`,
+                                    html: `<div style="background:${color};width:${iconSize}px;height:${iconSize}px;border-radius:50%;border:${borderWidth}px solid white;box-shadow:0 0 12px ${color}, 0 0 24px ${color}, 0 2px 8px rgba(0,0,0,0.5);animation:pulse 2s infinite;position:relative;z-index:1000;"></div>`,
                                     iconSize: [iconSize, iconSize],
-                                    iconAnchor: [iconSize/2, iconSize/2]
+                                    iconAnchor: [iconSize/2, iconSize/2],
+                                    popupAnchor: [0, -iconSize/2]
                                 });
                                 
-                                // Create marker
-                                const marker = L.marker([lat, lon], { icon: icon });
+                                // Create marker with higher z-index
+                                const marker = L.marker([lat, lon], { 
+                                    icon: icon,
+                                    zIndexOffset: mag * 100 // Higher z-index for larger magnitudes
+                                });
                                 
                                 // Check if earthquake is near known volcanoes
                                 const isNearVolcano = checkIfNearVolcano(lat, lon);
