@@ -170,6 +170,74 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             color: var(--primary-color-1);
         }
         
+        .ai-analytics-panel {
+            background: var(--card-bg-1);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: 1px solid var(--border-color-1);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+        
+        .ai-analytics-header {
+            background: linear-gradient(135deg, var(--primary-color-1), #6c5ce7);
+            color: white;
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .ai-analytics-content {
+            padding: 1.5rem;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .risk-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+        
+        .risk-low { background: #4CAF50; color: white; }
+        .risk-moderate { background: #FFC107; color: #333; }
+        .risk-high { background: #FF9800; color: white; }
+        .risk-critical { background: #F44336; color: white; }
+        
+        .hazard-item {
+            background: var(--card-bg-1);
+            border-left: 4px solid var(--primary-color-1);
+            padding: 0.75rem 1rem;
+            margin: 0.5rem 0;
+            border-radius: 4px;
+        }
+        
+        .impact-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color-1);
+        }
+        
+        .impact-item:last-child {
+            border-bottom: none;
+        }
+        
+        .recommendation-item {
+            background: #e3f2fd;
+            padding: 0.75rem;
+            margin: 0.5rem 0;
+            border-radius: 4px;
+            border-left: 3px solid #2196F3;
+        }
+        
+        [data-theme="dark"] .recommendation-item {
+            background: #1e3a5f;
+            border-left-color: #64b5f6;
+        }
+        
         /* Map always shows natural colors - not affected by dark mode */
         #earthquakeMap {
             filter: none !important;
@@ -259,6 +327,23 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                         </div>
                     </div>
                     
+                    <!-- AI Analytics Panel -->
+                    <div class="ai-analytics-panel" id="aiAnalyticsPanel" style="display: none;">
+                        <div class="ai-analytics-header">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-robot" style="color: var(--primary-color-1);"></i>
+                                <h3 style="margin: 0;">AI Impact Analysis for Quezon City</h3>
+                            </div>
+                            <button onclick="document.getElementById('aiAnalyticsPanel').style.display='none'" style="background:none;border:none;color:inherit;cursor:pointer;font-size:1.5rem;line-height:1;">×</button>
+                        </div>
+                        <div class="ai-analytics-content" id="aiAnalyticsContent">
+                            <div style="text-align: center; padding: 2rem;">
+                                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--primary-color-1);"></i>
+                                <p>Analyzing earthquake impacts...</p>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Map Container -->
                     <div class="map-container">
                         <div id="earthquakeMap"></div>
@@ -278,6 +363,14 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             <button id="filterBtn" class="earthquake-control-btn" title="Filter by Magnitude">
                                 <i class="fas fa-filter"></i>
                                 <span>Filter</span>
+                            </button>
+                            <button id="aiAnalyticsBtn" class="earthquake-control-btn" title="AI Impact Analysis" onclick="showAIAnalytics()">
+                                <i class="fas fa-robot"></i>
+                                <span>AI Analysis</span>
+                            </button>
+                            <button id="realtimeToggleBtn" class="earthquake-control-btn active" title="Toggle Real-time Updates" onclick="toggleRealtime()">
+                                <i class="fas fa-circle" style="color: #4CAF50; font-size: 0.7rem;"></i>
+                                <span id="realtimeStatus">Real-time ON</span>
                             </button>
                         </div>
                         
@@ -303,6 +396,10 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         let earthquakeMarkers = [];
         let earthquakeData = [];
         let minMagnitude = 2.5;
+        let realtimeEnabled = true;
+        let realtimeInterval = null;
+        let lastUpdateTime = null;
+        let lastEarthquakeCount = 0;
         
         // Initialize map
         function initMap() {
@@ -324,6 +421,9 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             // Setup button handlers
             document.getElementById('refreshBtn')?.addEventListener('click', loadEarthquakeData);
             document.getElementById('filterBtn')?.addEventListener('click', showFilterDialog);
+            
+            // Start real-time updates
+            startRealtimeUpdates();
             
             // Ensure Quezon City stays focused on resize
             window.addEventListener('resize', () => {
@@ -374,10 +474,14 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 maxLon: 127.0
             };
             
-            // USGS Earthquake API - Last 30 days, magnitude 2.5+, Philippines region
+            // USGS Earthquake API - Last 30 days for historical, but also check last hour for real-time
             const startTime = new Date();
             startTime.setDate(startTime.getDate() - 30);
             const endTime = new Date();
+            
+            // For real-time detection, also check last hour
+            const recentStartTime = new Date();
+            recentStartTime.setHours(recentStartTime.getHours() - 1);
             
             const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${startTime.toISOString().split('T')[0]}&endtime=${endTime.toISOString().split('T')[0]}&minmagnitude=${minMagnitude}&maxlatitude=${philippinesBounds.maxLat}&minlatitude=${philippinesBounds.minLat}&maxlongitude=${philippinesBounds.maxLon}&minlongitude=${philippinesBounds.minLon}`;
             
@@ -447,6 +551,16 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                         
                         // Show info panel
                         showEarthquakeInfo(data.features.length);
+                        
+                        // Check for new earthquakes and trigger AI analysis if significant
+                        checkForNewEarthquakes(data.features);
+                        
+                        // Auto-trigger AI analysis for significant earthquakes
+                        const significantEarthquakes = data.features.filter(f => (f.properties.mag || 0) >= 4.0);
+                        if (significantEarthquakes.length > 0 && realtimeEnabled) {
+                            // Auto-analyze if there are significant earthquakes
+                            setTimeout(() => analyzeEarthquakeImpact(data.features), 2000);
+                        }
                     } else {
                         alert('No recent earthquakes found in the Philippines region.');
                         updateStatistics([]);
@@ -544,9 +658,297 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             }
         }
         
+        // Real-time update functions
+        function startRealtimeUpdates() {
+            if (realtimeInterval) {
+                clearInterval(realtimeInterval);
+            }
+            
+            if (realtimeEnabled) {
+                // Update every 2 minutes (120000 ms)
+                realtimeInterval = setInterval(() => {
+                    console.log('Auto-refreshing earthquake data...');
+                    loadEarthquakeData();
+                }, 120000); // 2 minutes
+                
+                updateRealtimeStatus(true);
+            }
+        }
+        
+        function stopRealtimeUpdates() {
+            if (realtimeInterval) {
+                clearInterval(realtimeInterval);
+                realtimeInterval = null;
+            }
+            updateRealtimeStatus(false);
+        }
+        
+        function toggleRealtime() {
+            realtimeEnabled = !realtimeEnabled;
+            const btn = document.getElementById('realtimeToggleBtn');
+            
+            if (realtimeEnabled) {
+                startRealtimeUpdates();
+                btn.classList.add('active');
+            } else {
+                stopRealtimeUpdates();
+                btn.classList.remove('active');
+            }
+        }
+        
+        function updateRealtimeStatus(enabled) {
+            const statusEl = document.getElementById('realtimeStatus');
+            const iconEl = document.querySelector('#realtimeToggleBtn i');
+            
+            if (enabled) {
+                statusEl.textContent = 'Real-time ON';
+                if (iconEl) {
+                    iconEl.style.color = '#4CAF50';
+                }
+            } else {
+                statusEl.textContent = 'Real-time OFF';
+                if (iconEl) {
+                    iconEl.style.color = '#999';
+                }
+            }
+        }
+        
+        function checkForNewEarthquakes(features) {
+            const currentCount = features.length;
+            if (lastEarthquakeCount > 0 && currentCount > lastEarthquakeCount) {
+                const newCount = currentCount - lastEarthquakeCount;
+                console.log(`New earthquakes detected: ${newCount}`);
+                
+                // Show notification if significant
+                const significantNew = features.slice(0, newCount).filter(f => (f.properties.mag || 0) >= 4.0);
+                if (significantNew.length > 0) {
+                    showNewEarthquakeNotification(significantNew.length);
+                }
+            }
+            lastEarthquakeCount = currentCount;
+            lastUpdateTime = new Date();
+        }
+        
+        function showNewEarthquakeNotification(count) {
+            // Create a temporary notification
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #FF5722;
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 10000;
+                animation: slideIn 0.3s ease-out;
+            `;
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div>
+                        <strong>${count} New Significant Earthquake${count > 1 ? 's' : ''} Detected!</strong>
+                        <div style="font-size: 0.9em; margin-top: 0.25rem;">AI analysis available</div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
+        }
+        
+        // AI Analytics Functions
+        function showAIAnalytics() {
+            const panel = document.getElementById('aiAnalyticsPanel');
+            if (earthquakeData.length === 0) {
+                alert('No earthquake data available for analysis. Please load earthquake data first.');
+                return;
+            }
+            
+            panel.style.display = 'block';
+            analyzeEarthquakeImpact(earthquakeData);
+        }
+        
+        function analyzeEarthquakeImpact(earthquakes) {
+            const contentEl = document.getElementById('aiAnalyticsContent');
+            contentEl.innerHTML = `
+                <div style="text-align: center; padding: 2rem;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--primary-color-1);"></i>
+                    <p>Analyzing earthquake impacts on Quezon City...</p>
+                    <p style="font-size: 0.9em; color: var(--text-secondary-1); margin-top: 0.5rem;">This may take a few seconds</p>
+                </div>
+            `;
+            
+            // Prepare earthquake data for API
+            const eqData = earthquakes.map(feature => ({
+                lat: feature.geometry.coordinates[1],
+                lon: feature.geometry.coordinates[0],
+                magnitude: feature.properties.mag || 0,
+                depth: feature.geometry.coordinates[2] || 0,
+                place: feature.properties.place || 'Unknown',
+                time: feature.properties.time
+            }));
+            
+            fetch('../api/earthquake-ai-analytics.php?action=analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    earthquakes: eqData
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.analysis) {
+                    displayAIAnalysis(data.analysis);
+                } else {
+                    contentEl.innerHTML = `
+                        <div style="padding: 1rem; color: var(--error-color, #F44336);">
+                            <i class="fas fa-exclamation-circle"></i> ${data.message || 'Failed to generate analysis'}
+                            <p style="font-size: 0.9em; margin-top: 0.5rem;">Please ensure Gemini API key is configured in Automated Warnings → AI Warning Settings.</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('AI Analysis Error:', error);
+                contentEl.innerHTML = `
+                    <div style="padding: 1rem; color: var(--error-color, #F44336);">
+                        <i class="fas fa-exclamation-circle"></i> Error: ${error.message}
+                    </div>
+                `;
+            });
+        }
+        
+        function displayAIAnalysis(analysis) {
+            const contentEl = document.getElementById('aiAnalyticsContent');
+            
+            // Handle raw response if JSON parsing failed
+            if (analysis.raw_response) {
+                contentEl.innerHTML = `
+                    <div style="padding: 1rem;">
+                        <h4 style="margin-top: 0;">Analysis:</h4>
+                        <div style="white-space: pre-wrap; line-height: 1.6;">${analysis.overall_assessment}</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const riskLevel = analysis.risk_level || 'moderate';
+            const riskClass = `risk-${riskLevel}`;
+            
+            let html = `
+                <div style="margin-bottom: 1.5rem;">
+                    <h3 style="margin: 0 0 0.5rem 0; display: flex; align-items: center;">
+                        Overall Assessment
+                        <span class="risk-badge ${riskClass}">${riskLevel.toUpperCase()}</span>
+                    </h3>
+                    <p style="margin: 0; line-height: 1.6;">${analysis.overall_assessment || 'No assessment available'}</p>
+                </div>
+            `;
+            
+            if (analysis.immediate_impacts && analysis.immediate_impacts.length > 0) {
+                html += `
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="margin: 0 0 0.75rem 0; color: var(--primary-color-1);">
+                            <i class="fas fa-bolt"></i> Immediate Impacts
+                        </h4>
+                        <ul style="margin: 0; padding-left: 1.5rem;">
+                            ${analysis.immediate_impacts.map(impact => `<li style="margin: 0.5rem 0;">${impact}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            if (analysis.potential_hazards && analysis.potential_hazards.length > 0) {
+                html += `
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="margin: 0 0 0.75rem 0; color: var(--primary-color-1);">
+                            <i class="fas fa-exclamation-triangle"></i> Potential Hazards for Quezon City
+                        </h4>
+                        ${analysis.potential_hazards.map(hazard => `
+                            <div class="hazard-item">
+                                <i class="fas fa-circle" style="font-size: 0.5rem; margin-right: 0.5rem;"></i>
+                                ${hazard}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            if (analysis.affected_areas && analysis.affected_areas.length > 0) {
+                html += `
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="margin: 0 0 0.75rem 0; color: var(--primary-color-1);">
+                            <i class="fas fa-map-marker-alt"></i> Potentially Affected Areas in Quezon City
+                        </h4>
+                        <ul style="margin: 0; padding-left: 1.5rem;">
+                            ${analysis.affected_areas.map(area => `<li style="margin: 0.5rem 0;">${area}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            if (analysis.recommendations && analysis.recommendations.length > 0) {
+                html += `
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="margin: 0 0 0.75rem 0; color: var(--primary-color-1);">
+                            <i class="fas fa-lightbulb"></i> Recommendations
+                        </h4>
+                        ${analysis.recommendations.map(rec => `
+                            <div class="recommendation-item">
+                                <i class="fas fa-check-circle" style="color: #2196F3; margin-right: 0.5rem;"></i>
+                                ${rec}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            if (analysis.distance_analysis) {
+                html += `
+                    <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--card-bg-1); border-radius: 4px; border-left: 4px solid var(--primary-color-1);">
+                        <h4 style="margin: 0 0 0.5rem 0; color: var(--primary-color-1);">
+                            <i class="fas fa-ruler"></i> Distance Analysis
+                        </h4>
+                        <p style="margin: 0; line-height: 1.6;">${analysis.distance_analysis}</p>
+                    </div>
+                `;
+            }
+            
+            if (analysis.magnitude_threshold) {
+                html += `
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: #fff3cd; border-radius: 4px; border-left: 4px solid #ffc107;">
+                        <strong><i class="fas fa-info-circle"></i> Note:</strong> ${analysis.magnitude_threshold}
+                    </div>
+                `;
+            }
+            
+            contentEl.innerHTML = html;
+        }
+        
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
             initMap();
+            
+            // Add CSS animations
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOut {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
         });
     </script>
 </body>
