@@ -10,17 +10,37 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
+// Start output buffering to catch any unexpected output
+ob_start();
+
+// Set error handler to catch fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        ob_end_clean();
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(500);
+        echo json_encode([
+            "success" => false,
+            "message" => "Fatal error: " . $error['message'] . " in " . basename($error['file']) . " on line " . $error['line']
+        ]);
+        error_log("Earthquake AI Analytics Fatal Error: " . $error['message'] . " in " . $error['file'] . " on line " . $error['line']);
+    }
+});
+
 header('Content-Type: application/json; charset=utf-8');
 
 try {
     require_once 'db_connect.php';
     require_once 'secure-api-config.php';
 } catch (Exception $e) {
+    ob_end_clean();
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Configuration error: ' . $e->getMessage()]);
     error_log('Earthquake AI Analytics: Failed to load required files: ' . $e->getMessage());
     exit();
 } catch (Error $e) {
+    ob_end_clean();
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Fatal error loading files: ' . $e->getMessage()]);
     error_log('Earthquake AI Analytics: Fatal error loading files: ' . $e->getMessage());
@@ -34,6 +54,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Check if user is logged in
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    ob_end_clean();
     http_response_code(401);
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit();
@@ -47,16 +68,19 @@ try {
             analyzeEarthquakeImpact();
             break;
         default:
+            ob_end_clean();
             http_response_code(400);
             echo json_encode(['success' => false, 'message' => 'Invalid action']);
             break;
     }
 } catch (Exception $e) {
+    ob_end_clean();
     http_response_code(500);
     $errorMessage = 'Error: ' . $e->getMessage();
     error_log('Earthquake AI Analytics Exception: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
     echo json_encode(['success' => false, 'message' => $errorMessage]);
 } catch (Error $e) {
+    ob_end_clean();
     http_response_code(500);
     $errorMessage = 'Fatal error: ' . $e->getMessage();
     error_log('Earthquake AI Analytics Fatal Error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
@@ -74,6 +98,7 @@ function analyzeEarthquakeImpact() {
         $input = file_get_contents('php://input');
         
         if (empty($input)) {
+            ob_end_clean();
             http_response_code(400);
             echo json_encode(['success' => false, 'message' => 'No data received']);
             exit();
@@ -82,12 +107,14 @@ function analyzeEarthquakeImpact() {
         $earthquakeData = json_decode($input, true);
         
         if (json_last_error() !== JSON_ERROR_NONE) {
+            ob_end_clean();
             http_response_code(400);
             echo json_encode(['success' => false, 'message' => 'Invalid JSON: ' . json_last_error_msg()]);
             exit();
         }
         
         if (empty($earthquakeData) || !isset($earthquakeData['earthquakes'])) {
+            ob_end_clean();
             http_response_code(400);
             echo json_encode(['success' => false, 'message' => 'No earthquake data provided']);
             exit();
@@ -96,6 +123,7 @@ function analyzeEarthquakeImpact() {
         $earthquakes = $earthquakeData['earthquakes'] ?? [];
         
         if (empty($earthquakes) || !is_array($earthquakes)) {
+            ob_end_clean();
             http_response_code(400);
             echo json_encode(['success' => false, 'message' => 'Empty or invalid earthquake array']);
             exit();
@@ -115,6 +143,7 @@ function analyzeEarthquakeImpact() {
         }
         
         if (empty($apiKey)) {
+            ob_end_clean();
             http_response_code(500);
             echo json_encode([
                 'success' => false, 
@@ -123,11 +152,13 @@ function analyzeEarthquakeImpact() {
             exit();
         }
     } catch (Exception $e) {
+        ob_end_clean();
         http_response_code(500);
         error_log('Error in analyzeEarthquakeImpact (input processing): ' . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Error processing request: ' . $e->getMessage()]);
         exit();
     } catch (Error $e) {
+        ob_end_clean();
         http_response_code(500);
         error_log('Fatal error in analyzeEarthquakeImpact (input processing): ' . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Fatal error processing request: ' . $e->getMessage()]);
@@ -178,6 +209,7 @@ function analyzeEarthquakeImpact() {
         $analysis = callGeminiAI($apiKey, $prompt);
         
         if ($analysis['success']) {
+            ob_end_clean();
             echo json_encode([
                 'success' => true,
                 'analysis' => $analysis['content'],
@@ -186,6 +218,7 @@ function analyzeEarthquakeImpact() {
             ]);
             exit();
         } else {
+            ob_end_clean();
             http_response_code(500);
             echo json_encode([
                 'success' => false,
@@ -194,11 +227,13 @@ function analyzeEarthquakeImpact() {
             exit();
         }
     } catch (Exception $e) {
+        ob_end_clean();
         http_response_code(500);
         error_log('Error in analyzeEarthquakeImpact (analysis): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
         echo json_encode(['success' => false, 'message' => 'Error during analysis: ' . $e->getMessage()]);
         exit();
     } catch (Error $e) {
+        ob_end_clean();
         http_response_code(500);
         error_log('Fatal error in analyzeEarthquakeImpact (analysis): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
         echo json_encode(['success' => false, 'message' => 'Fatal error during analysis: ' . $e->getMessage()]);
