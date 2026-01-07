@@ -359,9 +359,13 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                         
                         <!-- Controls -->
                         <div class="earthquake-controls">
-                            <button id="refreshBtn" class="earthquake-control-btn" title="Refresh Earthquake Data">
+                            <button id="refreshBtn" class="earthquake-control-btn" title="Refresh Earthquake Data (Last 30 Days)">
                                 <i class="fas fa-sync-alt"></i>
                                 <span>Refresh</span>
+                            </button>
+                            <button id="checkNowBtn" class="earthquake-control-btn" title="Check for New Earthquakes Right Now" onclick="checkRecentEarthquakes()">
+                                <i class="fas fa-search"></i>
+                                <span>Check Now</span>
                             </button>
                             <button id="filterBtn" class="earthquake-control-btn" title="Filter by Magnitude">
                                 <i class="fas fa-filter"></i>
@@ -479,20 +483,27 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 maxLon: 127.0
             };
             
-            // USGS Earthquake API - Last 30 days for historical, but also check last hour for real-time
+            // USGS Earthquake API - Last 30 days with FULL TIMESTAMP (not just date)
+            // This ensures we get ALL earthquakes including recent ones
             const startTime = new Date();
             startTime.setDate(startTime.getDate() - 30);
             const endTime = new Date();
             
-            // For real-time detection, also check last hour
-            const recentStartTime = new Date();
-            recentStartTime.setHours(recentStartTime.getHours() - 1);
+            // Use FULL ISO timestamp (not just date) to get precise real-time data
+            const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${startTime.toISOString()}&endtime=${endTime.toISOString()}&minmagnitude=${minMagnitude}&maxlatitude=${philippinesBounds.maxLat}&minlatitude=${philippinesBounds.minLat}&maxlongitude=${philippinesBounds.maxLon}&minlongitude=${philippinesBounds.minLon}`;
             
-            const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${startTime.toISOString().split('T')[0]}&endtime=${endTime.toISOString().split('T')[0]}&minmagnitude=${minMagnitude}&maxlatitude=${philippinesBounds.maxLat}&minlatitude=${philippinesBounds.minLat}&maxlongitude=${philippinesBounds.maxLon}&minlongitude=${philippinesBounds.minLon}`;
+            console.log('Loading earthquake data from:', startTime.toISOString(), 'to', endTime.toISOString());
             
             fetch(url)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Earthquake data loaded:', data.metadata?.count || 0, 'earthquakes');
+                    
                     // Clear existing markers
                     earthquakeMarkers.forEach(marker => {
                         if (map.hasLayer(marker)) {
@@ -503,12 +514,21 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                     earthquakeData = [];
                     
                     if (data.features && data.features.length > 0) {
+                        console.log('Processing', data.features.length, 'earthquakes');
                         earthquakeData = data.features;
                         
                         // Track earthquake IDs for real-time detection
-                        lastRecentEarthquakeIds = new Set(data.features.map(f => 
-                            f.id || f.properties.code || `${f.properties.time}_${f.geometry.coordinates[0]}_${f.geometry.coordinates[1]}`
-                        ));
+                        // Use a more reliable ID generation method
+                        lastRecentEarthquakeIds = new Set(data.features.map(f => {
+                            // Try multiple ID sources for reliability
+                            if (f.id) return String(f.id);
+                            if (f.properties.code) return String(f.properties.code);
+                            if (f.properties.ids) return String(f.properties.ids).split(',')[0]; // USGS sometimes provides comma-separated IDs
+                            // Fallback: create unique ID from time + coordinates
+                            const coords = f.geometry.coordinates;
+                            return `${f.properties.time}_${coords[0].toFixed(4)}_${coords[1].toFixed(4)}_${(coords[2] || 0).toFixed(1)}`;
+                        }));
+                        console.log('Tracked', lastRecentEarthquakeIds.size, 'earthquake IDs for real-time detection');
                         
                         data.features.forEach(feature => {
                             const [lon, lat] = feature.geometry.coordinates;
@@ -584,7 +604,15 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 })
                 .catch(error => {
                     console.error('Error loading earthquake data:', error);
-                    alert('Could not load earthquake data. Please check your internet connection.');
+                    console.error('Error details:', {
+                        message: error.message,
+                        stack: error.stack,
+                        url: url
+                    });
+                    
+                    // Show error notification instead of alert
+                    const errorMsg = error.message || 'Could not load earthquake data. Please check your internet connection.';
+                    showErrorNotification(errorMsg);
                     
                     // Reset refresh button
                     const refreshBtn = document.getElementById('refreshBtn');
@@ -691,7 +719,8 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                     checkRecentEarthquakes();
                 }, 30000); // 30 seconds - TRUE REAL-TIME
                 
-                // Initial recent check
+                // Initial recent check - run immediately and then after 5 seconds
+                checkRecentEarthquakes(); // Run immediately
                 setTimeout(() => checkRecentEarthquakes(), 5000);
                 
                 updateRealtimeStatus(true);
@@ -710,7 +739,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             updateRealtimeStatus(false);
         }
         
-        // Check for recent earthquakes (last hour) - TRUE REAL-TIME
+        // Check for recent earthquakes (last 2 hours) - TRUE REAL-TIME
         function checkRecentEarthquakes() {
             const philippinesBounds = {
                 minLat: 4.5,
@@ -719,23 +748,59 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 maxLon: 127.0
             };
             
-            // Check last 1 hour for NEW earthquakes
+            // Check last 2 hours for NEW earthquakes (extended window to catch all recent events)
             const startTime = new Date();
-            startTime.setHours(startTime.getHours() - 1);
+            startTime.setHours(startTime.getHours() - 2); // Extended to 2 hours
             const endTime = new Date();
             
             const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${startTime.toISOString()}&endtime=${endTime.toISOString()}&minmagnitude=${minMagnitude}&maxlatitude=${philippinesBounds.maxLat}&minlatitude=${philippinesBounds.minLat}&maxlongitude=${philippinesBounds.maxLon}&minlongitude=${philippinesBounds.minLon}`;
             
+            console.log('Real-time check: Looking for earthquakes from', startTime.toISOString(), 'to', endTime.toISOString());
+            
             fetch(url)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Real-time check response:', data.metadata?.count || 0, 'earthquakes found');
+                    
+                    if (!data || !data.features) {
+                        console.warn('No features in response:', data);
+                        return;
+                    }
                     if (data.features && data.features.length > 0) {
-                        const currentIds = new Set(data.features.map(f => f.id || f.properties.code || `${f.properties.time}_${f.geometry.coordinates[0]}_${f.geometry.coordinates[1]}`));
+                        // Generate IDs using same method as main load
+                        const currentIds = new Set(data.features.map(f => {
+                            if (f.id) return String(f.id);
+                            if (f.properties.code) return String(f.properties.code);
+                            if (f.properties.ids) return String(f.properties.ids).split(',')[0];
+                            const coords = f.geometry.coordinates;
+                            return `${f.properties.time}_${coords[0].toFixed(4)}_${coords[1].toFixed(4)}_${(coords[2] || 0).toFixed(1)}`;
+                        }));
                         
                         // Find new earthquakes
                         const newEarthquakes = data.features.filter(f => {
-                            const id = f.id || f.properties.code || `${f.properties.time}_${f.geometry.coordinates[0]}_${f.geometry.coordinates[1]}`;
-                            return !lastRecentEarthquakeIds.has(id);
+                            let id;
+                            if (f.id) id = String(f.id);
+                            else if (f.properties.code) id = String(f.properties.code);
+                            else if (f.properties.ids) id = String(f.properties.ids).split(',')[0];
+                            else {
+                                const coords = f.geometry.coordinates;
+                                id = `${f.properties.time}_${coords[0].toFixed(4)}_${coords[1].toFixed(4)}_${(coords[2] || 0).toFixed(1)}`;
+                            }
+                            const isNew = !lastRecentEarthquakeIds.has(id);
+                            if (isNew) {
+                                console.log('New earthquake detected:', {
+                                    id: id,
+                                    magnitude: f.properties.mag,
+                                    place: f.properties.place,
+                                    time: new Date(f.properties.time).toISOString()
+                                });
+                            }
+                            return isNew;
                         });
                         
                         if (newEarthquakes.length > 0) {
@@ -823,6 +888,11 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 })
                 .catch(error => {
                     console.error('Error checking recent earthquakes:', error);
+                    console.error('Error details:', {
+                        message: error.message,
+                        stack: error.stack,
+                        url: url
+                    });
                 });
         }
         
@@ -879,6 +949,39 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             }
             lastEarthquakeCount = currentCount;
             lastUpdateTime = new Date();
+        }
+        
+        function showErrorNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'earthquake-notification';
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #F44336;
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 10000;
+                animation: slideIn 0.3s ease-out;
+                max-width: 300px;
+            `;
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-exclamation-circle" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <strong>Error Loading Data</strong>
+                        <div style="font-size: 0.9em; margin-top: 0.25rem;">${message}</div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => notification.remove(), 5000);
+            }, 5000);
         }
         
         function showNewEarthquakeNotification(count, isSignificant = true) {
