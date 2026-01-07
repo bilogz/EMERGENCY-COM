@@ -12,7 +12,31 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
-header('Content-Type: application/json');
+// Helper function to send JSON response and exit - MUST be defined before use
+function sendJsonResponse($data, $statusCode = 200) {
+    // Clean any previous output
+    if (ob_get_level() > 0) {
+        ob_clean();
+    }
+    // Only set headers if they haven't been sent
+    if (!headers_sent()) {
+        http_response_code($statusCode);
+        header('Content-Type: application/json');
+    } else {
+        // Headers already sent, just set response code if possible
+        http_response_code($statusCode);
+    }
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (ob_get_level() > 0) {
+        ob_end_flush();
+    }
+    exit;
+}
+
+// Set JSON header early (only if headers not sent)
+if (!headers_sent()) {
+    header('Content-Type: application/json');
+}
 
 try {
     require_once __DIR__ . '/db_connect.php';
@@ -49,15 +73,6 @@ try {
         'message' => 'Database error',
         'error' => $e->getMessage()
     ], 500);
-}
-
-// Helper function to send JSON response and exit
-function sendJsonResponse($data, $statusCode = 200) {
-    ob_clean();
-    http_response_code($statusCode);
-    echo json_encode($data);
-    ob_end_flush();
-    exit;
 }
 
 // Check if device tracking columns exist
@@ -307,14 +322,12 @@ try {
             $conversationData['userAgent'] = $conversation['user_agent'] ?? null;
         }
         
-        ob_clean();
-        echo json_encode([
+        sendJsonResponse([
             'success' => true,
             'conversationId' => $conversation['conversation_id'],
             'conversation' => $conversationData,
             'isNew' => false
         ]);
-        ob_end_flush();
     } else {
         // Create new conversation
         $conversationId = null;
@@ -383,8 +396,7 @@ try {
             }
         }
         
-        ob_clean();
-        echo json_encode([
+        sendJsonResponse([
             'success' => true,
             'conversationId' => $conversationId,
             'conversation' => [
@@ -404,7 +416,6 @@ try {
             ],
             'isNew' => true
         ]);
-        ob_end_flush();
     }
     
 } catch (PDOException $e) {
