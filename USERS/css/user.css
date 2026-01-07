@@ -2548,7 +2548,10 @@ textarea:focus {
         text-align: center !important;
         width: calc(100% - var(--sidebar-width-1, 280px)) !important;
         max-width: calc(100% - var(--sidebar-width-1, 280px)) !important;
+        display: flex !important;
+        flex-direction: column !important;
         align-items: center !important;
+        justify-content: flex-start !important;
     }
     
     /* Ensure containers are centered within the available space */
@@ -2569,6 +2572,7 @@ textarea:focus {
         margin-left: auto !important;
         margin-right: auto !important;
         width: 100% !important;
+        max-width: 100% !important;
         text-align: center !important;
     }
     
@@ -2577,7 +2581,32 @@ textarea:focus {
         margin-left: auto !important;
         margin-right: auto !important;
         width: 100% !important;
+        max-width: 100% !important;
         text-align: center !important;
+    }
+    
+    /* Ensure hero sections are centered */
+    .main-content > .hero-section,
+    body .hero-section {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+    
+    .main-content > .home-hero,
+    body .home-hero {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+    
+    /* Ensure all direct children of main-content are centered */
+    .main-content > *:not(.hero-section):not(.home-hero) {
+        max-width: 1200px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
     }
 }
 
@@ -4466,6 +4495,10 @@ body .sub-container select {
         padding-left: 0 !important;
         width: calc(100% - var(--sidebar-width-1, 280px)) !important;
         max-width: calc(100% - var(--sidebar-width-1, 280px)) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
     }
     
     /* Override collapsed sidebar margin */
@@ -4493,6 +4526,7 @@ body .sub-container select {
         margin-left: auto !important;
         margin-right: auto !important;
         width: 100% !important;
+        max-width: 100% !important;
         text-align: center !important;
     }
     
@@ -4501,6 +4535,7 @@ body .sub-container select {
         margin-left: auto !important;
         margin-right: auto !important;
         width: 100% !important;
+        max-width: 100% !important;
         text-align: center !important;
     }
     
@@ -4509,7 +4544,32 @@ body .sub-container select {
         margin-left: auto !important;
         margin-right: auto !important;
         width: 100% !important;
+        max-width: 100% !important;
         text-align: center !important;
+    }
+    
+    /* Ensure hero sections are centered */
+    .main-content > .hero-section,
+    body .hero-section {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+    
+    .main-content > .home-hero,
+    body .home-hero {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+    
+    /* Ensure all direct children of main-content are centered (except hero sections) */
+    .main-content > *:not(.hero-section):not(.home-hero) {
+        max-width: 1200px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
     }
     
     /* Ensure cards grid is centered */
