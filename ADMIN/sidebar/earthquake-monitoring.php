@@ -357,6 +357,18 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             border-color: rgba(255, 255, 255, 0.3);
         }
         
+        [data-theme="dark"] .ai-analytics-panel.minimized {
+            background: var(--card-bg-1);
+        }
+        
+        [data-theme="dark"] .ai-analytics-header-btn {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        [data-theme="dark"] .ai-analytics-header-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+        
         .qc-risk-item {
             display: flex;
             align-items: flex-start;
@@ -449,6 +461,15 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             border: 1px solid var(--border-color-1);
             margin-bottom: 1.5rem;
             overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .ai-analytics-panel.minimized {
+            cursor: pointer;
+        }
+        
+        .ai-analytics-panel.minimized .ai-analytics-content {
+            display: none;
         }
         
         .ai-analytics-header {
@@ -458,12 +479,70 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             display: flex;
             justify-content: space-between;
             align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .ai-analytics-header:hover {
+            opacity: 0.95;
+        }
+        
+        .ai-analytics-header-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .ai-analytics-header-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            padding: 0.4rem 0.6rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+            opacity: 0.8;
+        }
+        
+        .ai-analytics-header-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            opacity: 1;
         }
         
         .ai-analytics-content {
             padding: 1.5rem;
             max-height: 500px;
             overflow-y: auto;
+            transition: all 0.3s ease;
+            animation: slideDownContent 0.3s ease-out;
+        }
+        
+        @keyframes slideDownContent {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .ai-analytics-panel.minimized .ai-analytics-content {
+            animation: slideUpContent 0.3s ease-out;
+        }
+        
+        @keyframes slideUpContent {
+            from {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
         }
         
         .risk-badge {
@@ -632,15 +711,22 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                     
                     <!-- AI Analytics Panel -->
                     <div class="ai-analytics-panel" id="aiAnalyticsPanel" style="display: none;">
-                        <div class="ai-analytics-header">
+                        <div class="ai-analytics-header" onclick="toggleAIPanelMinimize()">
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <i class="fas fa-map-marker-alt" style="color: var(--primary-color-1);"></i>
+                                <i class="fas fa-map-marker-alt" style="color: rgba(255,255,255,0.9);"></i>
                                 <div>
                                     <h3 style="margin: 0;">AI Impact Analysis for Quezon City</h3>
-                                    <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem; opacity: 0.9;">Focused analysis on Quezon City area</p>
+                                    <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem; opacity: 0.9;" id="aiPanelSubtitle">Focused analysis on Quezon City area</p>
                                 </div>
                             </div>
-                            <button onclick="document.getElementById('aiAnalyticsPanel').style.display='none'" style="background:none;border:none;color:inherit;cursor:pointer;font-size:1.5rem;line-height:1;opacity:0.8;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">×</button>
+                            <div class="ai-analytics-header-controls" onclick="event.stopPropagation();">
+                                <button class="ai-analytics-header-btn" id="minimizeBtn" onclick="toggleAIPanelMinimize()" title="Minimize/Maximize">
+                                    <i class="fas fa-minus" id="minimizeIcon"></i>
+                                </button>
+                                <button class="ai-analytics-header-btn" onclick="closeAIPanel()" title="Close">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="ai-analytics-content" id="aiAnalyticsContent">
                             <div style="text-align: center; padding: 2rem;">
@@ -1749,8 +1835,49 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 return;
             }
             
+            // Show panel and ensure it's expanded (not minimized)
             panel.style.display = 'block';
+            panel.classList.remove('minimized');
+            updateMinimizeButton();
             analyzeEarthquakeImpact(earthquakeData);
+        }
+        
+        function toggleAIPanelMinimize() {
+            const panel = document.getElementById('aiAnalyticsPanel');
+            if (panel.style.display === 'none') {
+                // If panel is hidden, show it first
+                showAIAnalytics();
+                return;
+            }
+            
+            // Toggle minimized state
+            panel.classList.toggle('minimized');
+            updateMinimizeButton();
+        }
+        
+        function updateMinimizeButton() {
+            const panel = document.getElementById('aiAnalyticsPanel');
+            const minimizeIcon = document.getElementById('minimizeIcon');
+            const subtitle = document.getElementById('aiPanelSubtitle');
+            
+            if (panel.classList.contains('minimized')) {
+                minimizeIcon.className = 'fas fa-plus';
+                if (subtitle) {
+                    subtitle.textContent = 'Click to expand analysis';
+                }
+            } else {
+                minimizeIcon.className = 'fas fa-minus';
+                if (subtitle) {
+                    subtitle.textContent = 'Focused analysis on Quezon City area';
+                }
+            }
+        }
+        
+        function closeAIPanel() {
+            const panel = document.getElementById('aiAnalyticsPanel');
+            panel.style.display = 'none';
+            panel.classList.remove('minimized');
+            updateMinimizeButton();
         }
         
         function analyzeEarthquakeImpact(earthquakes) {

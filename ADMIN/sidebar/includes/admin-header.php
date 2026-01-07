@@ -742,20 +742,35 @@ document.addEventListener('DOMContentLoaded', function() {
     function initGlobalChatNotifications() {
         // Only initialize if Firebase is available and we're not already on chat pages
         if (typeof firebase === 'undefined') {
-            // Load Firebase SDKs
+            // Load Firebase SDKs - Use compat version for non-module usage
             const firebaseAppScript = document.createElement('script');
-            firebaseAppScript.src = 'https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js';
+            firebaseAppScript.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js';
             document.head.appendChild(firebaseAppScript);
             
             const firebaseDatabaseScript = document.createElement('script');
-            firebaseDatabaseScript.src = 'https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js';
+            firebaseDatabaseScript.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js';
             document.head.appendChild(firebaseDatabaseScript);
             
             // Wait for Firebase to load
             firebaseAppScript.onload = () => {
                 firebaseDatabaseScript.onload = () => {
-                    setupChatNotifications();
+                    // Add small delay to ensure Firebase is fully initialized
+                    setTimeout(() => {
+                        if (typeof firebase !== 'undefined') {
+                            setupChatNotifications();
+                        } else {
+                            console.warn('Firebase failed to load, chat notifications unavailable');
+                        }
+                    }, 100);
                 };
+            };
+            
+            // Error handling
+            firebaseAppScript.onerror = () => {
+                console.error('Failed to load Firebase App');
+            };
+            firebaseDatabaseScript.onerror = () => {
+                console.error('Failed to load Firebase Database');
             };
         } else {
             setupChatNotifications();
@@ -763,45 +778,58 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function setupChatNotifications() {
-        const currentPage = window.location.pathname;
-        const isChatPage = currentPage.includes('two-way-communication') || currentPage.includes('chat-queue');
-        
-        // Don't show notifications on chat pages
-        if (isChatPage) return;
-        
-        const firebaseConfig = {
-            apiKey: "AIzaSyAvfyPTCsBp0dL76VsEVkiIrIsQkko91os",
-            authDomain: "emergencycommunicationsy-eb828.firebaseapp.com",
-            databaseURL: "https://emergencycommunicationsy-eb828-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "emergencycommunicationsy-eb828",
-            storageBucket: "emergencycommunicationsy-eb828.firebasestorage.app",
-            messagingSenderId: "201064241540",
-            appId: "1:201064241540:web:4f6d026cd355404ec365d1",
-            measurementId: "G-ESQ63CMP9B"
-        };
-        
-        if (!window.firebaseApp) {
-            window.firebaseApp = firebase.initializeApp(firebaseConfig);
-        }
-        const database = firebase.database();
-        
-        // Listen for new chat queue items
-        const chatQueueRef = database.ref('chat_queue').orderByChild('status').equalTo('pending');
-        let lastNotificationTime = 0;
-        const notificationCooldown = 5000; // 5 seconds between notifications
-        
-        chatQueueRef.on('child_added', (snapshot) => {
-            const queueItem = snapshot.val();
-            const now = Date.now();
+        try {
+            const currentPage = window.location.pathname;
+            const isChatPage = currentPage.includes('two-way-communication') || currentPage.includes('chat-queue');
             
-            // Prevent duplicate notifications
-            if (now - lastNotificationTime < notificationCooldown) {
+            // Don't show notifications on chat pages
+            if (isChatPage) return;
+            
+            // Verify Firebase is available
+            if (typeof firebase === 'undefined') {
+                console.warn('Firebase not available, skipping chat notifications');
                 return;
             }
             
-            lastNotificationTime = now;
-            showChatNotification(queueItem);
-        });
+            const firebaseConfig = {
+                apiKey: "AIzaSyAvfyPTCsBp0dL76VsEVkiIrIsQkko91os",
+                authDomain: "emergencycommunicationsy-eb828.firebaseapp.com",
+                databaseURL: "https://emergencycommunicationsy-eb828-default-rtdb.asia-southeast1.firebasedatabase.app",
+                projectId: "emergencycommunicationsy-eb828",
+                storageBucket: "emergencycommunicationsy-eb828.firebasestorage.app",
+                messagingSenderId: "201064241540",
+                appId: "1:201064241540:web:4f6d026cd355404ec365d1",
+                measurementId: "G-ESQ63CMP9B"
+            };
+            
+            if (!window.firebaseApp) {
+                window.firebaseApp = firebase.initializeApp(firebaseConfig);
+            }
+            const database = firebase.database();
+            
+            // Listen for new chat queue items
+            const chatQueueRef = database.ref('chat_queue').orderByChild('status').equalTo('pending');
+            let lastNotificationTime = 0;
+            const notificationCooldown = 5000; // 5 seconds between notifications
+            
+            chatQueueRef.on('child_added', (snapshot) => {
+                const queueItem = snapshot.val();
+                const now = Date.now();
+                
+                // Prevent duplicate notifications
+                if (now - lastNotificationTime < notificationCooldown) {
+                    return;
+                }
+                
+                lastNotificationTime = now;
+                showChatNotification(queueItem);
+            });
+            
+            console.log('✅ Chat notifications initialized successfully');
+        } catch (error) {
+            console.error('❌ Error setting up chat notifications:', error);
+            // Fail gracefully - don't break the page
+        }
     }
     
     function showChatNotification(queueItem) {

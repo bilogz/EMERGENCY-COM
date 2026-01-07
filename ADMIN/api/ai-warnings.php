@@ -35,6 +35,7 @@ register_shutdown_function(function() {
 try {
     require_once 'db_connect.php';
     require_once 'secure-api-config.php';
+    require_once 'gemini-api-wrapper.php';  // NEW: Auto-rotation support
     require_once 'alert-translation-helper.php';
     require_once 'activity_logger.php';
 } catch (Exception $e) {

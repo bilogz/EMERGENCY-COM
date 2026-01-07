@@ -6,11 +6,51 @@
  */
 
 /**
- * Get Gemini API Key securely
- * Checks: 1) Secure config file, 2) Database, 3) Environment variable
- * @param string $purpose Optional: 'analysis', 'translation', or 'default' - determines which key to use
+ * Get Gemini API Key securely with auto-rotation support
+ * Checks: 1) API Key Management Database, 2) Secure config file, 3) Database, 4) Environment variable
+ * @param string $purpose Optional: 'analysis', 'translation', 'earthquake' or 'default' - determines which key to use
+ * @param bool $tryRotation Whether to attempt auto-rotation if quota exceeded
  */
-function getGeminiApiKey($purpose = 'default') {
+function getGeminiApiKey($purpose = 'default', $tryRotation = false) {
+    global $pdo;
+    
+    // Priority 0: API Key Management System (NEW)
+    if ($pdo !== null) {
+        try {
+            // Map purpose to key name
+            $keyName = 'AI_API_KEY';
+            if ($purpose === 'earthquake') {
+                $keyName = 'AI_API_KEY_EARTHQUAKE';
+            } elseif ($purpose === 'analysis') {
+                $keyName = 'AI_API_KEY_ANALYSIS';
+            } elseif ($purpose === 'analysis_backup') {
+                $keyName = 'AI_API_KEY_ANALYSIS_BACKUP';
+            } elseif ($purpose === 'translation') {
+                $keyName = 'AI_API_KEY_TRANSLATION';
+            }
+            
+            // Check if table exists
+            $tableCheck = $pdo->query("SHOW TABLES LIKE 'api_keys_management'");
+            if ($tableCheck && $tableCheck->rowCount() > 0) {
+                $stmt = $pdo->prepare("SELECT key_value FROM api_keys_management WHERE key_name = ? AND is_active = 1 AND key_value IS NOT NULL AND key_value != ''");
+                $stmt->execute([$keyName]);
+                $apiKey = $stmt->fetchColumn();
+                
+                if (!empty($apiKey)) {
+                    // Increment usage count
+                    $pdo->prepare("UPDATE api_keys_management SET usage_count = usage_count + 1, last_used = NOW() WHERE key_name = ?")
+                        ->execute([$keyName]);
+                    
+                    error_log("Found API key in management system: $keyName");
+                    return $apiKey;
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("PDO Error getting key from management system: " . $e->getMessage());
+        } catch (Exception $e) {
+            error_log("Error getting key from management system: " . $e->getMessage());
+        }
+    }
     // Priority 1: Secure config file (most secure, not in Git)
     // Try multiple possible paths - check ADMIN first, then USERS
     $baseDir = dirname(dirname(__DIR__)); // Go up from ADMIN/api to EMERGENCY-COM
@@ -156,6 +196,123 @@ function getGeminiModel() {
         }
     }
     return 'gemini-2.5-flash';
+}
+
+/**
+ * Auto-rotate API key when quota exceeded
+ * @param string $keyName The key that hit quota limit
+ * @param string $errorMessage The error message from API
+ * @return string|null The backup key if rotation successful, null otherwise
+ */
+function rotateApiKeyOnQuotaExceeded($keyName, $errorMessage = '') {
+    global $pdo;
+    
+    if ($pdo === null) {
+        error_log("Cannot rotate key - no database connection");
+        return null;
+    }
+    
+    try {
+        // Check if table exists
+        $tableCheck = $pdo->query("SHOW TABLES LIKE 'api_keys_management'");
+        if (!$tableCheck || $tableCheck->rowCount() === 0) {
+            error_log("API key management table does not exist");
+            return null;
+        }
+        
+        // Get key settings
+        $stmt = $pdo->prepare("SELECT * FROM api_keys_management WHERE key_name = ? AND auto_rotate = 1");
+        $stmt->execute([$keyName]);
+        $keySettings = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$keySettings) {
+            error_log("Auto-rotation not enabled for key: $keyName");
+            return null;
+        }
+        
+        // Find backup key based on key name
+        $backupKeyName = null;
+        if ($keyName === 'AI_API_KEY_ANALYSIS') {
+            $backupKeyName = 'AI_API_KEY_ANALYSIS_BACKUP';
+        } elseif ($keyName === 'AI_API_KEY') {
+            $backupKeyName = 'AI_API_KEY_TRANSLATION'; // Fallback to translation key
+        }
+        
+        if (!$backupKeyName) {
+            error_log("No backup key defined for: $keyName");
+            return null;
+        }
+        
+        // Get backup key
+        $backupStmt = $pdo->prepare("SELECT key_value FROM api_keys_management WHERE key_name = ? AND is_active = 1 AND key_value IS NOT NULL AND key_value != ''");
+        $backupStmt->execute([$backupKeyName]);
+        $backupKey = $backupStmt->fetchColumn();
+        
+        if (!$backupKey) {
+            error_log("Backup key not available or not configured: $backupKeyName");
+            return null;
+        }
+        
+        // Log the rotation
+        $pdo->prepare("UPDATE api_keys_management SET quota_exceeded_count = quota_exceeded_count + 1, last_rotated = NOW() WHERE key_name = ?")
+            ->execute([$keyName]);
+        
+        // Log the change
+        $pdo->prepare("INSERT INTO api_key_change_logs (key_name, action, admin_id, admin_email, notes) 
+                      VALUES (?, 'rotate', 0, 'system@auto-rotation', ?)")
+            ->execute([$keyName, "Auto-rotated from $keyName to $backupKeyName. Reason: $errorMessage"]);
+        
+        error_log("✅ Auto-rotated API key from $keyName to $backupKeyName");
+        
+        // Send notification email to admins
+        notifyAdminsOfKeyRotation($keyName, $backupKeyName, $errorMessage);
+        
+        return $backupKey;
+        
+    } catch (Exception $e) {
+        error_log("Error during key rotation: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Notify admins when a key is auto-rotated
+ */
+function notifyAdminsOfKeyRotation($originalKey, $backupKey, $reason) {
+    global $pdo;
+    
+    if ($pdo === null) return;
+    
+    try {
+        // Get all active admin emails
+        $stmt = $pdo->query("SELECT email, name FROM admin_user WHERE status = 'active'");
+        $admins = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        if (empty($admins)) return;
+        
+        $subject = '⚠️ API Key Auto-Rotation Alert - Emergency Communication System';
+        $body = "AUTOMATIC KEY ROTATION NOTIFICATION\n\n";
+        $body .= "An API key has been automatically rotated due to quota limits:\n\n";
+        $body .= "Original Key: $originalKey\n";
+        $body .= "Rotated To: $backupKey\n";
+        $body .= "Reason: $reason\n";
+        $body .= "Time: " . date('Y-m-d H:i:s') . "\n\n";
+        $body .= "ACTION REQUIRED:\n";
+        $body .= "1. Check the API quota limits in Google Cloud Console\n";
+        $body .= "2. Consider upgrading your API plan or adding more quota\n";
+        $body .= "3. Review the backup key usage to ensure continuity\n\n";
+        $body .= "You can manage API keys at:\n";
+        $body .= "https://emergency-comm.alertaraqc.com/ADMIN/sidebar/automated-warnings.php\n\n";
+        $body .= "This is an automated message from the Emergency Communication System.";
+        
+        // Send to each admin
+        foreach ($admins as $admin) {
+            @mail($admin['email'], $subject, $body, "From: noreply@emergency-com.local\r\n");
+        }
+        
+    } catch (Exception $e) {
+        error_log("Error notifying admins of key rotation: " . $e->getMessage());
+    }
 }
 
 /**

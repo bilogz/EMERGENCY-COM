@@ -157,6 +157,18 @@ $pageTitle = 'Automated Warning Integration';
                                         </div>
                                     </div>
                                 </div>
+                                <div class="channel-card" style="cursor: pointer; transition: transform 0.2s;" onclick="openApiKeyManagementModal()">
+                                    <div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                            <h3><i class="fas fa-key" style="color: #4c8a89;"></i> API Key Management</h3>
+                                            <i class="fas fa-chevron-right" style="color: var(--text-secondary-1);"></i>
+                                        </div>
+                                        <p>Manage all API keys with OTP security and auto-rotation</p>
+                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                                            <small style="color: var(--text-secondary-1);">Secure key configuration</small>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -588,6 +600,181 @@ $pageTitle = 'Automated Warning Integration';
             .settings-modal .modal-body {
                 padding: 1rem;
             }
+        }
+    </style>
+
+    <!-- API Key Management Modal -->
+    <div id="apiKeyManagementModal" class="settings-modal" style="display: none;">
+        <div class="modal-overlay" onclick="closeApiKeyManagementModal()"></div>
+        <div class="modal-content modal-content-xlarge">
+            <div class="modal-header">
+                <h2><i class="fas fa-key"></i> API Key Management</h2>
+                <button class="modal-close" onclick="closeApiKeyManagementModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Security Notice -->
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem; color: white;">
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">
+                        <i class="fas fa-shield-alt" style="font-size: 2rem;"></i>
+                        <div>
+                            <h3 style="margin: 0; font-size: 1.1rem;">Secure API Key Management</h3>
+                            <p style="margin: 0.25rem 0 0 0; opacity: 0.9; font-size: 0.9rem;">All changes require email OTP verification</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Config File Sync Info -->
+                <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem;">
+                    <div style="display: flex; align-items: start; gap: 0.75rem;">
+                        <i class="fas fa-info-circle" style="color: #2196f3; font-size: 1.2rem; margin-top: 0.2rem;"></i>
+                        <div style="flex: 1;">
+                            <strong style="color: #1976d2; display: block; margin-bottom: 0.5rem;">About Config File Changes</strong>
+                            <p style="margin: 0; color: #424242; font-size: 0.9rem; line-height: 1.5;">
+                                <strong>Priority Order:</strong> Database → Config File → Environment Variables<br>
+                                If you manually edit <code>config.local.php</code> on the server, click <strong>"Sync from Config File"</strong> 
+                                to import those changes into the database. The database takes priority, so manual config edits won't be used 
+                                until synced.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Key Categories -->
+                <div id="apiKeysContainer" style="display: grid; gap: 1.5rem;">
+                    <!-- Keys will be loaded here dynamically -->
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary-1);">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                        <p>Loading API keys...</p>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="form-actions" style="margin-top: 2rem; border-top: 1px solid var(--border-color-1); padding-top: 1.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="closeApiKeyManagementModal()">Cancel</button>
+                    <button type="button" class="btn btn-info" onclick="loadApiKeys()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                    <button type="button" class="btn btn-warning" onclick="syncFromConfigFile()" title="Import keys from config.local.php">
+                        <i class="fas fa-file-import"></i> Sync from Config File
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="requestOTPForKeyChange()">
+                        <i class="fas fa-save"></i> Save Changes (Requires OTP)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OTP Verification Modal -->
+    <div id="otpVerificationModal" class="settings-modal" style="display: none;">
+        <div class="modal-overlay" onclick="closeOtpVerificationModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-shield-alt"></i> OTP Verification Required</h2>
+                <button class="modal-close" onclick="closeOtpVerificationModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="text-align: center; margin-bottom: 1.5rem;">
+                    <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <i class="fas fa-envelope" style="font-size: 2rem; color: white;"></i>
+                    </div>
+                    <p style="color: var(--text-color-1); font-size: 1.1rem; margin-bottom: 0.5rem;">Verification code sent to your email</p>
+                    <p style="color: var(--text-secondary-1); font-size: 0.9rem;" id="otpEmailDisplay"></p>
+                </div>
+
+                <div class="form-group">
+                    <label for="otpCode">Enter 6-digit OTP Code</label>
+                    <input type="text" id="otpCode" maxlength="6" placeholder="000000" 
+                           style="width: 100%; padding: 1rem; font-size: 1.5rem; text-align: center; letter-spacing: 0.5rem; border: 2px solid var(--border-color-1); border-radius: 8px;"
+                           onkeypress="if(event.key === 'Enter') verifyOTPAndSaveKeys()">
+                    <small>Check your email for the verification code. Code expires in 10 minutes.</small>
+                </div>
+
+                <div id="otpError" style="display: none; background: #ffebee; border-left: 4px solid #f44336; padding: 1rem; border-radius: 4px; margin-top: 1rem; color: #c62828;">
+                    <i class="fas fa-exclamation-triangle"></i> <span id="otpErrorMessage"></span>
+                </div>
+
+                <div class="form-actions" style="margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="closeOtpVerificationModal()">Cancel</button>
+                    <button type="button" class="btn btn-link" onclick="requestOTPForKeyChange(true)">
+                        <i class="fas fa-redo"></i> Resend OTP
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="verifyOTPAndSaveKeys()">
+                        <i class="fas fa-check"></i> Verify & Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .modal-content-xlarge {
+            max-width: 1100px;
+        }
+
+        .api-key-card {
+            background: var(--card-bg-1);
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .api-key-card:hover {
+            border-color: var(--primary-color-1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .api-key-input {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .key-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .key-status-active {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .key-status-inactive {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--primary-color-1);
+        }
+
+        .category-header h3 {
+            margin: 0;
+            font-size: 1rem;
+            color: var(--text-color-1);
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(0, 0, 0, 0.02);
+            border-radius: 4px;
+            font-size: 0.85rem;
         }
     </style>
 
@@ -1185,6 +1372,401 @@ $pageTitle = 'Automated Warning Integration';
             loadAISettings();
             loadWeatherAnalysis();
         });
+
+        // ===================================
+        // API KEY MANAGEMENT FUNCTIONS
+        // ===================================
+        
+        let apiKeysData = [];
+        let pendingChanges = [];
+
+        function openApiKeyManagementModal() {
+            document.getElementById('apiKeyManagementModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            loadApiKeys();
+        }
+
+        function closeApiKeyManagementModal() {
+            document.getElementById('apiKeyManagementModal').style.display = 'none';
+            document.body.style.overflow = '';
+            pendingChanges = [];
+        }
+
+        function closeOtpVerificationModal() {
+            document.getElementById('otpVerificationModal').style.display = 'none';
+            document.getElementById('otpCode').value = '';
+            document.getElementById('otpError').style.display = 'none';
+        }
+
+        function loadApiKeys() {
+            fetch('../api/api-key-management.php?action=getKeys')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        apiKeysData = data.keys;
+                        displayApiKeys(data.keys, data.categories);
+                    } else {
+                        throw new Error(data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading API keys:', error);
+                    document.getElementById('apiKeysContainer').innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: #f44336;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                            <p>Error loading API keys: ${error.message}</p>
+                        </div>
+                    `;
+                });
+        }
+
+        function displayApiKeys(keys, categories) {
+            const container = document.getElementById('apiKeysContainer');
+            
+            // Group keys by category
+            const grouped = {};
+            keys.forEach(key => {
+                if (!grouped[key.key_category]) {
+                    grouped[key.key_category] = [];
+                }
+                grouped[key.key_category].push(key);
+            });
+
+            let html = '';
+            
+            // Display each category
+            Object.keys(categories).forEach(categoryKey => {
+                if (grouped[categoryKey] && grouped[categoryKey].length > 0) {
+                    html += `
+                        <div class="category-section">
+                            <div class="category-header">
+                                <i class="fas fa-folder-open" style="color: var(--primary-color-1);"></i>
+                                <h3>${categories[categoryKey]}</h3>
+                                <span class="key-status-badge" style="margin-left: auto;">${grouped[categoryKey].length} key(s)</span>
+                            </div>
+                            <div style="display: grid; gap: 1rem;">
+                    `;
+                    
+                    grouped[categoryKey].forEach(key => {
+                        html += generateKeyCard(key);
+                    });
+                    
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+
+            container.innerHTML = html;
+        }
+
+        function generateKeyCard(key) {
+            const hasKey = key.has_key == 1;
+            const statusClass = key.is_active ? 'key-status-active' : 'key-status-inactive';
+            const statusText = key.is_active ? 'Active' : 'Inactive';
+            
+            return `
+                <div class="api-key-card" data-key-name="${key.key_name}">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                                <h4 style="margin: 0; color: var(--text-color-1);">${key.key_label}</h4>
+                                <span class="key-status-badge ${statusClass}">
+                                    <i class="fas fa-circle" style="font-size: 0.5rem;"></i>
+                                    ${statusText}
+                                </span>
+                            </div>
+                            <p style="margin: 0; color: var(--text-secondary-1); font-size: 0.85rem; font-family: 'Courier New', monospace;">${key.key_name}</p>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-info" onclick="testKey('${key.key_name}')" 
+                                ${!hasKey ? 'disabled' : ''} title="Test API Key">
+                            <i class="fas fa-vial"></i>
+                        </button>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label for="key_${key.key_name}">API Key Value</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="password" id="key_${key.key_name}" 
+                                   class="api-key-input" 
+                                   placeholder="${hasKey ? key.key_preview : 'Enter API key...'}" 
+                                   value=""
+                                   style="flex: 1; padding: 0.75rem; border: 1px solid var(--border-color-1); border-radius: 4px;"
+                                   onchange="markKeyChanged('${key.key_name}')">
+                            <button type="button" class="btn btn-secondary" onclick="toggleKeyVisibility('${key.key_name}')">
+                                <i class="fas fa-eye" id="eye_${key.key_name}"></i>
+                            </button>
+                        </div>
+                        <small>Leave empty to keep current key${hasKey ? ' (' + key.key_preview + ')' : ''}</small>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: rgba(0,0,0,0.02); border-radius: 4px;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; margin: 0; cursor: pointer;">
+                            <input type="checkbox" id="autorotate_${key.key_name}" 
+                                   ${key.auto_rotate ? 'checked' : ''}
+                                   onchange="markKeyChanged('${key.key_name}')">
+                            <span style="font-size: 0.9rem;">Enable Auto-Rotation</span>
+                        </label>
+                        <span style="margin-left: auto; font-size: 0.75rem; color: var(--text-secondary-1);">
+                            <i class="fas fa-info-circle"></i> Automatically switch to backup when quota exceeded
+                        </span>
+                    </div>
+
+                    ${key.usage_count > 0 || key.quota_exceeded_count > 0 ? `
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color-1);">
+                            <div class="stat-item">
+                                <i class="fas fa-chart-line" style="color: #2196F3;"></i>
+                                <span>Used: ${key.usage_count} times</span>
+                            </div>
+                            ${key.quota_exceeded_count > 0 ? `
+                                <div class="stat-item">
+                                    <i class="fas fa-exclamation-triangle" style="color: #ff9800;"></i>
+                                    <span>Quota exceeded: ${key.quota_exceeded_count}x</span>
+                                </div>
+                            ` : ''}
+                            ${key.last_used ? `
+                                <div class="stat-item">
+                                    <i class="fas fa-clock" style="color: #4caf50;"></i>
+                                    <span>Last used: ${new Date(key.last_used).toLocaleDateString()}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function toggleKeyVisibility(keyName) {
+            const input = document.getElementById('key_' + keyName);
+            const eye = document.getElementById('eye_' + keyName);
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                eye.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                eye.className = 'fas fa-eye';
+            }
+        }
+
+        function markKeyChanged(keyName) {
+            if (!pendingChanges.includes(keyName)) {
+                pendingChanges.push(keyName);
+            }
+        }
+
+        function testKey(keyName) {
+            const input = document.getElementById('key_' + keyName);
+            const keyValue = input.value.trim();
+            
+            if (!keyValue) {
+                alert('Please enter an API key to test');
+                return;
+            }
+
+            const btn = event.target.closest('button');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btn.disabled = true;
+
+            fetch('../api/api-key-management.php?action=testKey', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key_value: keyValue })
+            })
+            .then(response => response.json())
+            .then(data => {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                
+                if (data.success) {
+                    alert('✅ API Key is valid and working!');
+                } else {
+                    alert('❌ API Key test failed: ' + data.message);
+                }
+            })
+            .catch(error => {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                alert('Error testing key: ' + error.message);
+            });
+        }
+
+        function requestOTPForKeyChange(isResend = false) {
+            if (!isResend && pendingChanges.length === 0) {
+                alert('No changes detected. Please modify at least one API key.');
+                return;
+            }
+
+            const btn = event.target;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending OTP...';
+            btn.disabled = true;
+
+            fetch('../api/api-key-management.php?action=requestOTP', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                
+                if (data.success) {
+                    // Show OTP modal
+                    document.getElementById('otpVerificationModal').style.display = 'flex';
+                    document.getElementById('otpEmailDisplay').textContent = '<?php echo $_SESSION['admin_email'] ?? 'your email'; ?>';
+                    document.getElementById('otpCode').value = '';
+                    document.getElementById('otpCode').focus();
+                    
+                    if (data.debug_otp) {
+                        console.log('DEBUG OTP:', data.debug_otp);
+                        alert('Development mode: OTP sent! Check console for debug code.');
+                    } else {
+                        if (!isResend) {
+                            alert('✅ OTP sent to your email! Please check your inbox.');
+                        } else {
+                            alert('✅ New OTP sent!');
+                        }
+                    }
+                } else {
+                    alert('❌ Failed to send OTP: ' + data.message);
+                }
+            })
+            .catch(error => {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                alert('Error: ' + error.message);
+            });
+        }
+
+        function verifyOTPAndSaveKeys() {
+            const otp = document.getElementById('otpCode').value.trim();
+            
+            if (otp.length !== 6) {
+                showOtpError('Please enter a 6-digit OTP code');
+                return;
+            }
+
+            const btn = event.target;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+            btn.disabled = true;
+
+            // Collect changed keys
+            const keys = [];
+            pendingChanges.forEach(keyName => {
+                const input = document.getElementById('key_' + keyName);
+                const autoRotate = document.getElementById('autorotate_' + keyName);
+                const keyValue = input.value.trim();
+                
+                if (keyValue) { // Only include if value is provided
+                    keys.push({
+                        key_name: keyName,
+                        key_value: keyValue,
+                        auto_rotate: autoRotate.checked ? 1 : 0
+                    });
+                } else {
+                    // Include auto-rotate change even without key change
+                    const originalKey = apiKeysData.find(k => k.key_name === keyName);
+                    if (originalKey && originalKey.auto_rotate != autoRotate.checked) {
+                        keys.push({
+                            key_name: keyName,
+                            key_value: '', // Empty means keep existing
+                            auto_rotate: autoRotate.checked ? 1 : 0
+                        });
+                    }
+                }
+            });
+
+            fetch('../api/api-key-management.php?action=verifyAndSaveKeys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    otp: otp,
+                    keys: keys,
+                    change_action: 'update'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                
+                if (data.success) {
+                    alert('✅ API keys updated successfully!');
+                    closeOtpVerificationModal();
+                    closeApiKeyManagementModal();
+                    pendingChanges = [];
+                    // Reload integration status
+                    loadIntegrationStatus();
+                } else {
+                    showOtpError(data.message);
+                }
+            })
+            .catch(error => {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                showOtpError('Error: ' + error.message);
+            });
+        }
+
+        function showOtpError(message) {
+            const errorDiv = document.getElementById('otpError');
+            const errorMsg = document.getElementById('otpErrorMessage');
+            errorMsg.textContent = message;
+            errorDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function syncFromConfigFile() {
+            if (!confirm('This will import all API keys from config.local.php into the database.\n\n' +
+                         'Keys that exist in both will be updated.\n' +
+                         'New keys from config will be added.\n\n' +
+                         'Continue?')) {
+                return;
+            }
+
+            const btn = event.target;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+            btn.disabled = true;
+
+            fetch('../api/api-key-management.php?action=syncFromConfig', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                
+                if (data.success) {
+                    let message = '✅ Successfully synced ' + data.total_synced + ' key(s) from config file!\n\n';
+                    if (data.synced_keys.length > 0) {
+                        message += 'Updated keys:\n' + data.synced_keys.join('\n');
+                    }
+                    if (data.skipped_keys.length > 0) {
+                        message += '\n\nSkipped (unchanged):\n' + data.skipped_keys.join('\n');
+                    }
+                    alert(message);
+                    
+                    // Reload keys to show updated values
+                    loadApiKeys();
+                } else {
+                    alert('❌ Failed to sync: ' + data.message);
+                }
+            })
+            .catch(error => {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                alert('❌ Error syncing: ' + error.message);
+            });
+        }
     </script>
 </body>
 </html>
