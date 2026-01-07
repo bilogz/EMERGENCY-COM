@@ -14,6 +14,20 @@ if (!$pdo) {
     exit;
 }
 
+// Check if device tracking columns exist
+function hasDeviceTrackingColumns($pdo) {
+    static $hasColumns = null;
+    if ($hasColumns === null) {
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM conversations LIKE 'device_info'");
+            $hasColumns = $stmt->fetch() !== false;
+        } catch (Exception $e) {
+            $hasColumns = false;
+        }
+    }
+    return $hasColumns;
+}
+
 try {
     $conversationId = $_GET['conversationId'] ?? null;
     $userId = $_GET['userId'] ?? $_POST['userId'] ?? null;
@@ -24,10 +38,11 @@ try {
     $userConcern = $_GET['userConcern'] ?? $_POST['userConcern'] ?? null;
     $isGuest = isset($_GET['isGuest']) ? (bool)$_GET['isGuest'] : (isset($_POST['isGuest']) ? (bool)$_POST['isGuest'] : true);
     
-    // Get device info and IP address
-    $ipAddress = getClientIP();
-    $deviceInfo = formatDeviceInfoForDB();
-    $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    // Get device info and IP address (only if columns exist)
+    $hasDeviceColumns = hasDeviceTrackingColumns($pdo);
+    $ipAddress = $hasDeviceColumns ? getClientIP() : null;
+    $deviceInfo = $hasDeviceColumns ? formatDeviceInfoForDB() : null;
+    $userAgent = $hasDeviceColumns ? ($_SERVER['HTTP_USER_AGENT'] ?? '') : null;
     
     // If conversationId is provided, just return its status and who closed it
     if ($conversationId && !$userId) {
@@ -69,24 +84,30 @@ try {
     // For registered users, find by user_id
     if ($isGuest) {
         // First, try to find by user_id (most reliable for same user)
+        $selectFields = "
+            conversation_id,
+            user_id,
+            user_name,
+            user_email,
+            user_phone,
+            user_location,
+            user_concern,
+            is_guest,
+            status,
+            last_message,
+            last_message_time,
+            created_at,
+            updated_at";
+        
+        if ($hasDeviceColumns) {
+            $selectFields .= ",
+            device_info,
+            ip_address,
+            user_agent";
+        }
+        
         $stmt = $pdo->prepare("
-            SELECT 
-                conversation_id,
-                user_id,
-                user_name,
-                user_email,
-                user_phone,
-                user_location,
-                user_concern,
-                is_guest,
-                device_info,
-                ip_address,
-                user_agent,
-                status,
-                last_message,
-                last_message_time,
-                created_at,
-                updated_at
+            SELECT $selectFields
             FROM conversations 
             WHERE user_id = ? 
               AND status = 'active' 
@@ -96,26 +117,10 @@ try {
         $stmt->execute([$userId]);
         $conversation = $stmt->fetch();
         
-        // If not found by user_id, try device/IP as fallback
-        if (!$conversation) {
+        // If not found by user_id, try device/IP as fallback (only if columns exist)
+        if (!$conversation && $hasDeviceColumns) {
             $stmt = $pdo->prepare("
-                SELECT 
-                    conversation_id,
-                    user_id,
-                    user_name,
-                    user_email,
-                    user_phone,
-                    user_location,
-                    user_concern,
-                    is_guest,
-                    device_info,
-                    ip_address,
-                    user_agent,
-                    status,
-                    last_message,
-                    last_message_time,
-                    created_at,
-                    updated_at
+                SELECT $selectFields
                 FROM conversations 
                 WHERE ip_address = ? 
                   AND device_info = ? 
@@ -128,24 +133,30 @@ try {
         }
     } else {
         // Registered user - find by user_id
+        $selectFields = "
+            conversation_id,
+            user_id,
+            user_name,
+            user_email,
+            user_phone,
+            user_location,
+            user_concern,
+            is_guest,
+            status,
+            last_message,
+            last_message_time,
+            created_at,
+            updated_at";
+        
+        if ($hasDeviceColumns) {
+            $selectFields .= ",
+            device_info,
+            ip_address,
+            user_agent";
+        }
+        
         $stmt = $pdo->prepare("
-            SELECT 
-                conversation_id,
-                user_id,
-                user_name,
-                user_email,
-                user_phone,
-                user_location,
-                user_concern,
-                is_guest,
-                device_info,
-                ip_address,
-                user_agent,
-                status,
-                last_message,
-                last_message_time,
-                created_at,
-                updated_at
+            SELECT $selectFields
             FROM conversations 
             WHERE user_id = ? AND status = 'active' 
             ORDER BY updated_at DESC 
@@ -158,53 +169,75 @@ try {
     if ($conversation) {
         // Parse device info if available
         $deviceInfoParsed = null;
-        if (!empty($conversation['device_info'])) {
+        if ($hasDeviceColumns && !empty($conversation['device_info'])) {
             $deviceInfoParsed = json_decode($conversation['device_info'], true);
         }
         
         // Return existing conversation
+        $conversationData = [
+            'id' => $conversation['conversation_id'],
+            'userId' => $conversation['user_id'],
+            'userName' => $conversation['user_name'],
+            'userEmail' => $conversation['user_email'],
+            'userPhone' => $conversation['user_phone'],
+            'userLocation' => $conversation['user_location'],
+            'userConcern' => $conversation['user_concern'],
+            'isGuest' => (bool)$conversation['is_guest'],
+            'status' => $conversation['status'],
+            'lastMessage' => $conversation['last_message'],
+            'lastMessageTime' => $conversation['last_message_time'] ? strtotime($conversation['last_message_time']) * 1000 : null,
+            'createdAt' => strtotime($conversation['created_at']) * 1000,
+            'updatedAt' => strtotime($conversation['updated_at']) * 1000
+        ];
+        
+        if ($hasDeviceColumns) {
+            $conversationData['deviceInfo'] = $deviceInfoParsed;
+            $conversationData['ipAddress'] = $conversation['ip_address'] ?? null;
+            $conversationData['userAgent'] = $conversation['user_agent'] ?? null;
+        }
+        
         echo json_encode([
             'success' => true,
             'conversationId' => $conversation['conversation_id'],
-            'conversation' => [
-                'id' => $conversation['conversation_id'],
-                'userId' => $conversation['user_id'],
-                'userName' => $conversation['user_name'],
-                'userEmail' => $conversation['user_email'],
-                'userPhone' => $conversation['user_phone'],
-                'userLocation' => $conversation['user_location'],
-                'userConcern' => $conversation['user_concern'],
-                'isGuest' => (bool)$conversation['is_guest'],
-                'deviceInfo' => $deviceInfoParsed,
-                'ipAddress' => $conversation['ip_address'] ?? null,
-                'userAgent' => $conversation['user_agent'] ?? null,
-                'status' => $conversation['status'],
-                'lastMessage' => $conversation['last_message'],
-                'lastMessageTime' => $conversation['last_message_time'] ? strtotime($conversation['last_message_time']) * 1000 : null,
-                'createdAt' => strtotime($conversation['created_at']) * 1000,
-                'updatedAt' => strtotime($conversation['updated_at']) * 1000
-            ],
+            'conversation' => $conversationData,
             'isNew' => false
         ]);
     } else {
         // Create new conversation
-        $stmt = $pdo->prepare("
-            INSERT INTO conversations 
-            (user_id, user_name, user_email, user_phone, user_location, user_concern, is_guest, device_info, ip_address, user_agent, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NOW(), NOW())
-        ");
-        $stmt->execute([
-            $userId,
-            $userName,
-            $userEmail,
-            $userPhone,
-            $userLocation,
-            $userConcern,
-            $isGuest ? 1 : 0,
-            $deviceInfo,
-            $ipAddress,
-            $userAgent
-        ]);
+        if ($hasDeviceColumns) {
+            $stmt = $pdo->prepare("
+                INSERT INTO conversations 
+                (user_id, user_name, user_email, user_phone, user_location, user_concern, is_guest, device_info, ip_address, user_agent, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NOW(), NOW())
+            ");
+            $stmt->execute([
+                $userId,
+                $userName,
+                $userEmail,
+                $userPhone,
+                $userLocation,
+                $userConcern,
+                $isGuest ? 1 : 0,
+                $deviceInfo,
+                $ipAddress,
+                $userAgent
+            ]);
+        } else {
+            $stmt = $pdo->prepare("
+                INSERT INTO conversations 
+                (user_id, user_name, user_email, user_phone, user_location, user_concern, is_guest, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NOW(), NOW())
+            ");
+            $stmt->execute([
+                $userId,
+                $userName,
+                $userEmail,
+                $userPhone,
+                $userLocation,
+                $userConcern,
+                $isGuest ? 1 : 0
+            ]);
+        }
         $conversationId = $pdo->lastInsertId();
         
         echo json_encode([
@@ -230,8 +263,22 @@ try {
     }
     
 } catch (PDOException $e) {
-    error_log('Chat get conversation error: ' . $e->getMessage());
+    error_log('Chat get conversation PDO error: ' . $e->getMessage());
+    error_log('Stack trace: ' . $e->getTraceAsString());
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Failed to get/create conversation']);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'Failed to get/create conversation',
+        'error' => $e->getMessage()
+    ]);
+} catch (Exception $e) {
+    error_log('Chat get conversation error: ' . $e->getMessage());
+    error_log('Stack trace: ' . $e->getTraceAsString());
+    http_response_code(500);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'An error occurred while processing your request',
+        'error' => $e->getMessage()
+    ]);
 }
 
