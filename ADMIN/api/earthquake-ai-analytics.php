@@ -5,12 +5,32 @@
  * Uses Gemini AI to provide hazard assessments and impact predictions
  */
 
+// Enable error reporting for debugging (disable in production)
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
 header('Content-Type: application/json; charset=utf-8');
 
-require_once 'db_connect.php';
-require_once 'secure-api-config.php';
+try {
+    require_once 'db_connect.php';
+    require_once 'secure-api-config.php';
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Configuration error: ' . $e->getMessage()]);
+    error_log('Earthquake AI Analytics: Failed to load required files: ' . $e->getMessage());
+    exit();
+} catch (Error $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Fatal error loading files: ' . $e->getMessage()]);
+    error_log('Earthquake AI Analytics: Fatal error loading files: ' . $e->getMessage());
+    exit();
+}
 
-session_start();
+// Start session
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Check if user is logged in
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
@@ -33,7 +53,14 @@ try {
     }
 } catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+    $errorMessage = 'Error: ' . $e->getMessage();
+    error_log('Earthquake AI Analytics Exception: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+    echo json_encode(['success' => false, 'message' => $errorMessage]);
+} catch (Error $e) {
+    http_response_code(500);
+    $errorMessage = 'Fatal error: ' . $e->getMessage();
+    error_log('Earthquake AI Analytics Fatal Error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+    echo json_encode(['success' => false, 'message' => $errorMessage]);
 }
 
 /**
@@ -42,108 +69,139 @@ try {
 function analyzeEarthquakeImpact() {
     global $pdo;
     
-    // Get earthquake data from request
-    $input = file_get_contents('php://input');
-    
-    if (empty($input)) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'No data received']);
-        exit();
-    }
-    
-    $earthquakeData = json_decode($input, true);
-    
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'Invalid JSON: ' . json_last_error_msg()]);
-        exit();
-    }
-    
-    if (empty($earthquakeData) || !isset($earthquakeData['earthquakes'])) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'No earthquake data provided']);
-        exit();
-    }
-    
-    $earthquakes = $earthquakeData['earthquakes'] ?? [];
-    
-    if (empty($earthquakes) || !is_array($earthquakes)) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'Empty or invalid earthquake array']);
-        exit();
-    }
-    
-    // Get API key for analysis
-    $apiKey = getGeminiApiKey('analysis');
-    if (empty($apiKey)) {
-        $apiKey = getGeminiApiKey('default');
-    }
-    
-    if (empty($apiKey)) {
-        http_response_code(500);
-        echo json_encode([
-            'success' => false, 
-            'message' => 'AI API key not configured. Please configure Gemini API key in Automated Warnings → AI Warning Settings.'
-        ]);
-        exit();
-    }
-    
-    // Quezon City coordinates
-    $quezonCityLat = 14.6488;
-    $quezonCityLon = 121.0509;
-    
-    // Prepare earthquake data for analysis
-    $earthquakeSummary = [];
-    foreach ($earthquakes as $eq) {
-        $lat = $eq['lat'] ?? $eq['geometry']['coordinates'][1] ?? null;
-        $lon = $eq['lon'] ?? $eq['geometry']['coordinates'][0] ?? null;
-        $mag = $eq['magnitude'] ?? $eq['properties']['mag'] ?? 0;
-        $depth = $eq['depth'] ?? $eq['geometry']['coordinates'][2] ?? 0;
-        $place = $eq['place'] ?? $eq['properties']['place'] ?? 'Unknown';
-        $time = $eq['time'] ?? $eq['properties']['time'] ?? time() * 1000;
+    try {
+        // Get earthquake data from request
+        $input = file_get_contents('php://input');
         
-        if ($lat && $lon) {
-            // Calculate distance from Quezon City (Haversine formula)
-            $distance = calculateDistance($quezonCityLat, $quezonCityLon, $lat, $lon);
-            
-            $earthquakeSummary[] = [
-                'magnitude' => $mag,
-                'depth' => $depth,
-                'location' => $place,
-                'latitude' => $lat,
-                'longitude' => $lon,
-                'distance_km' => round($distance, 1),
-                'time' => date('Y-m-d H:i:s', $time / 1000)
-            ];
+        if (empty($input)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'No data received']);
+            exit();
         }
+        
+        $earthquakeData = json_decode($input, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Invalid JSON: ' . json_last_error_msg()]);
+            exit();
+        }
+        
+        if (empty($earthquakeData) || !isset($earthquakeData['earthquakes'])) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'No earthquake data provided']);
+            exit();
+        }
+        
+        $earthquakes = $earthquakeData['earthquakes'] ?? [];
+        
+        if (empty($earthquakes) || !is_array($earthquakes)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Empty or invalid earthquake array']);
+            exit();
+        }
+        
+        // Get API key for analysis
+        $apiKey = null;
+        try {
+            $apiKey = getGeminiApiKey('analysis');
+            if (empty($apiKey)) {
+                $apiKey = getGeminiApiKey('default');
+            }
+        } catch (Exception $e) {
+            error_log('Error getting Gemini API key: ' . $e->getMessage());
+        } catch (Error $e) {
+            error_log('Fatal error getting Gemini API key: ' . $e->getMessage());
+        }
+        
+        if (empty($apiKey)) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false, 
+                'message' => 'AI API key not configured. Please configure Gemini API key in Automated Warnings → AI Warning Settings.'
+            ]);
+            exit();
+        }
+    } catch (Exception $e) {
+        http_response_code(500);
+        error_log('Error in analyzeEarthquakeImpact (input processing): ' . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Error processing request: ' . $e->getMessage()]);
+        exit();
+    } catch (Error $e) {
+        http_response_code(500);
+        error_log('Fatal error in analyzeEarthquakeImpact (input processing): ' . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Fatal error processing request: ' . $e->getMessage()]);
+        exit();
     }
     
-    // Sort by magnitude (highest first) and limit to top 10 most significant
-    usort($earthquakeSummary, function($a, $b) {
-        return $b['magnitude'] <=> $a['magnitude'];
-    });
-    $earthquakeSummary = array_slice($earthquakeSummary, 0, 10);
-    
-    // Build AI prompt
-    $prompt = buildAnalysisPrompt($earthquakeSummary, $quezonCityLat, $quezonCityLon);
-    
-    // Call Gemini AI
-    $analysis = callGeminiAI($apiKey, $prompt);
-    
-    if ($analysis['success']) {
-        echo json_encode([
-            'success' => true,
-            'analysis' => $analysis['content'],
-            'earthquakes_analyzed' => count($earthquakeSummary),
-            'timestamp' => date('Y-m-d H:i:s')
-        ]);
-        exit();
-    } else {
+    try {
+        // Quezon City coordinates
+        $quezonCityLat = 14.6488;
+        $quezonCityLon = 121.0509;
+        
+        // Prepare earthquake data for analysis
+        $earthquakeSummary = [];
+        foreach ($earthquakes as $eq) {
+            $lat = $eq['lat'] ?? $eq['geometry']['coordinates'][1] ?? null;
+            $lon = $eq['lon'] ?? $eq['geometry']['coordinates'][0] ?? null;
+            $mag = $eq['magnitude'] ?? $eq['properties']['mag'] ?? 0;
+            $depth = $eq['depth'] ?? $eq['geometry']['coordinates'][2] ?? 0;
+            $place = $eq['place'] ?? $eq['properties']['place'] ?? 'Unknown';
+            $time = $eq['time'] ?? $eq['properties']['time'] ?? time() * 1000;
+            
+            if ($lat && $lon) {
+                // Calculate distance from Quezon City (Haversine formula)
+                $distance = calculateDistance($quezonCityLat, $quezonCityLon, $lat, $lon);
+                
+                $earthquakeSummary[] = [
+                    'magnitude' => $mag,
+                    'depth' => $depth,
+                    'location' => $place,
+                    'latitude' => $lat,
+                    'longitude' => $lon,
+                    'distance_km' => round($distance, 1),
+                    'time' => date('Y-m-d H:i:s', $time / 1000)
+                ];
+            }
+        }
+        
+        // Sort by magnitude (highest first) and limit to top 10 most significant
+        usort($earthquakeSummary, function($a, $b) {
+            return $b['magnitude'] <=> $a['magnitude'];
+        });
+        $earthquakeSummary = array_slice($earthquakeSummary, 0, 10);
+        
+        // Build AI prompt
+        $prompt = buildAnalysisPrompt($earthquakeSummary, $quezonCityLat, $quezonCityLon);
+        
+        // Call Gemini AI
+        $analysis = callGeminiAI($apiKey, $prompt);
+        
+        if ($analysis['success']) {
+            echo json_encode([
+                'success' => true,
+                'analysis' => $analysis['content'],
+                'earthquakes_analyzed' => count($earthquakeSummary),
+                'timestamp' => date('Y-m-d H:i:s')
+            ]);
+            exit();
+        } else {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => $analysis['error'] ?? 'Failed to generate analysis'
+            ]);
+            exit();
+        }
+    } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode([
-            'success' => false,
-            'message' => $analysis['error'] ?? 'Failed to generate analysis'
-        ]);
+        error_log('Error in analyzeEarthquakeImpact (analysis): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+        echo json_encode(['success' => false, 'message' => 'Error during analysis: ' . $e->getMessage()]);
+        exit();
+    } catch (Error $e) {
+        http_response_code(500);
+        error_log('Fatal error in analyzeEarthquakeImpact (analysis): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+        echo json_encode(['success' => false, 'message' => 'Fatal error during analysis: ' . $e->getMessage()]);
         exit();
     }
 }
@@ -197,137 +255,193 @@ function buildAnalysisPrompt($earthquakes, $qcLat, $qcLon) {
  * Call Gemini AI API
  */
 function callGeminiAI($apiKey, $prompt) {
-    $model = getGeminiModel();
+    try {
+        $model = getGeminiModel();
+    } catch (Exception $e) {
+        error_log('Error getting Gemini model: ' . $e->getMessage());
+        $model = 'gemini-2.5-flash'; // Fallback to default
+    } catch (Error $e) {
+        error_log('Fatal error getting Gemini model: ' . $e->getMessage());
+        $model = 'gemini-2.5-flash'; // Fallback to default
+    }
+    
+    if (empty($apiKey)) {
+        return [
+            'success' => false,
+            'error' => 'API key is empty or invalid'
+        ];
+    }
     
     // Try v1 API first (for Gemini 2.5), fallback to v1beta
     $apiVersions = ['v1', 'v1beta'];
     $lastError = null;
     
     foreach ($apiVersions as $version) {
-        $url = "https://generativelanguage.googleapis.com/{$version}/models/{$model}:generateContent?key=" . urlencode($apiKey);
-        
-        $data = [
-            'contents' => [
-                [
-                    'parts' => [
-                        ['text' => $prompt]
+        try {
+            $url = "https://generativelanguage.googleapis.com/{$version}/models/{$model}:generateContent?key=" . urlencode($apiKey);
+            
+            $data = [
+                'contents' => [
+                    [
+                        'parts' => [
+                            ['text' => $prompt]
+                        ]
                     ]
-                ]
-            ],
-            'generationConfig' => [
-                'temperature' => 0.3,
-                'topK' => 40,
-                'topP' => 0.95,
-                'maxOutputTokens' => 2048
-            ]
-        ];
-        
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($data),
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json'
-            ],
-            CURLOPT_TIMEOUT => 30
-        ]);
-        
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-        
-        if ($curlError) {
-            $lastError = "cURL Error: " . $curlError;
-            continue;
-        }
-        
-        if ($httpCode !== 200) {
-            $lastError = "HTTP Error {$httpCode}: " . substr($response, 0, 200);
-            continue;
-        }
-        
-        $result = json_decode($response, true);
-        
-        if (isset($result['candidates'][0]['content']['parts'][0]['text'])) {
-            $content = trim($result['candidates'][0]['content']['parts'][0]['text']);
-            
-            // Remove markdown code blocks if present
-            $content = preg_replace('/```json\s*/i', '', $content);
-            $content = preg_replace('/```\s*/', '', $content);
-            $content = trim($content);
-            
-            // Try multiple JSON extraction methods
-            $jsonContent = null;
-            
-            // Method 1: Try parsing the entire content as JSON
-            $jsonContent = json_decode($content, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($jsonContent)) {
-                return [
-                    'success' => true,
-                    'content' => $jsonContent,
-                    'raw' => $content
-                ];
-            }
-            
-            // Method 2: Extract JSON object from text (handles text before/after JSON)
-            $jsonMatch = [];
-            // Match JSON object that might span multiple lines
-            if (preg_match('/\{[\s\S]*?\}/', $content, $jsonMatch)) {
-                $jsonContent = json_decode($jsonMatch[0], true);
-                if (json_last_error() === JSON_ERROR_NONE && is_array($jsonContent)) {
-                    return [
-                        'success' => true,
-                        'content' => $jsonContent,
-                        'raw' => $content
-                    ];
-                }
-            }
-            
-            // Method 3: Try to find JSON between first { and last }
-            $firstBrace = strpos($content, '{');
-            $lastBrace = strrpos($content, '}');
-            if ($firstBrace !== false && $lastBrace !== false && $lastBrace > $firstBrace) {
-                $jsonStr = substr($content, $firstBrace, $lastBrace - $firstBrace + 1);
-                $jsonContent = json_decode($jsonStr, true);
-                if (json_last_error() === JSON_ERROR_NONE && is_array($jsonContent)) {
-                    return [
-                        'success' => true,
-                        'content' => $jsonContent,
-                        'raw' => $content
-                    ];
-                }
-            }
-            
-            // If JSON extraction failed, try to parse as structured text
-            // Extract key-value pairs manually
-            $parsed = parseStructuredResponse($content);
-            if (!empty($parsed)) {
-                return [
-                    'success' => true,
-                    'content' => $parsed,
-                    'raw' => $content
-                ];
-            }
-            
-            // Last resort: return as text
-            return [
-                'success' => true,
-                'content' => [
-                    'overall_assessment' => $content,
-                    'raw_response' => true
                 ],
-                'raw' => $content
+                'generationConfig' => [
+                    'temperature' => 0.3,
+                    'topK' => 40,
+                    'topP' => 0.95,
+                    'maxOutputTokens' => 2048
+                ]
             ];
+            
+            $ch = curl_init($url);
+            if ($ch === false) {
+                $lastError = "Failed to initialize cURL";
+                continue;
+            }
+            
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => json_encode($data),
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json'
+                ],
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_CONNECTTIMEOUT => 10
+            ]);
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+            
+            if ($curlError) {
+                $lastError = "cURL Error: " . $curlError;
+                error_log("Gemini API cURL error ({$version}): " . $curlError);
+                continue;
+            }
+            
+            if ($httpCode !== 200) {
+                $errorResponse = json_decode($response, true);
+                $errorMessage = isset($errorResponse['error']['message']) 
+                    ? $errorResponse['error']['message'] 
+                    : substr($response, 0, 200);
+                $lastError = "HTTP Error {$httpCode}: " . $errorMessage;
+                error_log("Gemini API HTTP error ({$version}): {$httpCode} - " . $errorMessage);
+                continue;
+            }
+            
+            // Parse response
+            try {
+                $result = json_decode($response, true);
+                
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    $lastError = "Invalid JSON response: " . json_last_error_msg();
+                    error_log("Gemini API JSON decode error ({$version}): " . json_last_error_msg());
+                    continue;
+                }
+                
+                if (!isset($result['candidates'][0]['content']['parts'][0]['text'])) {
+                    $lastError = "Unexpected response format: Missing candidates or content";
+                    error_log("Gemini API unexpected response format ({$version}): " . substr(json_encode($result), 0, 200));
+                    continue;
+                }
+                
+                $content = trim($result['candidates'][0]['content']['parts'][0]['text']);
+                
+                // Remove markdown code blocks if present
+                $content = preg_replace('/```json\s*/i', '', $content);
+                $content = preg_replace('/```\s*/', '', $content);
+                $content = trim($content);
+                
+                // Try multiple JSON extraction methods
+                $jsonContent = null;
+                
+                // Method 1: Try parsing the entire content as JSON
+                $jsonContent = json_decode($content, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($jsonContent)) {
+                    return [
+                        'success' => true,
+                        'content' => $jsonContent,
+                        'raw' => $content
+                    ];
+                }
+                
+                // Method 2: Extract JSON object from text (handles text before/after JSON)
+                $jsonMatch = [];
+                // Match JSON object that might span multiple lines
+                if (preg_match('/\{[\s\S]*?\}/', $content, $jsonMatch)) {
+                    $jsonContent = json_decode($jsonMatch[0], true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($jsonContent)) {
+                        return [
+                            'success' => true,
+                            'content' => $jsonContent,
+                            'raw' => $content
+                        ];
+                    }
+                }
+                
+                // Method 3: Try to find JSON between first { and last }
+                $firstBrace = strpos($content, '{');
+                $lastBrace = strrpos($content, '}');
+                if ($firstBrace !== false && $lastBrace !== false && $lastBrace > $firstBrace) {
+                    $jsonStr = substr($content, $firstBrace, $lastBrace - $firstBrace + 1);
+                    $jsonContent = json_decode($jsonStr, true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($jsonContent)) {
+                        return [
+                            'success' => true,
+                            'content' => $jsonContent,
+                            'raw' => $content
+                        ];
+                    }
+                }
+                
+                // If JSON extraction failed, try to parse as structured text
+                // Extract key-value pairs manually
+                $parsed = parseStructuredResponse($content);
+                if (!empty($parsed)) {
+                    return [
+                        'success' => true,
+                        'content' => $parsed,
+                        'raw' => $content
+                    ];
+                }
+                
+                // Last resort: return as text
+                return [
+                    'success' => true,
+                    'content' => [
+                        'overall_assessment' => $content,
+                        'raw_response' => true
+                    ],
+                    'raw' => $content
+                ];
+            } catch (Exception $e) {
+                $lastError = "Error parsing response: " . $e->getMessage();
+                error_log("Gemini API response parsing error ({$version}): " . $e->getMessage());
+                continue;
+            } catch (Error $e) {
+                $lastError = "Fatal error parsing response: " . $e->getMessage();
+                error_log("Gemini API fatal response parsing error ({$version}): " . $e->getMessage());
+                continue;
+            }
+        } catch (Exception $e) {
+            $lastError = "Exception during API call: " . $e->getMessage();
+            error_log("Gemini API exception ({$version}): " . $e->getMessage());
+            continue;
+        } catch (Error $e) {
+            $lastError = "Fatal error during API call: " . $e->getMessage();
+            error_log("Gemini API fatal error ({$version}): " . $e->getMessage());
+            continue;
         }
-        
-        $lastError = "Unexpected response format";
     }
     
     return [
         'success' => false,
-        'error' => $lastError ?? 'Unknown error'
+        'error' => $lastError ?? 'Unknown error - All API versions failed'
     ];
 }
 

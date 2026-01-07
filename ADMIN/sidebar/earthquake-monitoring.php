@@ -1306,11 +1306,37 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                     earthquakes: eqData
                 })
             })
-            .then(response => {
+            .then(async response => {
+                const contentType = response.headers.get('content-type');
+                let data;
+                
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    // Try to parse error response as JSON
+                    if (contentType && contentType.includes('application/json')) {
+                        try {
+                            data = await response.json();
+                            throw new Error(data.message || `HTTP error! status: ${response.status}`);
+                        } catch (e) {
+                            if (e instanceof Error && e.message.includes('HTTP error')) {
+                                throw e;
+                            }
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                    } else {
+                        // Non-JSON error response
+                        const text = await response.text();
+                        throw new Error(`Server error (${response.status}): ${text.substring(0, 200)}`);
+                    }
                 }
-                return response.json();
+                
+                // Parse successful response
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    throw new Error('Invalid response format from server');
+                }
+                
+                return data;
             })
             .then(data => {
                 if (data.success && data.analysis) {
@@ -1326,10 +1352,14 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             })
             .catch(error => {
                 console.error('AI Analysis Error:', error);
+                const errorMessage = error.message || 'Unknown error occurred';
                 contentEl.innerHTML = `
                     <div style="padding: 1rem; color: var(--error-color, #F44336);">
-                        <i class="fas fa-exclamation-circle"></i> Error: ${error.message}
+                        <i class="fas fa-exclamation-circle"></i> Error: ${errorMessage}
                         <p style="font-size: 0.9em; margin-top: 0.5rem;">AI analysis is optional. Earthquake data is still displayed correctly.</p>
+                        <p style="font-size: 0.85em; margin-top: 0.5rem; color: var(--text-secondary-1);">
+                            If this error persists, check the server logs or ensure the API endpoint is accessible.
+                        </p>
                     </div>
                 `;
             });
