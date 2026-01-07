@@ -227,6 +227,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
                 // In production, call actual email service here
                 // sendEmail($subscriber['email'], $subscriber['name'], $translatedAlert['title'], $translatedAlert['message']);
                 
+            } elseif ($channel === 'push') {
+                // Send push notification to mobile app
+                if (file_exists(__DIR__ . '/push-notification-helper.php')) {
+                    require_once __DIR__ . '/push-notification-helper.php';
+                    if (sendPushNotification($userId, $translatedAlert['title'], $translatedAlert['message'], ['alert_id' => $alertId], $alertId)) {
+                        // Log push notification
+                        try {
+                            $stmt = $pdo->prepare("
+                                INSERT INTO notification_logs (channel, message, recipient, recipients, priority, status, sent_at, sent_by, ip_address, alert_id, user_language)
+                                VALUES (?, ?, ?, ?, ?, 'sent', NOW(), ?, ?, ?, ?)
+                            ");
+                            $stmt->execute([
+                                $channel, 
+                                $translatedMessage, 
+                                "User $userId", 
+                                $recipientsStr, 
+                                $priority, 
+                                $adminId ? 'admin_' . $adminId : 'system',
+                                $ipAddress,
+                                $alertId,
+                                $userLanguage
+                            ]);
+                        } catch (PDOException $e) {
+                            // Fallback if columns don't exist
+                            $stmt = $pdo->prepare("
+                                INSERT INTO notification_logs (channel, message, recipient, recipients, priority, status, sent_at, sent_by, ip_address)
+                                VALUES (?, ?, ?, ?, ?, 'sent', NOW(), ?, ?)
+                            ");
+                            $stmt->execute([
+                                $channel, 
+                                $translatedMessage, 
+                                "User $userId", 
+                                $recipientsStr, 
+                                $priority, 
+                                $adminId ? 'admin_' . $adminId : 'system',
+                                $ipAddress
+                            ]);
+                        }
+                        $sentCount++;
+                    }
+                }
+                
             } elseif ($channel === 'pa') {
                 // PA System notification (log only)
                 try {

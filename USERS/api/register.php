@@ -263,6 +263,33 @@ try {
         }
     }
     
+    // Auto-subscribe user to all alert categories by default
+    try {
+        // Check if subscriptions table exists
+        $checkStmt = $pdo->query("SHOW TABLES LIKE 'subscriptions'");
+        if ($checkStmt->rowCount() > 0) {
+            // Check if user already has a subscription
+            $checkSub = $pdo->prepare("SELECT id FROM subscriptions WHERE user_id = ?");
+            $checkSub->execute([$userId]);
+            if ($checkSub->rowCount() === 0) {
+                // Create default subscription with all categories and channels
+                $defaultCategories = 'weather,earthquake,bomb,fire,general';
+                $defaultChannels = 'sms,email,push';
+                $defaultLanguage = 'en';
+                
+                $subStmt = $pdo->prepare("
+                    INSERT INTO subscriptions (user_id, categories, channels, preferred_language, status, created_at) 
+                    VALUES (?, ?, ?, ?, 'active', NOW())
+                ");
+                $subStmt->execute([$userId, $defaultCategories, $defaultChannels, $defaultLanguage]);
+                error_log("Auto-subscribed user $userId to all alert categories");
+            }
+        }
+    } catch (PDOException $e) {
+        error_log("Could not auto-subscribe user: " . $e->getMessage());
+        // Continue even if subscription fails - registration should still succeed
+    }
+    
     // Commit transaction
     $pdo->commit();
     

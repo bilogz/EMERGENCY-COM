@@ -930,6 +930,14 @@ function sendNotificationsToSubscribers($alertId, $warning, $settings) {
             } elseif ($channel === 'email' && !empty($subscriber['email'])) {
                 sendEmailNotification($subscriber['email'], $subscriber['name'], $translatedAlert['title'], $translatedAlert['message'], $alertId);
                 $sentCount++;
+            } elseif ($channel === 'push') {
+                // Send push notification to mobile app
+                if (file_exists(__DIR__ . '/push-notification-helper.php')) {
+                    require_once __DIR__ . '/push-notification-helper.php';
+                    if (sendPushNotification($userId, $translatedAlert['title'], $translatedAlert['message'], ['alert_id' => $alertId], $alertId)) {
+                        $sentCount++;
+                    }
+                }
             } elseif ($channel === 'pa') {
                 // PA System notification (log only)
                 logPANotification($message, $alertId);
@@ -1323,6 +1331,14 @@ Keep concise and actionable for public communication.";
                 } elseif ($channel === 'email' && !empty($subscriber['email'])) {
                     sendEmailNotification($subscriber['email'], $subscriber['name'], $translatedAlert['title'], $translatedAlert['message'], $alertId);
                     $sentCount++;
+                } elseif ($channel === 'push') {
+                    // Send push notification to mobile app
+                    if (file_exists(__DIR__ . '/push-notification-helper.php')) {
+                        require_once __DIR__ . '/push-notification-helper.php';
+                        if (sendPushNotification($userId, $translatedAlert['title'], $translatedAlert['message'], ['alert_id' => $alertId], $alertId)) {
+                            $sentCount++;
+                        }
+                    }
                 } elseif ($channel === 'pa') {
                     logPANotification($message, $alertId);
                     $sentCount++;

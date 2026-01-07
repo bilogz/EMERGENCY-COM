@@ -208,6 +208,30 @@ try {
     if ($stmt->execute($params)) {
         $userId = $pdo->lastInsertId();
         error_log("User registered successfully! ID: $userId");
+        
+        // Auto-subscribe user to all alert categories by default
+        try {
+            $checkStmt = $pdo->query("SHOW TABLES LIKE 'subscriptions'");
+            if ($checkStmt->rowCount() > 0) {
+                $checkSub = $pdo->prepare("SELECT id FROM subscriptions WHERE user_id = ?");
+                $checkSub->execute([$userId]);
+                if ($checkSub->rowCount() === 0) {
+                    $defaultCategories = 'weather,earthquake,bomb,fire,general';
+                    $defaultChannels = 'sms,email,push';
+                    $defaultLanguage = 'en';
+                    
+                    $subStmt = $pdo->prepare("
+                        INSERT INTO subscriptions (user_id, categories, channels, preferred_language, status, created_at) 
+                        VALUES (?, ?, ?, ?, 'active', NOW())
+                    ");
+                    $subStmt->execute([$userId, $defaultCategories, $defaultChannels, $defaultLanguage]);
+                    error_log("Auto-subscribed OTP user $userId to all alert categories");
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("Could not auto-subscribe OTP user: " . $e->getMessage());
+        }
+        
         // Clear session OTP data after successful registration
         unset($_SESSION['signup_otp_code']);
         unset($_SESSION['signup_otp_email']);

@@ -164,6 +164,29 @@ try {
                 }
             }
             
+            // Ensure existing user has subscription (auto-subscribe if missing)
+            try {
+                $checkStmt = $pdo->query("SHOW TABLES LIKE 'subscriptions'");
+                if ($checkStmt->rowCount() > 0) {
+                    $checkSub = $pdo->prepare("SELECT id FROM subscriptions WHERE user_id = ?");
+                    $checkSub->execute([$user['id']]);
+                    if ($checkSub->rowCount() === 0) {
+                        $defaultCategories = 'weather,earthquake,bomb,fire,general';
+                        $defaultChannels = 'sms,email,push';
+                        $defaultLanguage = 'en';
+                        
+                        $subStmt = $pdo->prepare("
+                            INSERT INTO subscriptions (user_id, categories, channels, preferred_language, status, created_at) 
+                            VALUES (?, ?, ?, ?, 'active', NOW())
+                        ");
+                        $subStmt->execute([$user['id'], $defaultCategories, $defaultChannels, $defaultLanguage]);
+                        error_log("Auto-subscribed existing Google OAuth user {$user['id']} to all alert categories");
+                    }
+                }
+            } catch (PDOException $e) {
+                error_log("Could not auto-subscribe existing Google OAuth user: " . $e->getMessage());
+            }
+            
             // Generate token for mobile app
             $token = bin2hex(random_bytes(16));
             
@@ -257,6 +280,29 @@ try {
                 } catch (PDOException $e) {
                     error_log("Could not register device: " . $e->getMessage());
                 }
+            }
+            
+            // Auto-subscribe new user to all alert categories by default
+            try {
+                $checkStmt = $pdo->query("SHOW TABLES LIKE 'subscriptions'");
+                if ($checkStmt->rowCount() > 0) {
+                    $checkSub = $pdo->prepare("SELECT id FROM subscriptions WHERE user_id = ?");
+                    $checkSub->execute([$newUserId]);
+                    if ($checkSub->rowCount() === 0) {
+                        $defaultCategories = 'weather,earthquake,bomb,fire,general';
+                        $defaultChannels = 'sms,email,push';
+                        $defaultLanguage = 'en';
+                        
+                        $subStmt = $pdo->prepare("
+                            INSERT INTO subscriptions (user_id, categories, channels, preferred_language, status, created_at) 
+                            VALUES (?, ?, ?, ?, 'active', NOW())
+                        ");
+                        $subStmt->execute([$newUserId, $defaultCategories, $defaultChannels, $defaultLanguage]);
+                        error_log("Auto-subscribed Google OAuth user $newUserId to all alert categories");
+                    }
+                }
+            } catch (PDOException $e) {
+                error_log("Could not auto-subscribe Google OAuth user: " . $e->getMessage());
             }
             
             // Generate token for mobile app
