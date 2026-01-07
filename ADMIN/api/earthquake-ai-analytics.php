@@ -85,7 +85,7 @@ function analyzeEarthquakeImpact() {
             'success' => false, 
             'message' => 'AI API key not configured. Please configure Gemini API key in Automated Warnings → AI Warning Settings.'
         ]);
-        return;
+        exit();
     }
     
     // Quezon City coordinates
@@ -137,12 +137,14 @@ function analyzeEarthquakeImpact() {
             'earthquakes_analyzed' => count($earthquakeSummary),
             'timestamp' => date('Y-m-d H:i:s')
         ]);
+        exit();
     } else {
         http_response_code(500);
         echo json_encode([
             'success' => false,
             'message' => $analysis['error'] ?? 'Failed to generate analysis'
         ]);
+        exit();
     }
 }
 

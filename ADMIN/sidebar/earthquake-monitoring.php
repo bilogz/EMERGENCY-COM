@@ -633,13 +633,19 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             marker.addTo(map);
                             earthquakeMarkers.push(marker);
                             
-                            // Verify marker was added correctly
+                            // Verify marker was added correctly (only log if there's an actual mismatch)
                             setTimeout(() => {
                                 const markerIcon = marker.options.icon;
                                 if (markerIcon && markerIcon.options) {
-                                    const iconColor = markerIcon.options.html.match(/background-color:([^;!]+)/);
-                                    if (iconColor && iconColor[1] !== color) {
-                                        console.warn(`Color mismatch for marker ${earthquakeMarkers.length}: Expected ${color}, Got ${iconColor[1]}`);
+                                    const iconHtml = markerIcon.options.html || '';
+                                    // Extract color more accurately (handle !important and spaces)
+                                    const colorMatch = iconHtml.match(/background-color:\s*([#\w]+)/);
+                                    if (colorMatch) {
+                                        const actualColor = colorMatch[1].trim();
+                                        const expectedColor = color.trim();
+                                        if (actualColor !== expectedColor) {
+                                            console.warn(`⚠️ Color mismatch for marker ${earthquakeMarkers.length}: Expected ${expectedColor}, Got ${actualColor}`);
+                                        }
                                     }
                                 }
                             }, 100);
@@ -938,10 +944,17 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                     return response.json();
                 })
                 .then(data => {
-                    console.log('Real-time check response:', data.metadata?.count || 0, 'earthquakes found');
+                    const count = data.metadata?.count || 0;
+                    console.log(`Real-time check response: ${count} earthquake${count !== 1 ? 's' : ''} found in last 2 hours`);
                     
                     if (!data || !data.features) {
                         console.warn('No features in response:', data);
+                        return;
+                    }
+                    
+                    // Note: 0 earthquakes in last 2 hours is normal - the main display shows last 30 days
+                    if (count === 0) {
+                        console.log('ℹ️ No new earthquakes in the last 2 hours (this is normal - main display shows last 30 days)');
                         return;
                     }
                     if (data.features && data.features.length > 0) {
