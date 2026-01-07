@@ -4,104 +4,25 @@
  * Gets existing conversation or creates a new one
  */
 
-// Start output buffering to prevent any accidental output
-ob_start();
-
-// Enable error reporting for debugging (remove in production)
+header('Content-Type: application/json');
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
-// Register shutdown function FIRST to catch fatal errors early
-register_shutdown_function(function() {
-    $error = error_get_last();
-    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-        ob_clean();
-        if (!headers_sent()) {
-            http_response_code(500);
-            header('Content-Type: application/json');
-        }
-        error_log('Fatal error in chat-get-conversation.php: ' . $error['message'] . ' in ' . $error['file'] . ' on line ' . $error['line']);
-        echo json_encode([
-            'success' => false,
-            'message' => 'Internal server error',
-            'error' => 'A fatal error occurred: ' . $error['message']
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if (ob_get_level() > 0) {
-            ob_end_flush();
-        }
-        exit;
-    }
-});
+require_once __DIR__ . '/db_connect.php';
+require_once __DIR__ . '/device_tracking.php';
 
-// Helper function to send JSON response and exit - MUST be defined before use
-function sendJsonResponse($data, $statusCode = 200) {
-    // Clean any previous output
-    if (ob_get_level() > 0) {
-        ob_clean();
-    }
-    // Only set headers if they haven't been sent
-    if (!headers_sent()) {
-        http_response_code($statusCode);
-        header('Content-Type: application/json');
-    } else {
-        // Headers already sent, just set response code if possible
-        http_response_code($statusCode);
-    }
-    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if (ob_get_level() > 0) {
-        ob_end_flush();
-    }
+if (!$pdo) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Database connection failed']);
     exit;
 }
 
-// Set JSON header early (only if headers not sent)
-if (!headers_sent()) {
-    header('Content-Type: application/json');
-}
-
-// Load required files with better error handling
-$dbConnectFile = __DIR__ . '/db_connect.php';
-$deviceTrackingFile = __DIR__ . '/device_tracking.php';
-
-if (!file_exists($dbConnectFile)) {
-    error_log('ERROR: db_connect.php not found at: ' . $dbConnectFile);
-    sendJsonResponse([
-        'success' => false,
-        'message' => 'Database configuration file not found',
-        'error' => 'db_connect.php missing'
-    ], 500);
-}
-
-if (!file_exists($deviceTrackingFile)) {
-    error_log('ERROR: device_tracking.php not found at: ' . $deviceTrackingFile);
-    sendJsonResponse([
-        'success' => false,
-        'message' => 'Device tracking file not found',
-        'error' => 'device_tracking.php missing'
-    ], 500);
-}
-
-try {
-    require_once $dbConnectFile;
-    require_once $deviceTrackingFile;
-} catch (Throwable $e) {
-    error_log('Error loading required files: ' . $e->getMessage());
-    error_log('Stack trace: ' . $e->getTraceAsString());
-    sendJsonResponse([
-        'success' => false, 
-        'message' => 'Failed to load required files',
-        'error' => $e->getMessage()
-    ], 500);
-}
-
-if (!$pdo) {
-    error_log('ERROR: $pdo is null or false after requiring db_connect.php');
-    sendJsonResponse([
-        'success' => false, 
-        'message' => 'Database connection failed',
-        'error' => 'PDO connection not available'
-    ], 500);
+// Helper function to send JSON response
+function sendJsonResponse($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
 }
 
 // Check if conversations table exists
@@ -181,7 +102,6 @@ try {
     
     // If conversationId is provided, just return its status and who closed it
     if ($conversationId && !$userId) {
-        // Query without closed_by column (it may not exist in all databases)
         $stmt = $pdo->prepare("
             SELECT conversation_id, status, last_message 
             FROM conversations 
@@ -191,7 +111,6 @@ try {
         $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if ($conversation) {
-            // Extract admin name from last_message if it contains "Closed by"
             $closedBy = null;
             if (isset($conversation['last_message']) && $conversation['last_message'] && strpos($conversation['last_message'], 'Closed by') === 0) {
                 $closedBy = str_replace('Closed by ', '', $conversation['last_message']);
@@ -212,14 +131,12 @@ try {
         sendJsonResponse(['success' => false, 'message' => 'User ID is required'], 400);
     }
     
-    // For anonymous/guest users, find conversation by user_id first, then device/IP
-    // For registered users, find by user_id
+    // Find existing conversation
     $conversation = null;
+    $sql = null;
     
     try {
         if ($isGuest) {
-            // First, try to find by user_id (most reliable for same user)
-            // Use basic fields first, then try with device columns if available
             $sql = "
                 SELECT 
                     conversation_id,
@@ -254,7 +171,7 @@ try {
             $stmt->execute([$userId]);
             $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
             
-            // If not found by user_id, try device/IP as fallback (only if columns exist)
+            // If not found by user_id, try device/IP as fallback
             if (!$conversation && $hasDeviceColumns && $ipAddress && $deviceInfo) {
                 $sql = "
                     SELECT 
@@ -285,7 +202,6 @@ try {
                 $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
             }
         } else {
-            // Registered user - find by user_id
             $sql = "
                 SELECT 
                     conversation_id,
@@ -346,10 +262,10 @@ try {
             ");
             $stmt->execute([$userId]);
             $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
-            $hasDeviceColumns = false; // Disable device columns for this request
+            $hasDeviceColumns = false;
         } catch (PDOException $e2) {
             error_log('Fallback query also failed: ' . $e2->getMessage());
-            throw $e; // Re-throw original error
+            throw $e;
         }
     }
     
@@ -429,7 +345,7 @@ try {
             }
             $conversationId = $pdo->lastInsertId();
         } catch (PDOException $e) {
-            error_log('Error creating conversation with device columns: ' . $e->getMessage());
+            error_log('Error creating conversation: ' . $e->getMessage());
             // Try without device columns as fallback
             if ($hasDeviceColumns) {
                 try {
@@ -450,10 +366,10 @@ try {
                     $conversationId = $pdo->lastInsertId();
                 } catch (PDOException $e2) {
                     error_log('Fallback INSERT also failed: ' . $e2->getMessage());
-                    throw $e2; // Re-throw the error
+                    throw $e2;
                 }
             } else {
-                throw $e; // Re-throw original error
+                throw $e;
             }
         }
         
@@ -482,9 +398,7 @@ try {
 } catch (PDOException $e) {
     error_log('Chat get conversation PDO error: ' . $e->getMessage());
     error_log('Stack trace: ' . $e->getTraceAsString());
-    error_log('SQL State: ' . $e->getCode());
     $errorMsg = $e->getMessage();
-    // Don't expose full SQL errors in production, but log them
     if (strpos($errorMsg, 'SQLSTATE') !== false) {
         error_log('Full SQL error: ' . $errorMsg);
         $errorMsg = 'Database query failed';
@@ -503,4 +417,3 @@ try {
         'error' => $e->getMessage()
     ], 500);
 }
-
