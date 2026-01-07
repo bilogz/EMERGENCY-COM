@@ -273,7 +273,47 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    text-align: center;
+    text-align: center !important;
+}
+
+/* Override admin sidebar CSS that sets text-align: left */
+.main-content h1,
+.main-content h2,
+.main-content h3,
+.main-content h4,
+.main-content h5,
+.main-content h6,
+.main-content p,
+.main-content span,
+.main-content div,
+.main-content section,
+.main-content article {
+    text-align: center !important;
+}
+
+/* Exception for form inputs - text inside should be left-aligned */
+.main-content input:not([type="submit"]):not([type="button"]):not([type="reset"]),
+.main-content textarea,
+.main-content select {
+    text-align: left !important;
+}
+
+.main-content .btn,
+.main-content button {
+    text-align: center !important;
+}
+
+/* Override admin global.css title styles */
+.main-content .title h1,
+.main-content .title p {
+    text-align: center !important;
+}
+
+/* Override admin hero.css styles */
+.main-content .hero-section h1,
+.main-content .hero-section p,
+.main-content .hero-section .hero-subtitle {
+    text-align: center !important;
 }
 
 /* Action buttons container - Desktop */
@@ -1986,7 +2026,39 @@ textarea:focus {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    text-align: center;
+    text-align: center !important;
+}
+
+.main-container h1,
+.main-container h2,
+.main-container h3,
+.main-container h4,
+.main-container h5,
+.main-container h6,
+.main-container p,
+.main-container span,
+.main-container div,
+.main-container section,
+.footer-main h1,
+.footer-main h2,
+.footer-main h3,
+.footer-main h4,
+.footer-main h5,
+.footer-main h6,
+.footer-main p,
+.footer-main span,
+.footer-main div {
+    text-align: center !important;
+}
+
+/* Exception for form inputs */
+.main-container input:not([type="submit"]):not([type="button"]):not([type="reset"]),
+.main-container textarea,
+.main-container select,
+.footer-main input:not([type="submit"]):not([type="button"]):not([type="reset"]),
+.footer-main textarea,
+.footer-main select {
+    text-align: left !important;
 }
 
 .conversation-closed-btn {
@@ -2496,7 +2568,27 @@ textarea:focus {
 
 .content-main {
     width: 100%;
-    text-align: center;
+    text-align: center !important;
+}
+
+.content-main h1,
+.content-main h2,
+.content-main h3,
+.content-main h4,
+.content-main h5,
+.content-main h6,
+.content-main p,
+.content-main span,
+.content-main div,
+.content-main section {
+    text-align: center !important;
+}
+
+/* Exception for form inputs */
+.content-main input:not([type="submit"]):not([type="button"]):not([type="reset"]),
+.content-main textarea,
+.content-main select {
+    text-align: left !important;
 }
 
 .sidebar-toggle-btn {
@@ -3034,7 +3126,26 @@ textarea:focus {
 .sub-container {
     padding-left: 0.375rem;
     padding-right: 0.375rem;
-    text-align: center;
+    text-align: center !important;
+}
+
+.sub-container h1,
+.sub-container h2,
+.sub-container h3,
+.sub-container h4,
+.sub-container h5,
+.sub-container h6,
+.sub-container p,
+.sub-container span,
+.sub-container div {
+    text-align: center !important;
+}
+
+/* Exception for form inputs */
+.sub-container input:not([type="submit"]):not([type="button"]):not([type="reset"]),
+.sub-container textarea,
+.sub-container select {
+    text-align: left !important;
 }
 
     /* Page content */
