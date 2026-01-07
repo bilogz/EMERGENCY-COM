@@ -15,74 +15,11 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 
 $pageTitle = 'General Settings';
 
-// Determine the base API path - try multiple methods for reliability
-$apiBasePath = '';
-
-// Method 1: Use REQUEST_URI to get actual URL path
-if (isset($_SERVER['REQUEST_URI']) && !empty($_SERVER['REQUEST_URI'])) {
-    $requestUri = $_SERVER['REQUEST_URI'];
-    // Remove query string
-    $requestUri = strtok($requestUri, '?');
-    // Get the directory part (removes filename)
-    $dir = dirname($requestUri);
-    // Go up one level from sidebar to ADMIN, then add /api/
-    $apiBasePath = dirname($dir) . '/api/';
-    // Normalize path (remove double slashes)
-    $apiBasePath = str_replace('//', '/', $apiBasePath);
-    // Ensure it starts with / for absolute path
-    if (substr($apiBasePath, 0, 1) !== '/') {
-        $apiBasePath = '/' . $apiBasePath;
-    }
-    // Ensure it ends with /
-    $apiBasePath = rtrim($apiBasePath, '/') . '/';
-}
-
-// Method 2: Use PHP_SELF if REQUEST_URI didn't work
-if (empty($apiBasePath) && isset($_SERVER['PHP_SELF']) && !empty($_SERVER['PHP_SELF'])) {
-    $scriptPath = $_SERVER['PHP_SELF'];
-    $apiBasePath = dirname(dirname($scriptPath)) . '/api/';
-    $apiBasePath = str_replace('//', '/', $apiBasePath);
-    // Ensure it starts with / for absolute path
-    if (substr($apiBasePath, 0, 1) !== '/') {
-        $apiBasePath = '/' . $apiBasePath;
-    }
-    // Ensure it ends with /
-    $apiBasePath = rtrim($apiBasePath, '/') . '/';
-}
-
-// Method 3: Use __DIR__ to calculate relative to file system
-if (empty($apiBasePath) && isset($_SERVER['DOCUMENT_ROOT']) && !empty($_SERVER['DOCUMENT_ROOT'])) {
-    $docRoot = rtrim(str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT']), '/');
-    $currentDir = str_replace('\\', '/', __DIR__);
-    
-    // Check if we're within document root
-    if (strpos($currentDir, $docRoot) === 0) {
-        // Calculate relative path from document root
-        $relativePath = substr($currentDir, strlen($docRoot));
-        // Current file is in: /ADMIN/sidebar/ (or /EMERGENCY-COM/ADMIN/sidebar/)
-        // Go up to ADMIN directory
-        $adminPath = dirname($relativePath);
-        // Add /api/
-        $apiBasePath = $adminPath . '/api/';
-        // Normalize path
-        $apiBasePath = str_replace('//', '/', $apiBasePath);
-        // Ensure it starts with /
-        if (substr($apiBasePath, 0, 1) !== '/') {
-            $apiBasePath = '/' . $apiBasePath;
-        }
-        // Ensure it ends with /
-        $apiBasePath = rtrim($apiBasePath, '/') . '/';
-    }
-}
-
-// Fallback: Use hardcoded path (works if structure is standard)
-if (empty($apiBasePath)) {
-    $apiBasePath = '/ADMIN/api/';
-}
-
-// Final normalization - ensure proper format
-$apiBasePath = str_replace('//', '/', $apiBasePath);
-$apiBasePath = rtrim($apiBasePath, '/') . '/';
+// Determine the base API path - use relative path like all other sidebar files
+// Current file is in: ADMIN/sidebar/general-settings.php
+// API files are in: ADMIN/api/
+// So we need to go up one level (../) to get to ADMIN/, then into api/
+$apiBasePath = '../api/';
 ?>
 <!DOCTYPE html>
 <html lang="en">
