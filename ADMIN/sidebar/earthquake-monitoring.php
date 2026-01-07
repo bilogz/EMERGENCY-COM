@@ -302,7 +302,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                     </ol>
                 </nav>
                 <h1><i class="fas fa-mountain"></i> PHIVOLCS Earthquake Monitoring</h1>
-                <p>Monitor earthquakes in the Philippines region using real-time data from USGS Earthquake Hazards Program.</p>
+                <p>Monitor earthquakes in the Philippines region using real-time data from USGS Earthquake Hazards Program. <strong>Note:</strong> This system monitors earthquakes (including volcano-tectonic earthquakes from volcanic activity). For comprehensive volcanic activity monitoring, please refer to PHIVOLCS official alerts.</p>
             </div>
             
             <div class="sub-container">
@@ -476,11 +476,12 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             }
             
             // Philippines bounding box: lat 4.5 to 21.0, lon 116.0 to 127.0
+            // Extended slightly to ensure we catch all earthquakes including those near borders
             const philippinesBounds = {
-                minLat: 4.5,
-                maxLat: 21.0,
-                minLon: 116.0,
-                maxLon: 127.0
+                minLat: 4.0,  // Extended south
+                maxLat: 21.5, // Extended north
+                minLon: 115.5, // Extended west
+                maxLon: 127.5  // Extended east (includes Albay/Bicol region)
             };
             
             // USGS Earthquake API - Last 30 days with FULL TIMESTAMP (not just date)
@@ -504,17 +505,19 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 .then(data => {
                     console.log('Earthquake data loaded:', data.metadata?.count || 0, 'earthquakes');
                     
-                    // Clear existing markers
-                    earthquakeMarkers.forEach(marker => {
-                        if (map.hasLayer(marker)) {
-                            map.removeLayer(marker);
-                        }
-                    });
-                    earthquakeMarkers = [];
-                    earthquakeData = [];
-                    
+                    // Only clear markers if we have new data to replace them
                     if (data.features && data.features.length > 0) {
                         console.log('Processing', data.features.length, 'earthquakes');
+                        
+                        // Clear existing markers BEFORE adding new ones
+                        earthquakeMarkers.forEach(marker => {
+                            if (map.hasLayer(marker)) {
+                                map.removeLayer(marker);
+                            }
+                        });
+                        earthquakeMarkers = [];
+                        
+                        // Store new data
                         earthquakeData = data.features;
                         
                         // Track earthquake IDs for real-time detection
@@ -555,10 +558,17 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             // Create marker
                             const marker = L.marker([lat, lon], { icon: icon });
                             
+                            // Check if earthquake is near known volcanoes (especially Albay/Mayon)
+                            const isNearVolcano = checkIfNearVolcano(lat, lon);
+                            
                             // Popup with earthquake details
                             const timeAgo = getTimeAgo(time);
+                            const volcanoWarning = isNearVolcano ? 
+                                '<div style="background:#FF9800;color:white;padding:0.5rem;border-radius:4px;margin-bottom:10px;font-weight:bold;"><i class="fas fa-volcano"></i> Near Active Volcano - May Require Attention</div>' : '';
+                            
                             marker.bindPopup(`
                                 <div style="min-width:200px;">
+                                    ${volcanoWarning}
                                     <h3 style="margin:0 0 10px 0;color:${color};">
                                         <i class="fas fa-mountain"></i> Magnitude ${mag.toFixed(1)}
                                     </h3>
@@ -566,6 +576,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                                     <p style="margin:5px 0;"><strong>Depth:</strong> ${depth.toFixed(1)} km</p>
                                     <p style="margin:5px 0;"><strong>Time:</strong> ${time.toLocaleString()}</p>
                                     <p style="margin:5px 0;font-size:0.9em;color:#666;">${timeAgo}</p>
+                                    ${isNearVolcano ? '<p style="margin:5px 0;font-size:0.85em;color:#FF9800;"><i class="fas fa-exclamation-triangle"></i> This earthquake may be related to volcanic activity</p>' : ''}
                                     <p style="margin:10px 0 0 0;font-size:0.85em;color:#999;">
                                         <i class="fas fa-info-circle"></i> Data from USGS Earthquake Hazards Program
                                     </p>
@@ -592,8 +603,12 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             setTimeout(() => analyzeEarthquakeImpact(data.features), 2000);
                         }
                     } else {
-                        alert('No recent earthquakes found in the Philippines region.');
-                        updateStatistics([]);
+                        // No earthquakes found - but DON'T clear existing markers
+                        console.warn('No earthquakes found in response, keeping existing markers');
+                        if (earthquakeData.length === 0) {
+                            // Only show alert if we have no data at all
+                            updateStatistics([]);
+                        }
                     }
                     
                     // Reset refresh button
@@ -675,6 +690,40 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             }
         }
         
+        // Check if earthquake is near known active volcanoes in Philippines
+        function checkIfNearVolcano(lat, lon) {
+            // Known active volcanoes in Philippines with their coordinates
+            const volcanoes = [
+                { name: 'Mayon Volcano', lat: 13.2571, lon: 123.6854, radius: 50 }, // Albay
+                { name: 'Taal Volcano', lat: 14.0100, lon: 121.0000, radius: 30 },
+                { name: 'Pinatubo', lat: 15.1429, lon: 120.3497, radius: 40 },
+                { name: 'Kanlaon', lat: 10.4111, lon: 123.1322, radius: 30 },
+                { name: 'Bulusan', lat: 12.7667, lon: 124.0500, radius: 30 },
+                { name: 'Hibok-Hibok', lat: 9.2033, lon: 124.6733, radius: 25 }
+            ];
+            
+            for (const volcano of volcanoes) {
+                const distance = calculateDistanceKm(lat, lon, volcano.lat, volcano.lon);
+                if (distance <= volcano.radius) {
+                    console.log(`Earthquake detected near ${volcano.name} (${distance.toFixed(1)} km away)`);
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // Calculate distance between two coordinates in kilometers
+        function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Earth's radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
         // Helper function to get time ago string
         function getTimeAgo(date) {
             const seconds = Math.floor((new Date() - date) / 1000);
@@ -741,11 +790,12 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         
         // Check for recent earthquakes (last 2 hours) - TRUE REAL-TIME
         function checkRecentEarthquakes() {
+            // Extended bounds to include Albay/Bicol region and surrounding areas
             const philippinesBounds = {
-                minLat: 4.5,
-                maxLat: 21.0,
-                minLon: 116.0,
-                maxLon: 127.0
+                minLat: 4.0,  // Extended south
+                maxLat: 21.5, // Extended north
+                minLon: 115.5, // Extended west
+                maxLon: 127.5  // Extended east (includes Albay/Bicol region)
             };
             
             // Check last 2 hours for NEW earthquakes (extended window to catch all recent events)
@@ -806,8 +856,20 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                         if (newEarthquakes.length > 0) {
                             console.log(`🚨 NEW EARTHQUAKES DETECTED: ${newEarthquakes.length}`);
                             
-                            // Add new markers to map
+                            // Add new markers to map (DO NOT clear existing markers)
                             newEarthquakes.forEach(feature => {
+                                // Check if marker already exists to avoid duplicates
+                                const existingMarker = earthquakeMarkers.find(m => {
+                                    const markerLat = m.getLatLng().lat;
+                                    const markerLon = m.getLatLng().lng;
+                                    const [eqLon, eqLat] = feature.geometry.coordinates;
+                                    return Math.abs(markerLat - eqLat) < 0.001 && Math.abs(markerLon - eqLon) < 0.001;
+                                });
+                                
+                                if (existingMarker) {
+                                    console.log('Marker already exists for this earthquake, skipping');
+                                    return;
+                                }
                                 const [lon, lat] = feature.geometry.coordinates;
                                 const mag = feature.properties.mag || 0;
                                 const place = feature.properties.place || 'Unknown';
@@ -832,6 +894,11 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                                 // Create marker
                                 const marker = L.marker([lat, lon], { icon: icon });
                                 
+                                // Check if earthquake is near known volcanoes
+                                const isNearVolcano = checkIfNearVolcano(lat, lon);
+                                const volcanoWarning = isNearVolcano ? 
+                                    '<div style="background:#FF9800;color:white;padding:0.5rem;border-radius:4px;margin-bottom:10px;font-weight:bold;"><i class="fas fa-volcano"></i> Near Active Volcano - May Require Attention</div>' : '';
+                                
                                 // Popup with earthquake details
                                 const timeAgo = getTimeAgo(time);
                                 marker.bindPopup(`
@@ -839,6 +906,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                                         <div style="background:${color};color:white;padding:0.5rem;border-radius:4px;margin-bottom:10px;font-weight:bold;">
                                             🆕 NEW EARTHQUAKE
                                         </div>
+                                        ${volcanoWarning}
                                         <h3 style="margin:0 0 10px 0;color:${color};">
                                             <i class="fas fa-mountain"></i> Magnitude ${mag.toFixed(1)}
                                         </h3>
@@ -846,6 +914,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                                         <p style="margin:5px 0;"><strong>Depth:</strong> ${depth.toFixed(1)} km</p>
                                         <p style="margin:5px 0;"><strong>Time:</strong> ${time.toLocaleString()}</p>
                                         <p style="margin:5px 0;font-size:0.9em;color:#666;">${timeAgo}</p>
+                                        ${isNearVolcano ? '<p style="margin:5px 0;font-size:0.85em;color:#FF9800;"><i class="fas fa-exclamation-triangle"></i> This earthquake may be related to volcanic activity</p>' : ''}
                                         <p style="margin:10px 0 0 0;font-size:0.85em;color:#999;">
                                             <i class="fas fa-info-circle"></i> Data from USGS Earthquake Hazards Program
                                         </p>
@@ -855,8 +924,17 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                                 marker.addTo(map);
                                 earthquakeMarkers.push(marker);
                                 
-                                // Add to earthquake data
-                                earthquakeData.push(feature);
+                                // Add to earthquake data (avoid duplicates)
+                                const existsInData = earthquakeData.some(eq => {
+                                    const [eqLon, eqLat] = eq.geometry.coordinates;
+                                    const [newLon, newLat] = feature.geometry.coordinates;
+                                    return Math.abs(eqLat - newLat) < 0.001 && Math.abs(eqLon - newLon) < 0.001 && 
+                                           Math.abs(eq.properties.time - feature.properties.time) < 1000;
+                                });
+                                
+                                if (!existsInData) {
+                                    earthquakeData.push(feature);
+                                }
                                 
                                 // Auto-open popup for significant earthquakes
                                 if (mag >= 4.0) {
@@ -864,7 +942,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                                 }
                             });
                             
-                            // Update statistics
+                            // Update statistics with ALL earthquakes (existing + new)
                             updateStatistics(earthquakeData);
                             
                             // Show notification
@@ -879,11 +957,14 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             }
                             
                             // Update last update time
-                            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString() + ' (Real-time)';
+                            const updateEl = document.getElementById('lastUpdate');
+                            if (updateEl) {
+                                updateEl.textContent = new Date().toLocaleTimeString() + ' (Real-time)';
+                            }
                         }
                         
-                        // Update tracked IDs
-                        lastRecentEarthquakeIds = currentIds;
+                        // Update tracked IDs (merge with existing to preserve all tracked IDs)
+                        currentIds.forEach(id => lastRecentEarthquakeIds.add(id));
                     }
                 })
                 .catch(error => {
