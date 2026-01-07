@@ -582,6 +582,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             <span id="errorText"></span>
         </div>
 
+        <form id="loginForm" method="POST" action="#" class="login-form">
         <div class="form-group">
     <label for="email" class="form-label">
         <i class="fas fa-envelope"></i>
@@ -922,31 +923,35 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
         const passwordToggle = document.getElementById('passwordToggle');
         const passwordInput = document.getElementById('password');
         
-        passwordToggle.addEventListener('click', function() {
-            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            passwordInput.setAttribute('type', type);
-            
-            const icon = this.querySelector('i');
-            icon.classList.toggle('fa-eye');
-            icon.classList.toggle('fa-eye-slash');
-        });
+        if (passwordToggle && passwordInput) {
+            passwordToggle.addEventListener('click', function() {
+                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', type);
+                
+                const icon = this.querySelector('i');
+                if (icon) {
+                    icon.classList.toggle('fa-eye');
+                    icon.classList.toggle('fa-eye-slash');
+                }
+            });
+        }
 
         // Form Submission
-        const loginForm = document.getElementById('loginForm');
+        const loginForm = document.querySelector('form') || document.getElementById('loginForm');
         const loginButton = document.getElementById('loginButton');
         const errorMessage = document.getElementById('errorMessage');
         const errorText = document.getElementById('errorText');
 
         function showError(message) {
-            errorText.textContent = message;
-            errorMessage.classList.add('show');
+            if (errorText) errorText.textContent = message;
+            if (errorMessage) errorMessage.classList.add('show');
             setTimeout(() => {
-                errorMessage.classList.remove('show');
+                if (errorMessage) errorMessage.classList.remove('show');
             }, 5000);
         }
 
         function hideError() {
-            errorMessage.classList.remove('show');
+            if (errorMessage) errorMessage.classList.remove('show');
         }
 
         // Check account lockout status on page load
@@ -970,7 +975,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                     recaptchaError.style.display = 'block';
                     recaptchaError.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Security verification is not configured. Please contact the administrator.';
                 }
-                loginButton.disabled = true;
+                if (loginButton) loginButton.disabled = true;
                 return;
             }
             
@@ -1018,7 +1023,8 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             }
         }, 1000);
 
-        loginForm.addEventListener('submit', async function(e) {
+        if (loginForm && loginButton) {
+            loginForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             hideError();
 
@@ -1065,8 +1071,10 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             }
 
             // Show loading state
-            loginButton.classList.add('loading');
-            loginButton.disabled = true;
+            if (loginButton) {
+                loginButton.classList.add('loading');
+                loginButton.disabled = true;
+            }
 
             try {
                 const response = await fetch('api/login-web.php', {
@@ -1112,8 +1120,10 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                     });
                 } else if (data.requires_otp) {
                     // Credentials valid, but OTP verification required
-                    loginButton.classList.remove('loading');
-                    loginButton.disabled = false;
+                    if (loginButton) {
+                        loginButton.classList.remove('loading');
+                        loginButton.disabled = false;
+                    }
                     
                     // Send OTP to email
                     try {
@@ -1205,17 +1215,24 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 console.error('Login error:', error);
                 // Don't reveal specific error details for security
                 showError('A connection error occurred. Please check your internet connection and try again.');
-                loginButton.classList.remove('loading');
-                loginButton.disabled = false;
+                if (loginButton) {
+                    loginButton.classList.remove('loading');
+                    loginButton.disabled = false;
+                }
             }
         });
+        }
 
         // OTP Modal close and resend handlers
-        document.getElementById('otpModalClose').addEventListener('click', closeOtpModal);
+        const otpModalClose = document.getElementById('otpModalClose');
+        if (otpModalClose) {
+            otpModalClose.addEventListener('click', closeOtpModal);
+        }
 
         // OTP Verification form submission
         const otpForm = document.getElementById('otpModalForm');
-        otpForm.addEventListener('submit', async function(e) {
+        if (otpForm) {
+            otpForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
             if (!pendingLoginData) {
@@ -1232,6 +1249,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             }
 
             const verifyButton = document.getElementById('otpVerifyButton');
+            if (!verifyButton) return;
             verifyButton.disabled = true;
             verifyButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
 
@@ -1319,6 +1337,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 verifyButton.innerHTML = '<i class="fas fa-check"></i> <span>Verify Code</span>';
             }
         });
+        }
 
         // Resend OTP button
         document.getElementById('otpResendButton').addEventListener('click', async function() {
