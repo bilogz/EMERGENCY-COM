@@ -43,20 +43,34 @@ function analyzeEarthquakeImpact() {
     global $pdo;
     
     // Get earthquake data from request
-    $earthquakeData = json_decode(file_get_contents('php://input'), true);
+    $input = file_get_contents('php://input');
+    
+    if (empty($input)) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'No data received']);
+        exit();
+    }
+    
+    $earthquakeData = json_decode($input, true);
+    
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Invalid JSON: ' . json_last_error_msg()]);
+        exit();
+    }
     
     if (empty($earthquakeData) || !isset($earthquakeData['earthquakes'])) {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'No earthquake data provided']);
-        return;
+        exit();
     }
     
     $earthquakes = $earthquakeData['earthquakes'] ?? [];
     
-    if (empty($earthquakes)) {
+    if (empty($earthquakes) || !is_array($earthquakes)) {
         http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'No earthquake data provided']);
-        return;
+        echo json_encode(['success' => false, 'message' => 'Empty or invalid earthquake array']);
+        exit();
     }
     
     // Get API key for analysis

@@ -138,23 +138,36 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
         
-        .earthquake-marker {
+        /* Custom earthquake marker styling */
+        .earthquake-marker-custom {
             background: transparent !important;
             border: none !important;
             pointer-events: auto !important;
         }
         
-        .earthquake-marker div {
+        .earthquake-marker-custom div {
             pointer-events: auto !important;
             cursor: pointer !important;
             display: block !important;
             visibility: visible !important;
             opacity: 1 !important;
+            background-color: inherit !important;
+        }
+        
+        /* Override Leaflet default marker styles */
+        .leaflet-marker-icon.earthquake-marker-custom {
+            background: transparent !important;
+            border: none !important;
         }
         
         /* Ensure markers are visible on map */
         .leaflet-marker-icon {
             z-index: 1000 !important;
+        }
+        
+        /* Hide default Leaflet marker shadow for custom markers */
+        .leaflet-marker-shadow.earthquake-marker-custom {
+            display: none !important;
         }
         
         .earthquake-stats {
@@ -564,19 +577,26 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             const iconSize = Math.max(25, Math.min(60, mag * 10)); // Larger default size
                             const borderWidth = mag >= 5.0 ? 4 : 3; // Thicker border for major earthquakes
                             
+                            // Create custom DIV icon - MUST use divIcon to show custom colored circles
+                            const iconHtml = `<div style="background-color:${color} !important;width:${iconSize}px !important;height:${iconSize}px !important;border-radius:50% !important;border:${borderWidth}px solid white !important;box-shadow:0 0 8px ${color}, 0 0 16px ${color}, 0 2px 8px rgba(0,0,0,0.5) !important;position:relative !important;z-index:1000 !important;display:block !important;margin:0 !important;padding:0 !important;"></div>`;
+                            
                             const icon = L.divIcon({
-                                className: 'earthquake-marker',
-                                html: `<div style="background:${color};width:${iconSize}px;height:${iconSize}px;border-radius:50%;border:${borderWidth}px solid white;box-shadow:0 0 8px ${color}, 0 0 16px ${color}, 0 2px 8px rgba(0,0,0,0.5);position:relative;z-index:1000;"></div>`,
+                                className: 'earthquake-marker-custom',
+                                html: iconHtml,
                                 iconSize: [iconSize, iconSize],
                                 iconAnchor: [iconSize/2, iconSize/2],
                                 popupAnchor: [0, -iconSize/2]
                             });
                             
-                            // Create marker with higher z-index
+                            // Create marker - MUST explicitly set icon to prevent default triangle marker
                             const marker = L.marker([lat, lon], { 
                                 icon: icon,
-                                zIndexOffset: mag * 100 // Higher z-index for larger magnitudes
+                                zIndexOffset: mag * 100,
+                                riseOnHover: true
                             });
+                            
+                            // Force set icon again to ensure it's applied
+                            marker.setIcon(icon);
                             
                             // Check if earthquake is near known volcanoes (especially Albay/Mayon)
                             const isNearVolcano = checkIfNearVolcano(lat, lon);
@@ -604,12 +624,29 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             `);
                             
                             // Add marker to map and verify it was added
+                            // Verify icon is set before adding to map
+                            if (!marker.options.icon) {
+                                console.error('ERROR: Marker icon not set!', marker);
+                                marker.setIcon(icon);
+                            }
+                            
                             marker.addTo(map);
                             earthquakeMarkers.push(marker);
                             
+                            // Verify marker was added correctly
+                            setTimeout(() => {
+                                const markerIcon = marker.options.icon;
+                                if (markerIcon && markerIcon.options) {
+                                    const iconColor = markerIcon.options.html.match(/background-color:([^;!]+)/);
+                                    if (iconColor && iconColor[1] !== color) {
+                                        console.warn(`Color mismatch for marker ${earthquakeMarkers.length}: Expected ${color}, Got ${iconColor[1]}`);
+                                    }
+                                }
+                            }, 100);
+                            
                             // Debug: Log marker creation
                             if (earthquakeMarkers.length <= 5) { // Log first 5 for debugging
-                                console.log(`Marker added: Mag ${mag.toFixed(1)} at ${lat.toFixed(4)}, ${lon.toFixed(4)} - Color: ${color}, Size: ${iconSize}px`);
+                                console.log(`✅ Marker ${earthquakeMarkers.length}: Mag ${mag.toFixed(1)} at ${lat.toFixed(4)}, ${lon.toFixed(4)} - Color: ${color}, Size: ${iconSize}px`);
                             }
                         });
                         
@@ -971,9 +1008,11 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                                 // Create custom icon with pulsing animation for new earthquakes
                                 const iconSize = Math.max(25, Math.min(60, mag * 10)); // Larger size
                                 const borderWidth = mag >= 5.0 ? 4 : 3;
+                                const iconHtml = `<div style="background-color:${color} !important;width:${iconSize}px !important;height:${iconSize}px !important;border-radius:50% !important;border:${borderWidth}px solid white !important;box-shadow:0 0 12px ${color}, 0 0 24px ${color}, 0 2px 8px rgba(0,0,0,0.5) !important;animation:pulse 2s infinite !important;position:relative !important;z-index:1000 !important;display:block !important;"></div>`;
+                                
                                 const icon = L.divIcon({
-                                    className: 'earthquake-marker',
-                                    html: `<div style="background:${color};width:${iconSize}px;height:${iconSize}px;border-radius:50%;border:${borderWidth}px solid white;box-shadow:0 0 12px ${color}, 0 0 24px ${color}, 0 2px 8px rgba(0,0,0,0.5);animation:pulse 2s infinite;position:relative;z-index:1000;"></div>`,
+                                    className: 'earthquake-marker-custom',
+                                    html: iconHtml,
                                     iconSize: [iconSize, iconSize],
                                     iconAnchor: [iconSize/2, iconSize/2],
                                     popupAnchor: [0, -iconSize/2]
@@ -982,8 +1021,12 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                                 // Create marker with higher z-index
                                 const marker = L.marker([lat, lon], { 
                                     icon: icon,
-                                    zIndexOffset: mag * 100 // Higher z-index for larger magnitudes
+                                    zIndexOffset: mag * 100,
+                                    riseOnHover: true
                                 });
+                                
+                                // Force set icon to ensure it's applied
+                                marker.setIcon(icon);
                                 
                                 // Check if earthquake is near known volcanoes
                                 const isNearVolcano = checkIfNearVolcano(lat, lon);
@@ -1250,7 +1293,12 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                     earthquakes: eqData
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success && data.analysis) {
                     displayAIAnalysis(data.analysis);
@@ -1268,6 +1316,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 contentEl.innerHTML = `
                     <div style="padding: 1rem; color: var(--error-color, #F44336);">
                         <i class="fas fa-exclamation-circle"></i> Error: ${error.message}
+                        <p style="font-size: 0.9em; margin-top: 0.5rem;">AI analysis is optional. Earthquake data is still displayed correctly.</p>
                     </div>
                 `;
             });
