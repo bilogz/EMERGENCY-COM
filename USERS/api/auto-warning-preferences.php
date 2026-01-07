@@ -300,3 +300,4 @@ function getUsersWithAutoWarningsEnabled($categories = null, $severity = 'all') 
     return array_values($users);
 }
 
+

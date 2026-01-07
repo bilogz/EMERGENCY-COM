@@ -306,3 +306,4 @@ Currently, you need to manually click "Sync from Config File".
 **Last Updated:** <?php echo date('Y-m-d'); ?>  
 **Version:** 1.0.0
 
+
