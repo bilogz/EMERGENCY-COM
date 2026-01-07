@@ -463,7 +463,10 @@ function buildAnalysisPrompt($earthquakes, $qcLat, $qcLon) {
     $prompt .= "  \"recommendations\": [\"List of recommended actions for Quezon City residents and authorities\"],\n";
     $prompt .= "  \"affected_areas\": [\"Specific areas in Quezon City that may be most affected\"],\n";
     $prompt .= "  \"magnitude_threshold\": \"Note if any earthquakes exceed dangerous thresholds\",\n";
-    $prompt .= "  \"distance_analysis\": \"Analysis of how distance affects impact\"\n";
+    $prompt .= "  \"distance_analysis\": \"Analysis of how distance affects impact\",\n";
+    $prompt .= "  \"landslide_risk\": \"Detailed assessment of landslide risk for Quezon City (consider hilly areas, slopes, and elevated regions)\",\n";
+    $prompt .= "  \"travel_safety\": \"Assessment of travel safety (safe|caution|unsafe) with specific guidance on whether it's safe to travel, use bridges, or be in elevated structures\",\n";
+    $prompt .= "  \"travel_safety_details\": \"Detailed explanation of travel safety assessment and specific precautions\"\n";
     $prompt .= "}\n\n";
     $prompt .= "Consider:\n";
     $prompt .= "- Distance decay: Earthquakes closer to Quezon City have more impact\n";
@@ -471,7 +474,10 @@ function buildAnalysisPrompt($earthquakes, $qcLat, $qcLon) {
     $prompt .= "- Depth: Shallow earthquakes cause more surface shaking\n";
     $prompt .= "- Local geology: Quezon City's soil conditions and building structures\n";
     $prompt .= "- Historical patterns: Known fault lines and seismic activity in the region\n";
-    $prompt .= "- Secondary hazards: Liquefaction risk, landslides, building damage potential\n\n";
+    $prompt .= "- Secondary hazards: Liquefaction risk, landslides, building damage potential\n";
+    $prompt .= "- Landslide risk: Assess risk for hilly areas, slopes, and elevated regions in Quezon City\n";
+    $prompt .= "- Travel safety: Evaluate if it's safe to travel, use bridges, or be in elevated structures based on earthquake magnitude, distance, and potential aftershocks\n";
+    $prompt .= "- Infrastructure: Consider impact on roads, bridges, and buildings\n\n";
     $prompt .= "Provide accurate, scientific, and actionable analysis. Return ONLY valid JSON, no additional text.";
     
     return $prompt;

@@ -61,30 +61,38 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         }
         
         .earthquake-control-btn {
-            background: var(--card-bg-1);
+            background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
-            border: 1px solid var(--border-color-1);
-            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
             padding: 0.75rem 1rem;
             cursor: pointer;
             display: flex;
             align-items: center;
             gap: 0.5rem;
             font-size: 0.9rem;
-            transition: all 0.2s;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             color: var(--text-color-1);
+            font-weight: 500;
         }
         
         .earthquake-control-btn:hover {
-            background: var(--card-bg-1);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            background: rgba(255, 255, 255, 1);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+            transform: translateY(-2px);
         }
         
         .earthquake-control-btn.active {
-            background: var(--primary-color-1);
+            background: linear-gradient(135deg, var(--primary-color-1), #6c5ce7);
             color: white;
-            border-color: var(--primary-color-1);
+            border-color: transparent;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+        }
+        
+        .earthquake-control-btn.active:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(102, 126, 234, 0.5);
         }
         
         .earthquake-info {
@@ -179,22 +187,187 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         
         .stat-card {
             background: var(--card-bg-1);
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 1.25rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
             border-left: 4px solid var(--primary-color-1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color-1), transparent);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        }
+        
+        .stat-card:hover::before {
+            opacity: 1;
         }
         
         .stat-card h3 {
-            margin: 0 0 0.5rem 0;
+            margin: 0 0 0.75rem 0;
             font-size: 0.9rem;
             color: var(--text-secondary-1);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
         
         .stat-card .stat-value {
             font-size: 2rem;
             font-weight: 600;
             color: var(--primary-color-1);
+        }
+        
+        .stat-card-last-earthquake {
+            border-left-color: #FF9800;
+        }
+        
+        .stat-card-last-earthquake .stat-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-color-1);
+        }
+        
+        .qc-risk-alert-panel {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.2);
+            animation: slideDown 0.5s ease-out;
+        }
+        
+        .qc-risk-header {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+        }
+        
+        .qc-risk-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+        }
+        
+        .qc-risk-badge.low { background: rgba(76, 175, 80, 0.3); }
+        .qc-risk-badge.moderate { background: rgba(255, 193, 7, 0.3); }
+        .qc-risk-badge.high { background: rgba(255, 152, 0, 0.3); }
+        .qc-risk-badge.critical { background: rgba(244, 67, 54, 0.3); }
+        
+        .qc-risk-content {
+            padding: 1.5rem;
+            background: rgba(255,255,255,0.95);
+            color: var(--text-color-1);
+        }
+        
+        .qc-risk-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            background: var(--card-bg-1);
+            border-radius: 8px;
+            border-left: 4px solid var(--primary-color-1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .qc-risk-item:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .qc-risk-item-icon {
+            font-size: 1.5rem;
+            color: var(--primary-color-1);
+            flex-shrink: 0;
+        }
+        
+        .qc-risk-item-content h4 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1rem;
+            color: var(--text-color-1);
+        }
+        
+        .qc-risk-item-content p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--text-secondary-1);
+            line-height: 1.6;
+        }
+        
+        .travel-safety-badge {
+            display: inline-block;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }
+        
+        .travel-safety-badge.safe {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .travel-safety-badge.caution {
+            background: #FFC107;
+            color: #333;
+        }
+        
+        .travel-safety-badge.unsafe {
+            background: #F44336;
+            color: white;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
+            }
+            50% {
+                box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
+            }
+        }
+        
+        .qc-risk-alert-panel.critical-alert {
+            animation: pulse-glow 2s infinite;
+            border-color: #F44336;
         }
         
         .ai-analytics-panel {
@@ -348,11 +521,39 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             <h3>Latest Magnitude</h3>
                             <div class="stat-value" id="latestMagnitude">-</div>
                         </div>
+                        <div class="stat-card stat-card-last-earthquake">
+                            <h3><i class="fas fa-clock"></i> Last Earthquake</h3>
+                            <div class="stat-value" style="font-size: 1.1rem;" id="lastEarthquakeTime">-</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary-1); margin-top: 0.5rem;" id="lastEarthquakeLocation">-</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary-1); margin-top: 0.25rem;" id="lastEarthquakeMagnitude">-</div>
+                        </div>
                         <div class="stat-card">
                             <h3>Last Update</h3>
                             <div class="stat-value" style="font-size: 1rem;" id="lastUpdate">-</div>
                             <div style="font-size: 0.75rem; color: var(--text-secondary-1); margin-top: 0.25rem;" id="realtimeIndicator">
                                 <i class="fas fa-circle" style="color: #4CAF50; font-size: 0.5rem;"></i> Real-time active
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Quezon City Risk Alert Panel -->
+                    <div class="qc-risk-alert-panel" id="qcRiskAlertPanel">
+                        <div class="qc-risk-header">
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <i class="fas fa-map-marker-alt" style="font-size: 1.5rem;"></i>
+                                <div>
+                                    <h3 style="margin: 0; font-size: 1.1rem;">Quezon City Risk Assessment</h3>
+                                    <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; opacity: 0.9;">Automated real-time analysis</p>
+                                </div>
+                            </div>
+                            <div class="qc-risk-badge" id="qcRiskBadge">
+                                <span id="qcRiskLevel">ASSESSING...</span>
+                            </div>
+                        </div>
+                        <div class="qc-risk-content" id="qcRiskContent">
+                            <div style="text-align: center; padding: 1.5rem;">
+                                <i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; color: var(--primary-color-1);"></i>
+                                <p style="margin-top: 0.5rem;">Analyzing Quezon City risk...</p>
                             </div>
                         </div>
                     </div>
@@ -460,6 +661,13 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             
             // Start real-time updates
             startRealtimeUpdates();
+            
+            // Initial Quezon City risk assessment (will be updated when data loads)
+            setTimeout(() => {
+                if (earthquakeData.length > 0) {
+                    updateQuezonCityRisk(earthquakeData);
+                }
+            }, 2000);
             
             // Ensure Quezon City stays focused on resize
             window.addEventListener('resize', () => {
@@ -656,11 +864,14 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             }
                         });
                         
-                        // Update statistics
+                        // Update statistics immediately
                         updateStatistics(data.features);
                         
                         // Show info panel
                         showEarthquakeInfo(data.features.length);
+                        
+                        // Trigger Quezon City risk update
+                        updateQuezonCityRisk(data.features);
                         
                         // Debug: Verify markers are on map
                         console.log(`✅ Total markers created: ${earthquakeMarkers.length}`);
@@ -771,14 +982,183 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         function updateStatistics(features) {
             const totalEvents = features.length;
             const majorEvents = features.filter(f => (f.properties.mag || 0) >= 5.0).length;
-            const latest = features.length > 0 ? features[0] : null;
+            
+            // Sort by time (most recent first) to get the latest earthquake
+            const sortedByTime = [...features].sort((a, b) => (b.properties.time || 0) - (a.properties.time || 0));
+            const latest = sortedByTime.length > 0 ? sortedByTime[0] : null;
             const latestMag = latest ? (latest.properties.mag || 0).toFixed(1) : '-';
             
             document.getElementById('totalEvents').textContent = totalEvents;
             document.getElementById('majorEvents').textContent = majorEvents;
             document.getElementById('latestMagnitude').textContent = latestMag;
+            
+            // Update Last Earthquake card
+            if (latest) {
+                const lastTime = new Date(latest.properties.time);
+                const timeAgo = getTimeAgo(lastTime);
+                const place = latest.properties.place || 'Unknown';
+                
+                document.getElementById('lastEarthquakeTime').textContent = timeAgo;
+                document.getElementById('lastEarthquakeLocation').innerHTML = `<i class="fas fa-map-marker-alt"></i> ${place}`;
+                document.getElementById('lastEarthquakeMagnitude').innerHTML = `<strong>Magnitude:</strong> ${latestMag}`;
+            } else {
+                document.getElementById('lastEarthquakeTime').textContent = 'No data';
+                document.getElementById('lastEarthquakeLocation').textContent = '-';
+                document.getElementById('lastEarthquakeMagnitude').textContent = '-';
+            }
+            
             const updateTime = new Date().toLocaleTimeString();
             document.getElementById('lastUpdate').textContent = realtimeEnabled ? `${updateTime} (Real-time)` : updateTime;
+            
+        }
+        
+        // Update Quezon City Risk Assessment
+        function updateQuezonCityRisk(features) {
+            const qcLat = 14.6488;
+            const qcLon = 121.0509;
+            
+            // Find earthquakes within 200km of Quezon City
+            const nearbyEarthquakes = features.filter(f => {
+                const [lon, lat] = f.geometry.coordinates;
+                const distance = calculateDistanceKm(lat, lon, qcLat, qcLon);
+                return distance <= 200;
+            });
+            
+            // Find the most significant nearby earthquake
+            const significantNearby = nearbyEarthquakes
+                .filter(f => (f.properties.mag || 0) >= 4.0)
+                .sort((a, b) => (b.properties.mag || 0) - (a.properties.mag || 0));
+            
+            const riskPanel = document.getElementById('qcRiskAlertPanel');
+            const riskContent = document.getElementById('qcRiskContent');
+            const riskBadge = document.getElementById('qcRiskBadge');
+            const riskLevel = document.getElementById('qcRiskLevel');
+            
+            if (significantNearby.length > 0) {
+                const closest = significantNearby[0];
+                const [lon, lat] = closest.geometry.coordinates;
+                const distance = calculateDistanceKm(lat, lon, qcLat, qcLon);
+                const mag = closest.properties.mag || 0;
+                
+                // Determine risk level
+                let risk = 'low';
+                let riskText = 'LOW RISK';
+                let travelSafety = 'safe';
+                let travelText = 'SAFE TO TRAVEL';
+                
+                if (distance < 50 && mag >= 5.0) {
+                    risk = 'critical';
+                    riskText = 'CRITICAL';
+                    travelSafety = 'unsafe';
+                    travelText = 'AVOID TRAVEL';
+                } else if (distance < 100 && mag >= 4.5) {
+                    risk = 'high';
+                    riskText = 'HIGH RISK';
+                    travelSafety = 'caution';
+                    travelText = 'TRAVEL WITH CAUTION';
+                } else if (distance < 150 && mag >= 4.0) {
+                    risk = 'moderate';
+                    riskText = 'MODERATE RISK';
+                    travelSafety = 'caution';
+                    travelText = 'TRAVEL WITH CAUTION';
+                }
+                
+                riskBadge.className = `qc-risk-badge ${risk}`;
+                riskLevel.textContent = riskText;
+                
+                // Determine landslide risk
+                let landslideRisk = 'Low';
+                if (distance < 50 && mag >= 5.0) {
+                    landslideRisk = 'High - Possible landslides in hilly areas';
+                } else if (distance < 100 && mag >= 4.5) {
+                    landslideRisk = 'Moderate - Monitor hilly and elevated areas';
+                } else {
+                    landslideRisk = 'Low - Minimal landslide risk';
+                }
+                
+                riskContent.innerHTML = `
+                    <div class="qc-risk-item">
+                        <div class="qc-risk-item-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="qc-risk-item-content">
+                            <h4>Current Risk Status</h4>
+                            <p>Magnitude ${mag.toFixed(1)} earthquake detected ${distance.toFixed(1)} km from Quezon City. ${risk === 'critical' || risk === 'high' ? 'Immediate monitoring recommended.' : 'No immediate threat detected.'}</p>
+                        </div>
+                    </div>
+                    <div class="qc-risk-item">
+                        <div class="qc-risk-item-icon">
+                            <i class="fas fa-mountain"></i>
+                        </div>
+                        <div class="qc-risk-item-content">
+                            <h4>Landslide Risk Assessment</h4>
+                            <p><strong>${landslideRisk}</strong></p>
+                            ${risk === 'high' || risk === 'critical' ? '<p style="margin-top: 0.5rem; font-size: 0.85rem;">Avoid hilly areas, slopes, and elevated regions. Monitor for ground movement.</p>' : ''}
+                        </div>
+                    </div>
+                    <div class="qc-risk-item">
+                        <div class="qc-risk-item-icon">
+                            <i class="fas fa-car"></i>
+                        </div>
+                        <div class="qc-risk-item-content">
+                            <h4>Travel Safety</h4>
+                            <p><span class="travel-safety-badge ${travelSafety}">${travelText}</span></p>
+                            ${travelSafety === 'unsafe' ? '<p style="margin-top: 0.5rem; font-size: 0.85rem;">Avoid non-essential travel. Stay indoors if possible.</p>' : travelSafety === 'caution' ? '<p style="margin-top: 0.5rem; font-size: 0.85rem;">Exercise caution when traveling. Avoid bridges and elevated structures.</p>' : '<p style="margin-top: 0.5rem; font-size: 0.85rem;">Normal travel conditions. Stay alert for aftershocks.</p>'}
+                        </div>
+                    </div>
+                    <div class="qc-risk-item">
+                        <div class="qc-risk-item-icon">
+                            <i class="fas fa-info-circle"></i>
+                        </div>
+                        <div class="qc-risk-item-content">
+                            <h4>Recommendations</h4>
+                            <p>${risk === 'critical' || risk === 'high' ? 'Stay indoors, avoid elevators, and prepare emergency supplies. Monitor official PHIVOLCS alerts.' : risk === 'moderate' ? 'Stay alert for aftershocks. Review emergency preparedness plans.' : 'Continue normal activities. Stay informed about seismic activity.'}</p>
+                        </div>
+                    </div>
+                `;
+                
+                // Add critical alert animation if high risk
+                if (risk === 'critical' || risk === 'high') {
+                    riskPanel.classList.add('critical-alert');
+                } else {
+                    riskPanel.classList.remove('critical-alert');
+                }
+            } else {
+                // No significant nearby earthquakes
+                riskBadge.className = 'qc-risk-badge low';
+                riskLevel.textContent = 'LOW RISK';
+                riskContent.innerHTML = `
+                    <div class="qc-risk-item">
+                        <div class="qc-risk-item-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="qc-risk-item-content">
+                            <h4>Current Status: Safe</h4>
+                            <p>No significant earthquakes detected within 200km of Quezon City in the last 30 days.</p>
+                        </div>
+                    </div>
+                    <div class="qc-risk-item">
+                        <div class="qc-risk-item-icon">
+                            <i class="fas fa-mountain"></i>
+                        </div>
+                        <div class="qc-risk-item-content">
+                            <h4>Landslide Risk</h4>
+                            <p><strong>Low</strong> - No immediate landslide concerns.</p>
+                        </div>
+                    </div>
+                    <div class="qc-risk-item">
+                        <div class="qc-risk-item-icon">
+                            <i class="fas fa-car"></i>
+                        </div>
+                        <div class="qc-risk-item-content">
+                            <h4>Travel Safety</h4>
+                            <p><span class="travel-safety-badge safe">SAFE TO TRAVEL</span></p>
+                            <p style="margin-top: 0.5rem; font-size: 0.85rem;">Normal travel conditions. Continue regular activities.</p>
+                        </div>
+                    </div>
+                `;
+                riskPanel.classList.remove('critical-alert');
+            }
         }
         
         // Show earthquake information panel
@@ -1090,7 +1470,32 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             });
                             
                             // Update statistics with ALL earthquakes (existing + new)
-                            updateStatistics(earthquakeData);
+                        updateStatistics(earthquakeData);
+                        
+                        // Update Quezon City risk assessment immediately
+                        updateQuezonCityRisk(earthquakeData);
+                        
+                        // Update last earthquake info immediately
+                        if (newEarthquakes.length > 0) {
+                            const latestNew = newEarthquakes.sort((a, b) => (b.properties.time || 0) - (a.properties.time || 0))[0];
+                            const lastTime = new Date(latestNew.properties.time);
+                            const timeAgo = getTimeAgo(lastTime);
+                            const place = latestNew.properties.place || 'Unknown';
+                            const mag = (latestNew.properties.mag || 0).toFixed(1);
+                            
+                            document.getElementById('lastEarthquakeTime').textContent = timeAgo;
+                            document.getElementById('lastEarthquakeLocation').innerHTML = `<i class="fas fa-map-marker-alt"></i> ${place}`;
+                            document.getElementById('lastEarthquakeMagnitude').innerHTML = `<strong>Magnitude:</strong> ${mag}`;
+                            
+                            // Add visual highlight animation to last earthquake card
+                            const lastEqCard = document.querySelector('.stat-card-last-earthquake');
+                            if (lastEqCard) {
+                                lastEqCard.style.animation = 'pulse-highlight 1s ease-out';
+                                setTimeout(() => {
+                                    lastEqCard.style.animation = '';
+                                }, 1000);
+                            }
+                        }
                             
                             // Show notification
                             const significantNew = newEarthquakes.filter(f => (f.properties.mag || 0) >= 4.0);
@@ -1471,6 +1876,61 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 `;
             }
             
+            if (analysis.landslide_risk) {
+                const landslideRiskLevel = analysis.landslide_risk.toLowerCase();
+                let riskColor = '#4CAF50';
+                if (landslideRiskLevel.includes('high') || landslideRiskLevel.includes('critical')) {
+                    riskColor = '#F44336';
+                } else if (landslideRiskLevel.includes('moderate')) {
+                    riskColor = '#FF9800';
+                }
+                
+                html += `
+                    <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--card-bg-1); border-radius: 4px; border-left: 4px solid ${riskColor};">
+                        <h4 style="margin: 0 0 0.5rem 0; color: ${riskColor};">
+                            <i class="fas fa-mountain"></i> Landslide Risk Assessment
+                        </h4>
+                        <p style="margin: 0; line-height: 1.6;"><strong>${analysis.landslide_risk}</strong></p>
+                        ${landslideRiskLevel.includes('high') || landslideRiskLevel.includes('moderate') ? 
+                            '<p style="margin-top: 0.5rem; font-size: 0.9em; color: var(--text-secondary-1);">Avoid hilly areas, slopes, and elevated regions. Monitor for ground movement and signs of instability.</p>' : ''}
+                    </div>
+                `;
+            }
+            
+            if (analysis.travel_safety) {
+                const travelSafety = analysis.travel_safety.toLowerCase();
+                let safetyClass = 'safe';
+                let safetyText = 'SAFE TO TRAVEL';
+                let safetyColor = '#4CAF50';
+                
+                if (travelSafety === 'unsafe' || travelSafety.includes('avoid')) {
+                    safetyClass = 'unsafe';
+                    safetyText = 'AVOID TRAVEL';
+                    safetyColor = '#F44336';
+                } else if (travelSafety === 'caution' || travelSafety.includes('caution')) {
+                    safetyClass = 'caution';
+                    safetyText = 'TRAVEL WITH CAUTION';
+                    safetyColor = '#FFC107';
+                }
+                
+                html += `
+                    <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--card-bg-1); border-radius: 4px; border-left: 4px solid ${safetyColor};">
+                        <h4 style="margin: 0 0 0.5rem 0; color: ${safetyColor};">
+                            <i class="fas fa-car"></i> Travel Safety Assessment
+                        </h4>
+                        <p style="margin: 0.5rem 0;">
+                            <span class="travel-safety-badge ${safetyClass}">${safetyText}</span>
+                        </p>
+                        ${analysis.travel_safety_details ? 
+                            `<p style="margin-top: 0.5rem; line-height: 1.6; font-size: 0.9em;">${analysis.travel_safety_details}</p>` : 
+                            '<p style="margin-top: 0.5rem; line-height: 1.6; font-size: 0.9em;">' + 
+                            (safetyClass === 'unsafe' ? 'Avoid non-essential travel. Stay indoors if possible.' : 
+                             safetyClass === 'caution' ? 'Exercise caution when traveling. Avoid bridges and elevated structures.' : 
+                             'Normal travel conditions. Stay alert for aftershocks.') + '</p>'}
+                    </div>
+                `;
+            }
+            
             if (analysis.magnitude_threshold) {
                 html += `
                     <div style="margin-top: 1rem; padding: 0.75rem; background: #fff3cd; border-radius: 4px; border-left: 4px solid #ffc107;">
@@ -1500,6 +1960,11 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 @keyframes pulse {
                     0%, 100% { transform: scale(1); opacity: 1; }
                     50% { transform: scale(1.1); opacity: 0.8; }
+                }
+                @keyframes pulse-highlight {
+                    0% { transform: scale(1); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+                    50% { transform: scale(1.02); box-shadow: 0 8px 24px rgba(255, 152, 0, 0.4); }
+                    100% { transform: scale(1); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
                 }
                 .earthquake-marker {
                     animation: pulse 2s infinite;
