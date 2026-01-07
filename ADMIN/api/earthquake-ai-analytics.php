@@ -592,9 +592,13 @@ function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
                     : substr($response, 0, 200);
                 
                 // Check if error is quota-related and retry with backup key
+                // "overloaded" is Google's way of saying the free tier is rate-limited
                 $isQuotaError = stripos($errorMessage, 'quota') !== false || 
                               stripos($errorMessage, 'exceeded') !== false ||
                               stripos($errorMessage, 'billing') !== false ||
+                              stripos($errorMessage, 'overloaded') !== false ||
+                              stripos($errorMessage, 'rate limit') !== false ||
+                              stripos($errorMessage, 'resource_exhausted') !== false ||
                               $httpCode === 429;
                 
                 // If quota error and backup key available, try with backup key

@@ -1548,9 +1548,13 @@ Keep recommendations practical and actionable for public safety. Risk level shou
             }
             
             // Check if error is quota-related and retry with backup key
+            // "overloaded" is Google's way of saying the free tier is rate-limited
             $isQuotaError = stripos($errorMsg, 'quota') !== false || 
                           stripos($errorMsg, 'exceeded') !== false ||
                           stripos($errorMsg, 'billing') !== false ||
+                          stripos($errorMsg, 'overloaded') !== false ||
+                          stripos($errorMsg, 'rate limit') !== false ||
+                          stripos($errorMsg, 'resource_exhausted') !== false ||
                           $httpCode === 429;
             
             if ($isQuotaError && !empty($backupApiKey) && $apiKey !== $backupApiKey) {

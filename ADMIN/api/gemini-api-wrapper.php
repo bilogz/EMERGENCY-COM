@@ -52,6 +52,7 @@ function callGeminiWithAutoRotation($prompt, $purpose = 'default', $model = 'gem
         }
         
         // Check if error is quota exceeded
+        // "overloaded" is Google's way of saying the free tier is rate-limited
         $isQuotaError = false;
         if (isset($result['error'])) {
             $errorLower = strtolower($result['error']);
@@ -59,6 +60,8 @@ function callGeminiWithAutoRotation($prompt, $purpose = 'default', $model = 'gem
                 strpos($errorLower, 'quota') !== false ||
                 strpos($errorLower, 'resource_exhausted') !== false ||
                 strpos($errorLower, 'rate limit') !== false ||
+                strpos($errorLower, 'overloaded') !== false ||
+                strpos($errorLower, 'exceeded') !== false ||
                 strpos($errorLower, '429') !== false
             );
         }
