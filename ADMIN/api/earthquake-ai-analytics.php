@@ -132,23 +132,43 @@ function analyzeEarthquakeImpact() {
         // Get API key for analysis
         $apiKey = null;
         try {
+            // Check if function exists
+            if (!function_exists('getGeminiApiKey')) {
+                throw new Exception('getGeminiApiKey function not found. secure-api-config.php may not be loaded correctly.');
+            }
+            
             $apiKey = getGeminiApiKey('analysis');
             if (empty($apiKey)) {
                 $apiKey = getGeminiApiKey('default');
             }
+        } catch (ParseError $e) {
+            error_log('Parse error getting Gemini API key: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine());
+            $apiKey = null;
         } catch (Exception $e) {
-            error_log('Error getting Gemini API key: ' . $e->getMessage());
+            error_log('Error getting Gemini API key: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+            $apiKey = null;
         } catch (Error $e) {
-            error_log('Fatal error getting Gemini API key: ' . $e->getMessage());
+            error_log('Fatal error getting Gemini API key: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine());
+            $apiKey = null;
+        } catch (Throwable $e) {
+            error_log('Throwable error getting Gemini API key: ' . $e->getMessage());
+            $apiKey = null;
         }
         
         if (empty($apiKey)) {
-            ob_end_clean();
+            ob_clean();
             http_response_code(500);
-            echo json_encode([
+            $output = json_encode([
                 'success' => false, 
                 'message' => 'AI API key not configured. Please configure Gemini API key in Automated Warnings → AI Warning Settings.'
-            ]);
+            ], JSON_UNESCAPED_UNICODE);
+            if ($output === false) {
+                $output = json_encode(['success' => false, 'message' => 'AI API key not configured.']);
+            }
+            echo $output;
+            if (ob_get_level()) {
+                ob_end_flush();
+            }
             exit();
         }
     } catch (Exception $e) {
@@ -209,21 +229,35 @@ function analyzeEarthquakeImpact() {
         $analysis = callGeminiAI($apiKey, $prompt);
         
         if ($analysis['success']) {
-            ob_end_clean();
-            echo json_encode([
+            ob_clean(); // Clean output buffer but keep it active
+            $output = json_encode([
                 'success' => true,
                 'analysis' => $analysis['content'],
                 'earthquakes_analyzed' => count($earthquakeSummary),
                 'timestamp' => date('Y-m-d H:i:s')
-            ]);
+            ], JSON_UNESCAPED_UNICODE);
+            if ($output === false) {
+                throw new Exception('JSON encoding failed: ' . json_last_error_msg());
+            }
+            echo $output;
+            if (ob_get_level()) {
+                ob_end_flush();
+            }
             exit();
         } else {
-            ob_end_clean();
+            ob_clean();
             http_response_code(500);
-            echo json_encode([
+            $output = json_encode([
                 'success' => false,
                 'message' => $analysis['error'] ?? 'Failed to generate analysis'
-            ]);
+            ], JSON_UNESCAPED_UNICODE);
+            if ($output === false) {
+                $output = json_encode(['success' => false, 'message' => 'Failed to generate analysis']);
+            }
+            echo $output;
+            if (ob_get_level()) {
+                ob_end_flush();
+            }
             exit();
         }
     } catch (Exception $e) {

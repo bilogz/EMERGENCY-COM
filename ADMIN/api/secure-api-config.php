@@ -12,13 +12,18 @@
  */
 function getGeminiApiKey($purpose = 'default') {
     // Priority 1: Secure config file (most secure, not in Git)
-    // Try multiple possible paths
+    // Try multiple possible paths - check ADMIN first, then USERS
     $baseDir = dirname(dirname(__DIR__)); // Go up from ADMIN/api to EMERGENCY-COM
     $possiblePaths = [
+        __DIR__ . '/config.local.php', // ADMIN/api/config.local.php (current directory)
         __DIR__ . '/../../USERS/api/config.local.php',
+        $baseDir . '/ADMIN/api/config.local.php',
         $baseDir . '/USERS/api/config.local.php',
+        dirname($baseDir) . '/EMERGENCY-COM/ADMIN/api/config.local.php',
         dirname($baseDir) . '/EMERGENCY-COM/USERS/api/config.local.php',
+        $_SERVER['DOCUMENT_ROOT'] . '/EMERGENCY-COM/ADMIN/api/config.local.php',
         $_SERVER['DOCUMENT_ROOT'] . '/EMERGENCY-COM/USERS/api/config.local.php',
+        dirname(dirname(dirname(__DIR__))) . '/ADMIN/api/config.local.php',
         dirname(dirname(dirname(__DIR__))) . '/USERS/api/config.local.php'
     ];
     
@@ -34,7 +39,8 @@ function getGeminiApiKey($purpose = 'default') {
     if ($secureConfigFile && file_exists($secureConfigFile)) {
         try {
             error_log("Loading config from: " . $secureConfigFile);
-            $secureConfig = require $secureConfigFile;
+            // Suppress warnings and capture any output
+            $secureConfig = @require $secureConfigFile;
             if (is_array($secureConfig)) {
                 // Check for purpose-specific key first
                 if ($purpose === 'analysis' && !empty($secureConfig['AI_API_KEY_ANALYSIS'])) {
@@ -52,32 +58,46 @@ function getGeminiApiKey($purpose = 'default') {
                 }
                 error_log("Config file loaded but no matching key found for purpose: " . $purpose);
             } else {
-                error_log("Config file did not return an array");
+                error_log("Config file did not return an array (returned: " . gettype($secureConfig) . ")");
             }
+        } catch (ParseError $e) {
+            error_log("Parse error loading secure config file: " . $e->getMessage() . " (File: " . $secureConfigFile . " on line " . $e->getLine() . ")");
         } catch (Exception $e) {
             error_log("Error loading secure config file: " . $e->getMessage() . " (File: " . $secureConfigFile . ")");
         } catch (Error $e) {
             error_log("Fatal error loading secure config file: " . $e->getMessage() . " (File: " . $secureConfigFile . ")");
+        } catch (Throwable $e) {
+            error_log("Throwable error loading secure config file: " . $e->getMessage() . " (File: " . $secureConfigFile . ")");
         }
     } else {
-        $checkedPaths = implode(', ', $possiblePaths);
-        error_log("Config file not found. Checked paths: " . $checkedPaths);
-        error_log("Current __DIR__: " . __DIR__);
+        // Only log if debug mode or if no config found at all (reduce log spam)
+        if (empty($secureConfigFile)) {
+            error_log("Config file not found. Checked " . count($possiblePaths) . " paths. Current __DIR__: " . __DIR__);
+        }
     }
     
     // Priority 2: Database (for backward compatibility)
     global $pdo;
     if ($pdo !== null) {
         try {
-            $stmt = $pdo->prepare("SELECT api_key FROM integration_settings WHERE source = 'gemini' OR source = 'google_ai' LIMIT 1");
-            $stmt->execute();
-            $result = $stmt->fetch();
-            $apiKey = $result['api_key'] ?? null;
-            if (!empty($apiKey)) {
-                return $apiKey;
+            // Check if table exists first to avoid errors
+            $tableCheck = $pdo->query("SHOW TABLES LIKE 'integration_settings'");
+            if ($tableCheck && $tableCheck->rowCount() > 0) {
+                $stmt = $pdo->prepare("SELECT api_key FROM integration_settings WHERE source = 'gemini' OR source = 'google_ai' LIMIT 1");
+                $stmt->execute();
+                $result = $stmt->fetch();
+                $apiKey = $result['api_key'] ?? null;
+                if (!empty($apiKey)) {
+                    error_log("Found Gemini API key in database");
+                    return $apiKey;
+                }
             }
+        } catch (PDOException $e) {
+            error_log("PDO Error getting Gemini key from database: " . $e->getMessage());
         } catch (Exception $e) {
             error_log("Error getting Gemini key from database: " . $e->getMessage());
+        } catch (Error $e) {
+            error_log("Fatal error getting Gemini key from database: " . $e->getMessage());
         }
     }
     
@@ -98,10 +118,12 @@ function getGeminiApiKey($purpose = 'default') {
  * Get Gemini Model (defaults to Gemini 2.5 Flash)
  */
 function getGeminiModel() {
-    // Try multiple possible paths
+    // Try multiple possible paths - check ADMIN first, then USERS
     $possiblePaths = [
+        __DIR__ . '/config.local.php', // ADMIN/api/config.local.php (current directory)
         __DIR__ . '/../../USERS/api/config.local.php',
         __DIR__ . '/../../../USERS/api/config.local.php',
+        dirname(dirname(dirname(__DIR__))) . '/ADMIN/api/config.local.php',
         dirname(dirname(dirname(__DIR__))) . '/USERS/api/config.local.php'
     ];
     
