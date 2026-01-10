@@ -122,3 +122,4 @@ If you have FileZilla installed:
 **Note:** The new APK (v1.0.2) is configured to connect to:
 `https://emergency-comm.alertaraqc.com/EMERGENCY-COM/USERS/api/`
 
+

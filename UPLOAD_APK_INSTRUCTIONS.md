@@ -153,3 +153,4 @@ put C:\xampp\htdocs\EMERGENCY-COM\USERS\downloads\emergency-comms-app.apk
 - [ ] Tested download from website
 - [ ] Installed on phone and verified version 1.0.1
 
+

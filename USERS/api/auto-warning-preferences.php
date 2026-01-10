@@ -301,3 +301,4 @@ function getUsersWithAutoWarningsEnabled($categories = null, $severity = 'all') 
 }
 
 
+
