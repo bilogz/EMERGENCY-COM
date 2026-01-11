@@ -182,18 +182,19 @@ try {
     
     // Translate alerts if language is specified and translation helper is available
     $translationApplied = false;
+    $translationAttempted = 0;
+    $translationSuccess = 0;
     if ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && !empty($alerts)) {
-        $translationAttempted = 0;
-        $translationSuccess = 0;
         foreach ($alerts as &$alert) {
             try {
                 $translationAttempted++;
-                $originalTitle = $alert['title'];
                 $translated = $translationHelper->getTranslatedAlert($alert['id'], $targetLanguage, null, $targetLanguage);
                 if ($translated && isset($translated['title'])) {
-                    // Apply translation if it's different from original (getTranslatedAlert returns original on failure)
-                    // Also check language field to ensure it's actually translated
-                    if (($translated['title'] !== $originalTitle || (isset($translated['language']) && $translated['language'] !== 'en'))) {
+                    // Apply translation if language field indicates it's translated (not 'en')
+                    // getTranslatedAlert returns original with language='en' on failure, translated with language=targetLanguage on success
+                    $isTranslated = isset($translated['language']) && $translated['language'] !== 'en';
+                    
+                    if ($isTranslated) {
                         $alert['title'] = $translated['title'];
                         if (isset($translated['message']) && !empty($translated['message'])) {
                             $alert['message'] = $translated['message'];
@@ -233,7 +234,14 @@ try {
         'count' => count($alerts),
         'timestamp' => date('c'),
         'language' => $targetLanguage ?? 'en',
-        'translation_applied' => $translationApplied
+        'translation_applied' => $translationApplied,
+        'translation_helper_available' => $translationHelper !== null,
+        'debug' => [
+            'target_language' => $targetLanguage ?? 'en',
+            'alerts_count' => count($alerts),
+            'translation_attempted' => $translationAttempted ?? 0,
+            'translation_success' => $translationSuccess ?? 0
+        ]
     ], JSON_UNESCAPED_UNICODE);
     
 } catch (PDOException $e) {
