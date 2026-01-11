@@ -263,22 +263,37 @@ try {
         $alert['timestamp'] = $alert['created_at'];
         $alert['time_ago'] = getTimeAgo($alert['created_at']);
     }
+    unset($alert); // Break reference
+    
+    // Calculate final counts after all processing
+    $finalAlertsCount = is_array($alerts) ? count($alerts) : 0;
+    
+    // Enhanced debug info to help diagnose issues
+    $debugInfo = [
+        'target_language' => $targetLanguage ?? 'en',
+        'alerts_count' => $finalAlertsCount,
+        'translation_attempted' => $translationAttempted ?? 0,
+        'translation_success' => $translationSuccess ?? 0,
+        'ai_service_available' => $aiServiceAvailable,
+        'translation_helper_available' => $translationHelper !== null,
+        'translation_applied' => $translationApplied,
+        'translation_condition_met' => ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && $finalAlertsCount > 0)
+    ];
+    
+    // Log debug info for server-side debugging
+    if ($targetLanguage && $targetLanguage !== 'en') {
+        error_log("Translation Debug - Language: {$targetLanguage}, Alerts: {$finalAlertsCount}, Helper: " . ($translationHelper ? 'yes' : 'no') . ", Attempted: {$translationAttempted}, Success: {$translationSuccess}");
+    }
     
     echo json_encode([
         'success' => true,
         'alerts' => $alerts,
-        'count' => count($alerts),
+        'count' => $finalAlertsCount,
         'timestamp' => date('c'),
         'language' => $targetLanguage ?? 'en',
         'translation_applied' => $translationApplied,
         'translation_helper_available' => $translationHelper !== null,
-        'debug' => [
-            'target_language' => $targetLanguage ?? 'en',
-            'alerts_count' => count($alerts),
-            'translation_attempted' => $translationAttempted ?? 0,
-            'translation_success' => $translationSuccess ?? 0,
-            'ai_service_available' => $aiServiceAvailable
-        ]
+        'debug' => $debugInfo
     ], JSON_UNESCAPED_UNICODE);
     
 } catch (PDOException $e) {

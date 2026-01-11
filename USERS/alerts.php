@@ -491,6 +491,8 @@ $current = 'alerts.php';
                 
                 // Call translation API
                 const apiPath = getApiPathForAlerts(`api/translate-alert-text.php`);
+                console.log(`🔄 Translating alert #${alert.id} to ${currentLang}...`);
+                
                 const response = await fetch(apiPath, {
                     method: 'POST',
                     headers: {
@@ -542,11 +544,24 @@ $current = 'alerts.php';
                         // Mark as translated
                         card.dataset.translated = 'true';
                         console.log(`✓ Translated alert card #${alert.id} to ${currentLang}`);
+                    } else {
+                        console.warn(`⚠️ Translation API returned success=false for alert #${alert.id}:`, data.message || 'Unknown error');
+                    }
+                } else {
+                    // Try to get error message from response
+                    let errorMessage = `HTTP ${response.status}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.message || errorData.error || errorMessage;
+                        console.error(`✗ Translation API error for alert #${alert.id}:`, errorMessage);
+                    } catch (e) {
+                        const errorText = await response.text();
+                        console.error(`✗ Translation API error for alert #${alert.id}: ${errorMessage}`, errorText.substring(0, 200));
                     }
                 }
             } catch (error) {
-                // Silently fail - don't break the UI if translation fails
-                console.debug(`Translation failed for alert #${alert.id}:`, error);
+                // Log error but don't break the UI
+                console.error(`✗ Translation failed for alert #${alert.id}:`, error.message || error);
             } finally {
                 // Remove from translating set
                 translatingCards.delete(cardId);

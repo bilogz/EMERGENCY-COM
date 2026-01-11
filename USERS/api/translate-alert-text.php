@@ -37,7 +37,11 @@ if (!isset($pdo) || $pdo === null) {
 }
 
 // Load AI translation service
-$aiTranslationServicePath = __DIR__ . '/../../ADMIN/api/ai-translation-service.php';
+// Set include path so relative requires in ai-translation-service.php work correctly
+$adminApiPath = __DIR__ . '/../../ADMIN/api';
+set_include_path(get_include_path() . PATH_SEPARATOR . $adminApiPath);
+
+$aiTranslationServicePath = $adminApiPath . '/ai-translation-service.php';
 if (!file_exists($aiTranslationServicePath)) {
     ob_clean();
     http_response_code(500);
@@ -49,8 +53,28 @@ if (!file_exists($aiTranslationServicePath)) {
     exit;
 }
 
+// Also ensure activity_logger.php is available (required by ai-translation-service.php)
+$activityLoggerPath = $adminApiPath . '/activity_logger.php';
+if (!file_exists($activityLoggerPath)) {
+    ob_clean();
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Activity logger file not found (required by translation service)',
+        'path_checked' => $activityLoggerPath
+    ]);
+    exit;
+}
+
 try {
-    require_once $aiTranslationServicePath;
+    // Change to ADMIN/api directory so relative requires work
+    $originalDir = getcwd();
+    chdir($adminApiPath);
+    
+    require_once 'ai-translation-service.php';
+    
+    // Restore original directory
+    chdir($originalDir);
     
     // Verify the class exists after loading
     if (!class_exists('AITranslationService')) {
@@ -63,6 +87,10 @@ try {
         exit;
     }
 } catch (Exception $e) {
+    // Restore directory if changed
+    if (isset($originalDir)) {
+        chdir($originalDir);
+    }
     ob_clean();
     http_response_code(500);
     echo json_encode([
@@ -74,6 +102,10 @@ try {
     ]);
     exit;
 } catch (Error $e) {
+    // Restore directory if changed
+    if (isset($originalDir)) {
+        chdir($originalDir);
+    }
     ob_clean();
     http_response_code(500);
     echo json_encode([
