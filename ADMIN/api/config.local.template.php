@@ -45,6 +45,7 @@ return [
     // API Keys (get from respective providers)
     'AI_API_KEY' => '',                 // Default AI key
     'AI_API_KEY_TRANSLATION' => '',     // AI-Alert-Translator: For alert translations (user preference-based)
+    'AI_API_KEY_TRANSLATION_BACKUP' => '',  // Backup key for translations (used when primary quota exceeded)
     'AI_API_KEY_ANALYSIS' => '',        // For AI analysis
     
     // LibreTranslate (FREE - no API key needed for public servers)

@@ -30,6 +30,8 @@ function getGeminiApiKey($purpose = 'default', $tryRotation = false) {
                 $keyName = 'AI_API_KEY_ANALYSIS';
             } elseif ($purpose === 'analysis_backup') {
                 $keyName = 'AI_API_KEY_ANALYSIS_BACKUP';
+            } elseif ($purpose === 'translation_backup') {
+                $keyName = 'AI_API_KEY_TRANSLATION_BACKUP';
             } elseif ($purpose === 'translation') {
                 $keyName = 'AI_API_KEY_TRANSLATION';
             }
@@ -99,6 +101,10 @@ function getGeminiApiKey($purpose = 'default', $tryRotation = false) {
                 if ($purpose === 'analysis' && !empty($secureConfig['AI_API_KEY_ANALYSIS'])) {
                     error_log("Found AI_API_KEY_ANALYSIS in config");
                     return $secureConfig['AI_API_KEY_ANALYSIS'];
+                }
+                if ($purpose === 'translation_backup' && !empty($secureConfig['AI_API_KEY_TRANSLATION_BACKUP'])) {
+                    error_log("Found AI_API_KEY_TRANSLATION_BACKUP in config");
+                    return $secureConfig['AI_API_KEY_TRANSLATION_BACKUP'];
                 }
                 if ($purpose === 'translation' && !empty($secureConfig['AI_API_KEY_TRANSLATION'])) {
                     error_log("Found AI_API_KEY_TRANSLATION in config");
@@ -243,6 +249,8 @@ function rotateApiKeyOnQuotaExceeded($keyName, $errorMessage = '') {
         $backupKeyName = null;
         if ($keyName === 'AI_API_KEY_ANALYSIS') {
             $backupKeyName = 'AI_API_KEY_ANALYSIS_BACKUP';
+        } elseif ($keyName === 'AI_API_KEY_TRANSLATION') {
+            $backupKeyName = 'AI_API_KEY_TRANSLATION_BACKUP';
         } elseif ($keyName === 'AI_API_KEY') {
             $backupKeyName = 'AI_API_KEY_TRANSLATION'; // Fallback to translation key
         }
