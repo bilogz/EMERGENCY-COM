@@ -512,17 +512,38 @@ $current = 'alerts.php';
                 if (response.ok) {
                     try {
                         const data = JSON.parse(responseText);
+                        console.log(`🔍 Translation response for alert #${alert.id}:`, {
+                            success: data.success,
+                            translations: data.translations,
+                            target_language: data.target_language
+                        });
+                        
                         if (data.success && data.translations) {
+                            let translationsApplied = 0;
+                            
                             // Apply translations
                             if (titleElement && data.translations.title) {
+                                const originalText = titleElement.textContent;
                                 titleElement.textContent = data.translations.title;
+                                console.log(`  ✓ Title translated: "${originalText}" → "${data.translations.title}"`);
+                                translationsApplied++;
+                            } else if (titleElement) {
+                                console.warn(`  ⚠️ Title element found but no translation for 'title' key`);
                             }
+                            
                             if (messageElement && data.translations.message) {
+                                const originalText = messageElement.textContent;
                                 messageElement.textContent = data.translations.message;
+                                console.log(`  ✓ Message translated: "${originalText.substring(0, 50)}..." → "${data.translations.message.substring(0, 50)}..."`);
+                                translationsApplied++;
+                            } else if (messageElement) {
+                                console.warn(`  ⚠️ Message element found but no translation for 'message' key`);
                             }
+                            
                             if (contentElement && data.translations.content) {
                                 // For content, we need to preserve HTML structure
                                 // Simple approach: replace the text content
+                                const originalHtml = contentElement.innerHTML;
                                 const tempDiv = document.createElement('div');
                                 tempDiv.innerHTML = contentElement.dataset.originalHtml;
                                 const textNodes = [];
@@ -542,14 +563,19 @@ $current = 'alerts.php';
                                 if (textNodes.length > 0) {
                                     textNodes[0].textContent = data.translations.content;
                                     contentElement.innerHTML = tempDiv.innerHTML;
+                                    console.log(`  ✓ Content translated`);
+                                    translationsApplied++;
                                 }
+                            } else if (contentElement) {
+                                console.warn(`  ⚠️ Content element found but no translation for 'content' key`);
                             }
                             
                             // Mark as translated
                             card.dataset.translated = 'true';
-                            console.log(`✓ Translated alert card #${alert.id} to ${currentLang}`);
+                            console.log(`✓ Translated alert card #${alert.id} to ${currentLang} (${translationsApplied} translations applied)`);
                         } else {
                             console.warn(`⚠️ Translation API returned success=false for alert #${alert.id}:`, data.message || 'Unknown error');
+                            console.warn(`  Response data:`, data);
                         }
                     } catch (parseError) {
                         console.error(`✗ Failed to parse translation response for alert #${alert.id}:`, parseError);
