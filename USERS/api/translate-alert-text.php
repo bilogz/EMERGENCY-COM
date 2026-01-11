@@ -2,6 +2,7 @@
 /**
  * Translate Alert Text API
  * Client-side translation endpoint for alert card content
+ * Uses LibreTranslate API (self-hosted or public)
  */
 
 // Prevent any output before headers
@@ -32,203 +33,182 @@ register_shutdown_function(function() {
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate, max-age=0');
 
-// Load database connection (try local first, then ADMIN)
-if (file_exists(__DIR__ . '/db_connect.php')) {
-    require_once __DIR__ . '/db_connect.php';
-} elseif (file_exists(__DIR__ . '/../../ADMIN/api/db_connect.php')) {
-    require_once __DIR__ . '/../../ADMIN/api/db_connect.php';
-} else {
-    ob_clean();
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Database connection file not found'
-    ]);
-    exit;
+// Load LibreTranslate configuration
+function getLibreTranslateConfig() {
+    // Try ADMIN/api/config.local.php first
+    $adminConfigPath = __DIR__ . '/../../ADMIN/api/config.local.php';
+    $userConfigPath = __DIR__ . '/config.local.php';
+    
+    $config = [];
+    
+    // Load ADMIN config if available
+    if (file_exists($adminConfigPath)) {
+        $adminConfig = require $adminConfigPath;
+        if (is_array($adminConfig)) {
+            $config = array_merge($config, $adminConfig);
+        }
+    }
+    
+    // Load USERS config if available (overrides ADMIN config)
+    if (file_exists($userConfigPath)) {
+        $userConfig = require $userConfigPath;
+        if (is_array($userConfig)) {
+            $config = array_merge($config, $userConfig);
+        }
+    }
+    
+    // Default values
+    $libreTranslateUrl = $config['LIBRETRANSLATE_URL'] ?? 'http://localhost:5000/translate';
+    $libreTranslateApiKey = $config['LIBRETRANSLATE_API_KEY'] ?? '';
+    
+    // Fallback to public LibreTranslate if localhost is not accessible
+    // User can override this in config.local.php
+    if ($libreTranslateUrl === 'http://localhost:5000/translate') {
+        // Check if we should use public server instead (user can set in config)
+        $libreTranslateUrl = $config['LIBRETRANSLATE_URL'] ?? 'https://libretranslate.com/translate';
+    }
+    
+    return [
+        'url' => $libreTranslateUrl,
+        'api_key' => $libreTranslateApiKey
+    ];
 }
 
-// Check if PDO connection is available
-if (!isset($pdo) || $pdo === null) {
-    ob_clean();
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Database connection not available'
-    ]);
-    exit;
-}
-
-// Load AI translation service
-// Set include path so relative requires in ai-translation-service.php work correctly
-$adminApiPath = __DIR__ . '/../../ADMIN/api';
-set_include_path(get_include_path() . PATH_SEPARATOR . $adminApiPath);
-
-$aiTranslationServicePath = $adminApiPath . '/ai-translation-service.php';
-if (!file_exists($aiTranslationServicePath)) {
-    ob_clean();
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Translation service file not found',
-        'path_checked' => $aiTranslationServicePath
-    ]);
-    exit;
-}
-
-// Also ensure activity_logger.php is available (required by ai-translation-service.php)
-$activityLoggerPath = $adminApiPath . '/activity_logger.php';
-if (!file_exists($activityLoggerPath)) {
-    ob_clean();
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Activity logger file not found (required by translation service)',
-        'path_checked' => $activityLoggerPath
-    ]);
-    exit;
-}
-
-try {
-    // Save original include path and working directory
-    $originalIncludePath = get_include_path();
-    $originalDir = getcwd();
-    
-    // Store our existing $pdo (from USERS/api/db_connect.php)
-    $existingPdo = $pdo;
-    
-    // IMPORTANT: Set $pdo in global scope so secure-api-config.php can access it
-    $GLOBALS['pdo'] = $existingPdo;
-    
-    // Change to ADMIN/api directory so relative requires in ai-translation-service.php work
-    if (!chdir($adminApiPath)) {
-        throw new Exception("Failed to change directory to: " . $adminApiPath);
+/**
+ * Translate text using LibreTranslate API
+ * @param string $text Text to translate
+ * @param string $targetLang Target language code (e.g., 'es', 'fr')
+ * @param string $sourceLang Source language code (default: 'en')
+ * @return array ['success' => bool, 'translated_text' => string|null, 'error' => string|null]
+ */
+function translateWithLibreTranslate($text, $targetLang, $sourceLang = 'en') {
+    if (empty($text)) {
+        return ['success' => true, 'translated_text' => $text, 'error' => null];
     }
     
-    // Add ADMIN/api to include path as well
-    set_include_path($adminApiPath . PATH_SEPARATOR . $originalIncludePath);
-    
-    // Require the file (it will require ADMIN/api/db_connect.php which might set a new $pdo)
-    // Use absolute path to avoid issues with chdir
-    $aiServiceFile = $adminApiPath . '/ai-translation-service.php';
-    if (!file_exists($aiServiceFile)) {
-        throw new Exception("Translation service file not found: " . $aiServiceFile);
+    // Don't translate if source and target are the same
+    if ($sourceLang === $targetLang) {
+        return ['success' => true, 'translated_text' => $text, 'error' => null];
     }
     
-    // Suppress warnings but catch fatal errors
-    $oldErrorReporting = error_reporting(E_ALL & ~E_WARNING & ~E_NOTICE);
-    $oldDisplayErrors = ini_get('display_errors');
-    ini_set('display_errors', 0);
+    $config = getLibreTranslateConfig();
+    $apiUrl = $config['url'];
+    $apiKey = $config['api_key'];
     
-    try {
-        require_once $aiServiceFile;
-    } catch (ParseError $e) {
-        error_reporting($oldErrorReporting);
-        ini_set('display_errors', $oldDisplayErrors);
-        throw new Exception("Parse error in translation service: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine());
-    } catch (Error $e) {
-        error_reporting($oldErrorReporting);
-        ini_set('display_errors', $oldDisplayErrors);
-        throw new Exception("Fatal error in translation service: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine());
-    }
-    
-    error_reporting($oldErrorReporting);
-    ini_set('display_errors', $oldDisplayErrors);
-    
-    // Use our original $pdo (from USERS) instead of the one from ADMIN/api/db_connect.php
-    // This ensures we use the correct database connection
-    $pdo = $existingPdo;
-    $GLOBALS['pdo'] = $existingPdo;
-    
-    // Restore original directory and include path
-    @chdir($originalDir);
-    set_include_path($originalIncludePath);
-    
-    // Verify the class exists after loading
-    if (!class_exists('AITranslationService')) {
-        ob_clean();
-        http_response_code(500);
-        echo json_encode([
-            'success' => false,
-            'message' => 'AITranslationService class not found after loading file',
-            'debug' => [
-                'file_loaded' => $aiServiceFile,
-                'file_exists' => file_exists($aiServiceFile),
-                'current_dir' => getcwd(),
-                'include_path' => get_include_path(),
-                'defined_classes' => get_declared_classes()
-            ]
-        ]);
-        exit;
-    }
-} catch (Exception $e) {
-    // Restore directory and include path if changed
-    if (isset($originalDir)) {
-        @chdir($originalDir);
-    }
-    if (isset($originalIncludePath)) {
-        set_include_path($originalIncludePath);
-    }
-    ob_clean();
-    http_response_code(500);
-    $errorDetails = [
-        'success' => false,
-        'message' => 'Failed to load translation service',
-        'error' => $e->getMessage(),
-        'file' => $e->getFile(),
-        'line' => $e->getLine()
+    // Prepare request payload
+    $data = [
+        'q' => $text,
+        'source' => $sourceLang,
+        'target' => $targetLang,
+        'format' => 'text'
     ];
     
-    // Add debug info in development mode (remove in production)
-    if (isset($_GET['debug']) || (defined('DEBUG_MODE') && DEBUG_MODE)) {
-        $errorDetails['debug'] = [
-            'admin_api_path' => $adminApiPath,
-            'ai_service_file' => $aiTranslationServicePath,
-            'file_exists' => file_exists($aiTranslationServicePath),
-            'current_dir' => getcwd(),
-            'original_dir' => $originalDir ?? 'not set',
-            'trace' => $e->getTraceAsString()
+    // Add API key if provided
+    if (!empty($apiKey)) {
+        $data['api_key'] = $apiKey;
+    }
+    
+    // Initialize cURL
+    $ch = curl_init($apiUrl);
+    
+    // Set cURL options
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($data),
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+        ],
+        CURLOPT_TIMEOUT => 30, // 30 second timeout for self-hosted instances
+        CURLOPT_CONNECTTIMEOUT => 10, // 10 second connection timeout
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2
+    ]);
+    
+    // Execute request
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    $curlErrno = curl_errno($ch);
+    curl_close($ch);
+    
+    // Handle cURL errors (connection timeouts, etc.)
+    if ($curlError) {
+        error_log("LibreTranslate API cURL error: {$curlError} (code: {$curlErrno})");
+        return [
+            'success' => false,
+            'translated_text' => null,
+            'error' => 'Connection error: ' . $curlError
         ];
     }
     
-    echo json_encode($errorDetails);
-    exit;
-} catch (Error $e) {
-    // Restore directory and include path if changed
-    if (isset($originalDir)) {
-        @chdir($originalDir);
+    // Handle HTTP errors
+    if ($httpCode !== 200) {
+        $errorMsg = "HTTP {$httpCode}";
+        if ($response) {
+            $errorData = json_decode($response, true);
+            if (isset($errorData['error'])) {
+                $errorMsg = $errorData['error'];
+            }
+        }
+        error_log("LibreTranslate API HTTP error: {$errorMsg} (code: {$httpCode})");
+        return [
+            'success' => false,
+            'translated_text' => null,
+            'error' => $errorMsg
+        ];
     }
-    if (isset($originalIncludePath)) {
-        set_include_path($originalIncludePath);
+    
+    // Parse response
+    if (!$response) {
+        return [
+            'success' => false,
+            'translated_text' => null,
+            'error' => 'Empty response from translation service'
+        ];
     }
-    ob_clean();
-    http_response_code(500);
-    echo json_encode([
+    
+    $result = json_decode($response, true);
+    
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        error_log("LibreTranslate API JSON decode error: " . json_last_error_msg());
+        return [
+            'success' => false,
+            'translated_text' => null,
+            'error' => 'Invalid JSON response from translation service'
+        ];
+    }
+    
+    // Check for translated text
+    if (isset($result['translatedText'])) {
+        return [
+            'success' => true,
+            'translated_text' => $result['translatedText'],
+            'error' => null
+        ];
+    }
+    
+    // If no translatedText in response, check for error
+    if (isset($result['error'])) {
+        error_log("LibreTranslate API error: " . $result['error']);
+        return [
+            'success' => false,
+            'translated_text' => null,
+            'error' => $result['error']
+        ];
+    }
+    
+    // Unknown response format
+    error_log("LibreTranslate API unexpected response format: " . substr($response, 0, 200));
+    return [
         'success' => false,
-        'message' => 'Fatal error loading translation service',
-        'error' => $e->getMessage(),
-        'file' => $e->getFile(),
-        'line' => $e->getLine()
-    ]);
-    exit;
+        'translated_text' => null,
+        'error' => 'Unexpected response format from translation service'
+    ];
 }
 
 // Clean output buffer before processing
 ob_clean();
-
-// Verify AITranslationService class is available before processing
-if (!class_exists('AITranslationService')) {
-    ob_clean();
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Translation service class not available',
-        'error' => 'AITranslationService class not found. Please check server logs for details.'
-    ]);
-    if (ob_get_level()) {
-        ob_end_flush();
-    }
-    exit;
-}
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -308,78 +288,13 @@ try {
     $targetLanguage = $input['target_language'] ?? 'en';
     $sourceLanguage = $input['source_language'] ?? 'en';
     
+    // Return original texts if target is English
     if ($targetLanguage === 'en' || empty($targetLanguage)) {
-        // Return original texts if target is English
         if (ob_get_level()) {
             ob_clean();
         }
         echo json_encode([
             'success' => true,
-            'translations' => $input['texts']
-        ]);
-        if (ob_get_level()) {
-            ob_end_flush();
-        }
-        exit;
-    }
-    
-    // Initialize translation service
-    try {
-        // Ensure $pdo is in global scope before initializing
-        $GLOBALS['pdo'] = $pdo;
-        $translationService = new AITranslationService($pdo);
-    } catch (Exception $e) {
-        error_log("Failed to initialize AITranslationService: " . $e->getMessage());
-        error_log("Stack trace: " . $e->getTraceAsString());
-        if (ob_get_level()) {
-            ob_clean();
-        }
-        http_response_code(500);
-        $response = [
-            'success' => false,
-            'message' => 'Failed to initialize translation service',
-            'error' => $e->getMessage()
-        ];
-        // Only include translations if input was successfully parsed
-        if (isset($input['texts']) && is_array($input['texts'])) {
-            $response['translations'] = $input['texts'];
-        }
-        echo json_encode($response);
-        if (ob_get_level()) {
-            ob_end_flush();
-        }
-        exit;
-    } catch (Error $e) {
-        error_log("Fatal error initializing AITranslationService: " . $e->getMessage());
-        error_log("Stack trace: " . $e->getTraceAsString());
-        if (ob_get_level()) {
-            ob_clean();
-        }
-        http_response_code(500);
-        $response = [
-            'success' => false,
-            'message' => 'Fatal error initializing translation service',
-            'error' => $e->getMessage()
-        ];
-        // Only include translations if input was successfully parsed
-        if (isset($input['texts']) && is_array($input['texts'])) {
-            $response['translations'] = $input['texts'];
-        }
-        echo json_encode($response);
-        if (ob_get_level()) {
-            ob_end_flush();
-        }
-        exit;
-    }
-    
-    if (!$translationService->isAvailable()) {
-        // If translation service not available, return original texts
-        if (ob_get_level()) {
-            ob_clean();
-        }
-        echo json_encode([
-            'success' => false,
-            'message' => 'AI Translation API is not available (check General Settings → AI Translation API toggle)',
             'translations' => $input['texts']
         ]);
         if (ob_get_level()) {
@@ -399,7 +314,7 @@ try {
             continue;
         }
         
-        $result = $translationService->translate($text, $targetLanguage, $sourceLanguage);
+        $result = translateWithLibreTranslate($text, $targetLanguage, $sourceLanguage);
         
         if ($result['success'] && isset($result['translated_text'])) {
             $translatedText = trim($result['translated_text']);

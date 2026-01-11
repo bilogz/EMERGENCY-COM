@@ -157,7 +157,68 @@ $current = 'alerts.php';
             'General': { icon: 'fa-exclamation-triangle', color: '#95a5a6', bgColor: 'rgba(149, 165, 166, 0.1)' }
         };
         
+        /**
+         * Auto-detect device language and set preference if not already set
+         * Returns the detected/current language code
+         */
+        function autoDetectDeviceLanguage() {
+            // Check if user has already manually set a language preference
+            const existingPreference = localStorage.getItem('preferredLanguage');
+            const userSetLanguage = localStorage.getItem('user_language_set');
+            
+            // If user has explicitly set a language, don't auto-detect
+            if (userSetLanguage === 'true' && existingPreference) {
+                return existingPreference;
+            }
+            
+            // Detect device language
+            const deviceLang = navigator.language || navigator.userLanguage || 'en';
+            const langCode = deviceLang.toLowerCase().split('-')[0]; // Extract base language code (e.g., "es-ES" -> "es")
+            
+            // Map common browser languages to supported codes
+            const langMap = {
+                'en': 'en',
+                'fil': 'fil',
+                'tl': 'fil',  // Tagalog -> Filipino
+                'es': 'es',
+                'fr': 'fr',
+                'de': 'de',
+                'it': 'it',
+                'pt': 'pt',
+                'ja': 'ja',
+                'ko': 'ko',
+                'zh': 'zh',
+                'ar': 'ar',
+                'hi': 'hi',
+                'th': 'th',
+                'vi': 'vi',
+                'id': 'id',
+                'ms': 'ms',
+                'ru': 'ru',
+                'tr': 'tr'
+            };
+            
+            const detectedLang = langMap[langCode] || 'en';
+            
+            // Only auto-set if language is different from English
+            if (detectedLang !== 'en') {
+                // Set language preference if not already set or if it was English
+                if (!existingPreference || existingPreference === 'en') {
+                    localStorage.setItem('preferredLanguage', detectedLang);
+                    console.log(`🌍 Auto-detected device language: ${deviceLang} -> ${detectedLang}`);
+                    return detectedLang;
+                }
+            }
+            
+            // Return existing preference or English
+            return existingPreference || 'en';
+        }
+        
         document.addEventListener('DOMContentLoaded', function() {
+            // Auto-detect and set language preference before initializing alerts
+            const detectedLang = autoDetectDeviceLanguage();
+            
+            // Initialize alerts system
             initializeAlerts();
             setupFilters();
             startAutoRefresh();
@@ -197,21 +258,13 @@ $current = 'alerts.php';
                     url += `&severity_filter=${encodeURIComponent(currentSeverityFilter)}`;
                 }
                 
-                // Get current language preference (UI language selector - stored in localStorage)
+                // Get current language preference (from localStorage, set by autoDetectDeviceLanguage() or user selection)
                 // The backend will resolve language with proper priority:
                 // 1. Query parameter (UI selector from localStorage - CURRENT session selection) - this value
                 // 2. Logged-in user's DB preference (persistent preference)
                 // 3. Browser language detection (for guests)
                 // 4. Default English
-                let currentLanguage = localStorage.getItem('preferredLanguage');
-                if (!currentLanguage) {
-                    // Fallback: detect browser language for initial setup
-                    const browserLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase().split('-')[0];
-                    // Map common browser languages
-                    const langMap = { 'en': 'en', 'fil': 'fil', 'tl': 'fil', 'es': 'es', 'fr': 'fr', 'de': 'de', 'it': 'it', 'pt': 'pt' };
-                    currentLanguage = langMap[browserLang] || 'en';
-                    localStorage.setItem('preferredLanguage', currentLanguage);
-                }
+                let currentLanguage = localStorage.getItem('preferredLanguage') || 'en';
                 
                 // Always send language parameter so backend knows the UI selector value
                 // Backend will use DB preference first for logged-in users, then this value
