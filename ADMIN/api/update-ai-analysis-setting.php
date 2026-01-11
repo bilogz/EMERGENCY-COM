@@ -36,6 +36,8 @@ try {
         $fieldName = 'ai_earthquake_enabled';
     } elseif ($type === 'disaster_monitoring') {
         $fieldName = 'ai_disaster_monitoring_enabled';
+    } elseif ($type === 'translation') {
+        $fieldName = 'ai_translation_enabled';
     }
 
     // Ensure table exists with new columns
@@ -46,6 +48,7 @@ try {
         ai_weather_enabled TINYINT(1) DEFAULT 1,
         ai_earthquake_enabled TINYINT(1) DEFAULT 1,
         ai_disaster_monitoring_enabled TINYINT(1) DEFAULT 1,
+        ai_translation_enabled TINYINT(1) DEFAULT 1,
         ai_check_interval INT DEFAULT 30,
         wind_threshold DECIMAL(5,2) DEFAULT 60,
         rain_threshold DECIMAL(5,2) DEFAULT 20,
@@ -63,7 +66,8 @@ try {
     $columnsToAdd = [
         'ai_weather_enabled' => "TINYINT(1) DEFAULT 1 AFTER ai_enabled",
         'ai_earthquake_enabled' => "TINYINT(1) DEFAULT 1 AFTER ai_weather_enabled",
-        'ai_disaster_monitoring_enabled' => "TINYINT(1) DEFAULT 1 AFTER ai_earthquake_enabled"
+        'ai_disaster_monitoring_enabled' => "TINYINT(1) DEFAULT 1 AFTER ai_earthquake_enabled",
+        'ai_translation_enabled' => "TINYINT(1) DEFAULT 1 AFTER ai_disaster_monitoring_enabled"
     ];
 
     foreach ($columnsToAdd as $columnName => $definition) {

@@ -493,6 +493,17 @@ $pageTitle = 'General Settings';
 
                             <div class="setting-item">
                                 <div class="setting-info">
+                                    <div class="setting-title">AI Translation API</div>
+                                    <div class="setting-description">Enable AI-powered translation service for multilingual alerts. Disable to prevent AI API usage for translations.</div>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="aiTranslationEnabled">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-info">
                                     <div class="setting-title">Sound Alerts</div>
                                     <div class="setting-description">Play sound when new messages or alerts arrive</div>
                                 </div>
@@ -608,12 +619,19 @@ $pageTitle = 'General Settings';
                             disasterCheckbox.checked = settings.ai_disaster_monitoring_enabled === 1 || settings.ai_disaster_monitoring_enabled === true ||
                                                         (settings.ai_disaster_monitoring_enabled === undefined && (settings.ai_enabled === 1 || settings.ai_enabled === true));
                         }
+                        
+                        // Load translation setting
+                        const translationCheckbox = document.getElementById('aiTranslationEnabled');
+                        if (translationCheckbox) {
+                            translationCheckbox.checked = settings.ai_translation_enabled === 1 || settings.ai_translation_enabled === true ||
+                                                          (settings.ai_translation_enabled === undefined && (settings.ai_enabled === 1 || settings.ai_enabled === true));
+                        }
                     }
                 })
                 .catch(error => {
                     console.error('Error loading AI Analysis settings:', error);
                     // Default to unchecked if error
-                    ['aiWeatherAnalysisEnabled', 'aiEarthquakeAnalysisEnabled', 'aiDisasterMonitoringEnabled'].forEach(id => {
+                    ['aiWeatherAnalysisEnabled', 'aiEarthquakeAnalysisEnabled', 'aiDisasterMonitoringEnabled', 'aiTranslationEnabled'].forEach(id => {
                         const checkbox = document.getElementById(id);
                         if (checkbox) {
                             checkbox.checked = false;
@@ -640,6 +658,8 @@ $pageTitle = 'General Settings';
                         // Revert checkbox on error
                         const checkboxId = type === 'weather' ? 'aiWeatherAnalysisEnabled' : 
                                           type === 'earthquake' ? 'aiEarthquakeAnalysisEnabled' : 
+                                          type === 'disaster_monitoring' ? 'aiDisasterMonitoringEnabled' :
+                                          type === 'translation' ? 'aiTranslationEnabled' :
                                           'aiDisasterMonitoringEnabled';
                         const checkbox = document.getElementById(checkboxId);
                         if (checkbox) {
@@ -652,6 +672,8 @@ $pageTitle = 'General Settings';
                     // Revert checkbox on error
                     const checkboxId = type === 'weather' ? 'aiWeatherAnalysisEnabled' : 
                                       type === 'earthquake' ? 'aiEarthquakeAnalysisEnabled' : 
+                                      type === 'disaster_monitoring' ? 'aiDisasterMonitoringEnabled' :
+                                      type === 'translation' ? 'aiTranslationEnabled' :
                                       'aiDisasterMonitoringEnabled';
                     const checkbox = document.getElementById(checkboxId);
                     if (checkbox) {
@@ -863,6 +885,13 @@ $pageTitle = 'General Settings';
             if (aiDisasterMonitoringEnabled) {
                 aiDisasterMonitoringEnabled.addEventListener('change', function() {
                     saveAIAnalysisSetting('disaster_monitoring', this.checked);
+                });
+            }
+            
+            const aiTranslationEnabled = document.getElementById('aiTranslationEnabled');
+            if (aiTranslationEnabled) {
+                aiTranslationEnabled.addEventListener('change', function() {
+                    saveAIAnalysisSetting('translation', this.checked);
                 });
             }
         });

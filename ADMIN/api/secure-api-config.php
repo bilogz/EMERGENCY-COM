@@ -343,7 +343,7 @@ function storeGeminiApiKeyInDatabase($apiKey) {
 /**
  * Check if AI analysis is enabled for a specific type
  * This function checks the specific AI enabled setting in ai_warning_settings table
- * @param string $type The type of AI analysis: 'weather', 'earthquake', 'disaster_monitoring', or 'all' for global check
+ * @param string $type The type of AI analysis: 'weather', 'earthquake', 'disaster_monitoring', 'translation', or 'all' for global check
  * @return bool True if AI analysis is enabled for the specified type, false otherwise
  */
 function isAIAnalysisEnabled($type = 'all') {
@@ -370,6 +370,8 @@ function isAIAnalysisEnabled($type = 'all') {
             $fieldName = 'ai_earthquake_enabled';
         } elseif ($type === 'disaster_monitoring') {
             $fieldName = 'ai_disaster_monitoring_enabled';
+        } elseif ($type === 'translation') {
+            $fieldName = 'ai_translation_enabled';
         }
         
         // First check if the specific field exists, if not fall back to global ai_enabled

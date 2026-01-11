@@ -63,14 +63,10 @@ class AITranslationService {
      * Check if AI translation is available
      */
     public function isAvailable() {
-        // Check if AI analysis is globally enabled (we use 'all' for translation, as it's a shared service)
+        // Check if AI translation is specifically enabled
         if (function_exists('isAIAnalysisEnabled')) {
-            // Translation service requires at least one AI feature to be enabled
-            // Check if any AI analysis type is enabled
-            if (!isAIAnalysisEnabled('weather') && 
-                !isAIAnalysisEnabled('earthquake') && 
-                !isAIAnalysisEnabled('disaster_monitoring') &&
-                !isAIAnalysisEnabled('all')) {
+            // Check if translation is specifically enabled
+            if (!isAIAnalysisEnabled('translation')) {
                 return false;
             }
         }
@@ -86,15 +82,12 @@ class AITranslationService {
      */
     public function translate($text, $targetLanguage, $sourceLanguage = 'en') {
         if (!$this->isAvailable()) {
-            // Check if all AI analysis types are disabled
+            // Check if translation is specifically disabled
             if (function_exists('isAIAnalysisEnabled')) {
-                if (!isAIAnalysisEnabled('weather') && 
-                    !isAIAnalysisEnabled('earthquake') && 
-                    !isAIAnalysisEnabled('disaster_monitoring') &&
-                    !isAIAnalysisEnabled('all')) {
+                if (!isAIAnalysisEnabled('translation')) {
                     return [
                         'success' => false,
-                        'error' => 'AI analysis is currently disabled. Please enable at least one AI analysis type in General Settings → AI Analysis Settings to use translation features.'
+                        'error' => 'AI Translation API is currently disabled. Please enable it in General Settings → System Settings → AI Translation API to use translation features.'
                     ];
                 }
             }

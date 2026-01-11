@@ -315,6 +315,10 @@ function getAISettings() {
             'weather_analysis_auto_send' => false,
             'weather_analysis_interval' => 60,
             'weather_analysis_verification_key' => '',
+            'ai_weather_enabled' => 1,
+            'ai_earthquake_enabled' => 1,
+            'ai_disaster_monitoring_enabled' => 1,
+            'ai_translation_enabled' => 1,
             'api_key_source' => $secureApiKey ? 'secure_config' : 'none'
         ];
         try {
@@ -340,6 +344,28 @@ function getAISettings() {
             $settings['weather_analysis_verification_key'] = '';
         } else {
             $settings['weather_analysis_verification_key'] = (string)$settings['weather_analysis_verification_key'];
+        }
+        
+        // Ensure AI analysis enabled flags exist
+        if (!array_key_exists('ai_weather_enabled', $settings) || $settings['ai_weather_enabled'] === null) {
+            $settings['ai_weather_enabled'] = 1;
+        } else {
+            $settings['ai_weather_enabled'] = (int)$settings['ai_weather_enabled'];
+        }
+        if (!array_key_exists('ai_earthquake_enabled', $settings) || $settings['ai_earthquake_enabled'] === null) {
+            $settings['ai_earthquake_enabled'] = 1;
+        } else {
+            $settings['ai_earthquake_enabled'] = (int)$settings['ai_earthquake_enabled'];
+        }
+        if (!array_key_exists('ai_disaster_monitoring_enabled', $settings) || $settings['ai_disaster_monitoring_enabled'] === null) {
+            $settings['ai_disaster_monitoring_enabled'] = 1;
+        } else {
+            $settings['ai_disaster_monitoring_enabled'] = (int)$settings['ai_disaster_monitoring_enabled'];
+        }
+        if (!array_key_exists('ai_translation_enabled', $settings) || $settings['ai_translation_enabled'] === null) {
+            $settings['ai_translation_enabled'] = 1;
+        } else {
+            $settings['ai_translation_enabled'] = (int)$settings['ai_translation_enabled'];
         }
 
         // If secure config has API key and database doesn't, use secure config
