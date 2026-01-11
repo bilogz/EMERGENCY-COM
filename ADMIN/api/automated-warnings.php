@@ -30,9 +30,17 @@ $action = $_GET['action'] ?? 'status';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        $data = json_decode(file_get_contents('php://input'), true);
+        // Check Content-Type to determine if JSON or FormData
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        $isJson = strpos($contentType, 'application/json') !== false;
         
-        if (isset($data['action']) && $data['action'] === 'toggle') {
+        $data = null;
+        if ($isJson) {
+            $data = json_decode(file_get_contents('php://input'), true);
+        }
+        
+        // Handle JSON toggle action
+        if ($isJson && isset($data['action']) && $data['action'] === 'toggle') {
             $source = $data['source'] ?? '';
             $enabled = $data['enabled'] ?? false;
             $adminId = $_SESSION['admin_user_id'] ?? null;
@@ -67,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
             }
         } else {
-            // Save settings
+            // Save settings from FormData
             $syncInterval = $_POST['sync_interval'] ?? 15;
             $autoPublish = isset($_POST['auto_publish']) ? 1 : 0;
             $channels = $_POST['channels'] ?? [];
@@ -78,13 +86,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             try {
-                $stmt = $pdo->prepare("
-                    INSERT INTO warning_settings (sync_interval, auto_publish, notification_channels, updated_at)
-                    VALUES (?, ?, ?, NOW())
-                    ON DUPLICATE KEY UPDATE sync_interval = ?, auto_publish = ?, notification_channels = ?, updated_at = NOW()
-                ");
-                $channelsStr = is_array($channels) ? implode(',', $channels) : '';
-                $stmt->execute([$syncInterval, $autoPublish, $channelsStr, $syncInterval, $autoPublish, $channelsStr]);
+                // Handle channels - can be array or string
+                if (is_string($channels)) {
+                    $channelsStr = $channels;
+                } else if (is_array($channels)) {
+                    $channelsStr = implode(',', $channels);
+                } else {
+                    $channelsStr = '';
+                }
+                
+                // Get existing record to update, or insert new
+                $stmt = $pdo->query("SELECT id FROM warning_settings ORDER BY id DESC LIMIT 1");
+                $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($existing) {
+                    // Update existing record
+                    $stmt = $pdo->prepare("
+                        UPDATE warning_settings 
+                        SET sync_interval = ?, auto_publish = ?, notification_channels = ?, updated_at = NOW()
+                        WHERE id = ?
+                    ");
+                    $stmt->execute([$syncInterval, $autoPublish, $channelsStr, $existing['id']]);
+                } else {
+                    // Insert new record
+                    $stmt = $pdo->prepare("
+                        INSERT INTO warning_settings (sync_interval, auto_publish, notification_channels, updated_at)
+                        VALUES (?, ?, ?, NOW())
+                    ");
+                    $stmt->execute([$syncInterval, $autoPublish, $channelsStr]);
+                }
                 
                 // Log admin activity
                 if ($adminId && function_exists('logAdminActivity')) {
@@ -105,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ob_clean();
                 error_log("Save Settings Error: " . $e->getMessage());
                 http_response_code(500);
-                echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
+                echo json_encode(['success' => false, 'message' => 'Database error occurred: ' . $e->getMessage()]);
             }
         }
     } catch (Exception $e) {
