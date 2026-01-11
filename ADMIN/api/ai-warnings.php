@@ -512,8 +512,10 @@ function saveAISettings() {
             throw new Exception('Failed to create database table: ' . $e->getMessage());
         }
 
-        // Add new columns if they don't exist (for existing tables)
+        // Add missing columns if they don't exist (for existing tables)
+        // This handles cases where the table was created before all columns were added
         $columnsToAdd = [
+            'gemini_api_key' => "VARCHAR(255) DEFAULT NULL FIRST",
             'weather_analysis_auto_send' => "TINYINT(1) DEFAULT 0 AFTER ai_channels",
             'weather_analysis_interval' => "INT DEFAULT 60 AFTER weather_analysis_auto_send",
             'weather_analysis_verification_key' => "VARCHAR(255) DEFAULT NULL AFTER weather_analysis_interval"
@@ -530,6 +532,7 @@ function saveAISettings() {
 
                 if (!$exists) {
                     $pdo->exec("ALTER TABLE ai_warning_settings ADD COLUMN `{$columnName}` {$definition}");
+                    error_log("Added missing column {$columnName} to ai_warning_settings table");
                 }
             } catch (PDOException $e) {
                 // Column might already exist or other error, continue
