@@ -506,57 +506,72 @@ $current = 'alerts.php';
                     })
                 });
                 
+                // Read response body once
+                const responseText = await response.text();
+                
                 if (response.ok) {
-                    const data = await response.json();
-                    if (data.success && data.translations) {
-                        // Apply translations
-                        if (titleElement && data.translations.title) {
-                            titleElement.textContent = data.translations.title;
-                        }
-                        if (messageElement && data.translations.message) {
-                            messageElement.textContent = data.translations.message;
-                        }
-                        if (contentElement && data.translations.content) {
-                            // For content, we need to preserve HTML structure
-                            // Simple approach: replace the text content
-                            const tempDiv = document.createElement('div');
-                            tempDiv.innerHTML = contentElement.dataset.originalHtml;
-                            const textNodes = [];
-                            const walker = document.createTreeWalker(
-                                tempDiv,
-                                NodeFilter.SHOW_TEXT,
-                                null,
-                                false
-                            );
-                            let node;
-                            while (node = walker.nextNode()) {
-                                if (node.textContent.trim()) {
-                                    textNodes.push(node);
+                    try {
+                        const data = JSON.parse(responseText);
+                        if (data.success && data.translations) {
+                            // Apply translations
+                            if (titleElement && data.translations.title) {
+                                titleElement.textContent = data.translations.title;
+                            }
+                            if (messageElement && data.translations.message) {
+                                messageElement.textContent = data.translations.message;
+                            }
+                            if (contentElement && data.translations.content) {
+                                // For content, we need to preserve HTML structure
+                                // Simple approach: replace the text content
+                                const tempDiv = document.createElement('div');
+                                tempDiv.innerHTML = contentElement.dataset.originalHtml;
+                                const textNodes = [];
+                                const walker = document.createTreeWalker(
+                                    tempDiv,
+                                    NodeFilter.SHOW_TEXT,
+                                    null,
+                                    false
+                                );
+                                let node;
+                                while (node = walker.nextNode()) {
+                                    if (node.textContent.trim()) {
+                                        textNodes.push(node);
+                                    }
+                                }
+                                // Replace first text node with translated content
+                                if (textNodes.length > 0) {
+                                    textNodes[0].textContent = data.translations.content;
+                                    contentElement.innerHTML = tempDiv.innerHTML;
                                 }
                             }
-                            // Replace first text node with translated content
-                            if (textNodes.length > 0) {
-                                textNodes[0].textContent = data.translations.content;
-                                contentElement.innerHTML = tempDiv.innerHTML;
-                            }
+                            
+                            // Mark as translated
+                            card.dataset.translated = 'true';
+                            console.log(`✓ Translated alert card #${alert.id} to ${currentLang}`);
+                        } else {
+                            console.warn(`⚠️ Translation API returned success=false for alert #${alert.id}:`, data.message || 'Unknown error');
                         }
-                        
-                        // Mark as translated
-                        card.dataset.translated = 'true';
-                        console.log(`✓ Translated alert card #${alert.id} to ${currentLang}`);
-                    } else {
-                        console.warn(`⚠️ Translation API returned success=false for alert #${alert.id}:`, data.message || 'Unknown error');
+                    } catch (parseError) {
+                        console.error(`✗ Failed to parse translation response for alert #${alert.id}:`, parseError);
+                        console.error(`  Response:`, responseText.substring(0, 200));
                     }
                 } else {
-                    // Try to get error message from response
+                    // Handle error response
                     let errorMessage = `HTTP ${response.status}`;
                     try {
-                        const errorData = await response.json();
+                        const errorData = JSON.parse(responseText);
                         errorMessage = errorData.message || errorData.error || errorMessage;
                         console.error(`✗ Translation API error for alert #${alert.id}:`, errorMessage);
+                        if (errorData.error) {
+                            console.error(`  Details:`, errorData.error);
+                        }
+                        if (errorData.file && errorData.line) {
+                            console.error(`  Location: ${errorData.file}:${errorData.line}`);
+                        }
                     } catch (e) {
-                        const errorText = await response.text();
-                        console.error(`✗ Translation API error for alert #${alert.id}: ${errorMessage}`, errorText.substring(0, 200));
+                        // If JSON parsing fails, show raw response
+                        console.error(`✗ Translation API error for alert #${alert.id}: ${errorMessage}`);
+                        console.error(`  Response:`, responseText.substring(0, 300));
                     }
                 }
             } catch (error) {

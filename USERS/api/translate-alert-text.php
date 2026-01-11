@@ -67,14 +67,29 @@ if (!file_exists($activityLoggerPath)) {
 }
 
 try {
-    // Change to ADMIN/api directory so relative requires work
+    // Save original include path and working directory
+    $originalIncludePath = get_include_path();
     $originalDir = getcwd();
+    
+    // Store our existing $pdo (from USERS/api/db_connect.php)
+    $existingPdo = $pdo;
+    
+    // Change to ADMIN/api directory so relative requires in ai-translation-service.php work
     chdir($adminApiPath);
     
+    // Add ADMIN/api to include path as well
+    set_include_path($adminApiPath . PATH_SEPARATOR . $originalIncludePath);
+    
+    // Require the file (it will require ADMIN/api/db_connect.php which might set a new $pdo)
     require_once 'ai-translation-service.php';
     
-    // Restore original directory
+    // Use our original $pdo (from USERS) instead of the one from ADMIN/api/db_connect.php
+    // This ensures we use the correct database connection
+    $pdo = $existingPdo;
+    
+    // Restore original directory and include path
     chdir($originalDir);
+    set_include_path($originalIncludePath);
     
     // Verify the class exists after loading
     if (!class_exists('AITranslationService')) {
@@ -87,9 +102,12 @@ try {
         exit;
     }
 } catch (Exception $e) {
-    // Restore directory if changed
+    // Restore directory and include path if changed
     if (isset($originalDir)) {
-        chdir($originalDir);
+        @chdir($originalDir);
+    }
+    if (isset($originalIncludePath)) {
+        set_include_path($originalIncludePath);
     }
     ob_clean();
     http_response_code(500);
@@ -102,9 +120,12 @@ try {
     ]);
     exit;
 } catch (Error $e) {
-    // Restore directory if changed
+    // Restore directory and include path if changed
     if (isset($originalDir)) {
-        chdir($originalDir);
+        @chdir($originalDir);
+    }
+    if (isset($originalIncludePath)) {
+        set_include_path($originalIncludePath);
     }
     ob_clean();
     http_response_code(500);
