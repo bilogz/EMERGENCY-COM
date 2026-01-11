@@ -34,12 +34,14 @@ class AITranslationService {
     
     /**
      * Load Gemini API key securely (from config file, database, or environment)
+     * Uses 'translation' purpose to get AI_API_KEY_TRANSLATION for alert translations
      */
     private function loadApiKey() {
         // Use secure config helper if available
         if (file_exists(__DIR__ . '/secure-api-config.php')) {
             require_once __DIR__ . '/secure-api-config.php';
-            $this->apiKey = getGeminiApiKey();
+            // Use 'translation' purpose to get AI_API_KEY_TRANSLATION (AI-Alert-Translator)
+            $this->apiKey = getGeminiApiKey('translation');
             if ($this->apiKey) {
                 return;
             }

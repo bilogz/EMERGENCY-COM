@@ -204,21 +204,33 @@ try {
     
     // Translate alerts if language is specified and translation helper is available
     if ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && !empty($alerts)) {
+        $translationAttempted = 0;
+        $translationSuccess = 0;
         foreach ($alerts as &$alert) {
             try {
+                $translationAttempted++;
                 $translated = $translationHelper->getTranslatedAlert($alert['id'], $targetLanguage, null, $targetLanguage);
-                if ($translated && isset($translated['title'])) {
+                if ($translated && isset($translated['title']) && $translated['title'] !== $alert['title']) {
+                    // Only apply translation if it's different from original
                     $alert['title'] = $translated['title'];
-                    $alert['message'] = $translated['message'] ?? $alert['message'];
-                    // Note: Translation helper returns 'message' for content, but we preserve original content if translation doesn't have it
-                    // Content field is typically the same as message for most alerts
+                    if (isset($translated['message']) && !empty($translated['message'])) {
+                        $alert['message'] = $translated['message'];
+                        // Use translated message for content as well if available
+                        $alert['content'] = $translated['message'];
+                    }
+                    $translationSuccess++;
                 }
             } catch (Exception $e) {
-                // If translation fails, use original alert
-                error_log("Translation error for alert {$alert['id']}: " . $e->getMessage());
+                // If translation fails, use original alert (silently fail to avoid breaking the API)
+                error_log("Translation error for alert {$alert['id']} (lang: {$targetLanguage}): " . $e->getMessage());
             }
         }
         unset($alert); // Break reference
+        
+        // Log translation stats for debugging
+        if ($translationAttempted > 0) {
+            error_log("Translation attempt: {$translationAttempted} alerts, {$translationSuccess} translated for language: {$targetLanguage}");
+        }
     }
     
     // Format timestamps

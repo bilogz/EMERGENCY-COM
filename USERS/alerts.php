@@ -233,6 +233,11 @@ $current = 'alerts.php';
                 
                 const data = await response.json();
                 
+                // Debug: Log translation status
+                if (data.language && data.language !== 'en') {
+                    console.log(`Translation requested: ${data.language}, Applied: ${data.translation_applied || false}`);
+                }
+                
                 if (data.success && data.alerts) {
                     if (showNewOnly && data.alerts.length > 0) {
                         // Show notification for new alerts

@@ -172,8 +172,23 @@ class AlertTranslationHelper {
      * Get original alert
      */
     private function getOriginalAlert($alertId) {
+        // Check if content column exists
+        $hasContent = false;
+        try {
+            $checkStmt = $this->pdo->query("SHOW COLUMNS FROM alerts LIKE 'content'");
+            $hasContent = $checkStmt->rowCount() > 0;
+        } catch (PDOException $e) {
+            // Column might not exist, continue without it
+        }
+        
+        $fields = "id, title, message";
+        if ($hasContent) {
+            $fields .= ", content";
+        }
+        $fields .= ", category, severity, location, created_at";
+        
         $stmt = $this->pdo->prepare("
-            SELECT id, title, message, category, severity, location, created_at
+            SELECT {$fields}
             FROM alerts
             WHERE id = ?
         ");
@@ -181,12 +196,16 @@ class AlertTranslationHelper {
         $alert = $stmt->fetch();
         
         if ($alert) {
-            return [
+            $result = [
                 'title' => $alert['title'],
                 'message' => $alert['message'],
                 'language' => 'en',
                 'method' => 'original'
             ];
+            if ($hasContent && isset($alert['content'])) {
+                $result['content'] = $alert['content'];
+            }
+            return $result;
         }
         
         return null;
