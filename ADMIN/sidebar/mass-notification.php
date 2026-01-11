@@ -200,14 +200,27 @@ $pageTitle = 'Mass Notification System';
             const channelType = document.getElementById('channelType');
             const modalTitle = document.getElementById('modalTitle');
             
+            if (!modal || !channelType || !modalTitle) {
+                console.error('Modal elements not found');
+                return;
+            }
+            
             channelType.value = channel;
             modalTitle.textContent = `Send ${channel.toUpperCase()} Notification`;
-            modal.style.display = 'block';
+            modal.style.display = 'flex';
+            modal.classList.add('show');
         }
 
         function closeNotificationModal() {
-            document.getElementById('notificationModal').style.display = 'none';
-            document.getElementById('notificationForm').reset();
+            const modal = document.getElementById('notificationModal');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+            }
+            const form = document.getElementById('notificationForm');
+            if (form) {
+                form.reset();
+            }
         }
 
         document.getElementById('notificationForm').addEventListener('submit', function(e) {
