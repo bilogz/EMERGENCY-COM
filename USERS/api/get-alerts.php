@@ -38,6 +38,8 @@ try {
     $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
     $lastId = isset($_GET['last_id']) ? (int)$_GET['last_id'] : 0;
     $lastUpdate = $_GET['last_update'] ?? null;
+    $timeFilter = $_GET['time_filter'] ?? 'recent'; // recent (24h), older, all
+    $severityFilter = $_GET['severity_filter'] ?? null; // emergency_only, warnings_only, null (all)
     
     // Get user area for filtering (if logged in)
     $userArea = null;
@@ -61,9 +63,11 @@ try {
         }
     }
     
-    // Check if area column exists in alerts table
+    // Check if area and category columns exist in alerts table
     $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'area'");
     $hasAreaColumn = $stmt->rowCount() > 0;
+    $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'category'");
+    $hasCategoryColumn = $stmt->rowCount() > 0;
     
     // Build query - prioritize recent alerts
     $query = "
@@ -80,11 +84,16 @@ try {
             COALESCE(ac.color, '#95a5a6') as category_color";
     
     // Add area and category if columns exist
-    if ($hasAreaColumn) {
-        $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'category'");
-        $hasCategoryColumn = $stmt->rowCount() > 0;
+    if ($hasAreaColumn || $hasCategoryColumn) {
+        $addFields = [];
+        if ($hasAreaColumn) {
+            $addFields[] = "a.area";
+        }
         if ($hasCategoryColumn) {
-            $query .= ", a.area, a.category";
+            $addFields[] = "a.category";
+        }
+        if (!empty($addFields)) {
+            $query .= ", " . implode(", ", $addFields);
         }
     }
     
@@ -107,6 +116,33 @@ try {
     if ($category && $category !== 'all') {
         $query .= " AND (ac.name = :category OR (:category = 'General' AND ac.name IS NULL))";
         $params[':category'] = $category;
+    }
+    
+    // Time-based filtering (default: last 24 hours for initial load, all for incremental updates)
+    if ($timeFilter === 'recent' && $lastId == 0) {
+        // Default to last 24 hours for initial load
+        $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+    } elseif ($timeFilter === 'older' && $lastId == 0) {
+        // Show alerts older than 24 hours
+        $query .= " AND a.created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+    }
+    // 'all' or incremental updates (lastId > 0) shows all alerts
+    
+    // Severity filtering based on category field (if exists) or category name
+    if ($severityFilter === 'emergency_only') {
+        if ($hasCategoryColumn) {
+            $query .= " AND a.category = 'Emergency Alert'";
+        } else {
+            // Fallback: filter by category names that are typically emergency-related
+            $query .= " AND ac.name IN ('Earthquake', 'Bomb Threat', 'Fire')";
+        }
+    } elseif ($severityFilter === 'warnings_only') {
+        if ($hasCategoryColumn) {
+            $query .= " AND a.category = 'Warning'";
+        } else {
+            // Fallback: filter by category names that are typically warning-related
+            $query .= " AND ac.name IN ('Weather', 'General')";
+        }
     }
     
     // Get only new alerts if lastId is provided (for incremental updates)

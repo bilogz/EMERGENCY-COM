@@ -58,24 +58,45 @@ $current = 'alerts.php';
 
         <div class="main-container">
             <div class="sub-container content-main">
-                <!-- Filter Tabs -->
-                <div class="alert-filters" style="margin-bottom: 2rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button class="filter-btn active" data-category="all">
-                        <i class="fas fa-list"></i> All Alerts
+                <!-- Time & Severity Filters -->
+                <div class="alert-filters" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                    <span style="font-weight: 600; color: var(--text-color, #1f2937); margin-right: 0.5rem;">Time:</span>
+                    <button class="filter-btn time-filter active" data-time-filter="recent">
+                        <i class="fas fa-clock"></i> Recent (24h)
                     </button>
-                    <button class="filter-btn" data-category="Weather">
+                    <button class="filter-btn time-filter" data-time-filter="older">
+                        <i class="fas fa-history"></i> Older
+                    </button>
+                    <span style="font-weight: 600; color: var(--text-color, #1f2937); margin-left: 1rem; margin-right: 0.5rem;">Type:</span>
+                    <button class="filter-btn severity-filter" data-severity-filter="emergency_only">
+                        <i class="fas fa-exclamation-circle"></i> Emergency Only
+                    </button>
+                    <button class="filter-btn severity-filter" data-severity-filter="warnings_only">
+                        <i class="fas fa-exclamation-triangle"></i> Warnings Only
+                    </button>
+                    <button class="filter-btn severity-filter active" data-severity-filter="all">
+                        <i class="fas fa-list"></i> All Types
+                    </button>
+                </div>
+                
+                <!-- Category Filters -->
+                <div class="alert-filters" style="margin-bottom: 2rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button class="filter-btn category-filter active" data-category="all">
+                        <i class="fas fa-list"></i> All Categories
+                    </button>
+                    <button class="filter-btn category-filter" data-category="Weather">
                         <i class="fas fa-cloud-rain"></i> Weather
                     </button>
-                    <button class="filter-btn" data-category="Earthquake">
+                    <button class="filter-btn category-filter" data-category="Earthquake">
                         <i class="fas fa-mountain"></i> Earthquake
                     </button>
-                    <button class="filter-btn" data-category="Bomb Threat">
+                    <button class="filter-btn category-filter" data-category="Bomb Threat">
                         <i class="fas fa-bomb"></i> Bomb Threat
                     </button>
-                    <button class="filter-btn" data-category="Fire">
+                    <button class="filter-btn category-filter" data-category="Fire">
                         <i class="fas fa-fire"></i> Fire
                     </button>
-                    <button class="filter-btn" data-category="General">
+                    <button class="filter-btn category-filter" data-category="General">
                         <i class="fas fa-exclamation-triangle"></i> General
                     </button>
                 </div>
@@ -113,12 +134,15 @@ $current = 'alerts.php';
     <script>
         // Live Alerts System - Real-time Updates
         let currentCategory = 'all';
+        let currentTimeFilter = 'recent'; // recent, older, all
+        let currentSeverityFilter = null; // null (all), emergency_only, warnings_only
         let lastAlertId = 0;
         let lastUpdateTime = null;
         let refreshInterval = null;
         let isInitialLoad = true;
+        let readAlerts = new Set(); // Track read alert IDs
         const API_BASE = window.API_BASE_PATH || 'api/';
-        const REFRESH_INTERVAL = 10000; // Refresh every 10 seconds for real-time feel
+        const REFRESH_INTERVAL = 5000; // Refresh every 5 seconds for near real-time updates
         
         // Category icons and colors mapping
         const categoryConfig = {
@@ -146,6 +170,7 @@ $current = 'alerts.php';
         });
         
         function initializeAlerts() {
+            loadReadAlerts();
             loadAlerts(false);
         }
         
@@ -158,8 +183,27 @@ $current = 'alerts.php';
                     url += `&category=${encodeURIComponent(category)}`;
                 }
                 
-                // Get current language preference from localStorage
-                const currentLanguage = localStorage.getItem('preferredLanguage') || 'en';
+                // Add time filter (only for initial loads, not incremental updates)
+                if (!showNewOnly && currentTimeFilter) {
+                    url += `&time_filter=${encodeURIComponent(currentTimeFilter)}`;
+                }
+                
+                // Add severity filter (only for initial loads, not incremental updates)
+                if (!showNewOnly && currentSeverityFilter && currentSeverityFilter !== 'all') {
+                    url += `&severity_filter=${encodeURIComponent(currentSeverityFilter)}`;
+                }
+                
+                // Get current language preference from localStorage or detect from browser
+                let currentLanguage = localStorage.getItem('preferredLanguage');
+                if (!currentLanguage) {
+                    // Detect browser language for guests
+                    const browserLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase().split('-')[0];
+                    // Map common browser languages
+                    const langMap = { 'en': 'en', 'fil': 'fil', 'tl': 'fil', 'es': 'es', 'fr': 'fr', 'de': 'de', 'it': 'it', 'pt': 'pt' };
+                    currentLanguage = langMap[browserLang] || 'en';
+                    localStorage.setItem('preferredLanguage', currentLanguage);
+                }
+                
                 if (currentLanguage && currentLanguage !== 'en') {
                     url += `&lang=${encodeURIComponent(currentLanguage)}`;
                 }
@@ -257,6 +301,12 @@ $current = 'alerts.php';
             card.className = 'card alert-card';
             card.dataset.alertId = alert.id;
             
+            // Check if alert is read
+            const isRead = readAlerts.has(parseInt(alert.id));
+            if (!isRead) {
+                card.classList.add('unread-alert');
+            }
+            
             // Determine severity color based on category (Emergency Alert/Warning/Advisory)
             let severityColor = config.color;
             let severityBgColor = config.bgColor || config.color + '15';
@@ -286,9 +336,13 @@ $current = 'alerts.php';
             const isUrgent = alert.category === 'Emergency Alert' || ['Bomb Threat', 'Fire', 'Earthquake'].includes(alert.category_name);
             const urgencyBadge = isUrgent ? '<span class="urgent-badge" style="background: #e74c3c; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; margin-left: 0.5rem;">URGENT</span>' : '';
             
+            // Read/unread indicator
+            const readIndicator = isRead ? '' : '<span class="unread-indicator" style="width: 8px; height: 8px; background: #4caf50; border-radius: 50%; display: inline-block; margin-right: 0.5rem; animation: pulse 2s infinite;"></span>';
+            
             card.innerHTML = `
                 <div class="alert-header" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
                     <div class="alert-category-badge" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: ${severityBgColor}; border-radius: 20px; color: ${severityColor}; font-weight: 600; font-size: 0.875rem;">
+                        ${readIndicator}
                         <i class="fas ${config.icon}"></i>
                         <span>${alert.category_name || 'General'}</span>
                         ${alert.category ? `<span style="margin-left: 0.5rem; font-size: 0.75rem; opacity: 0.9;">(${alert.category})</span>` : ''}
@@ -299,7 +353,7 @@ $current = 'alerts.php';
                         ${alert.time_ago || 'Just now'}
                     </span>
                 </div>
-                <h4 style="margin: 0 0 0.5rem 0; color: #1f2937; font-size: 1.25rem; font-weight: 700;">${escapeHtml(alert.title)}</h4>
+                <h4 style="margin: 0 0 0.5rem 0; color: #1f2937; font-size: 1.25rem; font-weight: ${isRead ? '600' : '700'};">${escapeHtml(alert.title)}</h4>
                 <p style="margin: 0 0 1rem 0; color: #4b5563; line-height: 1.6;">${escapeHtml(alert.message)}</p>
                 ${alert.content ? `<div class="alert-content" style="margin-bottom: 1rem; padding: 1rem; background: ${severityBgColor}; border-radius: 8px; color: #374151; border-left: 3px solid ${severityColor};">${escapeHtml(alert.content)}</div>` : ''}
                 <div class="alert-actions" style="display: flex; gap: 0.5rem;">
@@ -310,7 +364,52 @@ $current = 'alerts.php';
                 </div>
             `;
             
+            // Mark as read when clicked (but not on button clicks)
+            card.addEventListener('click', function(e) {
+                if (!e.target.closest('button')) {
+                    markAlertAsRead(parseInt(alert.id));
+                }
+            });
+            
             return card;
+        }
+        
+        function markAlertAsRead(alertId) {
+            readAlerts.add(alertId);
+            // Save to localStorage for persistence
+            try {
+                const readArray = Array.from(readAlerts);
+                localStorage.setItem('readAlerts', JSON.stringify(readArray));
+            } catch (e) {
+                console.error('Failed to save read alerts:', e);
+            }
+            
+            // Update UI
+            const card = document.querySelector(`[data-alert-id="${alertId}"]`);
+            if (card) {
+                card.classList.remove('unread-alert');
+                const indicator = card.querySelector('.unread-indicator');
+                if (indicator) {
+                    indicator.remove();
+                }
+                const title = card.querySelector('h4');
+                if (title) {
+                    title.style.fontWeight = '600';
+                }
+            }
+        }
+        
+        function loadReadAlerts() {
+            try {
+                const saved = localStorage.getItem('readAlerts');
+                if (saved) {
+                    const readArray = JSON.parse(saved).map(id => parseInt(id));
+                    readAlerts = new Set(readArray);
+                }
+            } catch (e) {
+                console.error('Failed to load read alerts:', e);
+                readAlerts = new Set();
+            }
         }
         
         function escapeHtml(text) {
@@ -320,19 +419,39 @@ $current = 'alerts.php';
         }
         
         function setupFilters() {
-            const filterButtons = document.querySelectorAll('.filter-btn');
-            filterButtons.forEach(btn => {
+            // Category filters
+            const categoryFilters = document.querySelectorAll('.category-filter');
+            categoryFilters.forEach(btn => {
                 btn.addEventListener('click', function() {
-                    // Update active state
-                    filterButtons.forEach(b => b.classList.remove('active'));
+                    categoryFilters.forEach(b => b.classList.remove('active'));
                     this.classList.add('active');
-                    
-                    // Update category
                     currentCategory = this.dataset.category;
-                    
-                    // Reload alerts
                     lastAlertId = 0;
-                    loadAlerts();
+                    loadAlerts(false);
+                });
+            });
+            
+            // Time filters
+            const timeFilters = document.querySelectorAll('.time-filter');
+            timeFilters.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    timeFilters.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentTimeFilter = this.dataset.timeFilter;
+                    lastAlertId = 0;
+                    loadAlerts(false);
+                });
+            });
+            
+            // Severity filters
+            const severityFilters = document.querySelectorAll('.severity-filter');
+            severityFilters.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    severityFilters.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentSeverityFilter = this.dataset.severityFilter === 'all' ? null : this.dataset.severityFilter;
+                    lastAlertId = 0;
+                    loadAlerts(false);
                 });
             });
         }
@@ -411,6 +530,9 @@ $current = 'alerts.php';
         }
         
         function viewAlertDetails(alertId) {
+            // Mark as read when viewing details
+            markAlertAsRead(parseInt(alertId));
+            
             // Fetch full alert details and show in modal
             fetch(`${API_BASE}get-alerts.php?status=active&limit=1`)
                 .then(res => res.json())
@@ -432,7 +554,7 @@ $current = 'alerts.php';
                                         ${escapeHtml(alert.message)}
                                     </div>
                                     ${alert.content ? `<div style="padding: 1rem; background: ${config.bgColor}; border-radius: 8px; border-left: 3px solid ${config.color};">
-                                        <strong>Details:</strong><br>
+                                        <strong>What to do:</strong><br>
                                         ${escapeHtml(alert.content)}
                                     </div>` : ''}
                                 </div>
@@ -516,6 +638,12 @@ $current = 'alerts.php';
             }
             .live-dot {
                 animation: pulse 2s infinite;
+            }
+            .unread-alert {
+                background: linear-gradient(to right, rgba(76, 175, 80, 0.05) 0%, var(--card-bg, #ffffff) 3%);
+            }
+            .unread-alert:hover {
+                background: linear-gradient(to right, rgba(76, 175, 80, 0.08) 0%, var(--card-bg, #ffffff) 3%);
             }
             .filter-btn {
                 padding: 0.75rem 1.25rem;
