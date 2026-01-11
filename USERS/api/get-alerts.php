@@ -4,12 +4,50 @@
  * Returns real-time alerts from the database for Quezon City
  */
 
+// Prevent any output before headers
+ob_start();
+
+// Set error reporting
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Register shutdown function to catch fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        ob_clean();
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Fatal error occurred',
+            'error' => $error['message'],
+            'file' => $error['file'],
+            'line' => $error['line'],
+            'alerts' => []
+        ]);
+        exit();
+    }
+});
+
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate, max-age=0');
 header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
 header('Pragma: no-cache');
 
-require_once 'db_connect.php';
+try {
+    require_once 'db_connect.php';
+} catch (Exception $e) {
+    ob_clean();
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Failed to load database connection',
+        'error' => $e->getMessage(),
+        'alerts' => []
+    ]);
+    exit();
+}
 
 // Load translation helper if available
 $translationHelper = null;
@@ -285,6 +323,11 @@ try {
         error_log("Translation Debug - Language: {$targetLanguage}, Alerts: {$finalAlertsCount}, Helper: " . ($translationHelper ? 'yes' : 'no') . ", Attempted: {$translationAttempted}, Success: {$translationSuccess}");
     }
     
+    // Ensure clean output before JSON
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
     echo json_encode([
         'success' => true,
         'alerts' => $alerts,
@@ -296,20 +339,70 @@ try {
         'debug' => $debugInfo
     ], JSON_UNESCAPED_UNICODE);
     
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
+    
 } catch (PDOException $e) {
     error_log("Get Alerts API Error: " . $e->getMessage());
+    error_log("Stack trace: " . $e->getTraceAsString());
+    
+    // Ensure clean output
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
+    http_response_code(500);
     echo json_encode([
         'success' => false,
         'message' => 'Database error occurred',
+        'error' => $e->getMessage(),
         'alerts' => []
     ]);
+    
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
 } catch (Exception $e) {
     error_log("Get Alerts API Error: " . $e->getMessage());
+    error_log("Stack trace: " . $e->getTraceAsString());
+    
+    // Ensure clean output
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
+    http_response_code(500);
     echo json_encode([
         'success' => false,
         'message' => 'Server error occurred',
+        'error' => $e->getMessage(),
         'alerts' => []
     ]);
+    
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
+} catch (Error $e) {
+    error_log("Get Alerts API Fatal Error: " . $e->getMessage());
+    error_log("Stack trace: " . $e->getTraceAsString());
+    
+    // Ensure clean output
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Fatal error occurred',
+        'error' => $e->getMessage(),
+        'alerts' => []
+    ]);
+    
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
 }
 
 /**

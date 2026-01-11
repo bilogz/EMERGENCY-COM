@@ -4,13 +4,51 @@
  * Uses AI (OpenAI/Gemini/Claude/Groq) for high-quality translations
  */
 
+// Prevent any output before headers
+ob_start();
+
+// Set error reporting
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Register shutdown function to catch fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        ob_clean();
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Fatal error occurred',
+            'error' => $error['message'],
+            'file' => $error['file'],
+            'line' => $error['line']
+        ]);
+        exit();
+    }
+});
+
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate, max-age=0');
 
-require_once '../../ADMIN/api/db_connect.php';
-require_once 'ai-translation-config.php';
-
-session_start();
+try {
+    require_once '../../ADMIN/api/db_connect.php';
+    require_once 'ai-translation-config.php';
+    
+    if (session_status() === PHP_SESSION_NONE) {
+        @session_start();
+    }
+} catch (Exception $e) {
+    ob_clean();
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Failed to load required files',
+        'error' => $e->getMessage()
+    ]);
+    exit();
+}
 
 $languageCode = $_GET['lang'] ?? 'en';
 
@@ -294,22 +332,30 @@ $filipinoTranslations = [
     'signup.barangay' => 'Barangay (Quezon City)',
 ];
 
+// Clean output buffer before processing
+ob_clean();
+
 try {
     // Check if language exists in database
     $language = null;
     if ($pdo) {
-        $stmt = $pdo->prepare("SELECT * FROM supported_languages WHERE language_code = ? AND is_active = 1");
-        $stmt->execute([$languageCode]);
-        $language = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM supported_languages WHERE language_code = ? AND is_active = 1");
+            $stmt->execute([$languageCode]);
+            $language = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            // Table might not exist, continue without language check
+            error_log("Supported languages table check failed: " . $e->getMessage());
+            $language = ['language_code' => $languageCode, 'language_name' => ucfirst($languageCode)];
+        }
         
         if (!$language) {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Language not supported or not active',
-                'language_code' => $languageCode
-            ]);
-            exit;
+            // If language not found, create a default entry
+            $language = ['language_code' => $languageCode, 'language_name' => ucfirst($languageCode)];
         }
+    } else {
+        // No database connection, use default
+        $language = ['language_code' => $languageCode, 'language_name' => ucfirst($languageCode)];
     }
     
     // Check user's auto-translate preference
@@ -436,24 +482,70 @@ try {
         }
     }
     
+    // Ensure clean output before JSON
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
     // Return translations
-    echo json_encode([
+    $response = [
         'success' => true,
         'language_code' => $languageCode,
-        'language_name' => $language['language_name'] ?? 'Unknown',
+        'language_name' => $language['language_name'] ?? ucfirst($languageCode),
         'native_name' => $language['native_name'] ?? '',
         'translations' => $translations,
         'auto_translated' => $autoTranslated,
-        'ai_provider' => $autoTranslated ? AI_PROVIDER : null,
-        'note' => $autoTranslated ? 'Automatically translated using ' . strtoupper(AI_PROVIDER) . ' AI' : null
-    ]);
+        'ai_provider' => $autoTranslated ? (defined('AI_PROVIDER') ? AI_PROVIDER : 'unknown') : null,
+        'note' => $autoTranslated && defined('AI_PROVIDER') ? 'Automatically translated using ' . strtoupper(AI_PROVIDER) . ' AI' : null
+    ];
+    
+    echo json_encode($response, JSON_UNESCAPED_UNICODE);
+    
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
     
 } catch (Exception $e) {
+    error_log("Get Translations API Error: " . $e->getMessage());
+    error_log("Stack trace: " . $e->getTraceAsString());
+    
+    // Ensure clean output
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
+    http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => 'Translation error: ' . $e->getMessage(),
-        'language_code' => $languageCode,
-        'translations' => $baseTranslations
+        'message' => 'Translation error occurred',
+        'error' => $e->getMessage(),
+        'language_code' => $languageCode ?? 'en',
+        'translations' => $baseTranslations ?? []
     ]);
+    
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
+} catch (Error $e) {
+    error_log("Get Translations API Fatal Error: " . $e->getMessage());
+    error_log("Stack trace: " . $e->getTraceAsString());
+    
+    // Ensure clean output
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Fatal error occurred',
+        'error' => $e->getMessage(),
+        'language_code' => $languageCode ?? 'en',
+        'translations' => $baseTranslations ?? []
+    ]);
+    
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
 }
 ?>
