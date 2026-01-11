@@ -4,8 +4,19 @@
  * Uses Google Gemini AI to translate content into multiple languages
  */
 
-require_once 'db_connect.php';
-require_once 'activity_logger.php';
+// Only require db_connect.php if $pdo is not already set
+if (!isset($pdo) || $pdo === null) {
+    require_once 'db_connect.php';
+    // Ensure $pdo is in global scope after requiring db_connect.php
+    if (isset($pdo) && $pdo !== null) {
+        $GLOBALS['pdo'] = $pdo;
+    }
+}
+
+// Only require activity_logger.php if not already loaded
+if (!function_exists('logAdminActivity')) {
+    require_once 'activity_logger.php';
+}
 
 class AITranslationService {
     private $pdo;
@@ -14,6 +25,8 @@ class AITranslationService {
     
     public function __construct($pdo) {
         $this->pdo = $pdo;
+        // Set global $pdo so secure-api-config.php can access it
+        $GLOBALS['pdo'] = $pdo;
         $this->loadApiKey();
         $this->loadApiUrl();
     }
@@ -22,10 +35,20 @@ class AITranslationService {
      * Load API URL dynamically based on configured model
      */
     private function loadApiUrl() {
+        // Ensure $pdo is in global scope before requiring secure-api-config.php
+        if (isset($this->pdo)) {
+            $GLOBALS['pdo'] = $this->pdo;
+        }
+        
         if (file_exists(__DIR__ . '/secure-api-config.php')) {
             require_once __DIR__ . '/secure-api-config.php';
-            $model = getGeminiModel();
-            $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+            if (function_exists('getGeminiModel')) {
+                $model = getGeminiModel();
+                $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+            } else {
+                // Fallback to default if function doesn't exist
+                $this->apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+            }
         } else {
             // Fallback to default
             $this->apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
@@ -37,13 +60,20 @@ class AITranslationService {
      * Uses 'translation' purpose to get AI_API_KEY_TRANSLATION for alert translations
      */
     private function loadApiKey() {
+        // Ensure $pdo is in global scope before requiring secure-api-config.php
+        if (isset($this->pdo)) {
+            $GLOBALS['pdo'] = $this->pdo;
+        }
+        
         // Use secure config helper if available
         if (file_exists(__DIR__ . '/secure-api-config.php')) {
             require_once __DIR__ . '/secure-api-config.php';
             // Use 'translation' purpose to get AI_API_KEY_TRANSLATION (AI-Alert-Translator)
-            $this->apiKey = getGeminiApiKey('translation');
-            if ($this->apiKey) {
-                return;
+            if (function_exists('getGeminiApiKey')) {
+                $this->apiKey = getGeminiApiKey('translation');
+                if ($this->apiKey) {
+                    return;
+                }
             }
         }
         
@@ -63,6 +93,11 @@ class AITranslationService {
      * Check if AI translation is available
      */
     public function isAvailable() {
+        // Ensure $pdo is in global scope before checking
+        if (isset($this->pdo)) {
+            $GLOBALS['pdo'] = $this->pdo;
+        }
+        
         // Check if AI translation is specifically enabled
         if (function_exists('isAIAnalysisEnabled')) {
             // Check if translation is specifically enabled

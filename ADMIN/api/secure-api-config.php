@@ -14,6 +14,11 @@
 function getGeminiApiKey($purpose = 'default', $tryRotation = false) {
     global $pdo;
     
+    // If $pdo is not set in global scope, try to get it from $GLOBALS
+    if (!isset($pdo) || $pdo === null) {
+        $pdo = $GLOBALS['pdo'] ?? null;
+    }
+    
     // Priority 0: API Key Management System (NEW)
     if ($pdo !== null) {
         try {
@@ -126,6 +131,10 @@ function getGeminiApiKey($purpose = 'default', $tryRotation = false) {
     
     // Priority 2: Database (for backward compatibility)
     global $pdo;
+    // If $pdo is not set in global scope, try to get it from $GLOBALS
+    if (!isset($pdo) || $pdo === null) {
+        $pdo = $GLOBALS['pdo'] ?? null;
+    }
     if ($pdo !== null) {
         try {
             // Check if table exists first to avoid errors
@@ -348,6 +357,11 @@ function storeGeminiApiKeyInDatabase($apiKey) {
  */
 function isAIAnalysisEnabled($type = 'all') {
     global $pdo;
+    
+    // If $pdo is not set in global scope, try to get it from $GLOBALS
+    if (!isset($pdo) || $pdo === null) {
+        $pdo = $GLOBALS['pdo'] ?? null;
+    }
     
     if ($pdo === null) {
         // If no database connection, default to disabled for safety

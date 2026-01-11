@@ -7,6 +7,28 @@
 // Prevent any output before headers
 ob_start();
 
+// Set error reporting for development (remove in production)
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Register shutdown function to catch fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        ob_clean();
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Fatal error occurred',
+            'error' => $error['message'],
+            'file' => $error['file'],
+            'line' => $error['line']
+        ]);
+        exit();
+    }
+});
+
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate, max-age=0');
 
@@ -74,21 +96,51 @@ try {
     // Store our existing $pdo (from USERS/api/db_connect.php)
     $existingPdo = $pdo;
     
+    // IMPORTANT: Set $pdo in global scope so secure-api-config.php can access it
+    $GLOBALS['pdo'] = $existingPdo;
+    
     // Change to ADMIN/api directory so relative requires in ai-translation-service.php work
-    chdir($adminApiPath);
+    if (!chdir($adminApiPath)) {
+        throw new Exception("Failed to change directory to: " . $adminApiPath);
+    }
     
     // Add ADMIN/api to include path as well
     set_include_path($adminApiPath . PATH_SEPARATOR . $originalIncludePath);
     
     // Require the file (it will require ADMIN/api/db_connect.php which might set a new $pdo)
-    require_once 'ai-translation-service.php';
+    // Use absolute path to avoid issues with chdir
+    $aiServiceFile = $adminApiPath . '/ai-translation-service.php';
+    if (!file_exists($aiServiceFile)) {
+        throw new Exception("Translation service file not found: " . $aiServiceFile);
+    }
+    
+    // Suppress warnings but catch fatal errors
+    $oldErrorReporting = error_reporting(E_ALL & ~E_WARNING & ~E_NOTICE);
+    $oldDisplayErrors = ini_get('display_errors');
+    ini_set('display_errors', 0);
+    
+    try {
+        require_once $aiServiceFile;
+    } catch (ParseError $e) {
+        error_reporting($oldErrorReporting);
+        ini_set('display_errors', $oldDisplayErrors);
+        throw new Exception("Parse error in translation service: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine());
+    } catch (Error $e) {
+        error_reporting($oldErrorReporting);
+        ini_set('display_errors', $oldDisplayErrors);
+        throw new Exception("Fatal error in translation service: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine());
+    }
+    
+    error_reporting($oldErrorReporting);
+    ini_set('display_errors', $oldDisplayErrors);
     
     // Use our original $pdo (from USERS) instead of the one from ADMIN/api/db_connect.php
     // This ensures we use the correct database connection
     $pdo = $existingPdo;
+    $GLOBALS['pdo'] = $existingPdo;
     
     // Restore original directory and include path
-    chdir($originalDir);
+    @chdir($originalDir);
     set_include_path($originalIncludePath);
     
     // Verify the class exists after loading
@@ -97,7 +149,14 @@ try {
         http_response_code(500);
         echo json_encode([
             'success' => false,
-            'message' => 'AITranslationService class not found after loading file'
+            'message' => 'AITranslationService class not found after loading file',
+            'debug' => [
+                'file_loaded' => $aiServiceFile,
+                'file_exists' => file_exists($aiServiceFile),
+                'current_dir' => getcwd(),
+                'include_path' => get_include_path(),
+                'defined_classes' => get_declared_classes()
+            ]
         ]);
         exit;
     }
@@ -111,13 +170,27 @@ try {
     }
     ob_clean();
     http_response_code(500);
-    echo json_encode([
+    $errorDetails = [
         'success' => false,
         'message' => 'Failed to load translation service',
         'error' => $e->getMessage(),
         'file' => $e->getFile(),
         'line' => $e->getLine()
-    ]);
+    ];
+    
+    // Add debug info in development mode (remove in production)
+    if (isset($_GET['debug']) || (defined('DEBUG_MODE') && DEBUG_MODE)) {
+        $errorDetails['debug'] = [
+            'admin_api_path' => $adminApiPath,
+            'ai_service_file' => $aiTranslationServicePath,
+            'file_exists' => file_exists($aiTranslationServicePath),
+            'current_dir' => getcwd(),
+            'original_dir' => $originalDir ?? 'not set',
+            'trace' => $e->getTraceAsString()
+        ];
+    }
+    
+    echo json_encode($errorDetails);
     exit;
 } catch (Error $e) {
     // Restore directory and include path if changed
@@ -141,6 +214,21 @@ try {
 
 // Clean output buffer before processing
 ob_clean();
+
+// Verify AITranslationService class is available before processing
+if (!class_exists('AITranslationService')) {
+    ob_clean();
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Translation service class not available',
+        'error' => 'AITranslationService class not found. Please check server logs for details.'
+    ]);
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
+    exit;
+}
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -189,9 +277,15 @@ try {
     
     // Initialize translation service
     try {
+        // Ensure $pdo is in global scope before initializing
+        $GLOBALS['pdo'] = $pdo;
         $translationService = new AITranslationService($pdo);
     } catch (Exception $e) {
         error_log("Failed to initialize AITranslationService: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
+        if (ob_get_level()) {
+            ob_clean();
+        }
         http_response_code(500);
         echo json_encode([
             'success' => false,
@@ -199,9 +293,16 @@ try {
             'error' => $e->getMessage(),
             'translations' => $input['texts']
         ]);
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
         exit;
     } catch (Error $e) {
         error_log("Fatal error initializing AITranslationService: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
+        if (ob_get_level()) {
+            ob_clean();
+        }
         http_response_code(500);
         echo json_encode([
             'success' => false,
@@ -209,6 +310,9 @@ try {
             'error' => $e->getMessage(),
             'translations' => $input['texts']
         ]);
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
         exit;
     }
     
