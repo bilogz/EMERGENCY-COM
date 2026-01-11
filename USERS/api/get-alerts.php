@@ -184,6 +184,23 @@ try {
     $translationApplied = false;
     $translationAttempted = 0;
     $translationSuccess = 0;
+    $aiServiceAvailable = false;
+    
+    // Check if AI service is available (for debugging)
+    if ($translationHelper) {
+        try {
+            $reflection = new ReflectionClass($translationHelper);
+            $aiServiceProperty = $reflection->getProperty('aiService');
+            $aiServiceProperty->setAccessible(true);
+            $aiService = $aiServiceProperty->getValue($translationHelper);
+            if ($aiService) {
+                $aiServiceAvailable = $aiService->isAvailable();
+            }
+        } catch (Exception $e) {
+            // Ignore reflection errors
+        }
+    }
+    
     if ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && !empty($alerts)) {
         foreach ($alerts as &$alert) {
             try {
@@ -192,7 +209,12 @@ try {
                 if ($translated && isset($translated['title'])) {
                     // Apply translation if language field indicates it's translated (not 'en')
                     // getTranslatedAlert returns original with language='en' on failure, translated with language=targetLanguage on success
+                    $returnedLanguage = $translated['language'] ?? 'unknown';
+                    $returnedMethod = $translated['method'] ?? 'unknown';
                     $isTranslated = isset($translated['language']) && $translated['language'] !== 'en';
+                    
+                    // Log translation attempt for debugging
+                    error_log("Alert {$alert['id']} translation check: language={$returnedLanguage}, method={$returnedMethod}, isTranslated=" . ($isTranslated ? 'yes' : 'no'));
                     
                     if ($isTranslated) {
                         $alert['title'] = $translated['title'];
@@ -207,7 +229,12 @@ try {
                         }
                         $translationSuccess++;
                         $translationApplied = true;
+                    } else {
+                        // Log why translation wasn't applied
+                        error_log("Alert {$alert['id']} translation NOT applied: returned language was '{$returnedLanguage}' (expected '{$targetLanguage}')");
                     }
+                } else {
+                    error_log("Alert {$alert['id']} translation failed: getTranslatedAlert returned null or missing title");
                 }
             } catch (Exception $e) {
                 // If translation fails, use original alert (silently fail to avoid breaking the API)
@@ -240,7 +267,8 @@ try {
             'target_language' => $targetLanguage ?? 'en',
             'alerts_count' => count($alerts),
             'translation_attempted' => $translationAttempted ?? 0,
-            'translation_success' => $translationSuccess ?? 0
+            'translation_success' => $translationSuccess ?? 0,
+            'ai_service_available' => $aiServiceAvailable
         ]
     ], JSON_UNESCAPED_UNICODE);
     
