@@ -199,9 +199,9 @@ $current = 'alerts.php';
                 
                 // Get current language preference (UI language selector - stored in localStorage)
                 // The backend will resolve language with proper priority:
-                // 1. Logged-in user's DB preference
-                // 2. Query parameter (UI selector from localStorage) - this value
-                // 3. Browser language detection
+                // 1. Query parameter (UI selector from localStorage - CURRENT session selection) - this value
+                // 2. Logged-in user's DB preference (persistent preference)
+                // 3. Browser language detection (for guests)
                 // 4. Default English
                 let currentLanguage = localStorage.getItem('preferredLanguage');
                 if (!currentLanguage) {

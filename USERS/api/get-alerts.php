@@ -254,13 +254,15 @@ try {
 
 /**
  * Resolve alert display language using priority order:
- * 1. Logged-in user's saved language preference (database)
- * 2. Global language selector (UI language icon - query parameter from localStorage)
+ * 1. Global language selector (UI language icon - query parameter from localStorage)
+ *    - Takes precedence as it represents the user's CURRENT session selection
+ * 2. Logged-in user's saved language preference (database - persistent preference)
  * 3. Guest browser language detection (Accept-Language header)
  * 4. System default language (English)
  * 
- * Note: Query parameter (UI selector) is checked first for logged-in users if provided,
- * as it represents the user's current session selection. Otherwise, DB preference is used.
+ * Note: Query parameter (UI selector) is checked FIRST to respect immediate user selections.
+ * When a user changes language via the UI, the query parameter reflects their current choice
+ * and should override the database preference for that request.
  * 
  * @param PDO $pdo Database connection
  * @return string Language code (e.g., 'en', 'fil', 'es')
@@ -281,7 +283,21 @@ function resolveAlertLanguage($pdo) {
         $userId = $_SESSION['user_id'] ?? null;
     }
     
+    // Priority 2: Global language selector (UI language icon - query parameter from localStorage)
+    // This represents the user's CURRENT session selection and takes precedence when explicitly provided
+    // Check this FIRST to respect immediate user selections via the UI
+    $queryLang = $_GET['lang'] ?? $_GET['language'] ?? null;
+    if ($queryLang && strlen($queryLang) >= 2) {
+        // Validate language code is reasonable (2-5 characters, alphanumeric with optional dash)
+        if (preg_match('/^[a-z]{2}(-[a-z]{2,3})?$/i', $queryLang)) {
+            $targetLanguage = strtolower($queryLang);
+            // Query parameter (UI selector) takes precedence - return immediately
+            return $targetLanguage;
+        }
+    }
+    
     // Priority 1: Logged-in user's saved language preference (database)
+    // Only checked if no query parameter was provided (user hasn't explicitly selected via UI)
     if ($isLoggedIn && $userId) {
         try {
             // Try user_preferences table first
@@ -302,19 +318,6 @@ function resolveAlertLanguage($pdo) {
             }
         } catch (PDOException $e) {
             error_log("Error getting user language preference: " . $e->getMessage());
-        }
-    }
-    
-    // Priority 2: Global language selector (UI language icon - query parameter from localStorage)
-    // This represents the user's current UI language selection
-    // Used if no DB preference found, or for guests
-    if (!$targetLanguage) {
-        $queryLang = $_GET['lang'] ?? $_GET['language'] ?? null;
-        if ($queryLang && strlen($queryLang) >= 2) {
-            // Validate language code is reasonable (2-5 characters, alphanumeric with optional dash)
-            if (preg_match('/^[a-z]{2}(-[a-z]{2,3})?$/i', $queryLang)) {
-                $targetLanguage = strtolower($queryLang);
-            }
         }
     }
     
