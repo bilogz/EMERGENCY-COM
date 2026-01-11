@@ -667,18 +667,21 @@ function saveAISettings() {
 
         ob_clean();
         echo json_encode(['success' => true, 'message' => 'AI settings saved successfully'], JSON_UNESCAPED_UNICODE);
+        exit();
     } catch (Exception $e) {
         error_log("Error in saveAISettings: " . $e->getMessage());
         error_log("Stack trace: " . $e->getTraceAsString());
         ob_clean();
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Error saving settings: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        exit();
     } catch (Error $e) {
         error_log("Fatal error in saveAISettings: " . $e->getMessage());
         error_log("Stack trace: " . $e->getTraceAsString());
         ob_clean();
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Fatal error: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        exit();
     }
 }
 
