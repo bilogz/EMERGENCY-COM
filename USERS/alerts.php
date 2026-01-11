@@ -358,7 +358,7 @@ $current = 'alerts.php';
                 </div>
                 <h4 style="margin: 0 0 0.5rem 0; color: #1f2937; font-size: 1.25rem; font-weight: ${isRead ? '600' : '700'};">${escapeHtml(alert.title)}</h4>
                 <p style="margin: 0 0 1rem 0; color: #4b5563; line-height: 1.6;">${escapeHtml(alert.message)}</p>
-                ${alert.content ? `<div class="alert-content" style="margin-bottom: 1rem; padding: 1rem; background: ${severityBgColor}; border-radius: 8px; color: #374151; border-left: 3px solid ${severityColor};">${escapeHtml(alert.content)}</div>` : ''}
+                ${alert.content ? `<div class="alert-content" style="margin-bottom: 1rem; padding: 1rem; background: ${severityBgColor}; border-radius: 8px; color: #374151; border-left: 3px solid ${severityColor};">${formatAlertContent(alert.content)}</div>` : ''}
                 <div class="alert-actions" style="display: flex; gap: 0.5rem;">
                     <button class="btn btn-primary btn-sm" onclick="viewAlertDetails(${alert.id})">
                         <i class="fas fa-info-circle"></i> View Details
@@ -419,6 +419,44 @@ $current = 'alerts.php';
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+        
+        function formatAlertContent(text) {
+            if (!text) return '';
+            // Escape HTML first to prevent XSS
+            const escaped = escapeHtml(text);
+            // Remove literal /n or \n sequences if they appear as text
+            let cleaned = escaped.replace(/\/n/g, '').replace(/\\n/g, '\n');
+            // Convert newlines to <br> tags and format properly
+            let formatted = cleaned.split('\n').map(line => {
+                const trimmed = line.trim();
+                if (!trimmed) return ''; // Skip empty lines
+                
+                // Check if line is a bullet point (starts with •, -, or *)
+                if (trimmed.startsWith('•')) {
+                    const content = trimmed.substring(1).trim();
+                    return content ? `<div style="margin: 0.4rem 0; padding-left: 1.25rem; position: relative; line-height: 1.6;">
+                        <span style="position: absolute; left: 0.5rem; color: #374151;">•</span>
+                        <span>${content}</span>
+                    </div>` : '';
+                } else if (trimmed.startsWith('-') && trimmed.length > 1 && trimmed[1] === ' ') {
+                    const content = trimmed.substring(2).trim();
+                    return content ? `<div style="margin: 0.4rem 0; padding-left: 1.25rem; position: relative; line-height: 1.6;">
+                        <span style="position: absolute; left: 0.5rem; color: #374151;">•</span>
+                        <span>${content}</span>
+                    </div>` : '';
+                } else if (trimmed.startsWith('* ') && trimmed.length > 2) {
+                    const content = trimmed.substring(2).trim();
+                    return content ? `<div style="margin: 0.4rem 0; padding-left: 1.25rem; position: relative; line-height: 1.6;">
+                        <span style="position: absolute; left: 0.5rem; color: #374151;">•</span>
+                        <span>${content}</span>
+                    </div>` : '';
+                } else {
+                    // Regular text line
+                    return `<div style="margin: 0.5rem 0; line-height: 1.6;">${trimmed}</div>`;
+                }
+            }).filter(line => line.length > 0).join('');
+            return formatted;
         }
         
         function setupFilters() {
@@ -588,11 +626,11 @@ $current = 'alerts.php';
                         </div>
                         <div style="margin-bottom: 1rem; padding: 1rem; background: #f9fafb; border-radius: 8px;">
                             <strong>Message:</strong><br>
-                            ${escapeHtml(alert.message)}
+                            <div style="margin-top: 0.5rem;">${escapeHtml(alert.message)}</div>
                         </div>
                         ${alert.content ? `<div style="padding: 1rem; background: ${config.bgColor}; border-radius: 8px; border-left: 3px solid ${config.color};">
-                            <strong>What to do:</strong><br>
-                            ${escapeHtml(alert.content)}
+                            <strong>What to do:</strong>
+                            <div style="margin-top: 0.75rem;">${formatAlertContent(alert.content)}</div>
                         </div>` : ''}
                     </div>
                 `,
