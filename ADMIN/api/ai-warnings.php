@@ -1279,12 +1279,27 @@ function sendWeatherAnalysisAuto() {
         $stmt = $pdo->query("SELECT * FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
         $settings = $stmt->fetch(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
-        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+        ob_clean();
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
         return;
     }
 
-    if (!$settings || !$settings['weather_analysis_auto_send']) {
-        echo json_encode(['success' => false, 'message' => 'Weather analysis auto-send is disabled']);
+    // Use default settings if none exist
+    if (!$settings) {
+        $settings = [
+            'gemini_api_key' => '',
+            'ai_channels' => 'sms,email,pa',
+            'weather_analysis_auto_send' => 0,
+            'weather_analysis_interval' => 60,
+            'weather_analysis_verification_key' => ''
+        ];
+    }
+
+    // Only check auto-send setting for cron jobs (manual sends are always allowed)
+    if ($isCronJob && !$settings['weather_analysis_auto_send']) {
+        ob_clean();
+        echo json_encode(['success' => false, 'message' => 'Weather analysis auto-send is disabled'], JSON_UNESCAPED_UNICODE);
         return;
     }
 

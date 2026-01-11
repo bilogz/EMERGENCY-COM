@@ -460,6 +460,17 @@ $pageTitle = 'General Settings';
 
                             <div class="setting-item">
                                 <div class="setting-info">
+                                    <div class="setting-title">AI Analysis</div>
+                                    <div class="setting-description">Enable AI-powered analysis features (weather, earthquake, etc.). Disable to prevent AI API usage limits.</div>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="aiAnalysisEnabled">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-info">
                                     <div class="setting-title">Sound Alerts</div>
                                     <div class="setting-description">Play sound when new messages or alerts arrive</div>
                                 </div>
@@ -542,6 +553,64 @@ $pageTitle = 'General Settings';
             document.getElementById('soundAlerts').checked = localStorage.getItem('soundAlerts') === 'true';
             document.getElementById('showBadges').checked = localStorage.getItem('showBadges') !== 'false';
             document.getElementById('desktopNotifications').checked = localStorage.getItem('desktopNotifications') === 'true';
+            
+            // Load AI Analysis setting from server
+            loadAIAnalysisSetting();
+        }
+
+        // Load AI Analysis setting from database
+        function loadAIAnalysisSetting() {
+            fetch('../api/ai-warnings.php?action=getSettings')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.settings) {
+                        const aiAnalysisCheckbox = document.getElementById('aiAnalysisEnabled');
+                        if (aiAnalysisCheckbox) {
+                            aiAnalysisCheckbox.checked = data.settings.ai_enabled === 1 || data.settings.ai_enabled === true;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading AI Analysis setting:', error);
+                    // Default to unchecked if error
+                    const aiAnalysisCheckbox = document.getElementById('aiAnalysisEnabled');
+                    if (aiAnalysisCheckbox) {
+                        aiAnalysisCheckbox.checked = false;
+                    }
+                });
+        }
+
+        // Save AI Analysis setting to database
+        function saveAIAnalysisSetting(enabled) {
+            fetch('../api/update-ai-analysis-setting.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ enabled: enabled })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Show success message (optional)
+                        console.log('AI Analysis setting updated:', enabled ? 'enabled' : 'disabled');
+                    } else {
+                        console.error('Error updating AI Analysis setting:', data.message);
+                        // Revert checkbox on error
+                        const aiAnalysisCheckbox = document.getElementById('aiAnalysisEnabled');
+                        if (aiAnalysisCheckbox) {
+                            aiAnalysisCheckbox.checked = !enabled;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error saving AI Analysis setting:', error);
+                    // Revert checkbox on error
+                    const aiAnalysisCheckbox = document.getElementById('aiAnalysisEnabled');
+                    if (aiAnalysisCheckbox) {
+                        aiAnalysisCheckbox.checked = !enabled;
+                    }
+                });
         }
 
         function setTheme(theme) {
@@ -725,6 +794,22 @@ $pageTitle = 'General Settings';
             if (desktopNotifications) {
                 desktopNotifications.addEventListener('change', function() {
                     localStorage.setItem('desktopNotifications', this.checked);
+                });
+            }
+            
+            // AI Analysis setting
+            const aiAnalysisEnabled = document.getElementById('aiAnalysisEnabled');
+            if (aiAnalysisEnabled) {
+                aiAnalysisEnabled.addEventListener('change', function() {
+                    saveAIAnalysisSetting(this.checked);
+                });
+            }
+            
+            // AI Analysis setting
+            const aiAnalysisEnabled = document.getElementById('aiAnalysisEnabled');
+            if (aiAnalysisEnabled) {
+                aiAnalysisEnabled.addEventListener('change', function() {
+                    saveAIAnalysisSetting(this.checked);
                 });
             }
         });

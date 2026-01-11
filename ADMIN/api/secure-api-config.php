@@ -339,5 +339,47 @@ function storeGeminiApiKeyInDatabase($apiKey) {
         return false;
     }
 }
+
+/**
+ * Check if AI analysis is globally enabled
+ * This function checks the ai_enabled setting in ai_warning_settings table
+ * When disabled, all AI analysis features (weather, earthquake, etc.) will be skipped
+ * @return bool True if AI analysis is enabled, false otherwise
+ */
+function isAIAnalysisEnabled() {
+    global $pdo;
+    
+    if ($pdo === null) {
+        // If no database connection, default to disabled for safety
+        return false;
+    }
+    
+    try {
+        // Check if table exists
+        $tableCheck = $pdo->query("SHOW TABLES LIKE 'ai_warning_settings'");
+        if (!$tableCheck || $tableCheck->rowCount() === 0) {
+            // Table doesn't exist, default to disabled
+            return false;
+        }
+        
+        // Get the ai_enabled setting from the most recent record
+        $stmt = $pdo->query("SELECT ai_enabled FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($result && isset($result['ai_enabled'])) {
+            return (bool)$result['ai_enabled'];
+        }
+        
+        // Default to disabled if no setting found
+        return false;
+    } catch (PDOException $e) {
+        error_log("Error checking AI analysis enabled status: " . $e->getMessage());
+        // On error, default to disabled for safety
+        return false;
+    } catch (Exception $e) {
+        error_log("Error checking AI analysis enabled status: " . $e->getMessage());
+        return false;
+    }
+}
 ?>
 

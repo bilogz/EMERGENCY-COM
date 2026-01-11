@@ -61,6 +61,10 @@ class AITranslationService {
      * Check if AI translation is available
      */
     public function isAvailable() {
+        // Check if AI analysis is globally enabled
+        if (function_exists('isAIAnalysisEnabled') && !isAIAnalysisEnabled()) {
+            return false;
+        }
         return !empty($this->apiKey);
     }
     
@@ -73,6 +77,13 @@ class AITranslationService {
      */
     public function translate($text, $targetLanguage, $sourceLanguage = 'en') {
         if (!$this->isAvailable()) {
+            // Check if it's disabled globally
+            if (function_exists('isAIAnalysisEnabled') && !isAIAnalysisEnabled()) {
+                return [
+                    'success' => false,
+                    'error' => 'AI analysis is currently disabled. Please enable it in General Settings → AI Analysis Settings to use this feature.'
+                ];
+            }
             return [
                 'success' => false,
                 'error' => 'AI translation service is not configured. Please set up Gemini API key.'

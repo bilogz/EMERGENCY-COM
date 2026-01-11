@@ -23,6 +23,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 // Load secure API configuration
 require_once __DIR__ . '/secure-api-config.php';
+require_once __DIR__ . '/db_connect.php';
+
+// Check if AI analysis is globally enabled
+if (!isAIAnalysisEnabled()) {
+    http_response_code(403);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'AI analysis is currently disabled. Please enable it in General Settings → AI Analysis Settings to use this feature.'
+    ]);
+    exit();
+}
 
 // Get API key securely from config file (not from client)
 $apiKey = getGeminiApiKey();
