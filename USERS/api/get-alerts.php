@@ -201,7 +201,16 @@ try {
         }
     }
     
-    if ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && !empty($alerts)) {
+    // Debug: Log why translation might not be attempted
+    $alertsCount = is_array($alerts) ? count($alerts) : 0;
+    if ($targetLanguage && $targetLanguage !== 'en' && $alertsCount > 0) {
+        if (!$translationHelper) {
+            error_log("Translation skipped: translationHelper is null (file may not exist or initialization failed)");
+        }
+    }
+    
+    // Check condition: targetLanguage must be set and not 'en', translationHelper must exist, and alerts must not be empty
+    if ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && $alertsCount > 0) {
         foreach ($alerts as &$alert) {
             try {
                 $translationAttempted++;

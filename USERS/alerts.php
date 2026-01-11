@@ -404,7 +404,153 @@ $current = 'alerts.php';
                 }
             });
             
+            // Translate alert card content if needed (client-side fallback)
+            translateAlertCard(card, alert);
+            
             return card;
+        }
+        
+        /**
+         * Translate alert card content client-side (fallback if backend translation fails)
+         * @param {HTMLElement} card - The alert card element
+         * @param {Object} alert - The alert data object
+         */
+        async function translateAlertCard(card, alert) {
+            const currentLang = localStorage.getItem('preferredLanguage') || 'en';
+            
+            // Skip if English or if translation already applied by backend
+            if (currentLang === 'en' || !currentLang) {
+                return;
+            }
+            
+            // Check if card already has translated content (indicated by data attribute)
+            if (card.dataset.translated === 'true') {
+                return;
+            }
+            
+            // Get text elements that need translation
+            const titleElement = card.querySelector('h4');
+            const messageElement = card.querySelector('p');
+            const contentElement = card.querySelector('.alert-content');
+            
+            // Store original texts if not already stored
+            if (titleElement && !titleElement.dataset.originalText) {
+                titleElement.dataset.originalText = titleElement.textContent.trim();
+            }
+            if (messageElement && !messageElement.dataset.originalText) {
+                messageElement.dataset.originalText = messageElement.textContent.trim();
+            }
+            if (contentElement && !contentElement.dataset.originalHtml) {
+                contentElement.dataset.originalHtml = contentElement.innerHTML;
+            }
+            
+            // Check if texts are already in English (might be translated by backend)
+            // If backend translation failed, we'll see English text and need to translate
+            const titleText = titleElement ? titleElement.dataset.originalText : '';
+            const messageText = messageElement ? messageElement.dataset.originalText : '';
+            const contentHtml = contentElement ? contentElement.dataset.originalHtml : '';
+            
+            // Only translate if we have text to translate
+            if (!titleText && !messageText && !contentHtml) {
+                return;
+            }
+            
+            try {
+                // Use the translation API to translate alert content
+                const textsToTranslate = {};
+                if (titleText) textsToTranslate['title'] = titleText;
+                if (messageText) textsToTranslate['message'] = messageText;
+                if (contentHtml) {
+                    // Extract text from HTML for translation
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = contentHtml;
+                    const contentText = tempDiv.textContent || tempDiv.innerText || '';
+                    if (contentText.trim()) {
+                        textsToTranslate['content'] = contentText.trim();
+                    }
+                }
+                
+                if (Object.keys(textsToTranslate).length === 0) {
+                    return;
+                }
+                
+                // Call translation API
+                const apiPath = getApiPath(`api/translate-alert-text.php`);
+                const response = await fetch(apiPath, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    },
+                    body: JSON.stringify({
+                        texts: textsToTranslate,
+                        target_language: currentLang,
+                        source_language: 'en'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.translations) {
+                        // Apply translations
+                        if (titleElement && data.translations.title) {
+                            titleElement.textContent = data.translations.title;
+                        }
+                        if (messageElement && data.translations.message) {
+                            messageElement.textContent = data.translations.message;
+                        }
+                        if (contentElement && data.translations.content) {
+                            // For content, we need to preserve HTML structure
+                            // Simple approach: replace the text content
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = contentElement.dataset.originalHtml;
+                            const textNodes = [];
+                            const walker = document.createTreeWalker(
+                                tempDiv,
+                                NodeFilter.SHOW_TEXT,
+                                null,
+                                false
+                            );
+                            let node;
+                            while (node = walker.nextNode()) {
+                                if (node.textContent.trim()) {
+                                    textNodes.push(node);
+                                }
+                            }
+                            // Replace first text node with translated content
+                            if (textNodes.length > 0) {
+                                textNodes[0].textContent = data.translations.content;
+                                contentElement.innerHTML = tempDiv.innerHTML;
+                            }
+                        }
+                        
+                        // Mark as translated
+                        card.dataset.translated = 'true';
+                        console.log(`✓ Translated alert card #${alert.id} to ${currentLang}`);
+                    }
+                }
+            } catch (error) {
+                // Silently fail - don't break the UI if translation fails
+                console.debug(`Translation failed for alert #${alert.id}:`, error);
+            }
+        }
+        
+        /**
+         * Get API path helper (if not already defined)
+         */
+        function getApiPath(relativePath) {
+            if (typeof window.getApiPath === 'function') {
+                return window.getApiPath(relativePath);
+            }
+            // Fallback path detection
+            const currentPath = window.location.pathname;
+            const isInUsersFolder = currentPath.includes('/USERS/');
+            if (relativePath.startsWith('api/')) {
+                if (!isInUsersFolder) {
+                    return 'USERS/' + relativePath;
+                }
+            }
+            return relativePath;
         }
         
         function markAlertAsRead(alertId) {
