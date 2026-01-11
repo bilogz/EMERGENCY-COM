@@ -544,17 +544,45 @@ $current = 'alerts.php';
             document.getElementById('noAlerts').style.display = 'block';
         }
         
+        function getNotificationText(count) {
+            const lang = localStorage.getItem('preferredLanguage') || 'en';
+            const translations = {
+                'en': {
+                    alert: count === 1 ? 'New Alert' : 'New Alerts',
+                    update: 'Real-time update from Quezon City'
+                },
+                'es': {
+                    alert: count === 1 ? 'Nueva Alerta' : 'Nuevas Alertas',
+                    update: 'Actualización en tiempo real de Quezon City'
+                },
+                'fil': {
+                    alert: count === 1 ? 'Bagong Alert' : 'Bagong mga Alert',
+                    update: 'Real-time update mula sa Quezon City'
+                },
+                'tl': {
+                    alert: count === 1 ? 'Bagong Alert' : 'Bagong mga Alert',
+                    update: 'Real-time update mula sa Quezon City'
+                }
+            };
+            const t = translations[lang] || translations['en'];
+            return {
+                title: `${count} ${t.alert}`,
+                subtitle: t.update
+            };
+        }
+        
         function showNewAlertsNotification(count) {
             // Show prominent notification for new alerts
             const notification = document.createElement('div');
             notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); color: white; padding: 1rem 1.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(76, 175, 80, 0.4); z-index: 2000; animation: slideInRight 0.4s ease; display: flex; align-items: center; gap: 0.75rem; min-width: 250px;';
+            const text = getNotificationText(count);
             notification.innerHTML = `
                 <div style="background: rgba(255,255,255,0.2); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
                     <i class="fas fa-bell" style="font-size: 1.2rem;"></i>
                 </div>
                 <div>
-                    <div style="font-weight: 700; font-size: 1rem;">${count} New Alert${count > 1 ? 's' : ''}</div>
-                    <div style="font-size: 0.875rem; opacity: 0.9;">Real-time update from Quezon City</div>
+                    <div style="font-weight: 700; font-size: 1rem;">${text.title}</div>
+                    <div style="font-size: 0.875rem; opacity: 0.9;">${text.subtitle}</div>
                 </div>
             `;
             
