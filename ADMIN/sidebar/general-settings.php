@@ -804,14 +804,6 @@ $pageTitle = 'General Settings';
                     saveAIAnalysisSetting(this.checked);
                 });
             }
-            
-            // AI Analysis setting
-            const aiAnalysisEnabled = document.getElementById('aiAnalysisEnabled');
-            if (aiAnalysisEnabled) {
-                aiAnalysisEnabled.addEventListener('change', function() {
-                    saveAIAnalysisSetting(this.checked);
-                });
-            }
         });
         
         // Listen for theme changes from header
