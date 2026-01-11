@@ -197,10 +197,15 @@ $current = 'alerts.php';
                     url += `&severity_filter=${encodeURIComponent(currentSeverityFilter)}`;
                 }
                 
-                // Get current language preference from localStorage or detect from browser
+                // Get current language preference (UI language selector - stored in localStorage)
+                // The backend will resolve language with proper priority:
+                // 1. Logged-in user's DB preference
+                // 2. Query parameter (UI selector from localStorage) - this value
+                // 3. Browser language detection
+                // 4. Default English
                 let currentLanguage = localStorage.getItem('preferredLanguage');
                 if (!currentLanguage) {
-                    // Detect browser language for guests
+                    // Fallback: detect browser language for initial setup
                     const browserLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase().split('-')[0];
                     // Map common browser languages
                     const langMap = { 'en': 'en', 'fil': 'fil', 'tl': 'fil', 'es': 'es', 'fr': 'fr', 'de': 'de', 'it': 'it', 'pt': 'pt' };
@@ -208,9 +213,9 @@ $current = 'alerts.php';
                     localStorage.setItem('preferredLanguage', currentLanguage);
                 }
                 
-                if (currentLanguage && currentLanguage !== 'en') {
-                    url += `&lang=${encodeURIComponent(currentLanguage)}`;
-                }
+                // Always send language parameter so backend knows the UI selector value
+                // Backend will use DB preference first for logged-in users, then this value
+                url += `&lang=${encodeURIComponent(currentLanguage)}`;
                 
                 // For incremental updates, use last_id
                 if (showNewOnly && lastAlertId > 0) {

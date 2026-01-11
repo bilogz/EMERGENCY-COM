@@ -173,52 +173,40 @@ try {
     $stmt->execute();
     $alerts = $stmt->fetchAll();
     
-    // Get language preference from query parameter
-    $targetLanguage = $_GET['lang'] ?? $_GET['language'] ?? null;
-    
-    // If no language in query parameter, try to get from session (for logged-in users)
-    if (!$targetLanguage) {
-        // Start session only if not already started (for logged-in users)
-        if (session_status() === PHP_SESSION_NONE) {
-            @session_start();
-        }
-        
-        if (isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true) {
-            $userId = $_SESSION['user_id'] ?? null;
-            if ($userId) {
-                // Try to get from user preferences
-                try {
-                    $prefStmt = $pdo->prepare("SELECT preferred_language FROM user_preferences WHERE user_id = ? LIMIT 1");
-                    $prefStmt->execute([$userId]);
-                    $pref = $prefStmt->fetch();
-                    if ($pref && !empty($pref['preferred_language'])) {
-                        $targetLanguage = $pref['preferred_language'];
-                    }
-                } catch (PDOException $e) {
-                    // Ignore errors, just continue without translation
-                    error_log("Error getting user language preference: " . $e->getMessage());
-                }
-            }
-        }
-    }
+    // Resolve language using priority order:
+    // 1. Logged-in user's saved language preference (database)
+    // 2. Global language selector (UI language icon - query parameter)
+    // 3. Guest browser language detection
+    // 4. System default language (English)
+    $targetLanguage = resolveAlertLanguage($pdo);
     
     // Translate alerts if language is specified and translation helper is available
+    $translationApplied = false;
     if ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && !empty($alerts)) {
         $translationAttempted = 0;
         $translationSuccess = 0;
         foreach ($alerts as &$alert) {
             try {
                 $translationAttempted++;
+                $originalTitle = $alert['title'];
                 $translated = $translationHelper->getTranslatedAlert($alert['id'], $targetLanguage, null, $targetLanguage);
-                if ($translated && isset($translated['title']) && $translated['title'] !== $alert['title']) {
-                    // Only apply translation if it's different from original
-                    $alert['title'] = $translated['title'];
-                    if (isset($translated['message']) && !empty($translated['message'])) {
-                        $alert['message'] = $translated['message'];
-                        // Use translated message for content as well if available
-                        $alert['content'] = $translated['message'];
+                if ($translated && isset($translated['title'])) {
+                    // Apply translation if it's different from original (getTranslatedAlert returns original on failure)
+                    // Also check language field to ensure it's actually translated
+                    if (($translated['title'] !== $originalTitle || (isset($translated['language']) && $translated['language'] !== 'en'))) {
+                        $alert['title'] = $translated['title'];
+                        if (isset($translated['message']) && !empty($translated['message'])) {
+                            $alert['message'] = $translated['message'];
+                            // Use translated message for content field if no separate content translation
+                            if (isset($translated['content']) && !empty($translated['content'])) {
+                                $alert['content'] = $translated['content'];
+                            } else {
+                                $alert['content'] = $translated['message'];
+                            }
+                        }
+                        $translationSuccess++;
+                        $translationApplied = true;
                     }
-                    $translationSuccess++;
                 }
             } catch (Exception $e) {
                 // If translation fails, use original alert (silently fail to avoid breaking the API)
@@ -244,7 +232,8 @@ try {
         'alerts' => $alerts,
         'count' => count($alerts),
         'timestamp' => date('c'),
-        'language' => $targetLanguage ?? 'en'
+        'language' => $targetLanguage ?? 'en',
+        'translation_applied' => $translationApplied
     ], JSON_UNESCAPED_UNICODE);
     
 } catch (PDOException $e) {
@@ -261,6 +250,116 @@ try {
         'message' => 'Server error occurred',
         'alerts' => []
     ]);
+}
+
+/**
+ * Resolve alert display language using priority order:
+ * 1. Logged-in user's saved language preference (database)
+ * 2. Global language selector (UI language icon - query parameter from localStorage)
+ * 3. Guest browser language detection (Accept-Language header)
+ * 4. System default language (English)
+ * 
+ * Note: Query parameter (UI selector) is checked first for logged-in users if provided,
+ * as it represents the user's current session selection. Otherwise, DB preference is used.
+ * 
+ * @param PDO $pdo Database connection
+ * @return string Language code (e.g., 'en', 'fil', 'es')
+ */
+function resolveAlertLanguage($pdo) {
+    // Start session if not already started
+    if (session_status() === PHP_SESSION_NONE) {
+        @session_start();
+    }
+    
+    $targetLanguage = null;
+    $userId = null;
+    $isLoggedIn = false;
+    
+    // Check if user is logged in
+    if (isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true) {
+        $isLoggedIn = true;
+        $userId = $_SESSION['user_id'] ?? null;
+    }
+    
+    // Priority 1: Logged-in user's saved language preference (database)
+    if ($isLoggedIn && $userId) {
+        try {
+            // Try user_preferences table first
+            $prefStmt = $pdo->prepare("SELECT preferred_language FROM user_preferences WHERE user_id = ? LIMIT 1");
+            $prefStmt->execute([$userId]);
+            $pref = $prefStmt->fetch();
+            
+            if ($pref && !empty($pref['preferred_language'])) {
+                $targetLanguage = $pref['preferred_language'];
+            } else {
+                // Fallback to users table for backward compatibility
+                $userStmt = $pdo->prepare("SELECT preferred_language FROM users WHERE id = ? LIMIT 1");
+                $userStmt->execute([$userId]);
+                $user = $userStmt->fetch();
+                if ($user && !empty($user['preferred_language'])) {
+                    $targetLanguage = $user['preferred_language'];
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("Error getting user language preference: " . $e->getMessage());
+        }
+    }
+    
+    // Priority 2: Global language selector (UI language icon - query parameter from localStorage)
+    // This represents the user's current UI language selection
+    // Used if no DB preference found, or for guests
+    if (!$targetLanguage) {
+        $queryLang = $_GET['lang'] ?? $_GET['language'] ?? null;
+        if ($queryLang && strlen($queryLang) >= 2) {
+            // Validate language code is reasonable (2-5 characters, alphanumeric with optional dash)
+            if (preg_match('/^[a-z]{2}(-[a-z]{2,3})?$/i', $queryLang)) {
+                $targetLanguage = strtolower($queryLang);
+            }
+        }
+    }
+    
+    // Priority 3: Guest browser language detection (Accept-Language header)
+    if (!$targetLanguage) {
+        $acceptLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
+        if ($acceptLanguage) {
+            // Parse Accept-Language header (e.g., "en-US,en;q=0.9,es;q=0.8")
+            $languages = [];
+            preg_match_all('/([a-z]{1,8}(?:-[a-z]{1,8})?)(?:;q=([0-9.]+))?/i', $acceptLanguage, $matches);
+            
+            if (!empty($matches[1])) {
+                foreach ($matches[1] as $index => $lang) {
+                    $quality = isset($matches[2][$index]) ? (float)$matches[2][$index] : 1.0;
+                    $langCode = strtolower(explode('-', $lang)[0]); // Get base language code
+                    $languages[$langCode] = $quality;
+                }
+                
+                // Sort by quality (highest first)
+                arsort($languages);
+                
+                // Use the highest quality language
+                $detectedLang = array_key_first($languages);
+                if ($detectedLang && strlen($detectedLang) === 2) {
+                    // Map common browser languages to supported codes
+                    $langMap = [
+                        'en' => 'en', 'fil' => 'fil', 'tl' => 'fil',
+                        'es' => 'es', 'fr' => 'fr', 'de' => 'de',
+                        'it' => 'it', 'pt' => 'pt', 'zh' => 'zh',
+                        'ja' => 'ja', 'ko' => 'ko', 'ar' => 'ar',
+                        'hi' => 'hi', 'th' => 'th', 'vi' => 'vi',
+                        'id' => 'id', 'ms' => 'ms', 'ru' => 'ru'
+                    ];
+                    $targetLanguage = $langMap[$detectedLang] ?? $detectedLang;
+                }
+            }
+        }
+    }
+    
+    // Priority 4: System default language (English)
+    if (!$targetLanguage || $targetLanguage === 'en') {
+        $targetLanguage = 'en';
+    }
+    
+    return $targetLanguage;
 }
 
 /**
