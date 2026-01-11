@@ -125,11 +125,60 @@ try {
         }
     }
     
+    // Check if alerts table exists first
+    $tableExists = false;
+    try {
+        $checkTable = $pdo->query("SHOW TABLES LIKE 'alerts'");
+        $tableExists = $checkTable->rowCount() > 0;
+    } catch (PDOException $e) {
+        error_log("Error checking alerts table: " . $e->getMessage());
+        $tableExists = false;
+    }
+    
+    if (!$tableExists) {
+        if (ob_get_level()) {
+            ob_clean();
+        }
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Alerts table does not exist',
+            'alerts' => []
+        ]);
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
+        exit;
+    }
+    
+    // Check if alert_categories table exists
+    $categoriesTableExists = false;
+    try {
+        $checkCategoriesTable = $pdo->query("SHOW TABLES LIKE 'alert_categories'");
+        $categoriesTableExists = $checkCategoriesTable->rowCount() > 0;
+    } catch (PDOException $e) {
+        error_log("Error checking alert_categories table: " . $e->getMessage());
+        $categoriesTableExists = false;
+    }
+    
     // Check if area and category columns exist in alerts table
-    $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'area'");
-    $hasAreaColumn = $stmt->rowCount() > 0;
-    $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'category'");
-    $hasCategoryColumn = $stmt->rowCount() > 0;
+    $hasAreaColumn = false;
+    $hasCategoryColumn = false;
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'area'");
+        $hasAreaColumn = $stmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        error_log("Error checking area column: " . $e->getMessage());
+        $hasAreaColumn = false;
+    }
+    
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'category'");
+        $hasCategoryColumn = $stmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        error_log("Error checking category column: " . $e->getMessage());
+        $hasCategoryColumn = false;
+    }
     
     // Build query - prioritize recent alerts
     $query = "
@@ -160,10 +209,17 @@ try {
     }
     
     $query .= "
-        FROM alerts a
-        LEFT JOIN alert_categories ac ON a.category_id = ac.id
-        WHERE a.status = :status
-    ";
+        FROM alerts a";
+    
+    // Only join alert_categories if the table exists
+    if ($categoriesTableExists) {
+        $query .= " LEFT JOIN alert_categories ac ON a.category_id = ac.id";
+    } else {
+        // Create a dummy alias for compatibility
+        $query .= " LEFT JOIN (SELECT NULL as id, NULL as name, NULL as icon, NULL as color) ac ON 1=0";
+    }
+    
+    $query .= " WHERE a.status = :status";
     
     $params = [':status' => $status];
     
@@ -174,8 +230,8 @@ try {
         $params[':user_area'] = $userArea;
     }
     
-    // Filter by category if provided
-    if ($category && $category !== 'all') {
+    // Filter by category if provided and categories table exists
+    if ($category && $category !== 'all' && $categoriesTableExists) {
         $query .= " AND (ac.name = :category OR (:category = 'General' AND ac.name IS NULL))";
         $params[':category'] = $category;
     }
@@ -195,17 +251,21 @@ try {
     if ($severityFilter === 'emergency_only') {
         if ($hasCategoryColumn) {
             $query .= " AND (a.category = 'Emergency Alert' OR a.title LIKE '%[EXTREME]%' OR a.title LIKE '%EXTREME%')";
-        } else {
+        } elseif ($categoriesTableExists) {
             // Fallback: filter by category names that are typically emergency-related OR title contains EXTREME
             $query .= " AND (ac.name IN ('Earthquake', 'Bomb Threat', 'Fire') OR a.title LIKE '%[EXTREME]%' OR a.title LIKE '%EXTREME%')";
+        } else {
+            // If no category info available, just check title for EXTREME
+            $query .= " AND (a.title LIKE '%[EXTREME]%' OR a.title LIKE '%EXTREME%')";
         }
     } elseif ($severityFilter === 'warnings_only') {
         if ($hasCategoryColumn) {
             $query .= " AND a.category = 'Warning'";
-        } else {
+        } elseif ($categoriesTableExists) {
             // Fallback: filter by category names that are typically warning-related
             $query .= " AND ac.name IN ('Weather', 'General')";
         }
+        // If no category info available, severity filter is skipped
     }
     
     // Get only new alerts if lastId is provided (for incremental updates)
