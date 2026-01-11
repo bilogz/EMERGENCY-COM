@@ -279,6 +279,17 @@ function translateWithGroq($text, $targetLang, $apiKey) {
  * This is MUCH faster than translating one by one!
  */
 function translateBatchWithAI($textsArray, $sourceLang, $targetLang) {
+    // Check if AI translation is enabled via settings
+    if (file_exists(__DIR__ . '/../../ADMIN/api/secure-api-config.php')) {
+        require_once __DIR__ . '/../../ADMIN/api/secure-api-config.php';
+        if (function_exists('isAIAnalysisEnabled')) {
+            if (!isAIAnalysisEnabled('translation')) {
+                error_log('AI Translation API is disabled in General Settings. Skipping AI translation.');
+                return $textsArray; // Return original texts
+            }
+        }
+    }
+    
     $targetName = getLanguageName($targetLang);
     $apiKey = defined('AI_API_KEY_TRANSLATION') ? AI_API_KEY_TRANSLATION : AI_API_KEY;
     

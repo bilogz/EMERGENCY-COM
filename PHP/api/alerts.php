@@ -1,11 +1,18 @@
 <?php
+// Prevent any output before headers
+ob_start();
+
 header('Content-Type: application/json; charset=utf-8');
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+// Log errors instead of displaying them (prevents JSON parsing errors)
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
 
 require_once 'db_connect.php';   // must define $pdo
+
+// Clean any output buffer before JSON
+ob_clean();
 
 $userId = isset($_GET['user_id']) ? $_GET['user_id'] : null;
 
@@ -40,18 +47,40 @@ try {
 
     $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Ensure clean output
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
     echo json_encode([
         "success" => true,
         "message" => "OK",
         "alerts"  => $alerts
     ]);
+    
+    // End output buffering
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
 
 } catch (PDOException $e) {
-    // TEMP: expose exact DB error so we can fix it
+    // Log error instead of exposing it
+    error_log("Alerts API DB Error: " . $e->getMessage());
+    
+    // Ensure clean output
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    
     http_response_code(500);
     echo json_encode([
         "success" => false,
-        "message" => "DB error: " . $e->getMessage(),
+        "message" => "Database error occurred",
         "alerts"  => []
     ]);
+    
+    // End output buffering
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
 }
