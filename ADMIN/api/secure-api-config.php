@@ -341,12 +341,12 @@ function storeGeminiApiKeyInDatabase($apiKey) {
 }
 
 /**
- * Check if AI analysis is globally enabled
- * This function checks the ai_enabled setting in ai_warning_settings table
- * When disabled, all AI analysis features (weather, earthquake, etc.) will be skipped
- * @return bool True if AI analysis is enabled, false otherwise
+ * Check if AI analysis is enabled for a specific type
+ * This function checks the specific AI enabled setting in ai_warning_settings table
+ * @param string $type The type of AI analysis: 'weather', 'earthquake', 'disaster_monitoring', or 'all' for global check
+ * @return bool True if AI analysis is enabled for the specified type, false otherwise
  */
-function isAIAnalysisEnabled() {
+function isAIAnalysisEnabled($type = 'all') {
     global $pdo;
     
     if ($pdo === null) {
@@ -362,22 +362,41 @@ function isAIAnalysisEnabled() {
             return false;
         }
         
-        // Get the ai_enabled setting from the most recent record
-        $stmt = $pdo->query("SELECT ai_enabled FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+        // Determine which field to check based on type
+        $fieldName = 'ai_enabled'; // Default to global
+        if ($type === 'weather') {
+            $fieldName = 'ai_weather_enabled';
+        } elseif ($type === 'earthquake') {
+            $fieldName = 'ai_earthquake_enabled';
+        } elseif ($type === 'disaster_monitoring') {
+            $fieldName = 'ai_disaster_monitoring_enabled';
+        }
+        
+        // First check if the specific field exists, if not fall back to global ai_enabled
+        $stmt = $pdo->query("SHOW COLUMNS FROM ai_warning_settings LIKE '$fieldName'");
+        $columnExists = $stmt->rowCount() > 0;
+        
+        if (!$columnExists && $type !== 'all') {
+            // If specific column doesn't exist, check global ai_enabled
+            $fieldName = 'ai_enabled';
+        }
+        
+        // Get the setting from the most recent record
+        $stmt = $pdo->query("SELECT $fieldName FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        if ($result && isset($result['ai_enabled'])) {
-            return (bool)$result['ai_enabled'];
+        if ($result && isset($result[$fieldName])) {
+            return (bool)$result[$fieldName];
         }
         
         // Default to disabled if no setting found
         return false;
     } catch (PDOException $e) {
-        error_log("Error checking AI analysis enabled status: " . $e->getMessage());
+        error_log("Error checking AI analysis enabled status ($type): " . $e->getMessage());
         // On error, default to disabled for safety
         return false;
     } catch (Exception $e) {
-        error_log("Error checking AI analysis enabled status: " . $e->getMessage());
+        error_log("Error checking AI analysis enabled status ($type): " . $e->getMessage());
         return false;
     }
 }

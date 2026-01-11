@@ -179,13 +179,13 @@ try {
 function analyzeEarthquakeImpact() {
     global $pdo;
     
-    // Check if AI analysis is globally enabled
-    if (!isAIAnalysisEnabled()) {
+    // Check if AI analysis is enabled for earthquake
+    if (!isAIAnalysisEnabled('earthquake')) {
         ob_clean();
         http_response_code(403);
         $output = json_encode([
             'success' => false, 
-            'message' => 'AI analysis is currently disabled. Please enable it in General Settings → AI Analysis Settings to use this feature.'
+            'message' => 'AI earthquake analysis is currently disabled. Please enable it in General Settings → AI Analysis Settings to use this feature.'
         ], JSON_UNESCAPED_UNICODE);
         echo $output;
         if (ob_get_level()) {

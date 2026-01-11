@@ -1549,6 +1549,21 @@ function getWeatherAnalysis() {
         ob_clean();
     }
 
+    // Check if AI disaster monitoring is enabled
+    require_once __DIR__ . '/secure-api-config.php';
+    if (!isAIAnalysisEnabled('disaster_monitoring')) {
+        ob_clean();
+        http_response_code(403);
+        echo json_encode([
+            'success' => false, 
+            'message' => 'AI disaster monitoring analysis is currently disabled. Please enable it in General Settings → AI Analysis Settings to use this feature.'
+        ], JSON_UNESCAPED_UNICODE);
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
+        exit();
+    }
+
     try {
         // Ensure we have a database connection
         if ($pdo === null) {

@@ -460,11 +460,33 @@ $pageTitle = 'General Settings';
 
                             <div class="setting-item">
                                 <div class="setting-info">
-                                    <div class="setting-title">AI Analysis</div>
-                                    <div class="setting-description">Enable AI-powered analysis features (weather, earthquake, etc.). Disable to prevent AI API usage limits.</div>
+                                    <div class="setting-title">AI Analysis - Weather Monitoring</div>
+                                    <div class="setting-description">Enable AI-powered weather analysis. Disable to prevent AI API usage for weather monitoring.</div>
                                 </div>
                                 <label class="switch">
-                                    <input type="checkbox" id="aiAnalysisEnabled">
+                                    <input type="checkbox" id="aiWeatherAnalysisEnabled">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <div class="setting-title">AI Analysis - Earthquake Monitoring</div>
+                                    <div class="setting-description">Enable AI-powered earthquake analysis. Disable to prevent AI API usage for earthquake monitoring.</div>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="aiEarthquakeAnalysisEnabled">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <div class="setting-title">AI Analysis - Disaster Monitoring</div>
+                                    <div class="setting-description">Enable AI-powered disaster monitoring analysis (automated warnings). Disable to prevent AI API usage for disaster monitoring.</div>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="aiDisasterMonitoringEnabled">
                                     <span class="slider"></span>
                                 </label>
                             </div>
@@ -554,61 +576,86 @@ $pageTitle = 'General Settings';
             document.getElementById('showBadges').checked = localStorage.getItem('showBadges') !== 'false';
             document.getElementById('desktopNotifications').checked = localStorage.getItem('desktopNotifications') === 'true';
             
-            // Load AI Analysis setting from server
-            loadAIAnalysisSetting();
+            // Load AI Analysis settings from server
+            loadAIAnalysisSettings();
         }
 
-        // Load AI Analysis setting from database
-        function loadAIAnalysisSetting() {
+        // Load AI Analysis settings from database
+        function loadAIAnalysisSettings() {
             fetch('../api/ai-warnings.php?action=getSettings')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.settings) {
-                        const aiAnalysisCheckbox = document.getElementById('aiAnalysisEnabled');
-                        if (aiAnalysisCheckbox) {
-                            aiAnalysisCheckbox.checked = data.settings.ai_enabled === 1 || data.settings.ai_enabled === true;
+                        const settings = data.settings;
+                        
+                        // Load weather analysis setting
+                        const weatherCheckbox = document.getElementById('aiWeatherAnalysisEnabled');
+                        if (weatherCheckbox) {
+                            weatherCheckbox.checked = settings.ai_weather_enabled === 1 || settings.ai_weather_enabled === true || 
+                                                       (settings.ai_weather_enabled === undefined && (settings.ai_enabled === 1 || settings.ai_enabled === true));
+                        }
+                        
+                        // Load earthquake analysis setting
+                        const earthquakeCheckbox = document.getElementById('aiEarthquakeAnalysisEnabled');
+                        if (earthquakeCheckbox) {
+                            earthquakeCheckbox.checked = settings.ai_earthquake_enabled === 1 || settings.ai_earthquake_enabled === true ||
+                                                          (settings.ai_earthquake_enabled === undefined && (settings.ai_enabled === 1 || settings.ai_enabled === true));
+                        }
+                        
+                        // Load disaster monitoring setting
+                        const disasterCheckbox = document.getElementById('aiDisasterMonitoringEnabled');
+                        if (disasterCheckbox) {
+                            disasterCheckbox.checked = settings.ai_disaster_monitoring_enabled === 1 || settings.ai_disaster_monitoring_enabled === true ||
+                                                        (settings.ai_disaster_monitoring_enabled === undefined && (settings.ai_enabled === 1 || settings.ai_enabled === true));
                         }
                     }
                 })
                 .catch(error => {
-                    console.error('Error loading AI Analysis setting:', error);
+                    console.error('Error loading AI Analysis settings:', error);
                     // Default to unchecked if error
-                    const aiAnalysisCheckbox = document.getElementById('aiAnalysisEnabled');
-                    if (aiAnalysisCheckbox) {
-                        aiAnalysisCheckbox.checked = false;
-                    }
+                    ['aiWeatherAnalysisEnabled', 'aiEarthquakeAnalysisEnabled', 'aiDisasterMonitoringEnabled'].forEach(id => {
+                        const checkbox = document.getElementById(id);
+                        if (checkbox) {
+                            checkbox.checked = false;
+                        }
+                    });
                 });
         }
 
         // Save AI Analysis setting to database
-        function saveAIAnalysisSetting(enabled) {
+        function saveAIAnalysisSetting(type, enabled) {
             fetch('../api/update-ai-analysis-setting.php', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ enabled: enabled })
+                body: JSON.stringify({ type: type, enabled: enabled })
             })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Show success message (optional)
-                        console.log('AI Analysis setting updated:', enabled ? 'enabled' : 'disabled');
+                        console.log(`AI ${type} analysis setting updated:`, enabled ? 'enabled' : 'disabled');
                     } else {
                         console.error('Error updating AI Analysis setting:', data.message);
                         // Revert checkbox on error
-                        const aiAnalysisCheckbox = document.getElementById('aiAnalysisEnabled');
-                        if (aiAnalysisCheckbox) {
-                            aiAnalysisCheckbox.checked = !enabled;
+                        const checkboxId = type === 'weather' ? 'aiWeatherAnalysisEnabled' : 
+                                          type === 'earthquake' ? 'aiEarthquakeAnalysisEnabled' : 
+                                          'aiDisasterMonitoringEnabled';
+                        const checkbox = document.getElementById(checkboxId);
+                        if (checkbox) {
+                            checkbox.checked = !enabled;
                         }
                     }
                 })
                 .catch(error => {
                     console.error('Error saving AI Analysis setting:', error);
                     // Revert checkbox on error
-                    const aiAnalysisCheckbox = document.getElementById('aiAnalysisEnabled');
-                    if (aiAnalysisCheckbox) {
-                        aiAnalysisCheckbox.checked = !enabled;
+                    const checkboxId = type === 'weather' ? 'aiWeatherAnalysisEnabled' : 
+                                      type === 'earthquake' ? 'aiEarthquakeAnalysisEnabled' : 
+                                      'aiDisasterMonitoringEnabled';
+                    const checkbox = document.getElementById(checkboxId);
+                    if (checkbox) {
+                        checkbox.checked = !enabled;
                     }
                 });
         }
@@ -797,11 +844,25 @@ $pageTitle = 'General Settings';
                 });
             }
             
-            // AI Analysis setting
-            const aiAnalysisEnabled = document.getElementById('aiAnalysisEnabled');
-            if (aiAnalysisEnabled) {
-                aiAnalysisEnabled.addEventListener('change', function() {
-                    saveAIAnalysisSetting(this.checked);
+            // AI Analysis settings
+            const aiWeatherAnalysisEnabled = document.getElementById('aiWeatherAnalysisEnabled');
+            if (aiWeatherAnalysisEnabled) {
+                aiWeatherAnalysisEnabled.addEventListener('change', function() {
+                    saveAIAnalysisSetting('weather', this.checked);
+                });
+            }
+            
+            const aiEarthquakeAnalysisEnabled = document.getElementById('aiEarthquakeAnalysisEnabled');
+            if (aiEarthquakeAnalysisEnabled) {
+                aiEarthquakeAnalysisEnabled.addEventListener('change', function() {
+                    saveAIAnalysisSetting('earthquake', this.checked);
+                });
+            }
+            
+            const aiDisasterMonitoringEnabled = document.getElementById('aiDisasterMonitoringEnabled');
+            if (aiDisasterMonitoringEnabled) {
+                aiDisasterMonitoringEnabled.addEventListener('change', function() {
+                    saveAIAnalysisSetting('disaster_monitoring', this.checked);
                 });
             }
         });

@@ -61,9 +61,16 @@ class AITranslationService {
      * Check if AI translation is available
      */
     public function isAvailable() {
-        // Check if AI analysis is globally enabled
-        if (function_exists('isAIAnalysisEnabled') && !isAIAnalysisEnabled()) {
-            return false;
+        // Check if AI analysis is globally enabled (we use 'all' for translation, as it's a shared service)
+        if (function_exists('isAIAnalysisEnabled')) {
+            // Translation service requires at least one AI feature to be enabled
+            // Check if any AI analysis type is enabled
+            if (!isAIAnalysisEnabled('weather') && 
+                !isAIAnalysisEnabled('earthquake') && 
+                !isAIAnalysisEnabled('disaster_monitoring') &&
+                !isAIAnalysisEnabled('all')) {
+                return false;
+            }
         }
         return !empty($this->apiKey);
     }
@@ -77,12 +84,17 @@ class AITranslationService {
      */
     public function translate($text, $targetLanguage, $sourceLanguage = 'en') {
         if (!$this->isAvailable()) {
-            // Check if it's disabled globally
-            if (function_exists('isAIAnalysisEnabled') && !isAIAnalysisEnabled()) {
-                return [
-                    'success' => false,
-                    'error' => 'AI analysis is currently disabled. Please enable it in General Settings → AI Analysis Settings to use this feature.'
-                ];
+            // Check if all AI analysis types are disabled
+            if (function_exists('isAIAnalysisEnabled')) {
+                if (!isAIAnalysisEnabled('weather') && 
+                    !isAIAnalysisEnabled('earthquake') && 
+                    !isAIAnalysisEnabled('disaster_monitoring') &&
+                    !isAIAnalysisEnabled('all')) {
+                    return [
+                        'success' => false,
+                        'error' => 'AI analysis is currently disabled. Please enable at least one AI analysis type in General Settings → AI Analysis Settings to use translation features.'
+                    ];
+                }
             }
             return [
                 'success' => false,

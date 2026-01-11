@@ -1798,10 +1798,23 @@ $pageTitle = 'Weather Monitoring';
                         renderHourlyChart(forecast);
                         renderWeeklyForecast(forecast);
                         
-                        // Auto-trigger AI analysis
+                        // Auto-trigger AI analysis (only if enabled)
                         setTimeout(() => {
                             if (window.currentWeatherData) {
-                                getAIWeatherAnalysis();
+                                // Check if AI is enabled before auto-triggering
+                                fetch('../api/ai-warnings.php?action=getSettings')
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success && data.settings) {
+                                            const aiEnabled = data.settings.ai_enabled === 1 || data.settings.ai_enabled === true;
+                                            if (aiEnabled) {
+                                                getAIWeatherAnalysis();
+                                            }
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error checking AI status for auto-trigger:', error);
+                                    });
                             }
                         }, 1000);
                     }
@@ -2098,6 +2111,12 @@ $pageTitle = 'Weather Monitoring';
                     return; // Exit successfully
                 }
                 
+                // Check if error is due to AI being disabled
+                if (data.message && (data.message.includes('disabled') || data.message.includes('General Settings'))) {
+                    showAIDisabledNote();
+                    return;
+                }
+                
                 // If we get here, there was an error
                 if (!response.ok && !data.success) {
                     throw new Error(data.message || `API Error: ${response.status}`);
@@ -2116,8 +2135,14 @@ $pageTitle = 'Weather Monitoring';
                 statusBadge.textContent = 'Error';
                 statusBadge.className = 'ai-status error';
                 
-                // Parse error message for better display
+                // Check if error is due to AI being disabled
                 let errorMessage = error.message;
+                if (errorMessage && (errorMessage.includes('disabled') || errorMessage.includes('403'))) {
+                    showAIDisabledNote();
+                    return;
+                }
+                
+                // Parse error message for better display
                 let errorDetails = '';
                 
                 // Try to extract JSON from error message if it contains a successful response
@@ -2587,7 +2612,60 @@ Keep concise and actionable.`;
         }
         
         // Tab switching
+        // Check AI Analysis status on page load
+        function checkAIAnalysisStatus() {
+            fetch('../api/ai-warnings.php?action=getSettings')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.settings) {
+                        const settings = data.settings;
+                        const aiEnabled = settings.ai_weather_enabled === 1 || settings.ai_weather_enabled === true ||
+                                         (settings.ai_weather_enabled === undefined && (settings.ai_enabled === 1 || settings.ai_enabled === true));
+                        if (!aiEnabled) {
+                            showAIDisabledNote();
+                        }
+                    } else {
+                        // If we can't get settings, show the note as a safety measure
+                        showAIDisabledNote();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking AI status:', error);
+                    // On error, show the note as a safety measure
+                    showAIDisabledNote();
+                });
+        }
+        
+        // Show note when AI is disabled
+        function showAIDisabledNote() {
+            const container = document.getElementById('aiAnalysis');
+            const statusBadge = document.getElementById('aiStatus');
+            
+            if (container) {
+                container.innerHTML = `
+                    <div style="background: rgba(231, 76, 60, 0.1); border: 2px solid #e74c3c; border-radius: 8px; padding: 1.5rem; text-align: center;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #e74c3c; margin-bottom: 1rem;"></i>
+                        <h4 style="color: #e74c3c; margin: 0 0 0.75rem 0; font-size: 1.1rem;">AI Weather Analysis is Disabled</h4>
+                        <p style="color: rgba(255,255,255,0.9); margin: 0 0 1rem 0; line-height: 1.6;">
+                            AI weather analysis is currently disabled. To enable AI weather analysis, please go to 
+                            <strong>General Settings → System Settings → AI Analysis - Weather Monitoring</strong> and turn it on.
+                        </p>
+                        <a href="general-settings.php" style="display: inline-block; background: #8e44ad; color: white; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; transition: all 0.3s;">
+                            <i class="fas fa-cog"></i> Go to General Settings
+                        </a>
+                    </div>
+                `;
+            }
+            
+            if (statusBadge) {
+                statusBadge.textContent = 'Disabled';
+                statusBadge.className = 'ai-status error';
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', function() {
+            // Check AI status first
+            checkAIAnalysisStatus();
             initMap();
             
             document.querySelectorAll('.weather-tab').forEach(tab => {

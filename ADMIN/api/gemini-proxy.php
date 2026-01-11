@@ -25,12 +25,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 require_once __DIR__ . '/secure-api-config.php';
 require_once __DIR__ . '/db_connect.php';
 
-// Check if AI analysis is globally enabled
-if (!isAIAnalysisEnabled()) {
+// Check if AI analysis is enabled for weather
+if (!isAIAnalysisEnabled('weather')) {
     http_response_code(403);
     echo json_encode([
         'success' => false, 
-        'message' => 'AI analysis is currently disabled. Please enable it in General Settings → AI Analysis Settings to use this feature.'
+        'message' => 'AI weather analysis is currently disabled. Please enable it in General Settings → AI Analysis Settings to use this feature.'
     ]);
     exit();
 }

@@ -1827,6 +1827,55 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             }, isSignificant ? 8000 : 5000);
         }
         
+        // Check AI Analysis status
+        function checkAIAnalysisStatus() {
+            fetch('../api/ai-warnings.php?action=getSettings')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.settings) {
+                        const settings = data.settings;
+                        const aiEnabled = settings.ai_earthquake_enabled === 1 || settings.ai_earthquake_enabled === true ||
+                                         (settings.ai_earthquake_enabled === undefined && (settings.ai_enabled === 1 || settings.ai_enabled === true));
+                        if (!aiEnabled) {
+                            showAIDisabledNote();
+                        }
+                    } else {
+                        // If we can't get settings, show the note as a safety measure
+                        showAIDisabledNote();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking AI status:', error);
+                    // On error, show the note as a safety measure
+                    showAIDisabledNote();
+                });
+        }
+        
+        // Show note when AI is disabled
+        function showAIDisabledNote() {
+            const contentEl = document.getElementById('aiAnalyticsContent');
+            if (contentEl) {
+                contentEl.innerHTML = `
+                    <div style="background: rgba(231, 76, 60, 0.1); border: 2px solid #e74c3c; border-radius: 8px; padding: 1.5rem; text-align: center;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #e74c3c; margin-bottom: 1rem;"></i>
+                        <h4 style="color: #e74c3c; margin: 0 0 0.75rem 0; font-size: 1.1rem;">AI Earthquake Analysis is Disabled</h4>
+                        <p style="color: var(--text-color-1, #333); margin: 0 0 1rem 0; line-height: 1.6;">
+                            AI earthquake analysis is currently disabled. To enable AI earthquake analysis, please go to 
+                            <strong>General Settings → System Settings → AI Analysis - Earthquake Monitoring</strong> and turn it on.
+                        </p>
+                        <a href="general-settings.php" style="display: inline-block; background: var(--primary-color-1, #667eea); color: white; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; transition: all 0.3s;">
+                            <i class="fas fa-cog"></i> Go to General Settings
+                        </a>
+                    </div>
+                `;
+            }
+        }
+        
+        // Check AI Analysis status on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAIAnalysisStatus();
+        });
+        
         // AI Analytics Functions
         function showAIAnalytics() {
             const panel = document.getElementById('aiAnalyticsPanel');
@@ -1835,11 +1884,38 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 return;
             }
             
-            // Show panel and ensure it's expanded (not minimized)
-            panel.style.display = 'block';
-            panel.classList.remove('minimized');
-            updateMinimizeButton();
-            analyzeEarthquakeImpact(earthquakeData);
+                    // Check if AI is enabled before showing
+                    fetch('../api/ai-warnings.php?action=getSettings')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.settings) {
+                                const settings = data.settings;
+                                const aiEnabled = settings.ai_earthquake_enabled === 1 || settings.ai_earthquake_enabled === true ||
+                                                 (settings.ai_earthquake_enabled === undefined && (settings.ai_enabled === 1 || settings.ai_enabled === true));
+                                if (!aiEnabled) {
+                                    // Show panel with disabled note
+                                    panel.style.display = 'block';
+                                    panel.classList.remove('minimized');
+                                    updateMinimizeButton();
+                                    showAIDisabledNote();
+                                    return;
+                                }
+                            }
+                    
+                    // Show panel and ensure it's expanded (not minimized)
+                    panel.style.display = 'block';
+                    panel.classList.remove('minimized');
+                    updateMinimizeButton();
+                    analyzeEarthquakeImpact(earthquakeData);
+                })
+                .catch(error => {
+                    console.error('Error checking AI status:', error);
+                    // Show disabled note on error
+                    panel.style.display = 'block';
+                    panel.classList.remove('minimized');
+                    updateMinimizeButton();
+                    showAIDisabledNote();
+                });
         }
         
         function toggleAIPanelMinimize() {
@@ -1995,15 +2071,21 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             .catch(error => {
                 console.error('AI Analysis Error:', error);
                 const errorMessage = error.message || 'Unknown error occurred';
-                contentEl.innerHTML = `
-                    <div style="padding: 1rem; color: var(--error-color, #F44336);">
-                        <i class="fas fa-exclamation-circle"></i> Error: ${errorMessage}
-                        <p style="font-size: 0.9em; margin-top: 0.5rem;">AI analysis is optional. Earthquake data is still displayed correctly.</p>
-                        <p style="font-size: 0.85em; margin-top: 0.5rem; color: var(--text-secondary-1);">
-                            If this error persists, check the server logs or ensure the API endpoint is accessible.
-                        </p>
-                    </div>
-                `;
+                
+                // Check if error is due to AI being disabled
+                if (errorMessage.includes('disabled') || errorMessage.includes('403')) {
+                    showAIDisabledNote();
+                } else {
+                    contentEl.innerHTML = `
+                        <div style="padding: 1rem; color: var(--error-color, #F44336);">
+                            <i class="fas fa-exclamation-circle"></i> Error: ${errorMessage}
+                            <p style="font-size: 0.9em; margin-top: 0.5rem;">AI analysis is optional. Earthquake data is still displayed correctly.</p>
+                            <p style="font-size: 0.85em; margin-top: 0.5rem; color: var(--text-secondary-1);">
+                                If this error persists, check the server logs or ensure the API endpoint is accessible.
+                            </p>
+                        </div>
+                    `;
+                }
             });
         }
         
