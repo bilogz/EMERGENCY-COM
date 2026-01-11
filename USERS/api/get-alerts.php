@@ -41,8 +41,14 @@ header('Cache-Control: no-cache, must-revalidate, max-age=0');
 header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
 header('Pragma: no-cache');
 
+// Use admin database connection to ensure we get alerts from the same source
+// The alerts table is in the ADMIN database
 try {
-    require_once 'db_connect.php';
+    if (file_exists(__DIR__ . '/../../ADMIN/api/db_connect.php')) {
+        require_once __DIR__ . '/../../ADMIN/api/db_connect.php';
+    } else {
+        require_once __DIR__ . '/db_connect.php';
+    }
 } catch (Exception $e) {
     if (ob_get_level()) {
         ob_clean();
