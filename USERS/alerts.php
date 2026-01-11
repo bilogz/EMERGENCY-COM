@@ -515,27 +515,45 @@ $current = 'alerts.php';
                         console.log(`🔍 Translation response for alert #${alert.id}:`, {
                             success: data.success,
                             translations: data.translations,
-                            target_language: data.target_language
+                            target_language: data.target_language,
+                            errors: data.errors || null,
+                            message: data.message || null
                         });
                         
-                        if (data.success && data.translations) {
+                        // Log errors if any
+                        if (data.errors && Object.keys(data.errors).length > 0) {
+                            console.error(`❌ Translation errors for alert #${alert.id}:`, data.errors);
+                            console.error(`   Message: ${data.message || 'No details available'}`);
+                        }
+                        
+                        if (data.translations) {
                             let translationsApplied = 0;
                             
-                            // Apply translations
+                            // Apply translations (only if they're different from original)
                             if (titleElement && data.translations.title) {
-                                const originalText = titleElement.textContent;
-                                titleElement.textContent = data.translations.title;
-                                console.log(`  ✓ Title translated: "${originalText}" → "${data.translations.title}"`);
-                                translationsApplied++;
+                                const originalText = titleElement.dataset.originalText || titleElement.textContent.trim();
+                                const translatedText = data.translations.title.trim();
+                                if (translatedText !== originalText && translatedText.length > 0) {
+                                    titleElement.textContent = translatedText;
+                                    console.log(`  ✓ Title translated: "${originalText}" → "${translatedText}"`);
+                                    translationsApplied++;
+                                } else {
+                                    console.warn(`  ⚠️ Title translation skipped: same as original or empty`);
+                                }
                             } else if (titleElement) {
                                 console.warn(`  ⚠️ Title element found but no translation for 'title' key`);
                             }
                             
                             if (messageElement && data.translations.message) {
-                                const originalText = messageElement.textContent;
-                                messageElement.textContent = data.translations.message;
-                                console.log(`  ✓ Message translated: "${originalText.substring(0, 50)}..." → "${data.translations.message.substring(0, 50)}..."`);
-                                translationsApplied++;
+                                const originalText = messageElement.dataset.originalText || messageElement.textContent.trim();
+                                const translatedText = data.translations.message.trim();
+                                if (translatedText !== originalText && translatedText.length > 0) {
+                                    messageElement.textContent = translatedText;
+                                    console.log(`  ✓ Message translated: "${originalText.substring(0, 50)}..." → "${translatedText.substring(0, 50)}..."`);
+                                    translationsApplied++;
+                                } else {
+                                    console.warn(`  ⚠️ Message translation skipped: same as original or empty`);
+                                }
                             } else if (messageElement) {
                                 console.warn(`  ⚠️ Message element found but no translation for 'message' key`);
                             }

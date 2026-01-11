@@ -390,6 +390,9 @@ try {
     
     // Translate each text
     $translations = [];
+    $errors = [];
+    $allSuccessful = true;
+    
     foreach ($input['texts'] as $key => $text) {
         if (empty($text)) {
             $translations[$key] = $text;
@@ -399,11 +402,25 @@ try {
         $result = $translationService->translate($text, $targetLanguage, $sourceLanguage);
         
         if ($result['success'] && isset($result['translated_text'])) {
-            $translations[$key] = $result['translated_text'];
+            $translatedText = trim($result['translated_text']);
+            // Check if translation actually changed the text (ignore if same as original)
+            if ($translatedText !== trim($text) && !empty($translatedText)) {
+                $translations[$key] = $translatedText;
+            } else {
+                // Translation returned same text or empty - treat as failure
+                $translations[$key] = $text;
+                $errorMsg = 'Translation returned same text or empty result';
+                $errors[$key] = $errorMsg;
+                $allSuccessful = false;
+                error_log("Translation failed for key '{$key}': {$errorMsg} (original: '{$text}', returned: '{$translatedText}')");
+            }
         } else {
             // If translation fails, use original text
             $translations[$key] = $text;
-            error_log("Translation failed for key '{$key}': " . ($result['error'] ?? 'Unknown error'));
+            $errorMsg = $result['error'] ?? 'Unknown error';
+            $errors[$key] = $errorMsg;
+            $allSuccessful = false;
+            error_log("Translation failed for key '{$key}': {$errorMsg}");
         }
     }
     
@@ -412,11 +429,19 @@ try {
         ob_clean();
     }
     
-    echo json_encode([
-        'success' => true,
+    $response = [
+        'success' => $allSuccessful,
         'translations' => $translations,
         'target_language' => $targetLanguage
-    ]);
+    ];
+    
+    // Include errors if any translations failed
+    if (!empty($errors)) {
+        $response['errors'] = $errors;
+        $response['message'] = 'Some translations failed: ' . implode(', ', array_keys($errors));
+    }
+    
+    echo json_encode($response);
     
     // End output buffering
     if (ob_get_level()) {
