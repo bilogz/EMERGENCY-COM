@@ -481,150 +481,205 @@ function diagnosticCheck() {
 function saveAISettings() {
     global $pdo;
 
-    $adminId = $_SESSION['admin_user_id'] ?? null;
+    try {
+        $adminId = $_SESSION['admin_user_id'] ?? null;
 
-    // Create table if not exists
-    $pdo->exec("CREATE TABLE IF NOT EXISTS ai_warning_settings (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        gemini_api_key VARCHAR(255) DEFAULT NULL,
-        ai_enabled TINYINT(1) DEFAULT 0,
-        ai_check_interval INT DEFAULT 30,
-        wind_threshold DECIMAL(5,2) DEFAULT 60,
-        rain_threshold DECIMAL(5,2) DEFAULT 20,
-        earthquake_threshold DECIMAL(3,1) DEFAULT 5.0,
-        warning_types TEXT DEFAULT NULL,
-        monitored_areas TEXT DEFAULT NULL,
-        ai_channels TEXT DEFAULT NULL,
-        weather_analysis_auto_send TINYINT(1) DEFAULT 0,
-        weather_analysis_interval INT DEFAULT 60,
-        weather_analysis_verification_key VARCHAR(255) DEFAULT NULL,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        // Check if database connection is available
+        if ($pdo === null) {
+            throw new Exception('Database connection not available');
+        }
 
-    // Add new columns if they don't exist (for existing tables)
-    $columnsToAdd = [
-        'weather_analysis_auto_send' => "TINYINT(1) DEFAULT 0 AFTER ai_channels",
-        'weather_analysis_interval' => "INT DEFAULT 60 AFTER weather_analysis_auto_send",
-        'weather_analysis_verification_key' => "VARCHAR(255) DEFAULT NULL AFTER weather_analysis_interval"
-    ];
-
-    foreach ($columnsToAdd as $columnName => $definition) {
+        // Create table if not exists
         try {
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-                                   WHERE TABLE_SCHEMA = DATABASE()
-                                   AND TABLE_NAME = 'ai_warning_settings'
-                                   AND COLUMN_NAME = ?");
-            $stmt->execute([$columnName]);
-            $exists = $stmt->fetchColumn() > 0;
-
-            if (!$exists) {
-                $pdo->exec("ALTER TABLE ai_warning_settings ADD COLUMN `{$columnName}` {$definition}");
-            }
+            $pdo->exec("CREATE TABLE IF NOT EXISTS ai_warning_settings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                gemini_api_key VARCHAR(255) DEFAULT NULL,
+                ai_enabled TINYINT(1) DEFAULT 0,
+                ai_check_interval INT DEFAULT 30,
+                wind_threshold DECIMAL(5,2) DEFAULT 60,
+                rain_threshold DECIMAL(5,2) DEFAULT 20,
+                earthquake_threshold DECIMAL(3,1) DEFAULT 5.0,
+                warning_types TEXT DEFAULT NULL,
+                monitored_areas TEXT DEFAULT NULL,
+                ai_channels TEXT DEFAULT NULL,
+                weather_analysis_auto_send TINYINT(1) DEFAULT 0,
+                weather_analysis_interval INT DEFAULT 60,
+                weather_analysis_verification_key VARCHAR(255) DEFAULT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         } catch (PDOException $e) {
-            // Column might already exist or other error, continue
-            error_log("Could not add column {$columnName}: " . $e->getMessage());
+            error_log("Error creating ai_warning_settings table: " . $e->getMessage());
+            throw new Exception('Failed to create database table: ' . $e->getMessage());
         }
-    }
 
-    $geminiApiKey = $_POST['gemini_api_key'] ?? '';
-    $aiEnabled = isset($_POST['ai_enabled']) ? 1 : 0;
-    $aiCheckInterval = intval($_POST['ai_check_interval'] ?? 30);
-    $windThreshold = floatval($_POST['wind_threshold'] ?? 60);
-    $rainThreshold = floatval($_POST['rain_threshold'] ?? 20);
-    $earthquakeThreshold = floatval($_POST['earthquake_threshold'] ?? 5.0);
-    $warningTypes = implode(',', $_POST['warning_types'] ?? []);
-    $monitoredAreas = $_POST['monitored_areas'] ?? '';
-    $aiChannels = implode(',', $_POST['ai_channels'] ?? []);
-    $weatherAnalysisAutoSend = isset($_POST['weather_analysis_auto_send']) ? 1 : 0;
-    $weatherAnalysisInterval = intval($_POST['weather_analysis_interval'] ?? 60);
-    $weatherAnalysisVerificationKey = $_POST['weather_analysis_verification_key'] ?? '';
+        // Add new columns if they don't exist (for existing tables)
+        $columnsToAdd = [
+            'weather_analysis_auto_send' => "TINYINT(1) DEFAULT 0 AFTER ai_channels",
+            'weather_analysis_interval' => "INT DEFAULT 60 AFTER weather_analysis_auto_send",
+            'weather_analysis_verification_key' => "VARCHAR(255) DEFAULT NULL AFTER weather_analysis_interval"
+        ];
 
-    // Check if settings exist
-    $stmt = $pdo->query("SELECT id, gemini_api_key FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
-    $existing = $stmt->fetch();
+        foreach ($columnsToAdd as $columnName => $definition) {
+            try {
+                $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                                       WHERE TABLE_SCHEMA = DATABASE()
+                                       AND TABLE_NAME = 'ai_warning_settings'
+                                       AND COLUMN_NAME = ?");
+                $stmt->execute([$columnName]);
+                $exists = $stmt->fetchColumn() > 0;
 
-    // Check secure config for API key if not provided
-    $secureApiKey = getGeminiApiKey('default');
-    if (empty($secureApiKey)) {
-        $secureApiKey = getGeminiApiKey('analysis');
-    }
-
-    if ($existing) {
-        // Only update API key if a new one is provided (not masked)
-        $updateApiKey = $geminiApiKey;
-        if (empty($geminiApiKey) || (strlen($geminiApiKey) <= 4 && strpos($geminiApiKey, '*') !== false)) {
-            // API key is masked or empty, check secure config or keep existing
-            if (!empty($secureApiKey)) {
-                $updateApiKey = $secureApiKey; // Use secure config API key
-            } else {
-                $updateApiKey = $existing['gemini_api_key']; // Keep existing
+                if (!$exists) {
+                    $pdo->exec("ALTER TABLE ai_warning_settings ADD COLUMN `{$columnName}` {$definition}");
+                }
+            } catch (PDOException $e) {
+                // Column might already exist or other error, continue
+                error_log("Could not add column {$columnName}: " . $e->getMessage());
             }
         }
 
-        // If secure config has API key and database doesn't, use secure config
-        if (empty($updateApiKey) && !empty($secureApiKey)) {
-            $updateApiKey = $secureApiKey;
+        $geminiApiKey = $_POST['gemini_api_key'] ?? '';
+        $aiEnabled = isset($_POST['ai_enabled']) ? 1 : 0;
+        $aiCheckInterval = intval($_POST['ai_check_interval'] ?? 30);
+        $windThreshold = floatval($_POST['wind_threshold'] ?? 60);
+        $rainThreshold = floatval($_POST['rain_threshold'] ?? 20);
+        $earthquakeThreshold = floatval($_POST['earthquake_threshold'] ?? 5.0);
+        $warningTypes = implode(',', $_POST['warning_types'] ?? []);
+        $monitoredAreas = $_POST['monitored_areas'] ?? '';
+        $aiChannels = implode(',', $_POST['ai_channels'] ?? []);
+        $weatherAnalysisAutoSend = isset($_POST['weather_analysis_auto_send']) ? 1 : 0;
+        $weatherAnalysisInterval = intval($_POST['weather_analysis_interval'] ?? 60);
+        $weatherAnalysisVerificationKey = $_POST['weather_analysis_verification_key'] ?? '';
+
+        // Check if settings exist
+        try {
+            $stmt = $pdo->query("SELECT id, gemini_api_key FROM ai_warning_settings ORDER BY id DESC LIMIT 1");
+            $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Error querying ai_warning_settings: " . $e->getMessage());
+            throw new Exception('Database query error: ' . $e->getMessage());
         }
 
-        $stmt = $pdo->prepare("UPDATE ai_warning_settings SET
-            gemini_api_key = ?,
-            ai_enabled = ?,
-            ai_check_interval = ?,
-            wind_threshold = ?,
-            rain_threshold = ?,
-            earthquake_threshold = ?,
-            warning_types = ?,
-            monitored_areas = ?,
-            ai_channels = ?,
-            weather_analysis_auto_send = ?,
-            weather_analysis_interval = ?,
-            weather_analysis_verification_key = ?
-            WHERE id = ?");
-        $stmt->execute([
-            $updateApiKey, $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
-            $earthquakeThreshold, $warningTypes, $monitoredAreas, $aiChannels,
-            $weatherAnalysisAutoSend, $weatherAnalysisInterval, $weatherAnalysisVerificationKey,
-            $existing['id']
-        ]);
-    } else {
-        // Use secure config API key if available and no key provided
-        $insertApiKey = $geminiApiKey;
-        if (empty($insertApiKey) && !empty($secureApiKey)) {
-            $insertApiKey = $secureApiKey;
+        // Check secure config for API key if not provided
+        $secureApiKey = null;
+        try {
+            if (function_exists('getGeminiApiKey')) {
+                $secureApiKey = getGeminiApiKey('default');
+                if (empty($secureApiKey)) {
+                    $secureApiKey = getGeminiApiKey('analysis');
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Error getting Gemini API key from secure config: " . $e->getMessage());
+            // Continue without secure API key
+        } catch (Error $e) {
+            error_log("Fatal error getting Gemini API key: " . $e->getMessage());
+            // Continue without secure API key
         }
 
-        $stmt = $pdo->prepare("INSERT INTO ai_warning_settings
-            (gemini_api_key, ai_enabled, ai_check_interval, wind_threshold, rain_threshold,
-             earthquake_threshold, warning_types, monitored_areas, ai_channels,
-             weather_analysis_auto_send, weather_analysis_interval, weather_analysis_verification_key)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([
-            $insertApiKey, $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
-            $earthquakeThreshold, $warningTypes, $monitoredAreas, $aiChannels,
-            $weatherAnalysisAutoSend, $weatherAnalysisInterval, $weatherAnalysisVerificationKey
-        ]);
+        if ($existing) {
+            // Only update API key if a new one is provided (not masked)
+            $updateApiKey = $geminiApiKey;
+            if (empty($geminiApiKey) || (strlen($geminiApiKey) <= 4 && strpos($geminiApiKey, '*') !== false)) {
+                // API key is masked or empty, check secure config or keep existing
+                if (!empty($secureApiKey)) {
+                    $updateApiKey = $secureApiKey; // Use secure config API key
+                } else {
+                    $updateApiKey = $existing['gemini_api_key'] ?? ''; // Keep existing
+                }
+            }
+
+            // If secure config has API key and database doesn't, use secure config
+            if (empty($updateApiKey) && !empty($secureApiKey)) {
+                $updateApiKey = $secureApiKey;
+            }
+
+            try {
+                $stmt = $pdo->prepare("UPDATE ai_warning_settings SET
+                    gemini_api_key = ?,
+                    ai_enabled = ?,
+                    ai_check_interval = ?,
+                    wind_threshold = ?,
+                    rain_threshold = ?,
+                    earthquake_threshold = ?,
+                    warning_types = ?,
+                    monitored_areas = ?,
+                    ai_channels = ?,
+                    weather_analysis_auto_send = ?,
+                    weather_analysis_interval = ?,
+                    weather_analysis_verification_key = ?
+                    WHERE id = ?");
+                $stmt->execute([
+                    $updateApiKey, $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
+                    $earthquakeThreshold, $warningTypes, $monitoredAreas, $aiChannels,
+                    $weatherAnalysisAutoSend, $weatherAnalysisInterval, $weatherAnalysisVerificationKey,
+                    $existing['id']
+                ]);
+            } catch (PDOException $e) {
+                error_log("Error updating ai_warning_settings: " . $e->getMessage());
+                throw new Exception('Failed to update settings: ' . $e->getMessage());
+            }
+        } else {
+            // Use secure config API key if available and no key provided
+            $insertApiKey = $geminiApiKey;
+            if (empty($insertApiKey) && !empty($secureApiKey)) {
+                $insertApiKey = $secureApiKey;
+            }
+
+            try {
+                $stmt = $pdo->prepare("INSERT INTO ai_warning_settings
+                    (gemini_api_key, ai_enabled, ai_check_interval, wind_threshold, rain_threshold,
+                     earthquake_threshold, warning_types, monitored_areas, ai_channels,
+                     weather_analysis_auto_send, weather_analysis_interval, weather_analysis_verification_key)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([
+                    $insertApiKey, $aiEnabled, $aiCheckInterval, $windThreshold, $rainThreshold,
+                    $earthquakeThreshold, $warningTypes, $monitoredAreas, $aiChannels,
+                    $weatherAnalysisAutoSend, $weatherAnalysisInterval, $weatherAnalysisVerificationKey
+                ]);
+            } catch (PDOException $e) {
+                error_log("Error inserting ai_warning_settings: " . $e->getMessage());
+                throw new Exception('Failed to save settings: ' . $e->getMessage());
+            }
+        }
+
+        // Log admin activity
+        if ($adminId && function_exists('logAdminActivity')) {
+            try {
+                $changes = [];
+                if (isset($_POST['ai_enabled'])) {
+                    $changes[] = 'AI Enabled: ' . ($_POST['ai_enabled'] ? 'Yes' : 'No');
+                }
+                if (isset($_POST['ai_check_interval'])) {
+                    $changes[] = 'Check Interval: ' . $_POST['ai_check_interval'] . ' minutes';
+                }
+                if (isset($_POST['warning_types'])) {
+                    $changes[] = 'Warning Types: ' . implode(', ', $_POST['warning_types']);
+                }
+                if (isset($_POST['weather_analysis_auto_send'])) {
+                    $changes[] = 'Weather Analysis Auto-Send: ' . ($_POST['weather_analysis_auto_send'] ? 'Yes' : 'No');
+                }
+                logAdminActivity($adminId, 'update_ai_warning_settings', 'Updated AI warning settings: ' . implode(', ', $changes));
+            } catch (Exception $e) {
+                error_log("Error logging admin activity: " . $e->getMessage());
+                // Don't fail if logging fails
+            }
+        }
+
+        ob_clean();
+        echo json_encode(['success' => true, 'message' => 'AI settings saved successfully'], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $e) {
+        error_log("Error in saveAISettings: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
+        ob_clean();
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Error saving settings: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    } catch (Error $e) {
+        error_log("Fatal error in saveAISettings: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
+        ob_clean();
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Fatal error: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
     }
-
-    // Log admin activity
-    if ($adminId && function_exists('logAdminActivity')) {
-        $changes = [];
-        if (isset($_POST['ai_enabled'])) {
-            $changes[] = 'AI Enabled: ' . ($_POST['ai_enabled'] ? 'Yes' : 'No');
-        }
-        if (isset($_POST['ai_check_interval'])) {
-            $changes[] = 'Check Interval: ' . $_POST['ai_check_interval'] . ' minutes';
-        }
-        if (isset($_POST['warning_types'])) {
-            $changes[] = 'Warning Types: ' . implode(', ', $_POST['warning_types']);
-        }
-        if (isset($_POST['weather_analysis_auto_send'])) {
-            $changes[] = 'Weather Analysis Auto-Send: ' . ($_POST['weather_analysis_auto_send'] ? 'Yes' : 'No');
-        }
-        logAdminActivity($adminId, 'update_ai_warning_settings', 'Updated AI warning settings: ' . implode(', ', $changes));
-    }
-
-    ob_clean();
-    echo json_encode(['success' => true, 'message' => 'AI settings saved successfully'], JSON_UNESCAPED_UNICODE);
 }
 
 function sendTestWarning() {
