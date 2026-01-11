@@ -141,6 +141,7 @@ $current = 'alerts.php';
         let refreshInterval = null;
         let isInitialLoad = true;
         let readAlerts = new Set(); // Track read alert IDs
+        let alertsCache = new Map(); // Cache alert data for quick access
         const API_BASE = window.API_BASE_PATH || 'api/';
         const REFRESH_INTERVAL = 5000; // Refresh every 5 seconds for near real-time updates
         
@@ -280,6 +281,8 @@ $current = 'alerts.php';
             alerts.forEach((alert, index) => {
                 const category = alert.category_name || 'General';
                 const config = categoryConfig[category] || categoryConfig['General'];
+                // Cache alert data for quick access
+                alertsCache.set(parseInt(alert.id), alert);
                 const alertCard = createAlertCard(alert, config, isNew && index === 0);
                 
                 if (append) {
@@ -533,47 +536,72 @@ $current = 'alerts.php';
             // Mark as read when viewing details
             markAlertAsRead(parseInt(alertId));
             
-            // Fetch full alert details and show in modal
-            fetch(`${API_BASE}get-alerts.php?status=active&limit=1`)
-                .then(res => res.json())
-                .then(data => {
-                    const alert = data.alerts?.find(a => a.id == alertId);
-                    if (alert) {
-                        const config = categoryConfig[alert.category_name] || categoryConfig['General'];
+            // Try to get alert from cache first
+            const alert = alertsCache.get(parseInt(alertId));
+            
+            if (alert) {
+                // Use cached alert data
+                showAlertModal(alert);
+            } else {
+                // If not in cache, fetch from API
+                const currentLanguage = localStorage.getItem('preferredLanguage') || 'en';
+                let url = `${API_BASE}get-alerts.php?status=active&limit=50`;
+                if (currentLanguage && currentLanguage !== 'en') {
+                    url += `&lang=${encodeURIComponent(currentLanguage)}`;
+                }
+                
+                fetch(url)
+                    .then(res => res.json())
+                    .then(data => {
+                        const foundAlert = data.alerts?.find(a => parseInt(a.id) == parseInt(alertId));
+                        if (foundAlert) {
+                            alertsCache.set(parseInt(foundAlert.id), foundAlert);
+                            showAlertModal(foundAlert);
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: 'Alert not found.'
+                            });
+                        }
+                    })
+                    .catch(() => {
                         Swal.fire({
-                            title: `<i class="fas ${config.icon}" style="color: ${config.color};"></i> ${escapeHtml(alert.title)}`,
-                            html: `
-                                <div style="text-align: left;">
-                                    <div style="margin-bottom: 1rem;">
-                                        <strong style="color: ${config.color};">Category:</strong> ${alert.category_name || 'General'}<br>
-                                        <strong>Time:</strong> ${alert.time_ago || 'Just now'}<br>
-                                        <strong>Date:</strong> ${new Date(alert.created_at).toLocaleString()}
-                                    </div>
-                                    <div style="margin-bottom: 1rem; padding: 1rem; background: #f9fafb; border-radius: 8px;">
-                                        <strong>Message:</strong><br>
-                                        ${escapeHtml(alert.message)}
-                                    </div>
-                                    ${alert.content ? `<div style="padding: 1rem; background: ${config.bgColor}; border-radius: 8px; border-left: 3px solid ${config.color};">
-                                        <strong>What to do:</strong><br>
-                                        ${escapeHtml(alert.content)}
-                                    </div>` : ''}
-                                </div>
-                            `,
-                            icon: null,
-                            showConfirmButton: true,
-                            confirmButtonText: 'Close',
-                            confirmButtonColor: config.color,
-                            width: '700px'
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Failed to load alert details.'
                         });
-                    }
-                })
-                .catch(() => {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'Failed to load alert details.'
                     });
-                });
+            }
+        }
+        
+        function showAlertModal(alert) {
+            const config = categoryConfig[alert.category_name] || categoryConfig['General'];
+            Swal.fire({
+                title: `<i class="fas ${config.icon}" style="color: ${config.color};"></i> ${escapeHtml(alert.title)}`,
+                html: `
+                    <div style="text-align: left;">
+                        <div style="margin-bottom: 1rem;">
+                            <strong style="color: ${config.color};">Category:</strong> ${escapeHtml(alert.category_name || 'General')}<br>
+                            <strong>Time:</strong> ${escapeHtml(alert.time_ago || 'Just now')}<br>
+                            <strong>Date:</strong> ${new Date(alert.created_at).toLocaleString()}
+                        </div>
+                        <div style="margin-bottom: 1rem; padding: 1rem; background: #f9fafb; border-radius: 8px;">
+                            <strong>Message:</strong><br>
+                            ${escapeHtml(alert.message)}
+                        </div>
+                        ${alert.content ? `<div style="padding: 1rem; background: ${config.bgColor}; border-radius: 8px; border-left: 3px solid ${config.color};">
+                            <strong>What to do:</strong><br>
+                            ${escapeHtml(alert.content)}
+                        </div>` : ''}
+                    </div>
+                `,
+                icon: null,
+                showConfirmButton: true,
+                confirmButtonText: 'Close',
+                confirmButtonColor: config.color,
+                width: '700px'
+            });
         }
         
         function shareAlert(alertId) {

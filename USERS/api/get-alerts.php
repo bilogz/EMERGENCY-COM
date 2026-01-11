@@ -209,10 +209,8 @@ try {
                 if ($translated && isset($translated['title'])) {
                     $alert['title'] = $translated['title'];
                     $alert['message'] = $translated['message'] ?? $alert['message'];
-                    if (isset($translated['message']) && !empty($alert['content'])) {
-                        // Try to get full content translation if available
-                        $alert['content'] = $translated['message'];
-                    }
+                    // Note: Translation helper returns 'message' for content, but we preserve original content if translation doesn't have it
+                    // Content field is typically the same as message for most alerts
                 }
             } catch (Exception $e) {
                 // If translation fails, use original alert
