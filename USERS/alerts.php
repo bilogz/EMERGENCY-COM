@@ -133,6 +133,16 @@ $current = 'alerts.php';
             initializeAlerts();
             setupFilters();
             startAutoRefresh();
+            
+            // Reload alerts when language changes
+            document.addEventListener('languageChanged', function(event) {
+                console.log('Language changed, reloading alerts with new language...');
+                // Reset last alert ID so we get all alerts in the new language
+                lastAlertId = 0;
+                lastUpdateTime = null;
+                // Reload alerts with new language
+                loadAlerts(false);
+            });
         });
         
         function initializeAlerts() {
@@ -146,6 +156,12 @@ $current = 'alerts.php';
                 
                 if (category) {
                     url += `&category=${encodeURIComponent(category)}`;
+                }
+                
+                // Get current language preference from localStorage
+                const currentLanguage = localStorage.getItem('preferredLanguage') || 'en';
+                if (currentLanguage && currentLanguage !== 'en') {
+                    url += `&lang=${encodeURIComponent(currentLanguage)}`;
                 }
                 
                 // For incremental updates, use last_id

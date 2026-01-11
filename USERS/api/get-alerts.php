@@ -11,6 +11,17 @@ header('Pragma: no-cache');
 
 require_once 'db_connect.php';
 
+// Load translation helper if available
+$translationHelper = null;
+if (file_exists(__DIR__ . '/../../ADMIN/api/alert-translation-helper.php')) {
+    require_once __DIR__ . '/../../ADMIN/api/alert-translation-helper.php';
+    try {
+        $translationHelper = new AlertTranslationHelper($pdo);
+    } catch (Exception $e) {
+        error_log("Failed to initialize AlertTranslationHelper: " . $e->getMessage());
+    }
+}
+
 try {
     if ($pdo === null) {
         echo json_encode([
@@ -81,6 +92,56 @@ try {
     $stmt->execute();
     $alerts = $stmt->fetchAll();
     
+    // Get language preference from query parameter
+    $targetLanguage = $_GET['lang'] ?? $_GET['language'] ?? null;
+    
+    // If no language in query parameter, try to get from session (for logged-in users)
+    if (!$targetLanguage) {
+        // Start session only if not already started (for logged-in users)
+        if (session_status() === PHP_SESSION_NONE) {
+            @session_start();
+        }
+        
+        if (isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true) {
+            $userId = $_SESSION['user_id'] ?? null;
+            if ($userId) {
+                // Try to get from user preferences
+                try {
+                    $prefStmt = $pdo->prepare("SELECT preferred_language FROM user_preferences WHERE user_id = ? LIMIT 1");
+                    $prefStmt->execute([$userId]);
+                    $pref = $prefStmt->fetch();
+                    if ($pref && !empty($pref['preferred_language'])) {
+                        $targetLanguage = $pref['preferred_language'];
+                    }
+                } catch (PDOException $e) {
+                    // Ignore errors, just continue without translation
+                    error_log("Error getting user language preference: " . $e->getMessage());
+                }
+            }
+        }
+    }
+    
+    // Translate alerts if language is specified and translation helper is available
+    if ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && !empty($alerts)) {
+        foreach ($alerts as &$alert) {
+            try {
+                $translated = $translationHelper->getTranslatedAlert($alert['id'], $targetLanguage, null, $targetLanguage);
+                if ($translated && isset($translated['title'])) {
+                    $alert['title'] = $translated['title'];
+                    $alert['message'] = $translated['message'] ?? $alert['message'];
+                    if (isset($translated['message']) && !empty($alert['content'])) {
+                        // Try to get full content translation if available
+                        $alert['content'] = $translated['message'];
+                    }
+                }
+            } catch (Exception $e) {
+                // If translation fails, use original alert
+                error_log("Translation error for alert {$alert['id']}: " . $e->getMessage());
+            }
+        }
+        unset($alert); // Break reference
+    }
+    
     // Format timestamps
     foreach ($alerts as &$alert) {
         $alert['timestamp'] = $alert['created_at'];
@@ -91,8 +152,9 @@ try {
         'success' => true,
         'alerts' => $alerts,
         'count' => count($alerts),
-        'timestamp' => date('c')
-    ]);
+        'timestamp' => date('c'),
+        'language' => $targetLanguage ?? 'en'
+    ], JSON_UNESCAPED_UNICODE);
     
 } catch (PDOException $e) {
     error_log("Get Alerts API Error: " . $e->getMessage());
