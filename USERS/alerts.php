@@ -241,6 +241,23 @@ $current = 'alerts.php';
                 // Debug: Log translation status
                 if (data.language && data.language !== 'en') {
                     console.log(`Translation requested: ${data.language}, Applied: ${data.translation_applied || false}`);
+                    if (data.debug) {
+                        console.log('Translation debug info:', {
+                            target_language: data.debug.target_language,
+                            alerts_count: data.debug.alerts_count,
+                            translation_attempted: data.debug.translation_attempted,
+                            translation_success: data.debug.translation_success,
+                            ai_service_available: data.debug.ai_service_available,
+                            translation_helper_available: data.translation_helper_available
+                        });
+                    }
+                    if (!data.translation_applied && data.debug) {
+                        console.warn('⚠️ Translations not applied. Check:', {
+                            ai_service_available: data.debug.ai_service_available,
+                            translation_attempted: data.debug.translation_attempted,
+                            translation_success: data.debug.translation_success
+                        });
+                    }
                 }
                 
                 if (data.success && data.alerts) {
