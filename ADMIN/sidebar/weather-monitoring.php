@@ -840,6 +840,9 @@ $pageTitle = 'Weather Monitoring';
                             <button onclick="getAIWeatherAnalysis()" class="ai-analyze-btn">
                                 <i class="fas fa-brain"></i> Analyze Weather
                             </button>
+                            <button onclick="sendWeatherAlert()" class="ai-analyze-btn" style="margin-top: 0.5rem; background: linear-gradient(135deg, #27ae60, #229954);">
+                                <i class="fas fa-paper-plane"></i> Send Alert
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -2266,8 +2269,111 @@ Keep concise and actionable.`;
             html += `<button onclick="getAIWeatherAnalysis()" class="ai-analyze-btn" style="margin-top: 1rem;">
                 <i class="fas fa-sync-alt"></i> Refresh Analysis
             </button>`;
+            html += `<button onclick="sendWeatherAlert()" class="ai-analyze-btn" style="margin-top: 0.5rem; background: linear-gradient(135deg, #27ae60, #229954);">
+                <i class="fas fa-paper-plane"></i> Send Alert
+            </button>`;
             
             container.innerHTML = html;
+        }
+        
+        // Send Weather Alert
+        async function sendWeatherAlert() {
+            const statusBadge = document.getElementById('aiStatus');
+            const container = document.getElementById('aiAnalysis');
+            
+            if (!confirm('Send weather analysis alert to all subscribed users?')) {
+                return;
+            }
+            
+            statusBadge.textContent = 'Sending...';
+            statusBadge.className = 'ai-status loading';
+            
+            try {
+                const response = await fetch('../api/ai-warnings.php?action=sendWeatherAnalysis');
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusBadge.textContent = 'Sent';
+                    statusBadge.className = 'ai-status';
+                    alert(`Alert sent successfully!\n\nRecipients: ${data.recipients || 0}\nNotifications Sent: ${data.notifications_sent || 0}`);
+                    
+                    // Reset status after 3 seconds
+                    setTimeout(() => {
+                        statusBadge.textContent = 'Ready';
+                        statusBadge.className = 'ai-status';
+                    }, 3000);
+                } else {
+                    statusBadge.textContent = 'Error';
+                    statusBadge.className = 'ai-status error';
+                    alert('Error: ' + (data.message || 'Failed to send alert'));
+                }
+            } catch (error) {
+                statusBadge.textContent = 'Error';
+                statusBadge.className = 'ai-status error';
+                console.error('Error sending alert:', error);
+                alert('Error sending alert: ' + error.message);
+            }
+        }
+        
+        // AI Auto-Send Alerts
+        let aiAutoSendInterval = null;
+        
+        async function checkAndStartAIAutoSend() {
+            try {
+                // Get AI settings to check if auto-send is enabled
+                const response = await fetch('../api/ai-warnings.php?action=getSettings');
+                const data = await response.json();
+                
+                if (data.success && data.settings) {
+                    const settings = data.settings;
+                    
+                    // Check if weather analysis auto-send is enabled
+                    if (settings.weather_analysis_auto_send && settings.weather_analysis_interval) {
+                        const intervalMinutes = parseInt(settings.weather_analysis_interval) || 60;
+                        const intervalMs = intervalMinutes * 60 * 1000;
+                        
+                        // Clear existing interval if any
+                        if (aiAutoSendInterval) {
+                            clearInterval(aiAutoSendInterval);
+                        }
+                        
+                        // Set up auto-send interval
+                        aiAutoSendInterval = setInterval(async () => {
+                            try {
+                                console.log('Auto-sending weather analysis alert...');
+                                const sendResponse = await fetch('../api/ai-warnings.php?action=sendWeatherAnalysis');
+                                const sendData = await sendResponse.json();
+                                
+                                if (sendData.success) {
+                                    console.log(`Auto-sent alert to ${sendData.notifications_sent || 0} recipients`);
+                                    // Update status badge if visible
+                                    const statusBadge = document.getElementById('aiStatus');
+                                    if (statusBadge) {
+                                        statusBadge.textContent = 'Auto-Sent';
+                                        setTimeout(() => {
+                                            statusBadge.textContent = 'Ready';
+                                        }, 5000);
+                                    }
+                                } else {
+                                    console.error('Auto-send failed:', sendData.message);
+                                }
+                            } catch (error) {
+                                console.error('Error in auto-send:', error);
+                            }
+                        }, intervalMs);
+                        
+                        console.log(`AI Auto-Send enabled: Sending alerts every ${intervalMinutes} minutes`);
+                    } else {
+                        // Auto-send is disabled, clear interval if exists
+                        if (aiAutoSendInterval) {
+                            clearInterval(aiAutoSendInterval);
+                            aiAutoSendInterval = null;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking AI auto-send settings:', error);
+            }
         }
         
         function parseAIResponse(text) {
@@ -2495,6 +2601,9 @@ Keep concise and actionable.`;
                     }
                 });
             });
+            
+            // Check and start AI auto-send if enabled
+            checkAndStartAIAutoSend();
         });
         
         function renderChartByType(type, forecastData) {

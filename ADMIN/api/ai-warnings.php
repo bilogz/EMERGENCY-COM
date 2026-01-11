@@ -130,7 +130,27 @@ try {
             break;
 
         case 'sendWeatherAnalysis':
-            sendWeatherAnalysisAuto();
+            try {
+                ob_clean();
+                sendWeatherAnalysisAuto();
+                if (ob_get_level()) {
+                    ob_end_flush();
+                }
+            } catch (Exception $e) {
+                ob_clean();
+                error_log("Exception in sendWeatherAnalysisAuto: " . $e->getMessage());
+                error_log("Stack trace: " . $e->getTraceAsString());
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Error sending weather analysis: ' . $e->getMessage()]);
+                exit();
+            } catch (Error $e) {
+                ob_clean();
+                error_log("Fatal error in sendWeatherAnalysisAuto: " . $e->getMessage());
+                error_log("Stack trace: " . $e->getTraceAsString());
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Fatal error sending weather analysis: ' . $e->getMessage()]);
+                exit();
+            }
             break;
 
         case 'getWeatherAnalysis':
@@ -158,7 +178,27 @@ try {
             break;
 
         default:
-            saveAISettings();
+            try {
+                ob_clean();
+                saveAISettings();
+                if (ob_get_level()) {
+                    ob_end_flush();
+                }
+            } catch (Exception $e) {
+                ob_clean();
+                error_log("Exception in saveAISettings: " . $e->getMessage());
+                error_log("Stack trace: " . $e->getTraceAsString());
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Error saving settings: ' . $e->getMessage()]);
+                exit();
+            } catch (Error $e) {
+                ob_clean();
+                error_log("Fatal error in saveAISettings: " . $e->getMessage());
+                error_log("Stack trace: " . $e->getTraceAsString());
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Fatal error saving settings: ' . $e->getMessage()]);
+                exit();
+            }
             break;
     }
 } catch (Exception $e) {
@@ -566,7 +606,7 @@ function saveAISettings() {
     }
 
     // Log admin activity
-    if ($adminId) {
+    if ($adminId && function_exists('logAdminActivity')) {
         $changes = [];
         if (isset($_POST['ai_enabled'])) {
             $changes[] = 'AI Enabled: ' . ($_POST['ai_enabled'] ? 'Yes' : 'No');
@@ -577,10 +617,14 @@ function saveAISettings() {
         if (isset($_POST['warning_types'])) {
             $changes[] = 'Warning Types: ' . implode(', ', $_POST['warning_types']);
         }
+        if (isset($_POST['weather_analysis_auto_send'])) {
+            $changes[] = 'Weather Analysis Auto-Send: ' . ($_POST['weather_analysis_auto_send'] ? 'Yes' : 'No');
+        }
         logAdminActivity($adminId, 'update_ai_warning_settings', 'Updated AI warning settings: ' . implode(', ', $changes));
     }
 
-    echo json_encode(['success' => true, 'message' => 'AI settings saved successfully']);
+    ob_clean();
+    echo json_encode(['success' => true, 'message' => 'AI settings saved successfully'], JSON_UNESCAPED_UNICODE);
 }
 
 function sendTestWarning() {
@@ -1395,17 +1439,26 @@ Keep concise and actionable for public communication.";
                 "AI Weather Analysis sent to {$sentCount} recipients via {$source}");
         }
 
+        ob_clean();
         echo json_encode([
             'success' => true,
             'message' => 'Weather analysis sent successfully',
             'recipients' => count($subscribers),
             'notifications_sent' => $sentCount,
             'alert_id' => $alertId
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
 
     } catch (Exception $e) {
         error_log("Error sending weather analysis: " . $e->getMessage());
-        echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+        error_log("Stack trace: " . $e->getTraceAsString());
+        ob_clean();
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    } catch (Error $e) {
+        error_log("Fatal error sending weather analysis: " . $e->getMessage());
+        ob_clean();
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Fatal error: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
     }
 }
 
