@@ -243,7 +243,55 @@ try {
         exit;
     }
     
-    $input = json_decode(file_get_contents('php://input'), true);
+    // Read and decode JSON input with proper error handling
+    $rawInput = file_get_contents('php://input');
+    if ($rawInput === false) {
+        error_log("Failed to read PHP input stream");
+        if (ob_get_level()) {
+            ob_clean();
+        }
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Failed to read request body'
+        ]);
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
+        exit;
+    }
+    
+    $input = json_decode($rawInput, true);
+    $jsonError = json_last_error();
+    
+    // Check if JSON decoding failed
+    if ($jsonError !== JSON_ERROR_NONE || $input === null) {
+        $errorMessages = [
+            JSON_ERROR_DEPTH => 'Maximum stack depth exceeded',
+            JSON_ERROR_STATE_MISMATCH => 'Underflow or the modes mismatch',
+            JSON_ERROR_CTRL_CHAR => 'Unexpected control character found',
+            JSON_ERROR_SYNTAX => 'Syntax error, malformed JSON',
+            JSON_ERROR_UTF8 => 'Malformed UTF-8 characters, possibly incorrectly encoded'
+        ];
+        $errorMessage = $errorMessages[$jsonError] ?? 'Unknown JSON error';
+        
+        error_log("JSON decode error: {$errorMessage} (code: {$jsonError})");
+        error_log("Raw input (first 200 chars): " . substr($rawInput, 0, 200));
+        
+        if (ob_get_level()) {
+            ob_clean();
+        }
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Invalid JSON in request body',
+            'error' => $errorMessage
+        ]);
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
+        exit;
+    }
     
     if (!isset($input['texts']) || !is_array($input['texts'])) {
         if (ob_get_level()) {
@@ -287,12 +335,16 @@ try {
             ob_clean();
         }
         http_response_code(500);
-        echo json_encode([
+        $response = [
             'success' => false,
             'message' => 'Failed to initialize translation service',
-            'error' => $e->getMessage(),
-            'translations' => $input['texts']
-        ]);
+            'error' => $e->getMessage()
+        ];
+        // Only include translations if input was successfully parsed
+        if (isset($input['texts']) && is_array($input['texts'])) {
+            $response['translations'] = $input['texts'];
+        }
+        echo json_encode($response);
         if (ob_get_level()) {
             ob_end_flush();
         }
@@ -304,12 +356,16 @@ try {
             ob_clean();
         }
         http_response_code(500);
-        echo json_encode([
+        $response = [
             'success' => false,
             'message' => 'Fatal error initializing translation service',
-            'error' => $e->getMessage(),
-            'translations' => $input['texts']
-        ]);
+            'error' => $e->getMessage()
+        ];
+        // Only include translations if input was successfully parsed
+        if (isset($input['texts']) && is_array($input['texts'])) {
+            $response['translations'] = $input['texts'];
+        }
+        echo json_encode($response);
         if (ob_get_level()) {
             ob_end_flush();
         }
