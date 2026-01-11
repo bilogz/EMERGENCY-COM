@@ -7,20 +7,10 @@
 // Suppress any output before headers
 ob_start();
 
-// Set error handler to return JSON instead of HTML
-set_error_handler(function($errno, $errstr, $errfile, $errline) {
-    if (error_reporting() === 0) return false;
-    
-    ob_clean();
-    http_response_code(500);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
-        'success' => false,
-        'message' => 'Server error occurred',
-        'error' => $errstr
-    ]);
-    exit;
-}, E_ALL);
+// Set error reporting
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate, max-age=0');
@@ -35,29 +25,57 @@ if (!file_exists($dbPath)) {
 }
 
 if (!file_exists($dbPath)) {
-    ob_clean();
+    if (ob_get_level()) {
+        ob_clean();
+    }
     http_response_code(500);
     echo json_encode([
         'success' => false,
         'message' => 'Database configuration not found',
         'languages' => []
     ]);
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
     exit;
 }
 
-require_once $dbPath;
-ob_end_clean();
+try {
+    require_once $dbPath;
+} catch (Exception $e) {
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Failed to load database connection',
+        'error' => $e->getMessage(),
+        'languages' => []
+    ]);
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
+    exit;
+}
 
 $action = $_GET['action'] ?? 'list';
 $lastUpdate = $_GET['last_update'] ?? null;
 
 try {
     if ($pdo === null) {
+        if (ob_get_level()) {
+            ob_clean();
+        }
+        http_response_code(500);
         echo json_encode([
             'success' => false,
             'message' => 'Database connection failed',
             'languages' => []
         ]);
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
         exit;
     }
     
@@ -69,11 +87,17 @@ try {
         
         // If checking for updates and no changes, return early
         if ($action === 'check-updates' && $lastUpdate && $dbLastUpdate === $lastUpdate) {
+            if (ob_get_level()) {
+                ob_clean();
+            }
             echo json_encode([
                 'success' => true,
                 'updated' => false,
                 'last_update' => $dbLastUpdate
             ]);
+            if (ob_get_level()) {
+                ob_end_flush();
+            }
             exit;
         }
         
@@ -98,6 +122,9 @@ try {
         // Log for debugging (remove in production if needed)
         // error_log("Languages API: Serving " . count($languages) . " active languages to user/guest");
         
+        if (ob_get_level()) {
+            ob_clean();
+        }
         echo json_encode([
             'success' => true,
             'languages' => $languages,
@@ -161,6 +188,9 @@ try {
             }
         }
         
+        if (ob_get_level()) {
+            ob_clean();
+        }
         echo json_encode([
             'success' => true,
             'detected_language' => $detectedLanguage,
@@ -170,16 +200,28 @@ try {
         ]);
         
     } else {
+        if (ob_get_level()) {
+            ob_clean();
+        }
+        http_response_code(400);
         echo json_encode([
             'success' => false,
             'message' => 'Invalid action'
         ]);
     }
     
+    // Clean output buffer and flush
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
+    
 } catch (PDOException $e) {
     error_log("Languages API Error: " . $e->getMessage());
     
     // Return JSON error instead of HTML
+    if (ob_get_level()) {
+        ob_clean();
+    }
     http_response_code(500);
     echo json_encode([
         'success' => false,
@@ -187,11 +229,17 @@ try {
         'error' => $e->getMessage(),
         'languages' => []
     ]);
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
     exit;
 } catch (Exception $e) {
     error_log("Languages API Error: " . $e->getMessage());
     
     // Return JSON error instead of HTML
+    if (ob_get_level()) {
+        ob_clean();
+    }
     http_response_code(500);
     echo json_encode([
         'success' => false,
@@ -199,6 +247,27 @@ try {
         'error' => $e->getMessage(),
         'languages' => []
     ]);
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
+    exit;
+} catch (Error $e) {
+    error_log("Languages API Fatal Error: " . $e->getMessage());
+    
+    // Return JSON error instead of HTML
+    if (ob_get_level()) {
+        ob_clean();
+    }
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Fatal error occurred',
+        'error' => $e->getMessage(),
+        'languages' => []
+    ]);
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
     exit;
 }
 

@@ -16,8 +16,11 @@ ini_set('log_errors', 1);
 register_shutdown_function(function() {
     $error = error_get_last();
     if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-        ob_clean();
+        if (ob_get_level()) {
+            ob_clean();
+        }
         http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'success' => false,
             'message' => 'Fatal error occurred',
@@ -26,6 +29,9 @@ register_shutdown_function(function() {
             'line' => $error['line'],
             'alerts' => []
         ]);
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
         exit();
     }
 });
@@ -38,7 +44,9 @@ header('Pragma: no-cache');
 try {
     require_once 'db_connect.php';
 } catch (Exception $e) {
-    ob_clean();
+    if (ob_get_level()) {
+        ob_clean();
+    }
     http_response_code(500);
     echo json_encode([
         'success' => false,
@@ -46,6 +54,9 @@ try {
         'error' => $e->getMessage(),
         'alerts' => []
     ]);
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
     exit();
 }
 
@@ -62,11 +73,18 @@ if (file_exists(__DIR__ . '/../../ADMIN/api/alert-translation-helper.php')) {
 
 try {
     if ($pdo === null) {
+        if (ob_get_level()) {
+            ob_clean();
+        }
+        http_response_code(500);
         echo json_encode([
             'success' => false,
             'message' => 'Database connection failed',
             'alerts' => []
         ]);
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
         exit;
     }
     
