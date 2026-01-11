@@ -65,6 +65,7 @@ $pageTitle = 'Weather Monitoring';
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             border: 1px solid var(--border-color-1);
             min-width: 0;
+            min-height: 500px;
         }
         
         #weatherMap {
