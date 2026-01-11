@@ -140,15 +140,15 @@ $pageTitle = 'Mass Notification System';
         </div>
     </div>
 
-    <!-- Notification Modal -->
-    <div id="notificationModal" class="modal" style="display: none;">
+    <!-- Mass Notification Modal -->
+    <div id="massNotificationModal" class="modal" style="display: none;">
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
-                <h2 id="modalTitle">Send Notification</h2>
-                <button class="modal-close" onclick="closeNotificationModal()">&times;</button>
+                <h2 id="massModalTitle">Send Notification</h2>
+                <button class="modal-close" onclick="closeMassNotificationModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <form id="notificationForm">
+                <form id="massNotificationForm">
                     <input type="hidden" id="channelType" name="channel">
                     <div class="form-group">
                         <label for="message">Message *</label>
@@ -184,7 +184,7 @@ $pageTitle = 'Mass Notification System';
                         </select>
                     </div>
                     <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" onclick="closeNotificationModal()">Cancel</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeMassNotificationModal()">Cancel</button>
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-paper-plane"></i> Send Notification
                         </button>
@@ -196,9 +196,9 @@ $pageTitle = 'Mass Notification System';
 
     <script>
         function openChannelModal(channel) {
-            const modal = document.getElementById('notificationModal');
+            const modal = document.getElementById('massNotificationModal');
             const channelType = document.getElementById('channelType');
-            const modalTitle = document.getElementById('modalTitle');
+            const modalTitle = document.getElementById('massModalTitle');
             
             if (!modal || !channelType || !modalTitle) {
                 console.error('Modal elements not found');
@@ -209,21 +209,45 @@ $pageTitle = 'Mass Notification System';
             modalTitle.textContent = `Send ${channel.toUpperCase()} Notification`;
             modal.style.display = 'flex';
             modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
         }
 
-        function closeNotificationModal() {
-            const modal = document.getElementById('notificationModal');
+        function closeMassNotificationModal() {
+            const modal = document.getElementById('massNotificationModal');
             if (modal) {
                 modal.style.display = 'none';
                 modal.classList.remove('show');
+                document.body.style.overflow = '';
             }
-            const form = document.getElementById('notificationForm');
+            const form = document.getElementById('massNotificationForm');
             if (form) {
                 form.reset();
             }
         }
 
-        document.getElementById('notificationForm').addEventListener('submit', function(e) {
+        // Close modal when clicking outside
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('massNotificationModal');
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        closeMassNotificationModal();
+                    }
+                });
+            }
+
+            // Close modal on Escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const modal = document.getElementById('massNotificationModal');
+                    if (modal && modal.classList.contains('show')) {
+                        closeMassNotificationModal();
+                    }
+                }
+            });
+        });
+
+        document.getElementById('massNotificationForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData(this);
             
@@ -235,7 +259,7 @@ $pageTitle = 'Mass Notification System';
             .then(data => {
                 if (data.success) {
                     alert('Notification sent successfully!');
-                    closeNotificationModal();
+                    closeMassNotificationModal();
                     loadNotifications();
                 } else {
                     alert('Error: ' + data.message);
