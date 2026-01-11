@@ -327,10 +327,22 @@ if (!document.getElementById('translation-notice-styles')) {
     document.head.appendChild(style);
 }
 
+// Track if translations are being applied to prevent recursion
+let isApplyingTranslations = false;
+
 // Apply translations to the page
 async function applyTranslations() {
-    const lang = getCurrentLanguage();
-    let translation = translations[lang];
+    // Prevent infinite recursion
+    if (isApplyingTranslations) {
+        console.debug('applyTranslations already in progress, skipping...');
+        return;
+    }
+    
+    isApplyingTranslations = true;
+    
+    try {
+        const lang = getCurrentLanguage();
+        let translation = translations[lang];
     
     // If language is not in static translations, fetch from API
     if (!translation && lang !== 'en') {
@@ -435,7 +447,10 @@ async function applyTranslations() {
         document.title = translation[titleKey];
     }
     
-    console.log(`✓ Translations applied for language: ${lang}`);
+        console.log(`✓ Translations applied for language: ${lang}`);
+    } finally {
+        isApplyingTranslations = false;
+    }
 }
 
 // Export for global access

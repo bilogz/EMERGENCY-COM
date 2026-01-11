@@ -405,10 +405,18 @@ $current = 'alerts.php';
             });
             
             // Translate alert card content if needed (client-side fallback)
-            translateAlertCard(card, alert);
+            // Use setTimeout to avoid blocking and prevent recursion issues
+            setTimeout(() => {
+                translateAlertCard(card, alert).catch(err => {
+                    console.debug(`Translation failed for alert #${alert.id}:`, err);
+                });
+            }, 100);
             
             return card;
         }
+        
+        // Track translation in progress to prevent duplicate calls
+        const translatingCards = new Set();
         
         /**
          * Translate alert card content client-side (fallback if backend translation fails)
@@ -427,6 +435,13 @@ $current = 'alerts.php';
             if (card.dataset.translated === 'true') {
                 return;
             }
+            
+            // Prevent duplicate translation calls for the same card
+            const cardId = `alert-${alert.id}`;
+            if (translatingCards.has(cardId)) {
+                return;
+            }
+            translatingCards.add(cardId);
             
             // Get text elements that need translation
             const titleElement = card.querySelector('h4');
@@ -475,7 +490,7 @@ $current = 'alerts.php';
                 }
                 
                 // Call translation API
-                const apiPath = getApiPath(`api/translate-alert-text.php`);
+                const apiPath = getApiPathForAlerts(`api/translate-alert-text.php`);
                 const response = await fetch(apiPath, {
                     method: 'POST',
                     headers: {
@@ -532,13 +547,17 @@ $current = 'alerts.php';
             } catch (error) {
                 // Silently fail - don't break the UI if translation fails
                 console.debug(`Translation failed for alert #${alert.id}:`, error);
+            } finally {
+                // Remove from translating set
+                translatingCards.delete(cardId);
             }
         }
         
         /**
-         * Get API path helper (if not already defined)
+         * Get API path helper (uses global function if available, otherwise local fallback)
          */
-        function getApiPath(relativePath) {
+        function getApiPathForAlerts(relativePath) {
+            // Use global getApiPath if available (from translations.js)
             if (typeof window.getApiPath === 'function') {
                 return window.getApiPath(relativePath);
             }
