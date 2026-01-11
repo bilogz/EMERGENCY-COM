@@ -2,7 +2,7 @@
 /**
  * Translate Alert Text API
  * Client-side translation endpoint for alert card content
- * Uses LibreTranslate API (self-hosted or public)
+ * Uses Argos Translate (offline) or LibreTranslate API (fallback)
  */
 
 // Prevent any output before headers
@@ -33,8 +33,8 @@ register_shutdown_function(function() {
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate, max-age=0');
 
-// Load LibreTranslate configuration
-function getLibreTranslateConfig() {
+// Load translation service configuration
+function getTranslationConfig() {
     // Try ADMIN/api/config.local.php first
     $adminConfigPath = __DIR__ . '/../../ADMIN/api/config.local.php';
     $userConfigPath = __DIR__ . '/config.local.php';
@@ -57,25 +57,152 @@ function getLibreTranslateConfig() {
         }
     }
     
-    // Default values
+    // Argos Translate configuration (preferred - offline)
+    $argosTranslateUrl = $config['ARGOS_TRANSLATE_URL'] ?? 'http://localhost:5001/translate';
+    
+    // LibreTranslate configuration (fallback)
     $libreTranslateUrl = $config['LIBRETRANSLATE_URL'] ?? 'http://localhost:5000/translate';
     $libreTranslateApiKey = $config['LIBRETRANSLATE_API_KEY'] ?? '';
     
-    // Fallback to public LibreTranslate if localhost is not accessible
-    // User can override this in config.local.php
-    if ($libreTranslateUrl === 'http://localhost:5000/translate') {
-        // Check if we should use public server instead (user can set in config)
-        $libreTranslateUrl = $config['LIBRETRANSLATE_URL'] ?? 'https://libretranslate.com/translate';
-    }
+    // Translation provider preference
+    $translationProvider = $config['TRANSLATION_PROVIDER'] ?? 'argos'; // 'argos' or 'libretranslate'
     
     return [
-        'url' => $libreTranslateUrl,
-        'api_key' => $libreTranslateApiKey
+        'provider' => $translationProvider,
+        'argos_url' => $argosTranslateUrl,
+        'libretranslate_url' => $libreTranslateUrl,
+        'libretranslate_api_key' => $libreTranslateApiKey
     ];
 }
 
 /**
- * Translate text using LibreTranslate API
+ * Translate text using Argos Translate API
+ * @param string $text Text to translate
+ * @param string $targetLang Target language code (e.g., 'es', 'fr')
+ * @param string $sourceLang Source language code (default: 'en')
+ * @return array ['success' => bool, 'translated_text' => string|null, 'error' => string|null]
+ */
+function translateWithArgos($text, $targetLang, $sourceLang = 'en') {
+    if (empty($text)) {
+        return ['success' => true, 'translated_text' => $text, 'error' => null];
+    }
+    
+    // Don't translate if source and target are the same
+    if ($sourceLang === $targetLang) {
+        return ['success' => true, 'translated_text' => $text, 'error' => null];
+    }
+    
+    $config = getTranslationConfig();
+    $apiUrl = $config['argos_url'];
+    
+    // Prepare request payload
+    $data = [
+        'q' => $text,
+        'source' => $sourceLang,
+        'target' => $targetLang
+    ];
+    
+    // Initialize cURL
+    $ch = curl_init($apiUrl);
+    
+    // Set cURL options
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($data),
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+        ],
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => false, // Allow self-signed certs for localhost
+        CURLOPT_SSL_VERIFYHOST => 0
+    ]);
+    
+    // Execute request
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    $curlErrno = curl_errno($ch);
+    curl_close($ch);
+    
+    // Handle cURL errors
+    if ($curlError) {
+        error_log("Argos Translate API cURL error: {$curlError} (code: {$curlErrno})");
+        return [
+            'success' => false,
+            'translated_text' => null,
+            'error' => 'Connection error: ' . $curlError
+        ];
+    }
+    
+    // Handle HTTP errors
+    if ($httpCode !== 200) {
+        $errorMsg = "HTTP {$httpCode}";
+        if ($response) {
+            $errorData = json_decode($response, true);
+            if (isset($errorData['error'])) {
+                $errorMsg = $errorData['error'];
+            }
+        }
+        error_log("Argos Translate API HTTP error: {$errorMsg} (code: {$httpCode})");
+        return [
+            'success' => false,
+            'translated_text' => null,
+            'error' => $errorMsg
+        ];
+    }
+    
+    // Parse response
+    if (!$response) {
+        return [
+            'success' => false,
+            'translated_text' => null,
+            'error' => 'Empty response from translation service'
+        ];
+    }
+    
+    $result = json_decode($response, true);
+    
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        error_log("Argos Translate API JSON decode error: " . json_last_error_msg());
+        return [
+            'success' => false,
+            'translated_text' => null,
+            'error' => 'Invalid JSON response from translation service'
+        ];
+    }
+    
+    // Check for success and translated text
+    if (isset($result['success']) && $result['success'] && isset($result['translatedText'])) {
+        return [
+            'success' => true,
+            'translated_text' => $result['translatedText'],
+            'error' => null
+        ];
+    }
+    
+    // Check for error in response
+    if (isset($result['error'])) {
+        error_log("Argos Translate API error: " . $result['error']);
+        return [
+            'success' => false,
+            'translated_text' => null,
+            'error' => $result['error']
+        ];
+    }
+    
+    // Unknown response format
+    error_log("Argos Translate API unexpected response format: " . substr($response, 0, 200));
+    return [
+        'success' => false,
+        'translated_text' => null,
+        'error' => 'Unexpected response format from translation service'
+    ];
+}
+
+/**
+ * Translate text using LibreTranslate API (fallback)
  * @param string $text Text to translate
  * @param string $targetLang Target language code (e.g., 'es', 'fr')
  * @param string $sourceLang Source language code (default: 'en')
@@ -91,9 +218,9 @@ function translateWithLibreTranslate($text, $targetLang, $sourceLang = 'en') {
         return ['success' => true, 'translated_text' => $text, 'error' => null];
     }
     
-    $config = getLibreTranslateConfig();
-    $apiUrl = $config['url'];
-    $apiKey = $config['api_key'];
+    $config = getTranslationConfig();
+    $apiUrl = $config['libretranslate_url'];
+    $apiKey = $config['libretranslate_api_key'];
     
     // Prepare request payload
     $data = [
@@ -119,8 +246,8 @@ function translateWithLibreTranslate($text, $targetLang, $sourceLang = 'en') {
         CURLOPT_HTTPHEADER => [
             'Content-Type: application/json',
         ],
-        CURLOPT_TIMEOUT => 30, // 30 second timeout for self-hosted instances
-        CURLOPT_CONNECTTIMEOUT => 10, // 10 second connection timeout
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_SSL_VERIFYPEER => true,
         CURLOPT_SSL_VERIFYHOST => 2
     ]);
@@ -132,7 +259,7 @@ function translateWithLibreTranslate($text, $targetLang, $sourceLang = 'en') {
     $curlErrno = curl_errno($ch);
     curl_close($ch);
     
-    // Handle cURL errors (connection timeouts, etc.)
+    // Handle cURL errors
     if ($curlError) {
         error_log("LibreTranslate API cURL error: {$curlError} (code: {$curlErrno})");
         return [
@@ -205,6 +332,35 @@ function translateWithLibreTranslate($text, $targetLang, $sourceLang = 'en') {
         'translated_text' => null,
         'error' => 'Unexpected response format from translation service'
     ];
+}
+
+/**
+ * Translate text using configured translation service
+ * @param string $text Text to translate
+ * @param string $targetLang Target language code
+ * @param string $sourceLang Source language code (default: 'en')
+ * @return array ['success' => bool, 'translated_text' => string|null, 'error' => string|null]
+ */
+function translateText($text, $targetLang, $sourceLang = 'en') {
+    $config = getTranslationConfig();
+    $provider = $config['provider'];
+    
+    // Try Argos Translate first (preferred)
+    if ($provider === 'argos' || $provider === 'auto') {
+        $result = translateWithArgos($text, $targetLang, $sourceLang);
+        if ($result['success']) {
+            return $result;
+        }
+        // If Argos fails and provider is 'auto', fallback to LibreTranslate
+        if ($provider === 'auto') {
+            error_log("Argos Translate failed, falling back to LibreTranslate");
+            return translateWithLibreTranslate($text, $targetLang, $sourceLang);
+        }
+        return $result;
+    }
+    
+    // Use LibreTranslate
+    return translateWithLibreTranslate($text, $targetLang, $sourceLang);
 }
 
 // Clean output buffer before processing
@@ -314,7 +470,7 @@ try {
             continue;
         }
         
-        $result = translateWithLibreTranslate($text, $targetLanguage, $sourceLanguage);
+        $result = translateText($text, $targetLanguage, $sourceLanguage);
         
         if ($result['success'] && isset($result['translated_text'])) {
             $translatedText = trim($result['translated_text']);

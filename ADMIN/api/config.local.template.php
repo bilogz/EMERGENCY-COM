@@ -48,7 +48,11 @@ return [
     'AI_API_KEY_TRANSLATION_BACKUP' => '',  // Backup key for translations (used when primary quota exceeded)
     'AI_API_KEY_ANALYSIS' => '',        // For AI analysis
     
-    // LibreTranslate (FREE - no API key needed for public servers)
+    // Argos Translate (OFFLINE - no API key needed, runs locally)
+    'ARGOS_TRANSLATE_URL' => 'http://localhost:5001/translate',
+    'TRANSLATION_PROVIDER' => 'argos',  // 'argos', 'libretranslate', or 'auto' (tries argos first, falls back to libretranslate)
+    
+    // LibreTranslate (FREE - no API key needed for public servers, fallback option)
     'LIBRETRANSLATE_URL' => 'https://libretranslate.com/translate',
     'LIBRETRANSLATE_API_KEY' => '',     // Leave empty for public servers
     
