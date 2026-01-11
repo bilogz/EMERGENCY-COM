@@ -256,7 +256,25 @@ $current = 'alerts.php';
             const card = document.createElement('div');
             card.className = 'card alert-card';
             card.dataset.alertId = alert.id;
-            card.style.borderLeft = `4px solid ${config.color}`;
+            
+            // Determine severity color based on category (Emergency Alert/Warning/Advisory)
+            let severityColor = config.color;
+            let severityBgColor = config.bgColor || config.color + '15';
+            
+            if (alert.category === 'Emergency Alert') {
+                // EXTREME severity → red
+                severityColor = '#e74c3c';
+                severityBgColor = 'rgba(231, 76, 60, 0.1)';
+                card.style.borderLeft = '4px solid #e74c3c';
+            } else if (alert.category === 'Warning') {
+                // MODERATE severity → yellow
+                severityColor = '#f39c12';
+                severityBgColor = 'rgba(243, 156, 18, 0.1)';
+                card.style.borderLeft = '4px solid #f39c12';
+            } else {
+                // Default to category color
+                card.style.borderLeft = `4px solid ${config.color}`;
+            }
             
             // Add new alert animation class
             if (isNew) {
@@ -264,15 +282,16 @@ $current = 'alerts.php';
                 card.style.animation = 'slideInFromTop 0.5s ease';
             }
             
-            // Determine severity/urgency based on category
-            const isUrgent = ['Bomb Threat', 'Fire', 'Earthquake'].includes(alert.category_name);
+            // Determine severity/urgency based on category or severity category
+            const isUrgent = alert.category === 'Emergency Alert' || ['Bomb Threat', 'Fire', 'Earthquake'].includes(alert.category_name);
             const urgencyBadge = isUrgent ? '<span class="urgent-badge" style="background: #e74c3c; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; margin-left: 0.5rem;">URGENT</span>' : '';
             
             card.innerHTML = `
                 <div class="alert-header" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
-                    <div class="alert-category-badge" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: ${config.bgColor || config.color + '15'}; border-radius: 20px; color: ${config.color}; font-weight: 600; font-size: 0.875rem;">
+                    <div class="alert-category-badge" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: ${severityBgColor}; border-radius: 20px; color: ${severityColor}; font-weight: 600; font-size: 0.875rem;">
                         <i class="fas ${config.icon}"></i>
                         <span>${alert.category_name || 'General'}</span>
+                        ${alert.category ? `<span style="margin-left: 0.5rem; font-size: 0.75rem; opacity: 0.9;">(${alert.category})</span>` : ''}
                         ${urgencyBadge}
                     </div>
                     <span class="alert-time" style="margin-left: auto; font-size: 0.875rem; color: #666; display: flex; align-items: center; gap: 0.25rem;">
@@ -282,7 +301,7 @@ $current = 'alerts.php';
                 </div>
                 <h4 style="margin: 0 0 0.5rem 0; color: #1f2937; font-size: 1.25rem; font-weight: 700;">${escapeHtml(alert.title)}</h4>
                 <p style="margin: 0 0 1rem 0; color: #4b5563; line-height: 1.6;">${escapeHtml(alert.message)}</p>
-                ${alert.content ? `<div class="alert-content" style="margin-bottom: 1rem; padding: 1rem; background: ${config.bgColor || '#f9fafb'}; border-radius: 8px; color: #374151; border-left: 3px solid ${config.color};">${escapeHtml(alert.content)}</div>` : ''}
+                ${alert.content ? `<div class="alert-content" style="margin-bottom: 1rem; padding: 1rem; background: ${severityBgColor}; border-radius: 8px; color: #374151; border-left: 3px solid ${severityColor};">${escapeHtml(alert.content)}</div>` : ''}
                 <div class="alert-actions" style="display: flex; gap: 0.5rem;">
                     <button class="btn btn-primary btn-sm" onclick="viewAlertDetails(${alert.id})">
                         <i class="fas fa-info-circle"></i> View Details

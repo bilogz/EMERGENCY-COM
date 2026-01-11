@@ -33,29 +33,22 @@ if (!isset($_SESSION['admin_username']) || !isset($_SESSION['admin_email'])) {
                 // Check if $pdo is available (it's set in db_connect.php)
                 global $pdo;
                 if (isset($pdo) && $pdo) {
-                    $adminId = $_SESSION['admin_user_id'];
-                    
-                    // Check if admin_user table exists
-                    $useAdminUserTable = false;
-                    try {
-                        $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
-                        $useAdminUserTable = true;
-                    } catch (PDOException $e) {
-                        // admin_user table doesn't exist, use users table
+                    // Load service classes
+                    $servicePath = __DIR__ . '/../../services/AdminService.php';
+                    if (!file_exists($servicePath)) {
+                        $servicePath = __DIR__ . '/../services/AdminService.php';
                     }
                     
-                    if ($useAdminUserTable) {
-                        $stmt = $pdo->prepare("SELECT name, email FROM admin_user WHERE id = ?");
-                    } else {
-                        $stmt = $pdo->prepare("SELECT name, email FROM users WHERE id = ? AND user_type = 'admin'");
-                    }
-                    
-                    $stmt->execute([$adminId]);
-                    $admin = $stmt->fetch(PDO::FETCH_ASSOC);
-                    
-                    if ($admin) {
-                        $_SESSION['admin_username'] = $admin['name'];
-                        $_SESSION['admin_email'] = $admin['email'];
+                    if (file_exists($servicePath)) {
+                        require_once $servicePath;
+                        $adminService = new AdminService($pdo);
+                        $adminId = $_SESSION['admin_user_id'];
+                        $admin = $adminService->getNameAndEmailById($adminId);
+                        
+                        if ($admin) {
+                            $_SESSION['admin_username'] = $admin['name'];
+                            $_SESSION['admin_email'] = $admin['email'];
+                        }
                     }
                 }
             }

@@ -315,6 +315,123 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Error occurred: ' . $e->getMessage()]);
     }
+} elseif ($action === 'processIncident' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Process incident and generate alerts based on severity
+    try {
+        $input = json_decode(file_get_contents('php://input'), true);
+        
+        if (!$input) {
+            throw new Exception('Invalid JSON input');
+        }
+        
+        // Validate required fields
+        $required = ['type', 'severity', 'area'];
+        foreach ($required as $field) {
+            if (!isset($input[$field]) || empty($input[$field])) {
+                throw new Exception("Missing required field: $field");
+            }
+        }
+        
+        // Validate and sanitize inputs
+        $type = strtolower(trim($input['type']));
+        $severity = strtoupper(trim($input['severity']));
+        $area = trim($input['area']);
+        $confidence = isset($input['confidence']) ? floatval($input['confidence']) : 100.00;
+        $description = isset($input['description']) ? trim($input['description']) : null;
+        $source = isset($input['source']) ? trim($input['source']) : 'manual';
+        
+        // Validate incident type
+        $validTypes = ['flood', 'earthquake', 'fire', 'crime', 'typhoon'];
+        if (!in_array($type, $validTypes)) {
+            throw new Exception('Invalid incident type. Must be one of: ' . implode(', ', $validTypes));
+        }
+        
+        // Validate severity
+        $validSeverities = ['LOW', 'MODERATE', 'EXTREME'];
+        if (!in_array($severity, $validSeverities)) {
+            throw new Exception('Invalid severity. Must be one of: LOW, MODERATE, EXTREME');
+        }
+        
+        // Validate confidence (0-100)
+        if ($confidence < 0 || $confidence > 100) {
+            throw new Exception('Confidence must be between 0 and 100');
+        }
+        
+        // Apply confidence downgrade logic: if confidence < 60%, downgrade severity
+        $originalSeverity = $severity;
+        if ($confidence < 60) {
+            $severity = downgradeSeverity($severity);
+            error_log("Incident severity downgraded from $originalSeverity to $severity due to low confidence ($confidence%)");
+        }
+        
+        // Insert incident into database
+        $stmt = $pdo->prepare("
+            INSERT INTO incidents (type, severity, area, confidence, description, source, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'active')
+        ");
+        
+        $stmt->execute([$type, $severity, $area, $confidence, $description, $source]);
+        $incidentId = $pdo->lastInsertId();
+        
+        // Determine if alert should be generated
+        $alertGenerated = false;
+        $alertId = null;
+        $alertCategory = null;
+        
+        if ($severity === 'EXTREME') {
+            // EXTREME → send alert immediately
+            $alertCategory = 'Emergency Alert';
+            $alertMessage = generateAlertMessage($type, $severity, $area, $description);
+            $alertId = createIncidentAlert($pdo, $incidentId, $alertCategory, $alertMessage, $area);
+            $alertGenerated = true;
+            
+        } elseif ($severity === 'MODERATE') {
+            // MODERATE → send alert to affected area only
+            $alertCategory = 'Warning';
+            $alertMessage = generateAlertMessage($type, $severity, $area, $description);
+            $alertId = createIncidentAlert($pdo, $incidentId, $alertCategory, $alertMessage, $area);
+            $alertGenerated = true;
+            
+        } else {
+            // LOW → log incident, no alert generated
+            $alertGenerated = false;
+            error_log("Incident #$incidentId logged (LOW severity, no alert generated): $type in $area");
+        }
+        
+        ob_clean();
+        echo json_encode([
+            'success' => true,
+            'message' => 'Incident processed successfully',
+            'data' => [
+                'incident_id' => $incidentId,
+                'type' => $type,
+                'severity' => $severity,
+                'original_severity' => $originalSeverity,
+                'area' => $area,
+                'confidence' => $confidence,
+                'alert_generated' => $alertGenerated,
+                'alert_id' => $alertId,
+                'alert_category' => $alertCategory
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+        
+    } catch (Exception $e) {
+        ob_clean();
+        error_log("Incident processor error: " . $e->getMessage());
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage()
+        ]);
+    } catch (Error $e) {
+        ob_clean();
+        error_log("Incident processor fatal error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Internal server error'
+        ]);
+    }
 } else {
     ob_clean();
     http_response_code(400);
@@ -323,5 +440,88 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // End output buffering and send output
 ob_end_flush();
+
+/**
+ * Downgrade severity by one level
+ */
+function downgradeSeverity($severity) {
+    $levels = ['EXTREME' => 'MODERATE', 'MODERATE' => 'LOW', 'LOW' => 'LOW'];
+    return $levels[$severity] ?? 'LOW';
+}
+
+/**
+ * Generate alert message based on incident details
+ */
+function generateAlertMessage($type, $severity, $area, $description = null) {
+    $typeNames = [
+        'flood' => 'Flood',
+        'earthquake' => 'Earthquake',
+        'fire' => 'Fire',
+        'crime' => 'Crime',
+        'typhoon' => 'Typhoon'
+    ];
+    
+    $typeName = $typeNames[$type] ?? ucfirst($type);
+    
+    $message = "$typeName alert in $area. ";
+    
+    if ($severity === 'EXTREME') {
+        $message .= "EXTREME SEVERITY - Immediate action required. ";
+    } elseif ($severity === 'MODERATE') {
+        $message .= "Warning - Please take necessary precautions. ";
+    }
+    
+    if ($description) {
+        $message .= $description;
+    } else {
+        $message .= "Stay safe and follow official instructions.";
+    }
+    
+    return $message;
+}
+
+/**
+ * Create alert in database from incident
+ */
+function createIncidentAlert($pdo, $incidentId, $category, $message, $area) {
+    try {
+        // Determine title based on category
+        $title = "$category: " . explode('.', $message)[0];
+        
+        // Check if incident_id column exists
+        $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'incident_id'");
+        $hasIncidentId = $stmt->rowCount() > 0;
+        
+        // Check if category column exists (new category, not category_id)
+        $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'category'");
+        $hasCategory = $stmt->rowCount() > 0;
+        
+        // Check if area column exists
+        $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'area'");
+        $hasArea = $stmt->rowCount() > 0;
+        
+        if ($hasIncidentId && $hasCategory && $hasArea) {
+            // Use new columns if they exist
+            $stmt = $pdo->prepare("
+                INSERT INTO alerts (incident_id, category, area, title, message, status, created_at)
+                VALUES (?, ?, ?, ?, ?, 'active', NOW())
+            ");
+            $stmt->execute([$incidentId, $category, $area, $title, $message]);
+        } else {
+            // Fallback to existing structure
+            $stmt = $pdo->prepare("
+                INSERT INTO alerts (title, message, status, created_at)
+                VALUES (?, ?, 'active', NOW())
+            ");
+            $stmt->execute([$title, $message]);
+        }
+        
+        return $pdo->lastInsertId();
+        
+    } catch (Exception $e) {
+        error_log("Error creating alert: " . $e->getMessage());
+        throw $e;
+    }
+}
 ?>
 

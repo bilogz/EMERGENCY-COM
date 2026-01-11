@@ -213,7 +213,7 @@
 }
 
 .pagination .btn-secondary i {
-    color: white;
+    color: var(--text-color-1);
 }
 
 .pagination span {

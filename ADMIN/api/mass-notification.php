@@ -34,75 +34,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         $recipientsStr = is_array($recipients) ? implode(',', $recipients) : $recipients;
         
         // Create alert entry in database for translation tracking
+        require_once __DIR__ . '/../repositories/AlertRepository.php';
+        $alertRepository = new AlertRepository($pdo);
+        
         $categoryId = null;
         if (isset($_POST['category_id']) && !empty($_POST['category_id'])) {
             $categoryId = intval($_POST['category_id']);
         } else {
             // Try to find or create a "General" category
-            $stmt = $pdo->prepare("SELECT id FROM alert_categories WHERE name = 'General' LIMIT 1");
-            $stmt->execute();
-            $cat = $stmt->fetch();
-            if ($cat) {
-                $categoryId = $cat['id'];
-            }
+            $categoryId = $alertRepository->findOrGetDefaultCategoryId('General');
         }
         
         // Insert alert into alerts table
-        $stmt = $pdo->prepare("
-            INSERT INTO alerts (title, message, content, category_id, status, created_at) 
-            VALUES (?, ?, ?, ?, 'active', NOW())
-        ");
-        $stmt->execute([$title, $message, $message, $categoryId]);
-        $alertId = $pdo->lastInsertId();
+        $alertId = $alertRepository->create($title, $message, $message, $categoryId, 'active');
         
         // Initialize translation helper
         $translationHelper = new AlertTranslationHelper($pdo);
         
-        // Get all subscribers based on recipient selection
+        // Get all subscribers based on recipient selection (using repository)
+        require_once __DIR__ . '/../repositories/SubscriberRepository.php';
+        $subscriberRepository = new SubscriberRepository($pdo);
+        
         $subscribers = [];
         if (is_array($recipients)) {
-            foreach ($recipients as $recipient) {
-                if ($recipient === 'all') {
-                    // Get all active subscribers
-                    $stmt = $pdo->prepare("
-                        SELECT DISTINCT s.user_id, s.channels, s.preferred_language,
-                               u.name, u.email, u.phone
-                        FROM subscriptions s
-                        LEFT JOIN users u ON u.id = s.user_id
-                        WHERE s.status = 'active'
-                    ");
-                    $stmt->execute();
-                    $allSubs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                    $subscribers = array_merge($subscribers, $allSubs);
-                } else {
-                    // Get subscribers for specific category
-                    $stmt = $pdo->prepare("
-                        SELECT DISTINCT s.user_id, s.channels, s.preferred_language,
-                               u.name, u.email, u.phone
-                        FROM subscriptions s
-                        LEFT JOIN users u ON u.id = s.user_id
-                        WHERE s.status = 'active'
-                        AND (s.categories LIKE ? OR s.categories = 'all')
-                    ");
-                    $categoryPattern = "%{$recipient}%";
-                    $stmt->execute([$categoryPattern]);
-                    $catSubs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                    $subscribers = array_merge($subscribers, $catSubs);
-                }
-            }
+            $subscribers = $subscriberRepository->getByRecipients($recipients);
         }
-        
-        // Remove duplicates
-        $uniqueSubscribers = [];
-        $seenUserIds = [];
-        foreach ($subscribers as $sub) {
-            $userId = $sub['user_id'];
-            if (!in_array($userId, $seenUserIds)) {
-                $uniqueSubscribers[] = $sub;
-                $seenUserIds[] = $userId;
-            }
-        }
-        $subscribers = $uniqueSubscribers;
         
         $sentCount = 0;
         $translationStats = ['total' => 0, 'translated' => 0, 'english' => 0];

@@ -14,110 +14,25 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 }
 
 require_once 'db_connect.php';
+require_once __DIR__ . '/../services/AdminService.php';
 
 try {
     $adminId = $_SESSION['admin_user_id'];
+    $currentLoginLogId = $_SESSION['admin_login_log_id'] ?? null;
     
-    // Check if admin_user table exists
-    $useAdminUserTable = false;
-    try {
-        $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
-        $useAdminUserTable = true;
-    } catch (PDOException $e) {
-        // admin_user table doesn't exist, use users table (backward compatibility)
-    }
+    $adminService = new AdminService($pdo);
+    $profileData = $adminService->getCompleteProfile($adminId, $currentLoginLogId);
     
-    if ($useAdminUserTable) {
-        // Get admin details from admin_user table
-        $stmt = $pdo->prepare("
-            SELECT id, user_id, name, username, email, phone, role, status, created_at, updated_at, last_login
-            FROM admin_user
-            WHERE id = ?
-        ");
-    } else {
-        // Fallback to users table
-        $stmt = $pdo->prepare("
-            SELECT id, name, email, phone, status, user_type, created_at, updated_at
-            FROM users
-            WHERE id = ? AND user_type = 'admin'
-        ");
-    }
-    
-    $stmt->execute([$adminId]);
-    $admin = $stmt->fetch();
-    
-    if (!$admin) {
+    if (!$profileData) {
         echo json_encode(["success" => false, "message" => "Admin not found"]);
         exit();
     }
     
-    // Get current login session info
-    $currentLoginLogId = $_SESSION['admin_login_log_id'] ?? null;
-    $currentLoginInfo = null;
-    
-    if ($currentLoginLogId) {
-        $stmt = $pdo->prepare("
-            SELECT login_at, ip_address, user_agent
-            FROM admin_login_logs
-            WHERE id = ? AND admin_id = ?
-        ");
-        $stmt->execute([$currentLoginLogId, $adminId]);
-        $currentLoginInfo = $stmt->fetch();
-    }
-    
-    // Get last login info
-    $stmt = $pdo->prepare("
-        SELECT login_at, ip_address, logout_at, session_duration
-        FROM admin_login_logs
-        WHERE admin_id = ? AND login_status = 'success'
-        ORDER BY login_at DESC
-        LIMIT 1, 1
-    ");
-    $stmt->execute([$adminId]);
-    $lastLogin = $stmt->fetch();
-    
-    // Prepare profile data based on table used
-    if ($useAdminUserTable) {
-        $profileData = [
-            "id" => $admin['id'],
-            "user_id" => $admin['user_id'],
-            "name" => $admin['name'],
-            "username" => $admin['username'],
-            "email" => $admin['email'],
-            "phone" => $admin['phone'],
-            "role" => $admin['role'],
-            "status" => $admin['status'],
-            "created_at" => $admin['created_at'],
-            "updated_at" => $admin['updated_at'],
-            "last_login" => $admin['last_login']
-        ];
-    } else {
-        $profileData = [
-            "id" => $admin['id'],
-            "name" => $admin['name'],
-            "email" => $admin['email'],
-            "phone" => $admin['phone'],
-            "status" => $admin['status'],
-            "user_type" => $admin['user_type'],
-            "created_at" => $admin['created_at'],
-            "updated_at" => $admin['updated_at']
-        ];
-    }
-    
     echo json_encode([
         "success" => true,
-        "profile" => $profileData,
-        "current_login" => $currentLoginInfo ? [
-            "login_at" => $currentLoginInfo['login_at'],
-            "ip_address" => $currentLoginInfo['ip_address'],
-            "user_agent" => $currentLoginInfo['user_agent']
-        ] : null,
-        "last_login" => $lastLogin ? [
-            "login_at" => $lastLogin['login_at'],
-            "ip_address" => $lastLogin['ip_address'],
-            "logout_at" => $lastLogin['logout_at'],
-            "session_duration" => $lastLogin['session_duration']
-        ] : null
+        "profile" => $profileData['profile'],
+        "current_login" => $profileData['current_login'],
+        "last_login" => $profileData['last_login']
     ]);
     
 } catch (PDOException $e) {

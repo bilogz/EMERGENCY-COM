@@ -40,60 +40,22 @@ if (!isset($pdo) || $pdo === null) {
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $action = $_GET['action'] ?? 'list';
     
+    require_once __DIR__ . '/../services/AdminService.php';
+    $adminService = new AdminService($pdo);
+    
     if ($action === 'list') {
         try {
             // Pagination parameters
             $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
             $limit = isset($_GET['limit']) ? min(100, max(10, (int)$_GET['limit'])) : 50; // Default 50, max 100
-            $offset = ($page - 1) * $limit;
             
-            // Get total count for pagination
-            $totalCount = $pdo->query("SELECT COUNT(*) FROM admin_user")->fetchColumn();
-            
-            // Get paginated users from admin_user table
-            $stmt = $pdo->prepare("
-                SELECT id, name, email, role, status, created_at, last_login 
-                FROM admin_user 
-                ORDER BY created_at DESC
-                LIMIT ? OFFSET ?
-            ");
-            $stmt->execute([$limit, $offset]);
-            $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            // Calculate stats (from all users, not just current page)
-            $stats = [
-                'admins' => 0,
-                'staff' => 0,
-                'pending' => 0,
-                'inactive' => 0
-            ];
-            
-            $statsStmt = $pdo->query("
-                SELECT 
-                    SUM(CASE WHEN role IN ('admin', 'super_admin') THEN 1 ELSE 0 END) as admins,
-                    SUM(CASE WHEN role = 'staff' THEN 1 ELSE 0 END) as staff,
-                    SUM(CASE WHEN status = 'pending_approval' THEN 1 ELSE 0 END) as pending,
-                    SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) as inactive
-                FROM admin_user
-            ");
-            $statsRow = $statsStmt->fetch(PDO::FETCH_ASSOC);
-            if ($statsRow) {
-                $stats['admins'] = (int)$statsRow['admins'];
-                $stats['staff'] = (int)$statsRow['staff'];
-                $stats['pending'] = (int)$statsRow['pending'];
-                $stats['inactive'] = (int)$statsRow['inactive'];
-            }
+            $result = $adminService->getAllWithPagination($page, $limit);
             
             echo json_encode([
                 'success' => true,
-                'users' => $users,
-                'stats' => $stats,
-                'pagination' => [
-                    'page' => $page,
-                    'limit' => $limit,
-                    'total' => (int)$totalCount,
-                    'total_pages' => (int)ceil($totalCount / $limit)
-                ]
+                'users' => $result['users'],
+                'stats' => $result['stats'],
+                'pagination' => $result['pagination']
             ]);
         } catch (PDOException $e) {
             error_log('User list error: ' . $e->getMessage());
@@ -104,9 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     if ($action === 'get' && isset($_GET['id'])) {
         try {
-            $stmt = $pdo->prepare("SELECT id, name, email, role, status, created_at, last_login FROM admin_user WHERE id = ?");
-            $stmt->execute([$_GET['id']]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            $user = $adminService->getProfileById($_GET['id']);
             
             if ($user) {
                 echo json_encode(['success' => true, 'user' => $user]);

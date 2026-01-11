@@ -39,6 +39,32 @@ try {
     $lastId = isset($_GET['last_id']) ? (int)$_GET['last_id'] : 0;
     $lastUpdate = $_GET['last_update'] ?? null;
     
+    // Get user area for filtering (if logged in)
+    $userArea = null;
+    if (session_status() === PHP_SESSION_NONE) {
+        @session_start();
+    }
+    
+    if (isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true) {
+        $userId = $_SESSION['user_id'] ?? null;
+        if ($userId) {
+            try {
+                $areaStmt = $pdo->prepare("SELECT barangay FROM users WHERE id = ? LIMIT 1");
+                $areaStmt->execute([$userId]);
+                $user = $areaStmt->fetch();
+                if ($user && !empty($user['barangay'])) {
+                    $userArea = $user['barangay'];
+                }
+            } catch (PDOException $e) {
+                error_log("Error getting user area: " . $e->getMessage());
+            }
+        }
+    }
+    
+    // Check if area column exists in alerts table
+    $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'area'");
+    $hasAreaColumn = $stmt->rowCount() > 0;
+    
     // Build query - prioritize recent alerts
     $query = "
         SELECT 
@@ -51,13 +77,31 @@ try {
             a.updated_at,
             COALESCE(ac.name, 'General') as category_name,
             COALESCE(ac.icon, 'fa-exclamation-triangle') as category_icon,
-            COALESCE(ac.color, '#95a5a6') as category_color
+            COALESCE(ac.color, '#95a5a6') as category_color";
+    
+    // Add area and category if columns exist
+    if ($hasAreaColumn) {
+        $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'category'");
+        $hasCategoryColumn = $stmt->rowCount() > 0;
+        if ($hasCategoryColumn) {
+            $query .= ", a.area, a.category";
+        }
+    }
+    
+    $query .= "
         FROM alerts a
         LEFT JOIN alert_categories ac ON a.category_id = ac.id
         WHERE a.status = :status
     ";
     
     $params = [':status' => $status];
+    
+    // Filter by area if user is logged in and area column exists
+    if ($userArea && $hasAreaColumn) {
+        // Show alerts for user's area OR alerts with NULL area (city-wide)
+        $query .= " AND (a.area = :user_area OR a.area IS NULL OR a.area = '')";
+        $params[':user_area'] = $userArea;
+    }
     
     // Filter by category if provided
     if ($category && $category !== 'all') {
