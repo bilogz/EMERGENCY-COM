@@ -129,12 +129,13 @@ try {
     // 'all' or incremental updates (lastId > 0) shows all alerts
     
     // Severity filtering based on category field (if exists) or category name
+    // Also check for [EXTREME] in title for emergency alerts
     if ($severityFilter === 'emergency_only') {
         if ($hasCategoryColumn) {
-            $query .= " AND a.category = 'Emergency Alert'";
+            $query .= " AND (a.category = 'Emergency Alert' OR a.title LIKE '%[EXTREME]%' OR a.title LIKE '%EXTREME%')";
         } else {
-            // Fallback: filter by category names that are typically emergency-related
-            $query .= " AND ac.name IN ('Earthquake', 'Bomb Threat', 'Fire')";
+            // Fallback: filter by category names that are typically emergency-related OR title contains EXTREME
+            $query .= " AND (ac.name IN ('Earthquake', 'Bomb Threat', 'Fire') OR a.title LIKE '%[EXTREME]%' OR a.title LIKE '%EXTREME%')";
         }
     } elseif ($severityFilter === 'warnings_only') {
         if ($hasCategoryColumn) {

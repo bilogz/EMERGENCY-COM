@@ -32,6 +32,8 @@ $pageTitle = 'Mass Notification System';
     <link rel="stylesheet" href="css/hero.css">
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
+    <!-- Emergency Alert System -->
+    <link rel="stylesheet" href="../header/css/emergency-alert.css">
 </head>
 <body>
     <!-- Include Sidebar Component -->

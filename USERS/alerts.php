@@ -19,11 +19,14 @@ $current = 'alerts.php';
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <!-- Emergency Alert System -->
+    <link rel="stylesheet" href="../ADMIN/header/css/emergency-alert.css">
     <script>
         // Set global API base path for all JS files
         window.API_BASE_PATH = 'api/';
         window.IS_ROOT_CONTEXT = false;
     </script>
+    <script src="../ADMIN/header/js/emergency-alert.js"></script>
     <script src="js/translations.js"></script>
     <script src="js/language-manager.js"></script>
     <script src="js/language-selector-modal.js"></script>

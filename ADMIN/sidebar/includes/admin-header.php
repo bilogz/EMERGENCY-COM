@@ -63,9 +63,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin User';
 $adminEmail = $_SESSION['admin_email'] ?? 'admin@example.com';
 ?>
 
-<link rel="stylesheet" href="css/notification-modal.css">;
-<link rel="stylesheet" href="css/message-modal.css">;
-<link rel="stylesheet" href="css/message-content-modal.css">;
+<link rel="stylesheet" href="css/notification-modal.css">
+<link rel="stylesheet" href="css/message-modal.css">
+<link rel="stylesheet" href="css/message-content-modal.css">
+<!-- Emergency Alert System -->
+<link rel="stylesheet" href="../header/css/emergency-alert.css">
 
 <!-- Admin Header Component -->
 <header class="admin-header">
@@ -931,4 +933,13 @@ document.addEventListener('DOMContentLoaded', function() {
         initGlobalChatNotifications();
     }
 });
+</script>
+
+<!-- Emergency Alert System -->
+<script src="../header/js/emergency-alert.js"></script>
+<script>
+    // Set API endpoint for emergency alerts in admin context
+    if (typeof window.API_BASE_PATH === 'undefined') {
+        window.API_BASE_PATH = '../api/';
+    }
 </script>
