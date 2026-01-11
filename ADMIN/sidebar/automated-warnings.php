@@ -948,6 +948,10 @@ $pageTitle = 'Automated Warning Integration';
                     } else {
                         alert('Error: ' + data.message);
                     }
+                })
+                .catch(error => {
+                    console.error('Error sending test warning:', error);
+                    alert('Error sending test warning: ' + error.message);
                 });
             }
         }

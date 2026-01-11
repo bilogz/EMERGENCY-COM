@@ -57,7 +57,19 @@ if (!$isCronJob && (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_log
     exit();
 }
 
-$action = $_GET['action'] ?? ($_POST['action'] ?? '');
+// Handle action from GET, POST (form data), or JSON body
+$action = $_GET['action'] ?? '';
+if (empty($action) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Check if it's JSON POST
+    $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+    if (strpos($contentType, 'application/json') !== false) {
+        $jsonData = json_decode(file_get_contents('php://input'), true);
+        $action = $jsonData['action'] ?? '';
+    } else {
+        // Form data POST
+        $action = $_POST['action'] ?? '';
+    }
+}
 
 try {
     switch ($action) {
@@ -90,7 +102,27 @@ try {
             break;
 
         case 'test':
-            sendTestWarning();
+            try {
+                ob_clean();
+                sendTestWarning();
+                if (ob_get_level()) {
+                    ob_end_flush();
+                }
+            } catch (Exception $e) {
+                ob_clean();
+                error_log("Exception in sendTestWarning: " . $e->getMessage());
+                error_log("Stack trace: " . $e->getTraceAsString());
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Error sending test warning: ' . $e->getMessage()]);
+                exit();
+            } catch (Error $e) {
+                ob_clean();
+                error_log("Fatal error in sendTestWarning: " . $e->getMessage());
+                error_log("Stack trace: " . $e->getTraceAsString());
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Fatal error sending test warning: ' . $e->getMessage()]);
+                exit();
+            }
             break;
 
         case 'check':
@@ -554,29 +586,39 @@ function saveAISettings() {
 function sendTestWarning() {
     global $pdo;
 
+    // Check database connection
+    if ($pdo === null) {
+        throw new Exception('Database connection not available');
+    }
+
     $adminId = $_SESSION['admin_user_id'] ?? null;
 
     // Create a test warning
     $title = "Test AI Warning - Dangerous Weather Detected";
     $content = "This is a test warning from the AI Auto Warning System. If you receive this, the system is working correctly.";
 
-    // Insert into automated_warnings
-    $stmt = $pdo->prepare("INSERT INTO automated_warnings
-        (source, type, title, content, severity, status)
-        VALUES (?, ?, ?, ?, ?, ?)");
-    $stmt->execute(['ai', 'test', $title, $content, 'high', 'published']);
-    $warningId = $pdo->lastInsertId();
+    try {
+        // Insert into automated_warnings
+        $stmt = $pdo->prepare("INSERT INTO automated_warnings
+            (source, type, title, content, severity, status)
+            VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute(['ai', 'test', $title, $content, 'high', 'published']);
+        $warningId = $pdo->lastInsertId();
 
-    // Log admin activity
-    if ($adminId) {
-        logAdminActivity($adminId, 'test_ai_warning', "Sent test AI warning (ID: {$warningId})");
+        // Log admin activity
+        if ($adminId && function_exists('logAdminActivity')) {
+            logAdminActivity($adminId, 'test_ai_warning', "Sent test AI warning (ID: {$warningId})");
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Test warning created successfully',
+            'warning_id' => $warningId
+        ]);
+    } catch (PDOException $e) {
+        error_log("Database error in sendTestWarning: " . $e->getMessage());
+        throw new Exception('Database error: ' . $e->getMessage());
     }
-
-    echo json_encode([
-        'success' => true,
-        'message' => 'Test warning created successfully',
-        'warning_id' => $warningId
-    ]);
 }
 
 function checkAndSendWarnings() {
