@@ -1,18 +1,17 @@
 <?php
-// Prevent any output before headers
-ob_start();
-
 header('Content-Type: application/json; charset=utf-8');
 
-// Log errors instead of displaying them (prevents JSON parsing errors)
-ini_set('display_errors', 0);
-ini_set('display_startup_errors', 0);
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 require_once 'db_connect.php';   // must define $pdo
 
-// Clean any output buffer before JSON
-ob_clean();
+// Ensure $pdo is valid to prevent static analysis errors
+if (!$pdo) {
+    http_response_code(500);
+    exit(json_encode(["success" => false, "message" => "Database connection failed"]));
+}
 
 $userId = isset($_GET['user_id']) ? $_GET['user_id'] : null;
 
@@ -21,11 +20,14 @@ try {
     $sql = "
         SELECT 
             id,
-            category_id AS category,   -- maps to Alert.category
+            category_id AS category,
             title,
-            message      AS content,   -- maps to Alert.content
-            source,                     -- new field for the source of the alert
-            created_at   AS timestamp -- maps to Alert.timestamp
+            message AS content,
+            source,
+            location,
+            latitude,
+            longitude,
+            created_at AS timestamp
         FROM alerts
     ";
 
@@ -47,40 +49,18 @@ try {
 
     $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Ensure clean output
-    if (ob_get_level()) {
-        ob_clean();
-    }
-    
     echo json_encode([
         "success" => true,
         "message" => "OK",
         "alerts"  => $alerts
     ]);
-    
-    // End output buffering
-    if (ob_get_level()) {
-        ob_end_flush();
-    }
 
 } catch (PDOException $e) {
-    // Log error instead of exposing it
-    error_log("Alerts API DB Error: " . $e->getMessage());
-    
-    // Ensure clean output
-    if (ob_get_level()) {
-        ob_clean();
-    }
-    
+    // TEMP: expose exact DB error so we can fix it
     http_response_code(500);
     echo json_encode([
         "success" => false,
-        "message" => "Database error occurred",
+        "message" => "DB error: " . $e->getMessage(),
         "alerts"  => []
     ]);
-    
-    // End output buffering
-    if (ob_get_level()) {
-        ob_end_flush();
-    }
 }

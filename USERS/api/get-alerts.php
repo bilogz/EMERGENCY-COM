@@ -284,16 +284,27 @@ try {
     
     $query .= " ORDER BY a.created_at DESC, a.id DESC LIMIT :limit";
     
-    $stmt = $pdo->prepare($query);
-    
-    // Bind parameters
-    foreach ($params as $key => $value) {
-        $stmt->bindValue($key, $value);
+    try {
+        $stmt = $pdo->prepare($query);
+        
+        // Bind parameters
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        
+        $stmt->execute();
+        $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Error executing alerts query: " . $e->getMessage());
+        error_log("Query: " . $query);
+        error_log("Params: " . print_r($params, true));
+        
+        // Set alerts to empty array and continue - we'll return empty alerts
+        $alerts = [];
+        
+        // Log the error but continue processing to return a proper response
     }
-    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-    
-    $stmt->execute();
-    $alerts = $stmt->fetchAll();
     
     // Resolve language using priority order:
     // 1. Logged-in user's saved language preference (database)
