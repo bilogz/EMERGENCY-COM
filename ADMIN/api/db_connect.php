@@ -67,12 +67,21 @@ foreach ($connectionAttempts as $attempt) {
 if ($pdo === null) {
     error_log('DB Connection failed after all attempts: ' . $dbError);
     
-    // Only exit for API calls, allow pages to handle error gracefully
-    if (php_sapi_name() !== 'cli' && strpos($_SERVER['REQUEST_URI'] ?? '', '/api/') !== false) {
+    // Check if this file is being called directly (not included)
+    // If it's being included, let the calling script handle the error
+    $isIncluded = false;
+    $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
+    if (count($backtrace) > 1) {
+        // This file was included from another file
+        $isIncluded = true;
+    }
+    
+    // Only exit for direct API calls (not when included), allow pages to handle error gracefully
+    if (!$isIncluded && php_sapi_name() !== 'cli' && strpos($_SERVER['REQUEST_URI'] ?? '', '/api/') !== false) {
         http_response_code(500);
         header('Content-Type: application/json');
         echo json_encode(['success' => false, 'message' => 'Database connection failed.']);
         exit();
     }
-    // For non-API pages, $pdo will be null and pages can check for it
+    // For included files or non-API pages, $pdo will be null and pages can check for it
 }
