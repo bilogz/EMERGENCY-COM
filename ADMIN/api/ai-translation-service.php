@@ -22,35 +22,93 @@ class AITranslationService {
     private $pdo;
     private $apiKey;
     private $apiUrl;
+    private $translationProvider; // 'argos', 'gemini', 'libretranslate', etc.
+    private $argosTranslateUrl;
     
     public function __construct($pdo) {
         $this->pdo = $pdo;
         // Set global $pdo so secure-api-config.php can access it
         $GLOBALS['pdo'] = $pdo;
-        $this->loadApiKey();
-        $this->loadApiUrl();
+        
+        // Load translation provider configuration
+        try {
+            $this->loadTranslationProvider();
+        } catch (Throwable $e) {
+            error_log("Failed to load translation provider: " . $e->getMessage());
+            $this->translationProvider = 'gemini'; // Default fallback
+        }
+        
+        // Try to load API key and URL, but don't fail if they can't be loaded
+        try {
+            $this->loadApiKey();
+        } catch (Throwable $e) {
+            error_log("Failed to load API key in AITranslationService: " . $e->getMessage());
+            $this->apiKey = null;
+        }
+        
+        try {
+            $this->loadApiUrl();
+        } catch (Throwable $e) {
+            error_log("Failed to load API URL in AITranslationService: " . $e->getMessage());
+            // Set a default fallback URL
+            $this->apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+        }
+    }
+    
+    /**
+     * Load translation provider from config (argos, gemini, libretranslate)
+     */
+    private function loadTranslationProvider() {
+        try {
+            // Try config.env.php first (uses getDatabaseConfig)
+            if (file_exists(__DIR__ . '/config.env.php')) {
+                require_once __DIR__ . '/config.env.php';
+                $dbConfig = getDatabaseConfig();
+                $this->translationProvider = $dbConfig['translation_provider'] ?? 'gemini';
+                $this->argosTranslateUrl = $dbConfig['argos_translate_url'] ?? 'http://localhost:5001/translate';
+            }
+            // Also check config.local.php for direct config values
+            elseif (file_exists(__DIR__ . '/config.local.php')) {
+                $localConfig = require __DIR__ . '/config.local.php';
+                $this->translationProvider = $localConfig['TRANSLATION_PROVIDER'] ?? 'gemini';
+                $this->argosTranslateUrl = $localConfig['ARGOS_TRANSLATE_URL'] ?? 'http://localhost:5001/translate';
+            } else {
+                $this->translationProvider = 'gemini';
+                $this->argosTranslateUrl = 'http://localhost:5001/translate';
+            }
+        } catch (Throwable $e) {
+            error_log("Error loading translation provider config: " . $e->getMessage());
+            $this->translationProvider = 'gemini';
+            $this->argosTranslateUrl = 'http://localhost:5001/translate';
+        }
     }
     
     /**
      * Load API URL dynamically based on configured model
      */
     private function loadApiUrl() {
-        // Ensure $pdo is in global scope before requiring secure-api-config.php
-        if (isset($this->pdo)) {
-            $GLOBALS['pdo'] = $this->pdo;
-        }
-        
-        if (file_exists(__DIR__ . '/secure-api-config.php')) {
-            require_once __DIR__ . '/secure-api-config.php';
-            if (function_exists('getGeminiModel')) {
-                $model = getGeminiModel();
-                $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+        try {
+            // Ensure $pdo is in global scope before requiring secure-api-config.php
+            if (isset($this->pdo)) {
+                $GLOBALS['pdo'] = $this->pdo;
+            }
+            
+            if (file_exists(__DIR__ . '/secure-api-config.php')) {
+                require_once __DIR__ . '/secure-api-config.php';
+                if (function_exists('getGeminiModel')) {
+                    $model = getGeminiModel();
+                    $this->apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+                } else {
+                    // Fallback to default if function doesn't exist
+                    $this->apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+                }
             } else {
-                // Fallback to default if function doesn't exist
+                // Fallback to default
                 $this->apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
             }
-        } else {
-            // Fallback to default
+        } catch (Throwable $e) {
+            error_log("Error in loadApiUrl: " . $e->getMessage());
+            // Set default fallback
             $this->apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
         }
     }
@@ -60,31 +118,40 @@ class AITranslationService {
      * Uses 'translation' purpose to get AI_API_KEY_TRANSLATION for alert translations
      */
     private function loadApiKey() {
-        // Ensure $pdo is in global scope before requiring secure-api-config.php
-        if (isset($this->pdo)) {
-            $GLOBALS['pdo'] = $this->pdo;
-        }
-        
-        // Use secure config helper if available
-        if (file_exists(__DIR__ . '/secure-api-config.php')) {
-            require_once __DIR__ . '/secure-api-config.php';
-            // Use 'translation' purpose to get AI_API_KEY_TRANSLATION (AI-Alert-Translator)
-            if (function_exists('getGeminiApiKey')) {
-                $this->apiKey = getGeminiApiKey('translation');
-                if ($this->apiKey) {
-                    return;
+        try {
+            // Ensure $pdo is in global scope before requiring secure-api-config.php
+            if (isset($this->pdo)) {
+                $GLOBALS['pdo'] = $this->pdo;
+            }
+            
+            // Use secure config helper if available
+            if (file_exists(__DIR__ . '/secure-api-config.php')) {
+                require_once __DIR__ . '/secure-api-config.php';
+                // Use 'translation' purpose to get AI_API_KEY_TRANSLATION (AI-Alert-Translator)
+                if (function_exists('getGeminiApiKey')) {
+                    $this->apiKey = getGeminiApiKey('translation');
+                    if ($this->apiKey) {
+                        return;
+                    }
                 }
             }
-        }
-        
-        // Fallback to database (for backward compatibility)
-        try {
-            $stmt = $this->pdo->prepare("SELECT api_key FROM integration_settings WHERE source = 'gemini' LIMIT 1");
-            $stmt->execute();
-            $result = $stmt->fetch();
-            $this->apiKey = $result['api_key'] ?? null;
-        } catch (PDOException $e) {
-            error_log("Failed to load API key: " . $e->getMessage());
+            
+            // Fallback to database (for backward compatibility)
+            if ($this->pdo) {
+                try {
+                    $stmt = $this->pdo->prepare("SELECT api_key FROM integration_settings WHERE source = 'gemini' LIMIT 1");
+                    $stmt->execute();
+                    $result = $stmt->fetch();
+                    $this->apiKey = $result['api_key'] ?? null;
+                } catch (PDOException $e) {
+                    error_log("Failed to load API key from database: " . $e->getMessage());
+                    $this->apiKey = null;
+                }
+            } else {
+                $this->apiKey = null;
+            }
+        } catch (Throwable $e) {
+            error_log("Error in loadApiKey: " . $e->getMessage());
             $this->apiKey = null;
         }
     }
@@ -105,6 +172,13 @@ class AITranslationService {
                 return false;
             }
         }
+        
+        // For Argos Translate, we don't need an API key, just check if URL is configured
+        if ($this->translationProvider === 'argos') {
+            return !empty($this->argosTranslateUrl);
+        }
+        
+        // For Gemini and other services, need API key
         return !empty($this->apiKey);
     }
     
@@ -128,7 +202,7 @@ class AITranslationService {
             }
             return [
                 'success' => false,
-                'error' => 'AI translation service is not configured. Please set up Gemini API key.'
+                'error' => 'Translation service is not configured.'
             ];
         }
         
@@ -139,6 +213,12 @@ class AITranslationService {
             ];
         }
         
+        // Use Argos Translate if configured
+        if ($this->translationProvider === 'argos') {
+            return $this->translateWithArgos($text, $targetLanguage, $sourceLanguage);
+        }
+        
+        // Otherwise use Gemini (default)
         // Get language names for better AI prompts
         $languageNames = $this->getLanguageNames();
         $targetLangName = $languageNames[$targetLanguage] ?? $targetLanguage;
@@ -152,6 +232,14 @@ class AITranslationService {
                   "Text to translate:\n{$text}";
         
         try {
+            // Check if we have required configuration
+            if (empty($this->apiUrl)) {
+                return [
+                    'success' => false,
+                    'error' => 'Translation service URL is not configured'
+                ];
+            }
+            
             $url = $this->apiUrl . "?key=" . urlencode($this->apiKey);
             
             $data = [
@@ -171,13 +259,21 @@ class AITranslationService {
             ];
             
             $ch = curl_init($url);
+            if ($ch === false) {
+                return [
+                    'success' => false,
+                    'error' => 'Failed to initialize CURL'
+                ];
+            }
+            
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Content-Type: application/json'
             ]);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10); // Reduced timeout to fail faster
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5); // Connection timeout
             
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -185,15 +281,17 @@ class AITranslationService {
             curl_close($ch);
             
             if ($curlError) {
+                error_log("CURL Error in translation: " . $curlError);
                 return [
                     'success' => false,
-                    'error' => 'CURL Error: ' . $curlError
+                    'error' => 'Connection error: ' . $curlError
                 ];
             }
             
             if ($httpCode !== 200) {
                 $errorData = json_decode($response, true);
                 $errorMsg = $errorData['error']['message'] ?? 'Unknown API error';
+                error_log("Translation API returned HTTP $httpCode: " . $errorMsg);
                 return [
                     'success' => false,
                     'error' => 'API Error: ' . $errorMsg
@@ -218,11 +316,104 @@ class AITranslationService {
                 ];
             }
             
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log("AI Translation Error: " . $e->getMessage());
+            error_log("Error type: " . get_class($e));
             return [
                 'success' => false,
                 'error' => 'Translation failed: ' . $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * Translate using Argos Translate service
+     * @param string $text Text to translate
+     * @param string $targetLanguage Target language code
+     * @param string $sourceLanguage Source language code (default: 'en')
+     * @return array ['success' => bool, 'translated_text' => string, 'error' => string]
+     */
+    private function translateWithArgos($text, $targetLanguage, $sourceLanguage = 'en') {
+        try {
+            if (empty($this->argosTranslateUrl)) {
+                return [
+                    'success' => false,
+                    'error' => 'Argos Translate URL is not configured'
+                ];
+            }
+            
+            // Map language codes for Argos Translate (e.g., 'fil' -> 'tl')
+            $langMap = ['fil' => 'tl', 'tl' => 'tl'];
+            $argosSource = $langMap[$sourceLanguage] ?? $sourceLanguage;
+            $argosTarget = $langMap[$targetLanguage] ?? $targetLanguage;
+            
+            $data = [
+                'q' => $text,
+                'source' => $argosSource,
+                'target' => $argosTarget
+            ];
+            
+            $ch = curl_init($this->argosTranslateUrl);
+            if ($ch === false) {
+                return [
+                    'success' => false,
+                    'error' => 'Failed to initialize CURL for Argos Translate'
+                ];
+            }
+            
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json'
+            ]);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 5); // Short timeout - fail fast if service is down
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2); // Very short connection timeout
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+            
+            if ($curlError) {
+                error_log("Argos Translate CURL Error: " . $curlError);
+                return [
+                    'success' => false,
+                    'error' => 'Argos Translate service unavailable: ' . $curlError
+                ];
+            }
+            
+            if ($httpCode !== 200) {
+                error_log("Argos Translate returned HTTP $httpCode");
+                return [
+                    'success' => false,
+                    'error' => 'Argos Translate service returned error code: ' . $httpCode
+                ];
+            }
+            
+            $responseData = json_decode($response, true);
+            
+            if (isset($responseData['translatedText'])) {
+                return [
+                    'success' => true,
+                    'translated_text' => trim($responseData['translatedText']),
+                    'source_language' => $sourceLanguage,
+                    'target_language' => $targetLanguage
+                ];
+            } else {
+                error_log("Argos Translate response: " . $response);
+                return [
+                    'success' => false,
+                    'error' => 'Invalid response from Argos Translate service'
+                ];
+            }
+            
+        } catch (Throwable $e) {
+            error_log("Argos Translate Error: " . $e->getMessage());
+            error_log("Error type: " . get_class($e));
+            return [
+                'success' => false,
+                'error' => 'Argos Translate failed: ' . $e->getMessage()
             ];
         }
     }

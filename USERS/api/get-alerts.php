@@ -86,14 +86,35 @@ try {
     exit();
 }
 
-// Load translation helper if available
+// Load translation helper if available - make it completely optional
 $translationHelper = null;
 if (file_exists(__DIR__ . '/../../ADMIN/api/alert-translation-helper.php')) {
-    require_once __DIR__ . '/../../ADMIN/api/alert-translation-helper.php';
     try {
-        $translationHelper = new AlertTranslationHelper($pdo);
-    } catch (Exception $e) {
-        error_log("Failed to initialize AlertTranslationHelper: " . $e->getMessage());
+        // Check if required dependencies exist before requiring
+        $helperFile = __DIR__ . '/../../ADMIN/api/alert-translation-helper.php';
+        $aiServiceFile = __DIR__ . '/../../ADMIN/api/ai-translation-service.php';
+        
+        if (file_exists($aiServiceFile)) {
+            require_once $helperFile;
+            
+            // Try to instantiate, but catch ALL errors including fatal ones
+            try {
+                $translationHelper = new AlertTranslationHelper($pdo);
+            } catch (Throwable $e) {
+                // Catch both Exception and Error (fatal errors)
+                error_log("Failed to initialize AlertTranslationHelper: " . $e->getMessage());
+                error_log("Error type: " . get_class($e));
+                error_log("Stack trace: " . $e->getTraceAsString());
+                $translationHelper = null; // Ensure it's null on failure
+            }
+        } else {
+            error_log("AITranslationService file not found, skipping translation helper");
+        }
+    } catch (Throwable $e) {
+        // Catch any error during file loading or class instantiation
+        error_log("Error loading AlertTranslationHelper: " . $e->getMessage());
+        error_log("Error type: " . get_class($e));
+        $translationHelper = null; // Ensure it's null on failure
     }
 }
 

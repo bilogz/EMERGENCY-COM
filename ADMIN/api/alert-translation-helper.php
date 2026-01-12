@@ -13,7 +13,15 @@ class AlertTranslationHelper {
     
     public function __construct($pdo) {
         $this->pdo = $pdo;
-        $this->aiService = new AITranslationService($pdo);
+        // Try to initialize AI service, but don't fail if it doesn't work
+        try {
+            $this->aiService = new AITranslationService($pdo);
+        } catch (Throwable $e) {
+            // If AI service fails to initialize, log it but continue without it
+            error_log("Failed to initialize AITranslationService: " . $e->getMessage());
+            error_log("Error type: " . get_class($e));
+            $this->aiService = null; // Set to null so we can check if it's available
+        }
     }
     
     /**
@@ -222,8 +230,9 @@ class AlertTranslationHelper {
         }
         
         // Check if AI translation is available
-        if (!$this->aiService->isAvailable()) {
-            // Fallback to original
+        // Check if AI service is available and initialized
+        if (!$this->aiService || !$this->aiService->isAvailable()) {
+            // Fallback to original if AI service is not available
             return $original;
         }
         
@@ -250,6 +259,11 @@ class AlertTranslationHelper {
         }
         
         try {
+            // Check if AI service is available before using it
+            if (!$this->aiService) {
+                return $original; // Return original if AI service is not available
+            }
+            
             // Translate title
             $titleResult = $this->aiService->translate(
                 $original['title'],
