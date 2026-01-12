@@ -15,22 +15,32 @@ ini_set('log_errors', 1);
 // Register shutdown function to catch fatal errors
 register_shutdown_function(function() {
     $error = error_get_last();
-    if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+    if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_RECOVERABLE_ERROR])) {
+        // Log the error for debugging
+        error_log("FATAL ERROR in get-alerts.php: " . $error['message'] . " in " . $error['file'] . " on line " . $error['line']);
+        
         if (ob_get_level()) {
-            ob_clean();
+            @ob_clean();
         }
-        http_response_code(500);
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode([
-            'success' => false,
-            'message' => 'Fatal error occurred',
-            'error' => $error['message'],
-            'file' => $error['file'],
-            'line' => $error['line'],
-            'alerts' => []
-        ]);
+        
+        // Ensure headers haven't been sent
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        
+        try {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Fatal error occurred',
+                'alerts' => []
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (Exception $jsonError) {
+            echo '{"success":false,"message":"Fatal error occurred","alerts":[]}';
+        }
+        
         if (ob_get_level()) {
-            ob_end_flush();
+            @ob_end_flush();
         }
         exit();
     }
@@ -49,19 +59,29 @@ try {
     } else {
         require_once __DIR__ . '/db_connect.php';
     }
-} catch (Exception $e) {
+    
+    // Check if db_connect.php exited (it does on connection failure for API calls)
+    // If we reach here, connection was successful or it's a non-API context
+    if (!isset($pdo)) {
+        throw new Exception('Database connection variable not set');
+    }
+} catch (Throwable $e) {
     if (ob_get_level()) {
-        ob_clean();
+        @ob_clean();
     }
     http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Failed to load database connection',
-        'error' => $e->getMessage(),
-        'alerts' => []
-    ]);
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Failed to load database connection',
+            'alerts' => []
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $jsonError) {
+        echo '{"success":false,"message":"Failed to load database connection","alerts":[]}';
+    }
     if (ob_get_level()) {
-        ob_end_flush();
+        @ob_end_flush();
     }
     exit();
 }
@@ -78,18 +98,23 @@ if (file_exists(__DIR__ . '/../../ADMIN/api/alert-translation-helper.php')) {
 }
 
 try {
-    if ($pdo === null) {
+    if ($pdo === null || !($pdo instanceof PDO)) {
         if (ob_get_level()) {
-            ob_clean();
+            @ob_clean();
         }
         http_response_code(500);
-        echo json_encode([
-            'success' => false,
-            'message' => 'Database connection failed',
-            'alerts' => []
-        ]);
+        header('Content-Type: application/json; charset=utf-8');
+        try {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Database connection failed',
+                'alerts' => []
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (Exception $jsonError) {
+            echo '{"success":false,"message":"Database connection failed","alerts":[]}';
+        }
         if (ob_get_level()) {
-            ob_end_flush();
+            @ob_end_flush();
         }
         exit;
     }
