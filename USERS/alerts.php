@@ -145,8 +145,12 @@ $current = 'alerts.php';
         let isInitialLoad = true;
         let readAlerts = new Set(); // Track read alert IDs
         let alertsCache = new Map(); // Cache alert data for quick access
+        let consecutiveFailures = 0; // Track consecutive API failures
+        let isRetrying = false; // Prevent multiple simultaneous retries
         const API_BASE = window.API_BASE_PATH || 'api/';
         const REFRESH_INTERVAL = 5000; // Refresh every 5 seconds for near real-time updates
+        const MAX_CONSECUTIVE_FAILURES = 3; // Stop retrying after 3 consecutive failures
+        const BACKOFF_MULTIPLIER = 2; // Exponential backoff multiplier
         
         // Category icons and colors mapping
         const categoryConfig = {
@@ -240,6 +244,17 @@ $current = 'alerts.php';
         }
         
         async function loadAlerts(showNewOnly = false) {
+            // Prevent retry loops - stop if too many consecutive failures
+            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && showNewOnly) {
+                // Silently skip refresh attempts after max failures
+                return;
+            }
+            
+            // Prevent multiple simultaneous requests
+            if (isRetrying) {
+                return;
+            }
+            
             try {
                 const category = currentCategory === 'all' ? '' : currentCategory;
                 let url = `${API_BASE}get-alerts.php?status=active&limit=50`;
@@ -286,10 +301,27 @@ $current = 'alerts.php';
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Failed to fetch alerts');
+                    // Check if it's a server error (5xx)
+                    if (response.status >= 500) {
+                        consecutiveFailures++;
+                        throw new Error(`Server error: ${response.status}`);
+                    } else {
+                        // Client errors (4xx) - don't count as consecutive failures for retry logic
+                        throw new Error(`Failed to fetch alerts: ${response.status}`);
+                    }
                 }
                 
                 const data = await response.json();
+                
+                // Check if response indicates failure
+                if (!data || (data.success === false && !data.alerts)) {
+                    consecutiveFailures++;
+                    throw new Error(data?.message || 'Invalid response from server');
+                }
+                
+                // Reset failure counter on success
+                consecutiveFailures = 0;
+                isRetrying = false;
                 
                 // Debug: Log translation status
                 if (data.language && data.language !== 'en') {
@@ -332,17 +364,39 @@ $current = 'alerts.php';
                     showNoAlerts();
                 }
             } catch (error) {
-                console.error('Error loading alerts:', error);
-                if (!isInitialLoad) {
-                    // Don't show error on refresh, just log it
-                    return;
+                // Only log error once per failure sequence, not on every retry
+                if (consecutiveFailures === 1 || !showNewOnly) {
+                    console.error('Error loading alerts:', error);
                 }
-                document.getElementById('alertsContainer').innerHTML = `
-                    <div style="text-align: center; padding: 2rem; color: #e74c3c;">
-                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-                        <p>Failed to load alerts. Please refresh the page.</p>
-                    </div>
-                `;
+                
+                // Show error only on initial load
+                if (isInitialLoad) {
+                    document.getElementById('alertsContainer').innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: #e74c3c;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                            <p>Failed to load alerts. Please refresh the page.</p>
+                            ${consecutiveFailures >= MAX_CONSECUTIVE_FAILURES ? '<p style="font-size: 0.9rem; color: #95a5a6; margin-top: 0.5rem;">Connection issues detected. Retrying automatically...</p>' : ''}
+                        </div>
+                    `;
+                }
+                
+                // If we've hit max failures, implement exponential backoff
+                if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && !isRetrying) {
+                    isRetrying = true;
+                    const backoffDelay = REFRESH_INTERVAL * Math.pow(BACKOFF_MULTIPLIER, consecutiveFailures - MAX_CONSECUTIVE_FAILURES);
+                    const maxBackoff = 60000; // Max 60 seconds
+                    const delay = Math.min(backoffDelay, maxBackoff);
+                    
+                    // Reset after backoff period
+                    setTimeout(() => {
+                        consecutiveFailures = 0;
+                        isRetrying = false;
+                        // Retry once after backoff
+                        if (!isInitialLoad) {
+                            loadAlerts(false);
+                        }
+                    }, delay);
+                }
             }
         }
         

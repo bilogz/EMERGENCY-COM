@@ -94,14 +94,14 @@ try {
         exit;
     }
     
-    // Get query parameters
-    $category = $_GET['category'] ?? null;
-    $status = $_GET['status'] ?? 'active';
-    $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
-    $lastId = isset($_GET['last_id']) ? (int)$_GET['last_id'] : 0;
-    $lastUpdate = $_GET['last_update'] ?? null;
-    $timeFilter = $_GET['time_filter'] ?? 'recent'; // recent (24h), older, all
-    $severityFilter = $_GET['severity_filter'] ?? null; // emergency_only, warnings_only, null (all)
+    // Get query parameters with validation
+    $category = isset($_GET['category']) && $_GET['category'] !== '' ? trim($_GET['category']) : null;
+    $status = isset($_GET['status']) && $_GET['status'] !== '' ? trim($_GET['status']) : 'active';
+    $limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 50; // Clamp between 1-100
+    $lastId = isset($_GET['last_id']) ? max(0, (int)$_GET['last_id']) : 0;
+    $lastUpdate = isset($_GET['last_update']) && $_GET['last_update'] !== '' ? trim($_GET['last_update']) : null;
+    $timeFilter = isset($_GET['time_filter']) && in_array($_GET['time_filter'], ['recent', 'older', 'all']) ? $_GET['time_filter'] : 'recent';
+    $severityFilter = isset($_GET['severity_filter']) && in_array($_GET['severity_filter'], ['emergency_only', 'warnings_only']) ? $_GET['severity_filter'] : null;
     
     // Get user area for filtering (if logged in)
     $userArea = null;
@@ -181,42 +181,69 @@ try {
     }
     
     // Build query - prioritize recent alerts
-    $query = "
-        SELECT 
-            a.id,
-            a.title,
-            a.message,
-            a.content,
-            a.status,
-            a.created_at,
-            a.updated_at,
-            COALESCE(ac.name, 'General') as category_name,
-            COALESCE(ac.icon, 'fa-exclamation-triangle') as category_icon,
-            COALESCE(ac.color, '#95a5a6') as category_color";
-    
-    // Add area and category if columns exist
-    if ($hasAreaColumn || $hasCategoryColumn) {
-        $addFields = [];
-        if ($hasAreaColumn) {
-            $addFields[] = "a.area";
-        }
-        if ($hasCategoryColumn) {
-            $addFields[] = "a.category";
-        }
-        if (!empty($addFields)) {
-            $query .= ", " . implode(", ", $addFields);
-        }
-    }
-    
-    $query .= "
-        FROM alerts a";
-    
-    // Only join alert_categories if the table exists
     if ($categoriesTableExists) {
-        $query .= " LEFT JOIN alert_categories ac ON a.category_id = ac.id";
+        // Use JOIN when categories table exists
+        $query = "
+            SELECT 
+                a.id,
+                a.title,
+                a.message,
+                a.content,
+                a.status,
+                a.created_at,
+                a.updated_at,
+                COALESCE(ac.name, 'General') as category_name,
+                COALESCE(ac.icon, 'fa-exclamation-triangle') as category_icon,
+                COALESCE(ac.color, '#95a5a6') as category_color";
+        
+        // Add area and category if columns exist
+        if ($hasAreaColumn || $hasCategoryColumn) {
+            $addFields = [];
+            if ($hasAreaColumn) {
+                $addFields[] = "a.area";
+            }
+            if ($hasCategoryColumn) {
+                $addFields[] = "a.category";
+            }
+            if (!empty($addFields)) {
+                $query .= ", " . implode(", ", $addFields);
+            }
+        }
+        
+        $query .= "
+            FROM alerts a
+            LEFT JOIN alert_categories ac ON a.category_id = ac.id";
     } else {
-        // Create a dummy alias for compatibility
-        $query .= " LEFT JOIN (SELECT NULL as id, NULL as name, NULL as icon, NULL as color) ac ON 1=0";
+        // No categories table - use literal values
+        $query = "
+            SELECT 
+                a.id,
+                a.title,
+                a.message,
+                a.content,
+                a.status,
+                a.created_at,
+                a.updated_at,
+                'General' as category_name,
+                'fa-exclamation-triangle' as category_icon,
+                '#95a5a6' as category_color";
+        
+        // Add area and category if columns exist
+        if ($hasAreaColumn || $hasCategoryColumn) {
+            $addFields = [];
+            if ($hasAreaColumn) {
+                $addFields[] = "a.area";
+            }
+            if ($hasCategoryColumn) {
+                $addFields[] = "a.category";
+            }
+            if (!empty($addFields)) {
+                $query .= ", " . implode(", ", $addFields);
+            }
+        }
+        
+        $query .= "
+            FROM alerts a";
     }
     
     $query .= " WHERE a.status = :status";
@@ -233,6 +260,10 @@ try {
     // Filter by category if provided and categories table exists
     if ($category && $category !== 'all' && $categoriesTableExists) {
         $query .= " AND (ac.name = :category OR (:category = 'General' AND ac.name IS NULL))";
+        $params[':category'] = $category;
+    } elseif ($category && $category !== 'all' && $hasCategoryColumn) {
+        // Fallback: filter by category column if it exists
+        $query .= " AND a.category = :category";
         $params[':category'] = $category;
     }
     
@@ -282,7 +313,7 @@ try {
         $params[':last_update'] = $lastUpdateTime;
     }
     
-    $query .= " ORDER BY a.created_at DESC, a.id DESC LIMIT :limit";
+    $query .= " ORDER BY a.created_at DESC, a.id DESC LIMIT " . (int)$limit;
     
     try {
         $stmt = $pdo->prepare($query);
@@ -291,19 +322,28 @@ try {
         foreach ($params as $key => $value) {
             $stmt->bindValue($key, $value);
         }
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         
         $stmt->execute();
         $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Ensure alerts is always an array
+        if (!is_array($alerts)) {
+            $alerts = [];
+        }
     } catch (PDOException $e) {
         error_log("Error executing alerts query: " . $e->getMessage());
         error_log("Query: " . $query);
         error_log("Params: " . print_r($params, true));
+        error_log("Stack trace: " . $e->getTraceAsString());
         
         // Set alerts to empty array and continue - we'll return empty alerts
         $alerts = [];
         
         // Log the error but continue processing to return a proper response
+    } catch (Exception $e) {
+        error_log("Unexpected error executing alerts query: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
+        $alerts = [];
     }
     
     // Resolve language using priority order:
@@ -311,7 +351,13 @@ try {
     // 2. Global language selector (UI language icon - query parameter)
     // 3. Guest browser language detection
     // 4. System default language (English)
-    $targetLanguage = resolveAlertLanguage($pdo);
+    $targetLanguage = 'en'; // Default fallback
+    try {
+        $targetLanguage = resolveAlertLanguage($pdo);
+    } catch (Exception $e) {
+        error_log("Error resolving alert language: " . $e->getMessage());
+        $targetLanguage = 'en'; // Fallback to English
+    }
     
     // Translate alerts if language is specified and translation helper is available
     $translationApplied = false;
@@ -393,8 +439,14 @@ try {
     
     // Format timestamps
     foreach ($alerts as &$alert) {
-        $alert['timestamp'] = $alert['created_at'];
-        $alert['time_ago'] = getTimeAgo($alert['created_at']);
+        try {
+            $alert['timestamp'] = $alert['created_at'] ?? '';
+            $alert['time_ago'] = getTimeAgo($alert['created_at'] ?? '');
+        } catch (Exception $e) {
+            // If timestamp formatting fails, use defaults
+            $alert['timestamp'] = $alert['created_at'] ?? '';
+            $alert['time_ago'] = 'Recently';
+        }
     }
     unset($alert); // Break reference
     
@@ -418,21 +470,30 @@ try {
         error_log("Translation Debug - Language: {$targetLanguage}, Alerts: {$finalAlertsCount}, Helper: " . ($translationHelper ? 'yes' : 'no') . ", Attempted: {$translationAttempted}, Success: {$translationSuccess}");
     }
     
+    // Ensure alerts is always an array before encoding
+    if (!is_array($alerts)) {
+        $alerts = [];
+        $finalAlertsCount = 0;
+    }
+    
     // Ensure clean output before JSON
     if (ob_get_level()) {
         ob_clean();
     }
     
-    echo json_encode([
+    // Always return valid JSON response
+    $response = [
         'success' => true,
         'alerts' => $alerts,
         'count' => $finalAlertsCount,
         'timestamp' => date('c'),
         'language' => $targetLanguage ?? 'en',
-        'translation_applied' => $translationApplied,
+        'translation_applied' => $translationApplied ?? false,
         'translation_helper_available' => $translationHelper !== null,
-        'debug' => $debugInfo
-    ], JSON_UNESCAPED_UNICODE);
+        'debug' => $debugInfo ?? []
+    ];
+    
+    echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
     
     if (ob_get_level()) {
         ob_end_flush();
