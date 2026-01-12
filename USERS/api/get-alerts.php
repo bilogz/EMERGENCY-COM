@@ -129,9 +129,12 @@ try {
     $tableExists = false;
     try {
         $checkTable = $pdo->query("SHOW TABLES LIKE 'alerts'");
-        $tableExists = $checkTable->rowCount() > 0;
+        $tableExists = $checkTable !== false && $checkTable->rowCount() > 0;
     } catch (PDOException $e) {
         error_log("Error checking alerts table: " . $e->getMessage());
+        $tableExists = false;
+    } catch (Exception $e) {
+        error_log("Unexpected error checking alerts table: " . $e->getMessage());
         $tableExists = false;
     }
     
@@ -139,7 +142,7 @@ try {
         if (ob_get_level()) {
             ob_clean();
         }
-        http_response_code(500);
+        http_response_code(200); // Return 200 with error message instead of 500
         echo json_encode([
             'success' => false,
             'message' => 'Alerts table does not exist',
@@ -155,9 +158,12 @@ try {
     $categoriesTableExists = false;
     try {
         $checkCategoriesTable = $pdo->query("SHOW TABLES LIKE 'alert_categories'");
-        $categoriesTableExists = $checkCategoriesTable->rowCount() > 0;
+        $categoriesTableExists = $checkCategoriesTable !== false && $checkCategoriesTable->rowCount() > 0;
     } catch (PDOException $e) {
         error_log("Error checking alert_categories table: " . $e->getMessage());
+        $categoriesTableExists = false;
+    } catch (Exception $e) {
+        error_log("Unexpected error checking alert_categories table: " . $e->getMessage());
         $categoriesTableExists = false;
     }
     
@@ -166,17 +172,23 @@ try {
     $hasCategoryColumn = false;
     try {
         $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'area'");
-        $hasAreaColumn = $stmt->rowCount() > 0;
+        $hasAreaColumn = $stmt !== false && $stmt->rowCount() > 0;
     } catch (PDOException $e) {
         error_log("Error checking area column: " . $e->getMessage());
+        $hasAreaColumn = false;
+    } catch (Exception $e) {
+        error_log("Unexpected error checking area column: " . $e->getMessage());
         $hasAreaColumn = false;
     }
     
     try {
         $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'category'");
-        $hasCategoryColumn = $stmt->rowCount() > 0;
+        $hasCategoryColumn = $stmt !== false && $stmt->rowCount() > 0;
     } catch (PDOException $e) {
         error_log("Error checking category column: " . $e->getMessage());
+        $hasCategoryColumn = false;
+    } catch (Exception $e) {
+        error_log("Unexpected error checking category column: " . $e->getMessage());
         $hasCategoryColumn = false;
     }
     
@@ -315,15 +327,28 @@ try {
     
     $query .= " ORDER BY a.created_at DESC, a.id DESC LIMIT " . (int)$limit;
     
+    // Initialize alerts array before query execution
+    $alerts = [];
+    
     try {
         $stmt = $pdo->prepare($query);
+        
+        if ($stmt === false) {
+            throw new Exception("Failed to prepare query");
+        }
         
         // Bind parameters
         foreach ($params as $key => $value) {
             $stmt->bindValue($key, $value);
         }
         
-        $stmt->execute();
+        $executeResult = $stmt->execute();
+        
+        if ($executeResult === false) {
+            $errorInfo = $stmt->errorInfo();
+            throw new PDOException("Query execution failed: " . ($errorInfo[2] ?? 'Unknown error'));
+        }
+        
         $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // Ensure alerts is always an array
@@ -389,9 +414,14 @@ try {
     }
     
     // Check condition: targetLanguage must be set and not 'en', translationHelper must exist, and alerts must not be empty
-    if ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && $alertsCount > 0) {
+    if ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && $alertsCount > 0 && is_array($alerts)) {
         foreach ($alerts as &$alert) {
             try {
+                // Ensure alert is a valid array with an ID
+                if (!is_array($alert) || !isset($alert['id'])) {
+                    continue;
+                }
+                
                 $translationAttempted++;
                 $translated = $translationHelper->getTranslatedAlert($alert['id'], $targetLanguage, null, $targetLanguage);
                 if ($translated && isset($translated['title'])) {
@@ -426,7 +456,10 @@ try {
                 }
             } catch (Exception $e) {
                 // If translation fails, use original alert (silently fail to avoid breaking the API)
-                error_log("Translation error for alert {$alert['id']} (lang: {$targetLanguage}): " . $e->getMessage());
+                error_log("Translation error for alert " . (isset($alert['id']) ? $alert['id'] : 'unknown') . " (lang: {$targetLanguage}): " . $e->getMessage());
+            } catch (Error $e) {
+                // Catch fatal errors too
+                error_log("Fatal translation error: " . $e->getMessage());
             }
         }
         unset($alert); // Break reference
@@ -437,18 +470,23 @@ try {
         }
     }
     
-    // Format timestamps
-    foreach ($alerts as &$alert) {
-        try {
-            $alert['timestamp'] = $alert['created_at'] ?? '';
-            $alert['time_ago'] = getTimeAgo($alert['created_at'] ?? '');
-        } catch (Exception $e) {
-            // If timestamp formatting fails, use defaults
-            $alert['timestamp'] = $alert['created_at'] ?? '';
-            $alert['time_ago'] = 'Recently';
+    // Format timestamps - ensure we have a valid array
+    if (is_array($alerts) && !empty($alerts)) {
+        foreach ($alerts as &$alert) {
+            try {
+                if (!is_array($alert)) {
+                    continue;
+                }
+                $alert['timestamp'] = isset($alert['created_at']) ? $alert['created_at'] : '';
+                $alert['time_ago'] = getTimeAgo($alert['created_at'] ?? '');
+            } catch (Exception $e) {
+                // If timestamp formatting fails, use defaults
+                $alert['timestamp'] = isset($alert['created_at']) ? $alert['created_at'] : '';
+                $alert['time_ago'] = 'Recently';
+            }
         }
+        unset($alert); // Break reference
     }
-    unset($alert); // Break reference
     
     // Calculate final counts after all processing
     $finalAlertsCount = is_array($alerts) ? count($alerts) : 0;
@@ -505,60 +543,81 @@ try {
     
     // Ensure clean output
     if (ob_get_level()) {
-        ob_clean();
+        @ob_clean();
     }
     
     http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Database error occurred',
-        'error' => $e->getMessage(),
-        'alerts' => []
-    ]);
+    header('Content-Type: application/json; charset=utf-8');
+    
+    try {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Database error occurred',
+            'alerts' => []
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $jsonError) {
+        // Fallback if JSON encoding fails
+        echo '{"success":false,"message":"Database error occurred","alerts":[]}';
+    }
     
     if (ob_get_level()) {
-        ob_end_flush();
+        @ob_end_flush();
     }
+    exit;
 } catch (Exception $e) {
     error_log("Get Alerts API Error: " . $e->getMessage());
     error_log("Stack trace: " . $e->getTraceAsString());
     
     // Ensure clean output
     if (ob_get_level()) {
-        ob_clean();
+        @ob_clean();
     }
     
     http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Server error occurred',
-        'error' => $e->getMessage(),
-        'alerts' => []
-    ]);
+    header('Content-Type: application/json; charset=utf-8');
+    
+    try {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Server error occurred',
+            'alerts' => []
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $jsonError) {
+        // Fallback if JSON encoding fails
+        echo '{"success":false,"message":"Server error occurred","alerts":[]}';
+    }
     
     if (ob_get_level()) {
-        ob_end_flush();
+        @ob_end_flush();
     }
+    exit;
 } catch (Error $e) {
     error_log("Get Alerts API Fatal Error: " . $e->getMessage());
     error_log("Stack trace: " . $e->getTraceAsString());
     
     // Ensure clean output
     if (ob_get_level()) {
-        ob_clean();
+        @ob_clean();
     }
     
     http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Fatal error occurred',
-        'error' => $e->getMessage(),
-        'alerts' => []
-    ]);
+    header('Content-Type: application/json; charset=utf-8');
+    
+    try {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Fatal error occurred',
+            'alerts' => []
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $jsonError) {
+        // Fallback if JSON encoding fails
+        echo '{"success":false,"message":"Fatal error occurred","alerts":[]}';
+    }
     
     if (ob_get_level()) {
-        ob_end_flush();
+        @ob_end_flush();
     }
+    exit;
 }
 
 /**
