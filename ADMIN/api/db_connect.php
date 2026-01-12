@@ -11,10 +11,35 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
 // Load secure configuration
-require_once __DIR__ . '/config.env.php';
+$pdo = null;
+$dbError = null;
+$dbConfig = null;
 
-// Get database configuration
-$dbConfig = getDatabaseConfig();
+try {
+    if (!file_exists(__DIR__ . '/config.env.php')) {
+        throw new Exception('config.env.php file not found');
+    }
+    require_once __DIR__ . '/config.env.php';
+    
+    // Check if getDatabaseConfig function exists
+    if (!function_exists('getDatabaseConfig')) {
+        throw new Exception('getDatabaseConfig function not found in config.env.php');
+    }
+    
+    // Get database configuration
+    $dbConfig = getDatabaseConfig();
+    
+    // Validate config structure
+    if (!is_array($dbConfig) || !isset($dbConfig['primary']) || !isset($dbConfig['fallback'])) {
+        throw new Exception('Invalid database configuration structure');
+    }
+} catch (Exception $configError) {
+    error_log('ADMIN: Config loading error: ' . $configError->getMessage());
+    $pdo = null;
+    $dbError = 'Configuration error: ' . $configError->getMessage();
+    $dbConfig = null;
+    // Don't exit here - let the calling script handle it
+}
 
 $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -23,16 +48,15 @@ $options = [
     PDO::ATTR_TIMEOUT            => 5, // 5 second timeout
 ];
 
-$pdo = null;
-$dbError = null;
+// Only attempt connection if config was loaded successfully
+if ($dbConfig !== null) {
+    // Build connection attempts from config
+    $connectionAttempts = [
+        $dbConfig['primary'],
+        $dbConfig['fallback'],
+    ];
 
-// Build connection attempts from config
-$connectionAttempts = [
-    $dbConfig['primary'],
-    $dbConfig['fallback'],
-];
-
-foreach ($connectionAttempts as $attempt) {
+    foreach ($connectionAttempts as $attempt) {
     try {
         // Connect without database first to check/create it
         $dsn = "mysql:host={$attempt['host']};port={$attempt['port']};charset={$dbConfig['charset']}";
@@ -61,6 +85,7 @@ foreach ($connectionAttempts as $attempt) {
         $pdo = null;
         // Continue to next attempt
     }
+    }
 }
 
 // If all attempts failed, log the error
@@ -68,11 +93,33 @@ if ($pdo === null) {
     error_log('DB Connection failed after all attempts: ' . $dbError);
     
     // Check if this file is being called directly (not included)
-    // If it's being included, let the calling script handle the error
+    // Compare the script being executed with this file
     $isIncluded = false;
-    $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
-    if (count($backtrace) > 1) {
-        // This file was included from another file
+    if (isset($_SERVER['SCRIPT_FILENAME'])) {
+        $scriptFile = $_SERVER['SCRIPT_FILENAME'];
+        $thisFile = __FILE__;
+        
+        // Try to get real paths for more accurate comparison
+        $scriptFileReal = @realpath($scriptFile);
+        $thisFileReal = @realpath($thisFile);
+        
+        if ($scriptFileReal && $thisFileReal) {
+            // Use real paths if available
+            $scriptFile = $scriptFileReal;
+            $thisFile = $thisFileReal;
+        }
+        
+        // Normalize paths for comparison (handle Windows/Unix differences)
+        // Convert to lowercase and normalize separators
+        $scriptFile = strtolower(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $scriptFile));
+        $thisFile = strtolower(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $thisFile));
+        
+        // If the script file is different from this file, it means this file was included
+        if ($scriptFile !== $thisFile) {
+            $isIncluded = true;
+        }
+    } else {
+        // If SCRIPT_FILENAME is not set, assume it's included (safer default)
         $isIncluded = true;
     }
     
