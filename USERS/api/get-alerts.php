@@ -150,70 +150,80 @@ try {
         }
     }
     
-    // Check if alerts table exists first
+    // Check if alerts table exists first - use a simpler method
     $tableExists = false;
     try {
-        $checkTable = $pdo->query("SHOW TABLES LIKE 'alerts'");
-        $tableExists = $checkTable !== false && $checkTable->rowCount() > 0;
+        // Try a simple query to check if table exists
+        $testQuery = $pdo->query("SELECT 1 FROM alerts LIMIT 1");
+        $tableExists = $testQuery !== false;
     } catch (PDOException $e) {
         error_log("Error checking alerts table: " . $e->getMessage());
         $tableExists = false;
     } catch (Exception $e) {
         error_log("Unexpected error checking alerts table: " . $e->getMessage());
         $tableExists = false;
+    } catch (Throwable $e) {
+        error_log("Fatal error checking alerts table: " . $e->getMessage());
+        $tableExists = false;
     }
     
     if (!$tableExists) {
         if (ob_get_level()) {
-            ob_clean();
+            @ob_clean();
         }
         http_response_code(200); // Return 200 with error message instead of 500
-        echo json_encode([
-            'success' => false,
-            'message' => 'Alerts table does not exist',
-            'alerts' => []
-        ]);
+        header('Content-Type: application/json; charset=utf-8');
+        try {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Alerts table does not exist or is not accessible',
+                'alerts' => []
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (Exception $jsonError) {
+            echo '{"success":false,"message":"Alerts table does not exist","alerts":[]}';
+        }
         if (ob_get_level()) {
-            ob_end_flush();
+            @ob_end_flush();
         }
         exit;
     }
     
-    // Check if alert_categories table exists
+    // Check if alert_categories table exists - use simpler method
     $categoriesTableExists = false;
     try {
-        $checkCategoriesTable = $pdo->query("SHOW TABLES LIKE 'alert_categories'");
-        $categoriesTableExists = $checkCategoriesTable !== false && $checkCategoriesTable->rowCount() > 0;
+        $testQuery = $pdo->query("SELECT 1 FROM alert_categories LIMIT 1");
+        $categoriesTableExists = $testQuery !== false;
     } catch (PDOException $e) {
-        error_log("Error checking alert_categories table: " . $e->getMessage());
+        // Table doesn't exist or not accessible - that's okay, we'll use fallback
         $categoriesTableExists = false;
     } catch (Exception $e) {
-        error_log("Unexpected error checking alert_categories table: " . $e->getMessage());
+        $categoriesTableExists = false;
+    } catch (Throwable $e) {
         $categoriesTableExists = false;
     }
     
-    // Check if area and category columns exist in alerts table
+    // Check if area and category columns exist in alerts table - use simpler method
     $hasAreaColumn = false;
     $hasCategoryColumn = false;
     try {
-        $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'area'");
-        $hasAreaColumn = $stmt !== false && $stmt->rowCount() > 0;
+        $testQuery = $pdo->query("SELECT area FROM alerts LIMIT 1");
+        $hasAreaColumn = $testQuery !== false;
     } catch (PDOException $e) {
-        error_log("Error checking area column: " . $e->getMessage());
         $hasAreaColumn = false;
     } catch (Exception $e) {
-        error_log("Unexpected error checking area column: " . $e->getMessage());
+        $hasAreaColumn = false;
+    } catch (Throwable $e) {
         $hasAreaColumn = false;
     }
     
     try {
-        $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'category'");
-        $hasCategoryColumn = $stmt !== false && $stmt->rowCount() > 0;
+        $testQuery = $pdo->query("SELECT category FROM alerts LIMIT 1");
+        $hasCategoryColumn = $testQuery !== false;
     } catch (PDOException $e) {
-        error_log("Error checking category column: " . $e->getMessage());
         $hasCategoryColumn = false;
     } catch (Exception $e) {
-        error_log("Unexpected error checking category column: " . $e->getMessage());
+        $hasCategoryColumn = false;
+    } catch (Throwable $e) {
         $hasCategoryColumn = false;
     }
     
@@ -356,15 +366,25 @@ try {
     $alerts = [];
     
     try {
+        // Log query for debugging (remove in production)
+        error_log("Executing query: " . substr($query, 0, 200) . "...");
+        error_log("Params count: " . count($params));
+        
         $stmt = $pdo->prepare($query);
         
         if ($stmt === false) {
-            throw new Exception("Failed to prepare query");
+            $errorInfo = $pdo->errorInfo();
+            throw new Exception("Failed to prepare query: " . ($errorInfo[2] ?? 'Unknown error'));
         }
         
         // Bind parameters
         foreach ($params as $key => $value) {
-            $stmt->bindValue($key, $value);
+            try {
+                $stmt->bindValue($key, $value);
+            } catch (Exception $bindError) {
+                error_log("Error binding parameter $key: " . $bindError->getMessage());
+                throw $bindError;
+            }
         }
         
         $executeResult = $stmt->execute();
@@ -380,18 +400,41 @@ try {
         if (!is_array($alerts)) {
             $alerts = [];
         }
+        
+        error_log("Query executed successfully, returned " . count($alerts) . " alerts");
     } catch (PDOException $e) {
-        error_log("Error executing alerts query: " . $e->getMessage());
+        error_log("PDO Error executing alerts query: " . $e->getMessage());
         error_log("Query: " . $query);
         error_log("Params: " . print_r($params, true));
+        error_log("PDO Error Code: " . $e->getCode());
         error_log("Stack trace: " . $e->getTraceAsString());
         
-        // Set alerts to empty array and continue - we'll return empty alerts
-        $alerts = [];
-        
-        // Log the error but continue processing to return a proper response
+        // Try a simple fallback query
+        try {
+            error_log("Attempting fallback simple query...");
+            $fallbackQuery = "SELECT id, title, message, content, status, created_at, updated_at FROM alerts WHERE status = ? ORDER BY created_at DESC LIMIT ?";
+            $fallbackStmt = $pdo->prepare($fallbackQuery);
+            $fallbackStmt->bindValue(1, $status, PDO::PARAM_STR);
+            $fallbackStmt->bindValue(2, $limit, PDO::PARAM_INT);
+            $fallbackStmt->execute();
+            $alerts = $fallbackStmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Add default category fields
+            foreach ($alerts as &$alert) {
+                $alert['category_name'] = 'General';
+                $alert['category_icon'] = 'fa-exclamation-triangle';
+                $alert['category_color'] = '#95a5a6';
+            }
+            unset($alert);
+            
+            error_log("Fallback query succeeded, returned " . count($alerts) . " alerts");
+        } catch (Exception $fallbackError) {
+            error_log("Fallback query also failed: " . $fallbackError->getMessage());
+            $alerts = [];
+        }
     } catch (Exception $e) {
         error_log("Unexpected error executing alerts query: " . $e->getMessage());
+        error_log("Error type: " . get_class($e));
         error_log("Stack trace: " . $e->getTraceAsString());
         $alerts = [];
     }
@@ -541,25 +584,44 @@ try {
     
     // Ensure clean output before JSON
     if (ob_get_level()) {
-        ob_clean();
+        @ob_clean();
     }
     
     // Always return valid JSON response
-    $response = [
-        'success' => true,
-        'alerts' => $alerts,
-        'count' => $finalAlertsCount,
-        'timestamp' => date('c'),
-        'language' => $targetLanguage ?? 'en',
-        'translation_applied' => $translationApplied ?? false,
-        'translation_helper_available' => $translationHelper !== null,
-        'debug' => $debugInfo ?? []
-    ];
-    
-    echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+    try {
+        $response = [
+            'success' => true,
+            'alerts' => $alerts,
+            'count' => $finalAlertsCount,
+            'timestamp' => date('c'),
+            'language' => $targetLanguage ?? 'en',
+            'translation_applied' => $translationApplied ?? false,
+            'translation_helper_available' => $translationHelper !== null,
+            'debug' => $debugInfo ?? []
+        ];
+        
+        $jsonOutput = json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        
+        if ($jsonOutput === false) {
+            // JSON encoding failed, use fallback
+            error_log("JSON encoding failed, using fallback");
+            $jsonOutput = json_encode([
+                'success' => true,
+                'alerts' => [],
+                'count' => 0,
+                'timestamp' => date('c'),
+                'language' => 'en'
+            ], JSON_UNESCAPED_UNICODE);
+        }
+        
+        echo $jsonOutput;
+    } catch (Exception $jsonError) {
+        error_log("Error creating JSON response: " . $jsonError->getMessage());
+        echo '{"success":true,"alerts":[],"count":0,"timestamp":"' . date('c') . '","language":"en"}';
+    }
     
     if (ob_get_level()) {
-        ob_end_flush();
+        @ob_end_flush();
     }
     
 } catch (PDOException $e) {
