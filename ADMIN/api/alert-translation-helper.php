@@ -1,27 +1,17 @@
 <?php
 /**
  * Alert Translation Helper
- * Automatically translates alerts based on user language preferences
+ * Retrieves translated alerts from database based on user language preferences
+ * Only uses existing translations from alert_translations table
  */
 
 require_once 'db_connect.php';
-require_once 'ai-translation-service.php';
 
 class AlertTranslationHelper {
     private $pdo;
-    private $aiService;
     
     public function __construct($pdo) {
         $this->pdo = $pdo;
-        // Try to initialize AI service, but don't fail if it doesn't work
-        try {
-            $this->aiService = new AITranslationService($pdo);
-        } catch (Throwable $e) {
-            // If AI service fails to initialize, log it but continue without it
-            error_log("Failed to initialize AITranslationService: " . $e->getMessage());
-            error_log("Error type: " . get_class($e));
-            $this->aiService = null; // Set to null so we can check if it's available
-        }
     }
     
     /**
@@ -32,8 +22,6 @@ class AlertTranslationHelper {
         // Handle guest users (guest_* prefix)
         if ($userId && strpos($userId, 'guest_') === 0) {
             // For guests, check session or default to browser language
-            // Note: In production, guest language should be passed from frontend
-            // For now, we'll check if there's a way to get it from session
             if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['guest_language'])) {
                 return $_SESSION['guest_language'];
             }
@@ -99,8 +87,8 @@ class AlertTranslationHelper {
     }
     
     /**
-     * Get or create translation for an alert
-     * Returns translated title and message
+     * Get translated alert from database
+     * Returns translated title and message if available, otherwise returns original
      * @param int $alertId Alert ID
      * @param string|null $targetLanguage Explicit target language (optional)
      * @param string|int|null $userId User ID or guest ID (optional)
@@ -123,11 +111,10 @@ class AlertTranslationHelper {
             return $this->getOriginalAlert($alertId);
         }
         
-        // Check if translation exists
-        // Try both column name formats for compatibility
+        // Check if translation exists in database
         try {
             $stmt = $this->pdo->prepare("
-                SELECT translated_title, translated_content, translation_method, ai_model
+                SELECT translated_title, translated_content, translation_method
                 FROM alert_translations
                 WHERE alert_id = ? AND target_language = ? AND status = 'active'
                 ORDER BY translated_at DESC, created_at DESC
@@ -141,15 +128,14 @@ class AlertTranslationHelper {
                     'title' => $translation['translated_title'],
                     'message' => $translation['translated_content'],
                     'language' => $targetLanguage,
-                    'method' => $translation['translation_method'] ?? 'manual',
-                    'ai_model' => $translation['ai_model'] ?? null
+                    'method' => $translation['translation_method'] ?? 'manual'
                 ];
             }
         } catch (PDOException $e) {
             // Try alternative column names (for backward compatibility)
             try {
                 $stmt = $this->pdo->prepare("
-                    SELECT title, message, translation_method, ai_model
+                    SELECT title, message, translation_method
                     FROM alert_translations
                     WHERE alert_id = ? AND target_language = ? AND status = 'active'
                     ORDER BY created_at DESC
@@ -163,8 +149,7 @@ class AlertTranslationHelper {
                         'title' => $translation['title'],
                         'message' => $translation['message'],
                         'language' => $targetLanguage,
-                        'method' => $translation['translation_method'] ?? 'manual',
-                        'ai_model' => $translation['ai_model'] ?? null
+                        'method' => $translation['translation_method'] ?? 'manual'
                     ];
                 }
             } catch (PDOException $e2) {
@@ -172,8 +157,8 @@ class AlertTranslationHelper {
             }
         }
         
-        // Translation doesn't exist - try to auto-translate
-        return $this->autoTranslateAlert($alertId, $targetLanguage);
+        // Translation doesn't exist - return original English alert
+        return $this->getOriginalAlert($alertId);
     }
     
     /**
@@ -217,177 +202,6 @@ class AlertTranslationHelper {
         }
         
         return null;
-    }
-    
-    /**
-     * Auto-translate alert using AI
-     */
-    private function autoTranslateAlert($alertId, $targetLanguage) {
-        // Get original alert
-        $original = $this->getOriginalAlert($alertId);
-        if (!$original) {
-            return null;
-        }
-        
-        // Check if AI translation is available
-        // Check if AI service is available and initialized
-        if (!$this->aiService || !$this->aiService->isAvailable()) {
-            // Fallback to original if AI service is not available
-            return $original;
-        }
-        
-        // Check if language exists in supported_languages table (optional check)
-        // If table doesn't exist or check fails, proceed anyway (AI can translate any language)
-        try {
-            $stmt = $this->pdo->prepare("
-                SELECT is_ai_supported FROM supported_languages 
-                WHERE language_code = ? AND is_active = 1
-            ");
-            $stmt->execute([$targetLanguage]);
-            $lang = $stmt->fetch();
-            
-            // If language exists in table and is_ai_supported is explicitly 0, skip
-            if ($lang && isset($lang['is_ai_supported']) && $lang['is_ai_supported'] == 0) {
-                // Language explicitly marked as not AI-supported
-                return $original;
-            }
-            // Otherwise proceed with AI translation (table doesn't exist, or is_ai_supported is 1/null)
-        } catch (PDOException $e) {
-            // Table might not exist or column might not exist - proceed anyway
-            error_log("Note: Could not check supported_languages table: " . $e->getMessage());
-            // Continue with AI translation
-        }
-        
-        try {
-            // Check if AI service is available before using it
-            if (!$this->aiService) {
-                return $original; // Return original if AI service is not available
-            }
-            
-            // Translate title
-            $titleResult = $this->aiService->translate(
-                $original['title'],
-                $targetLanguage,
-                'en'
-            );
-            
-            // Translate message
-            $messageResult = $this->aiService->translate(
-                $original['message'],
-                $targetLanguage,
-                'en'
-            );
-            
-            $translatedTitle = $titleResult['success'] ? $titleResult['translated_text'] : null;
-            $translatedMessage = $messageResult['success'] ? $messageResult['translated_text'] : null;
-            
-            if ($translatedTitle && $translatedMessage) {
-                // Save translation to database
-                $this->saveTranslation(
-                    $alertId,
-                    $targetLanguage,
-                    $translatedTitle,
-                    $translatedMessage,
-                    'ai',
-                    null // No admin ID for auto-translations
-                );
-                
-                return [
-                    'title' => $translatedTitle,
-                    'message' => $translatedMessage,
-                    'language' => $targetLanguage,
-                    'method' => 'ai',
-                    'ai_model' => 'gemini-2.5-flash' // Default model name
-                ];
-            }
-        } catch (Exception $e) {
-            error_log("Auto-translation error: " . $e->getMessage());
-        }
-        
-        // Fallback to original
-        return $original;
-    }
-    
-    /**
-     * Save translation to database
-     */
-    private function saveTranslation($alertId, $targetLanguage, $title, $message, $method = 'ai', $adminId = null) {
-        try {
-            // Try with standard column names first
-            $stmt = $this->pdo->prepare("
-                INSERT INTO alert_translations (
-                    alert_id,
-                    target_language,
-                    translated_title,
-                    translated_content,
-                    translation_method,
-                    ai_model,
-                    translated_by_admin_id,
-                    status,
-                    translated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NOW())
-                ON DUPLICATE KEY UPDATE
-                    translated_title = VALUES(translated_title),
-                    translated_content = VALUES(translated_content),
-                    translation_method = VALUES(translation_method),
-                    ai_model = VALUES(ai_model),
-                    updated_at = NOW()
-            ");
-            
-            $aiModel = ($method === 'ai') ? 'gemini-2.5-flash' : null;
-            
-            $stmt->execute([
-                $alertId,
-                $targetLanguage,
-                $title,
-                $message,
-                $method,
-                $aiModel,
-                $adminId
-            ]);
-            
-            return true;
-        } catch (PDOException $e) {
-            // Try alternative column names for backward compatibility
-            try {
-                $stmt = $this->pdo->prepare("
-                    INSERT INTO alert_translations (
-                        alert_id,
-                        target_language,
-                        title,
-                        message,
-                        translation_method,
-                        ai_model,
-                        translated_by_admin_id,
-                        status,
-                        created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NOW())
-                    ON DUPLICATE KEY UPDATE
-                        title = VALUES(title),
-                        message = VALUES(message),
-                        translation_method = VALUES(translation_method),
-                        ai_model = VALUES(ai_model),
-                        updated_at = NOW()
-                ");
-                
-                $aiModel = ($method === 'ai') ? 'gemini-2.5-flash' : null;
-                
-                $stmt->execute([
-                    $alertId,
-                    $targetLanguage,
-                    $title,
-                    $message,
-                    $method,
-                    $aiModel,
-                    $adminId
-                ]);
-                
-                return true;
-            } catch (PDOException $e2) {
-                error_log("Error saving translation: " . $e2->getMessage());
-                return false;
-            }
-        }
     }
     
     /**
@@ -447,4 +261,3 @@ class AlertTranslationHelper {
         }
     }
 }
-

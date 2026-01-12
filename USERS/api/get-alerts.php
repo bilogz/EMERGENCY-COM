@@ -1,7 +1,7 @@
 <?php
 /**
- * Get Live Alerts API
- * Returns real-time alerts from the database for Quezon City
+ * Get Live Alerts API with Built-in Translation
+ * Returns real-time alerts from the database with automatic translation support
  */
 
 // Prevent any output before headers
@@ -16,14 +16,12 @@ ini_set('log_errors', 1);
 register_shutdown_function(function() {
     $error = error_get_last();
     if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_RECOVERABLE_ERROR])) {
-        // Log the error for debugging
         error_log("FATAL ERROR in get-alerts.php: " . $error['message'] . " in " . $error['file'] . " on line " . $error['line']);
         
         if (ob_get_level()) {
             @ob_clean();
         }
         
-        // Ensure headers haven't been sent
         if (!headers_sent()) {
             http_response_code(500);
             header('Content-Type: application/json; charset=utf-8');
@@ -51,8 +49,7 @@ header('Cache-Control: no-cache, must-revalidate, max-age=0');
 header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
 header('Pragma: no-cache');
 
-// Use admin database connection to ensure we get alerts from the same source
-// The alerts table is in the ADMIN database
+// Database connection
 try {
     if (file_exists(__DIR__ . '/../../ADMIN/api/db_connect.php')) {
         require_once __DIR__ . '/../../ADMIN/api/db_connect.php';
@@ -60,10 +57,8 @@ try {
         require_once __DIR__ . '/db_connect.php';
     }
     
-    // Check if db_connect.php exited (it does on connection failure for API calls)
-    // If we reach here, connection was successful or it's a non-API context
-    if (!isset($pdo)) {
-        throw new Exception('Database connection variable not set');
+    if (!isset($pdo) || $pdo === null) {
+        throw new Exception('Database connection failed');
     }
 } catch (Throwable $e) {
     if (ob_get_level()) {
@@ -71,781 +66,216 @@ try {
     }
     http_response_code(500);
     header('Content-Type: application/json; charset=utf-8');
-    try {
-        echo json_encode([
-            'success' => false,
-            'message' => 'Failed to load database connection',
-            'alerts' => []
-        ], JSON_UNESCAPED_UNICODE);
-    } catch (Exception $jsonError) {
-        echo '{"success":false,"message":"Failed to load database connection","alerts":[]}';
-    }
+    echo json_encode([
+        'success' => false,
+        'message' => 'Database connection failed',
+        'alerts' => []
+    ], JSON_UNESCAPED_UNICODE);
     if (ob_get_level()) {
         @ob_end_flush();
     }
     exit();
 }
 
-// Load translation helper if available - make it completely optional
+// Load translation helper (optional - will work without it)
 $translationHelper = null;
 if (file_exists(__DIR__ . '/../../ADMIN/api/alert-translation-helper.php')) {
     try {
-        // Check if required dependencies exist before requiring
-        $helperFile = __DIR__ . '/../../ADMIN/api/alert-translation-helper.php';
-        $aiServiceFile = __DIR__ . '/../../ADMIN/api/ai-translation-service.php';
-        
-        if (file_exists($aiServiceFile)) {
-            require_once $helperFile;
-            
-            // Try to instantiate, but catch ALL errors including fatal ones
-            try {
-                $translationHelper = new AlertTranslationHelper($pdo);
-            } catch (Throwable $e) {
-                // Catch both Exception and Error (fatal errors)
-                error_log("Failed to initialize AlertTranslationHelper: " . $e->getMessage());
-                error_log("Error type: " . get_class($e));
-                error_log("Stack trace: " . $e->getTraceAsString());
-                $translationHelper = null; // Ensure it's null on failure
-            }
-        } else {
-            error_log("AITranslationService file not found, skipping translation helper");
-        }
+        require_once __DIR__ . '/../../ADMIN/api/alert-translation-helper.php';
+        $translationHelper = new AlertTranslationHelper($pdo);
     } catch (Throwable $e) {
-        // Catch any error during file loading or class instantiation
-        error_log("Error loading AlertTranslationHelper: " . $e->getMessage());
-        error_log("Error type: " . get_class($e));
-        $translationHelper = null; // Ensure it's null on failure
+        error_log("Translation helper not available: " . $e->getMessage());
+        $translationHelper = null;
     }
 }
 
+// Determine target language
+$targetLanguage = 'en'; // Default
 try {
-    if ($pdo === null || !($pdo instanceof PDO)) {
-        if (ob_get_level()) {
-            @ob_clean();
-        }
-        http_response_code(500);
-        header('Content-Type: application/json; charset=utf-8');
-        try {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Database connection failed',
-                'alerts' => []
-            ], JSON_UNESCAPED_UNICODE);
-        } catch (Exception $jsonError) {
-            echo '{"success":false,"message":"Database connection failed","alerts":[]}';
-        }
-        if (ob_get_level()) {
-            @ob_end_flush();
-        }
-        exit;
+    // Priority 1: Query parameter (from UI language selector)
+    if (isset($_GET['lang']) && !empty($_GET['lang'])) {
+        $targetLanguage = strtolower(trim($_GET['lang']));
     }
-    
-    // Get query parameters with validation
-    $category = isset($_GET['category']) && $_GET['category'] !== '' ? trim($_GET['category']) : null;
-    $status = isset($_GET['status']) && $_GET['status'] !== '' ? trim($_GET['status']) : 'active';
-    $limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 50; // Clamp between 1-100
-    $lastId = isset($_GET['last_id']) ? max(0, (int)$_GET['last_id']) : 0;
-    $lastUpdate = isset($_GET['last_update']) && $_GET['last_update'] !== '' ? trim($_GET['last_update']) : null;
-    $timeFilter = isset($_GET['time_filter']) && in_array($_GET['time_filter'], ['recent', 'older', 'all']) ? $_GET['time_filter'] : 'recent';
-    $severityFilter = isset($_GET['severity_filter']) && in_array($_GET['severity_filter'], ['emergency_only', 'warnings_only']) ? $_GET['severity_filter'] : null;
-    
-    // Get user area for filtering (if logged in)
-    $userArea = null;
-    if (session_status() === PHP_SESSION_NONE) {
+    // Priority 2: User preference (if logged in)
+    elseif (session_status() === PHP_SESSION_NONE) {
         @session_start();
     }
     
-    if (isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true) {
-        $userId = $_SESSION['user_id'] ?? null;
-        if ($userId) {
-            try {
-                $areaStmt = $pdo->prepare("SELECT barangay FROM users WHERE id = ? LIMIT 1");
-                $areaStmt->execute([$userId]);
-                $user = $areaStmt->fetch();
-                if ($user && !empty($user['barangay'])) {
-                    $userArea = $user['barangay'];
-                }
-            } catch (PDOException $e) {
-                error_log("Error getting user area: " . $e->getMessage());
-            }
-        }
-    }
-    
-    // Check if alerts table exists first - use a simpler method
-    $tableExists = false;
-    try {
-        // Try a simple query to check if table exists
-        $testQuery = $pdo->query("SELECT 1 FROM alerts LIMIT 1");
-        $tableExists = $testQuery !== false;
-    } catch (PDOException $e) {
-        error_log("Error checking alerts table: " . $e->getMessage());
-        $tableExists = false;
-    } catch (Exception $e) {
-        error_log("Unexpected error checking alerts table: " . $e->getMessage());
-        $tableExists = false;
-    } catch (Throwable $e) {
-        error_log("Fatal error checking alerts table: " . $e->getMessage());
-        $tableExists = false;
-    }
-    
-    if (!$tableExists) {
-        if (ob_get_level()) {
-            @ob_clean();
-        }
-        http_response_code(200); // Return 200 with error message instead of 500
-        header('Content-Type: application/json; charset=utf-8');
+    if (isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true && isset($_SESSION['user_id'])) {
+        $userId = $_SESSION['user_id'];
         try {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Alerts table does not exist or is not accessible',
-                'alerts' => []
-            ], JSON_UNESCAPED_UNICODE);
-        } catch (Exception $jsonError) {
-            echo '{"success":false,"message":"Alerts table does not exist","alerts":[]}';
-        }
-        if (ob_get_level()) {
-            @ob_end_flush();
-        }
-        exit;
-    }
-    
-    // Check if alert_categories table exists - use simpler method
-    $categoriesTableExists = false;
-    try {
-        $testQuery = $pdo->query("SELECT 1 FROM alert_categories LIMIT 1");
-        $categoriesTableExists = $testQuery !== false;
-    } catch (PDOException $e) {
-        // Table doesn't exist or not accessible - that's okay, we'll use fallback
-        $categoriesTableExists = false;
-    } catch (Exception $e) {
-        $categoriesTableExists = false;
-    } catch (Throwable $e) {
-        $categoriesTableExists = false;
-    }
-    
-    // Check if area and category columns exist in alerts table - use simpler method
-    $hasAreaColumn = false;
-    $hasCategoryColumn = false;
-    try {
-        $testQuery = $pdo->query("SELECT area FROM alerts LIMIT 1");
-        $hasAreaColumn = $testQuery !== false;
-    } catch (PDOException $e) {
-        $hasAreaColumn = false;
-    } catch (Exception $e) {
-        $hasAreaColumn = false;
-    } catch (Throwable $e) {
-        $hasAreaColumn = false;
-    }
-    
-    try {
-        $testQuery = $pdo->query("SELECT category FROM alerts LIMIT 1");
-        $hasCategoryColumn = $testQuery !== false;
-    } catch (PDOException $e) {
-        $hasCategoryColumn = false;
-    } catch (Exception $e) {
-        $hasCategoryColumn = false;
-    } catch (Throwable $e) {
-        $hasCategoryColumn = false;
-    }
-    
-    // Build query - prioritize recent alerts
-    if ($categoriesTableExists) {
-        // Use JOIN when categories table exists
-        $query = "
-            SELECT 
-                a.id,
-                a.title,
-                a.message,
-                a.content,
-                a.status,
-                a.created_at,
-                a.updated_at,
-                COALESCE(ac.name, 'General') as category_name,
-                COALESCE(ac.icon, 'fa-exclamation-triangle') as category_icon,
-                COALESCE(ac.color, '#95a5a6') as category_color";
-        
-        // Add area and category if columns exist
-        if ($hasAreaColumn || $hasCategoryColumn) {
-            $addFields = [];
-            if ($hasAreaColumn) {
-                $addFields[] = "a.area";
-            }
-            if ($hasCategoryColumn) {
-                $addFields[] = "a.category";
-            }
-            if (!empty($addFields)) {
-                $query .= ", " . implode(", ", $addFields);
-            }
-        }
-        
-        $query .= "
-            FROM alerts a
-            LEFT JOIN alert_categories ac ON a.category_id = ac.id";
-    } else {
-        // No categories table - use literal values
-        $query = "
-            SELECT 
-                a.id,
-                a.title,
-                a.message,
-                a.content,
-                a.status,
-                a.created_at,
-                a.updated_at,
-                'General' as category_name,
-                'fa-exclamation-triangle' as category_icon,
-                '#95a5a6' as category_color";
-        
-        // Add area and category if columns exist
-        if ($hasAreaColumn || $hasCategoryColumn) {
-            $addFields = [];
-            if ($hasAreaColumn) {
-                $addFields[] = "a.area";
-            }
-            if ($hasCategoryColumn) {
-                $addFields[] = "a.category";
-            }
-            if (!empty($addFields)) {
-                $query .= ", " . implode(", ", $addFields);
-            }
-        }
-        
-        $query .= "
-            FROM alerts a";
-    }
-    
-    $query .= " WHERE a.status = :status";
-    
-    $params = [':status' => $status];
-    
-    // Filter by area if user is logged in and area column exists
-    if ($userArea && $hasAreaColumn) {
-        // Show alerts for user's area OR alerts with NULL area (city-wide)
-        $query .= " AND (a.area = :user_area OR a.area IS NULL OR a.area = '')";
-        $params[':user_area'] = $userArea;
-    }
-    
-    // Filter by category if provided and categories table exists
-    if ($category && $category !== 'all' && $categoriesTableExists) {
-        $query .= " AND (ac.name = :category OR (:category = 'General' AND ac.name IS NULL))";
-        $params[':category'] = $category;
-    } elseif ($category && $category !== 'all' && $hasCategoryColumn) {
-        // Fallback: filter by category column if it exists
-        $query .= " AND a.category = :category";
-        $params[':category'] = $category;
-    }
-    
-    // Time-based filtering (default: last 24 hours for initial load, all for incremental updates)
-    if ($timeFilter === 'recent' && $lastId == 0) {
-        // Default to last 24 hours for initial load
-        $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
-    } elseif ($timeFilter === 'older' && $lastId == 0) {
-        // Show alerts older than 24 hours
-        $query .= " AND a.created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)";
-    }
-    // 'all' or incremental updates (lastId > 0) shows all alerts
-    
-    // Severity filtering based on category field (if exists) or category name
-    // Also check for [EXTREME] in title for emergency alerts
-    if ($severityFilter === 'emergency_only') {
-        if ($hasCategoryColumn) {
-            $query .= " AND (a.category = 'Emergency Alert' OR a.title LIKE '%[EXTREME]%' OR a.title LIKE '%EXTREME%')";
-        } elseif ($categoriesTableExists) {
-            // Fallback: filter by category names that are typically emergency-related OR title contains EXTREME
-            $query .= " AND (ac.name IN ('Earthquake', 'Bomb Threat', 'Fire') OR a.title LIKE '%[EXTREME]%' OR a.title LIKE '%EXTREME%')";
-        } else {
-            // If no category info available, just check title for EXTREME
-            $query .= " AND (a.title LIKE '%[EXTREME]%' OR a.title LIKE '%EXTREME%')";
-        }
-    } elseif ($severityFilter === 'warnings_only') {
-        if ($hasCategoryColumn) {
-            $query .= " AND a.category = 'Warning'";
-        } elseif ($categoriesTableExists) {
-            // Fallback: filter by category names that are typically warning-related
-            $query .= " AND ac.name IN ('Weather', 'General')";
-        }
-        // If no category info available, severity filter is skipped
-    }
-    
-    // Get only new alerts if lastId is provided (for incremental updates)
-    if ($lastId > 0) {
-        $query .= " AND a.id > :last_id";
-        $params[':last_id'] = $lastId;
-    }
-    
-    // Alternative: check by updated_at timestamp for more reliable real-time updates
-    if ($lastUpdate && $lastId == 0) {
-        // Convert ISO 8601 timestamp to MySQL datetime format
-        $lastUpdateTime = date('Y-m-d H:i:s', strtotime($lastUpdate));
-        $query .= " AND a.updated_at > :last_update";
-        $params[':last_update'] = $lastUpdateTime;
-    }
-    
-    $query .= " ORDER BY a.created_at DESC, a.id DESC LIMIT " . (int)$limit;
-    
-    // Initialize alerts array before query execution
-    $alerts = [];
-    
-    try {
-        // Log query for debugging (remove in production)
-        error_log("Executing query: " . substr($query, 0, 200) . "...");
-        error_log("Params count: " . count($params));
-        
-        $stmt = $pdo->prepare($query);
-        
-        if ($stmt === false) {
-            $errorInfo = $pdo->errorInfo();
-            throw new Exception("Failed to prepare query: " . ($errorInfo[2] ?? 'Unknown error'));
-        }
-        
-        // Bind parameters
-        foreach ($params as $key => $value) {
-            try {
-                $stmt->bindValue($key, $value);
-            } catch (Exception $bindError) {
-                error_log("Error binding parameter $key: " . $bindError->getMessage());
-                throw $bindError;
-            }
-        }
-        
-        $executeResult = $stmt->execute();
-        
-        if ($executeResult === false) {
-            $errorInfo = $stmt->errorInfo();
-            throw new PDOException("Query execution failed: " . ($errorInfo[2] ?? 'Unknown error'));
-        }
-        
-        $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Ensure alerts is always an array
-        if (!is_array($alerts)) {
-            $alerts = [];
-        }
-        
-        error_log("Query executed successfully, returned " . count($alerts) . " alerts");
-    } catch (PDOException $e) {
-        error_log("PDO Error executing alerts query: " . $e->getMessage());
-        error_log("Query: " . $query);
-        error_log("Params: " . print_r($params, true));
-        error_log("PDO Error Code: " . $e->getCode());
-        error_log("Stack trace: " . $e->getTraceAsString());
-        
-        // Try a simple fallback query
-        try {
-            error_log("Attempting fallback simple query...");
-            $fallbackQuery = "SELECT id, title, message, content, status, created_at, updated_at FROM alerts WHERE status = ? ORDER BY created_at DESC LIMIT ?";
-            $fallbackStmt = $pdo->prepare($fallbackQuery);
-            $fallbackStmt->bindValue(1, $status, PDO::PARAM_STR);
-            $fallbackStmt->bindValue(2, $limit, PDO::PARAM_INT);
-            $fallbackStmt->execute();
-            $alerts = $fallbackStmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            // Add default category fields
-            foreach ($alerts as &$alert) {
-                $alert['category_name'] = 'General';
-                $alert['category_icon'] = 'fa-exclamation-triangle';
-                $alert['category_color'] = '#95a5a6';
-            }
-            unset($alert);
-            
-            error_log("Fallback query succeeded, returned " . count($alerts) . " alerts");
-        } catch (Exception $fallbackError) {
-            error_log("Fallback query also failed: " . $fallbackError->getMessage());
-            $alerts = [];
-        }
-    } catch (Exception $e) {
-        error_log("Unexpected error executing alerts query: " . $e->getMessage());
-        error_log("Error type: " . get_class($e));
-        error_log("Stack trace: " . $e->getTraceAsString());
-        $alerts = [];
-    }
-    
-    // Resolve language using priority order:
-    // 1. Logged-in user's saved language preference (database)
-    // 2. Global language selector (UI language icon - query parameter)
-    // 3. Guest browser language detection
-    // 4. System default language (English)
-    $targetLanguage = 'en'; // Default fallback
-    try {
-        $targetLanguage = resolveAlertLanguage($pdo);
-    } catch (Exception $e) {
-        error_log("Error resolving alert language: " . $e->getMessage());
-        $targetLanguage = 'en'; // Fallback to English
-    }
-    
-    // Translate alerts if language is specified and translation helper is available
-    $translationApplied = false;
-    $translationAttempted = 0;
-    $translationSuccess = 0;
-    $aiServiceAvailable = false;
-    
-    // Check if AI service is available (for debugging)
-    if ($translationHelper) {
-        try {
-            $reflection = new ReflectionClass($translationHelper);
-            $aiServiceProperty = $reflection->getProperty('aiService');
-            $aiServiceProperty->setAccessible(true);
-            $aiService = $aiServiceProperty->getValue($translationHelper);
-            if ($aiService) {
-                $aiServiceAvailable = $aiService->isAvailable();
-            }
-        } catch (Exception $e) {
-            // Ignore reflection errors
-        }
-    }
-    
-    // Debug: Log why translation might not be attempted
-    $alertsCount = is_array($alerts) ? count($alerts) : 0;
-    if ($targetLanguage && $targetLanguage !== 'en' && $alertsCount > 0) {
-        if (!$translationHelper) {
-            error_log("Translation skipped: translationHelper is null (file may not exist or initialization failed)");
-        }
-    }
-    
-    // Check condition: targetLanguage must be set and not 'en', translationHelper must exist, and alerts must not be empty
-    if ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && $alertsCount > 0 && is_array($alerts)) {
-        foreach ($alerts as &$alert) {
-            try {
-                // Ensure alert is a valid array with an ID
-                if (!is_array($alert) || !isset($alert['id'])) {
-                    continue;
-                }
-                
-                $translationAttempted++;
-                $translated = $translationHelper->getTranslatedAlert($alert['id'], $targetLanguage, null, $targetLanguage);
-                if ($translated && isset($translated['title'])) {
-                    // Apply translation if language field indicates it's translated (not 'en')
-                    // getTranslatedAlert returns original with language='en' on failure, translated with language=targetLanguage on success
-                    $returnedLanguage = $translated['language'] ?? 'unknown';
-                    $returnedMethod = $translated['method'] ?? 'unknown';
-                    $isTranslated = isset($translated['language']) && $translated['language'] !== 'en';
-                    
-                    // Log translation attempt for debugging
-                    error_log("Alert {$alert['id']} translation check: language={$returnedLanguage}, method={$returnedMethod}, isTranslated=" . ($isTranslated ? 'yes' : 'no'));
-                    
-                    if ($isTranslated) {
-                        $alert['title'] = $translated['title'];
-                        if (isset($translated['message']) && !empty($translated['message'])) {
-                            $alert['message'] = $translated['message'];
-                            // Use translated message for content field if no separate content translation
-                            if (isset($translated['content']) && !empty($translated['content'])) {
-                                $alert['content'] = $translated['content'];
-                            } else {
-                                $alert['content'] = $translated['message'];
-                            }
-                        }
-                        $translationSuccess++;
-                        $translationApplied = true;
-                    } else {
-                        // Log why translation wasn't applied
-                        error_log("Alert {$alert['id']} translation NOT applied: returned language was '{$returnedLanguage}' (expected '{$targetLanguage}')");
-                    }
-                } else {
-                    error_log("Alert {$alert['id']} translation failed: getTranslatedAlert returned null or missing title");
-                }
-            } catch (Exception $e) {
-                // If translation fails, use original alert (silently fail to avoid breaking the API)
-                error_log("Translation error for alert " . (isset($alert['id']) ? $alert['id'] : 'unknown') . " (lang: {$targetLanguage}): " . $e->getMessage());
-            } catch (Error $e) {
-                // Catch fatal errors too
-                error_log("Fatal translation error: " . $e->getMessage());
-            }
-        }
-        unset($alert); // Break reference
-        
-        // Log translation stats for debugging
-        if ($translationAttempted > 0) {
-            error_log("Translation attempt: {$translationAttempted} alerts, {$translationSuccess} translated for language: {$targetLanguage}");
-        }
-    }
-    
-    // Format timestamps - ensure we have a valid array
-    if (is_array($alerts) && !empty($alerts)) {
-        foreach ($alerts as &$alert) {
-            try {
-                if (!is_array($alert)) {
-                    continue;
-                }
-                $alert['timestamp'] = isset($alert['created_at']) ? $alert['created_at'] : '';
-                $alert['time_ago'] = getTimeAgo($alert['created_at'] ?? '');
-            } catch (Exception $e) {
-                // If timestamp formatting fails, use defaults
-                $alert['timestamp'] = isset($alert['created_at']) ? $alert['created_at'] : '';
-                $alert['time_ago'] = 'Recently';
-            }
-        }
-        unset($alert); // Break reference
-    }
-    
-    // Calculate final counts after all processing
-    $finalAlertsCount = is_array($alerts) ? count($alerts) : 0;
-    
-    // Enhanced debug info to help diagnose issues
-    $debugInfo = [
-        'target_language' => $targetLanguage ?? 'en',
-        'alerts_count' => $finalAlertsCount,
-        'translation_attempted' => $translationAttempted ?? 0,
-        'translation_success' => $translationSuccess ?? 0,
-        'ai_service_available' => $aiServiceAvailable,
-        'translation_helper_available' => $translationHelper !== null,
-        'translation_applied' => $translationApplied,
-        'translation_condition_met' => ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && $finalAlertsCount > 0)
-    ];
-    
-    // Log debug info for server-side debugging
-    if ($targetLanguage && $targetLanguage !== 'en') {
-        error_log("Translation Debug - Language: {$targetLanguage}, Alerts: {$finalAlertsCount}, Helper: " . ($translationHelper ? 'yes' : 'no') . ", Attempted: {$translationAttempted}, Success: {$translationSuccess}");
-    }
-    
-    // Ensure alerts is always an array before encoding
-    if (!is_array($alerts)) {
-        $alerts = [];
-        $finalAlertsCount = 0;
-    }
-    
-    // Ensure clean output before JSON
-    if (ob_get_level()) {
-        @ob_clean();
-    }
-    
-    // Always return valid JSON response
-    try {
-        $response = [
-            'success' => true,
-            'alerts' => $alerts,
-            'count' => $finalAlertsCount,
-            'timestamp' => date('c'),
-            'language' => $targetLanguage ?? 'en',
-            'translation_applied' => $translationApplied ?? false,
-            'translation_helper_available' => $translationHelper !== null,
-            'debug' => $debugInfo ?? []
-        ];
-        
-        $jsonOutput = json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
-        
-        if ($jsonOutput === false) {
-            // JSON encoding failed, use fallback
-            error_log("JSON encoding failed, using fallback");
-            $jsonOutput = json_encode([
-                'success' => true,
-                'alerts' => [],
-                'count' => 0,
-                'timestamp' => date('c'),
-                'language' => 'en'
-            ], JSON_UNESCAPED_UNICODE);
-        }
-        
-        echo $jsonOutput;
-    } catch (Exception $jsonError) {
-        error_log("Error creating JSON response: " . $jsonError->getMessage());
-        echo '{"success":true,"alerts":[],"count":0,"timestamp":"' . date('c') . '","language":"en"}';
-    }
-    
-    if (ob_get_level()) {
-        @ob_end_flush();
-    }
-    
-} catch (PDOException $e) {
-    error_log("Get Alerts API Error: " . $e->getMessage());
-    error_log("Stack trace: " . $e->getTraceAsString());
-    
-    // Ensure clean output
-    if (ob_get_level()) {
-        @ob_clean();
-    }
-    
-    http_response_code(500);
-    header('Content-Type: application/json; charset=utf-8');
-    
-    try {
-        echo json_encode([
-            'success' => false,
-            'message' => 'Database error occurred',
-            'alerts' => []
-        ], JSON_UNESCAPED_UNICODE);
-    } catch (Exception $jsonError) {
-        // Fallback if JSON encoding fails
-        echo '{"success":false,"message":"Database error occurred","alerts":[]}';
-    }
-    
-    if (ob_get_level()) {
-        @ob_end_flush();
-    }
-    exit;
-} catch (Exception $e) {
-    error_log("Get Alerts API Error: " . $e->getMessage());
-    error_log("Stack trace: " . $e->getTraceAsString());
-    
-    // Ensure clean output
-    if (ob_get_level()) {
-        @ob_clean();
-    }
-    
-    http_response_code(500);
-    header('Content-Type: application/json; charset=utf-8');
-    
-    try {
-        echo json_encode([
-            'success' => false,
-            'message' => 'Server error occurred',
-            'alerts' => []
-        ], JSON_UNESCAPED_UNICODE);
-    } catch (Exception $jsonError) {
-        // Fallback if JSON encoding fails
-        echo '{"success":false,"message":"Server error occurred","alerts":[]}';
-    }
-    
-    if (ob_get_level()) {
-        @ob_end_flush();
-    }
-    exit;
-} catch (Error $e) {
-    error_log("Get Alerts API Fatal Error: " . $e->getMessage());
-    error_log("Stack trace: " . $e->getTraceAsString());
-    
-    // Ensure clean output
-    if (ob_get_level()) {
-        @ob_clean();
-    }
-    
-    http_response_code(500);
-    header('Content-Type: application/json; charset=utf-8');
-    
-    try {
-        echo json_encode([
-            'success' => false,
-            'message' => 'Fatal error occurred',
-            'alerts' => []
-        ], JSON_UNESCAPED_UNICODE);
-    } catch (Exception $jsonError) {
-        // Fallback if JSON encoding fails
-        echo '{"success":false,"message":"Fatal error occurred","alerts":[]}';
-    }
-    
-    if (ob_get_level()) {
-        @ob_end_flush();
-    }
-    exit;
-}
-
-/**
- * Resolve alert display language using priority order:
- * 1. Global language selector (UI language icon - query parameter from localStorage)
- *    - Takes precedence as it represents the user's CURRENT session selection
- * 2. Logged-in user's saved language preference (database - persistent preference)
- * 3. Guest browser language detection (Accept-Language header)
- * 4. System default language (English)
- * 
- * Note: Query parameter (UI selector) is checked FIRST to respect immediate user selections.
- * When a user changes language via the UI, the query parameter reflects their current choice
- * and should override the database preference for that request.
- * 
- * @param PDO $pdo Database connection
- * @return string Language code (e.g., 'en', 'fil', 'es')
- */
-function resolveAlertLanguage($pdo) {
-    // Start session if not already started
-    if (session_status() === PHP_SESSION_NONE) {
-        @session_start();
-    }
-    
-    $targetLanguage = null;
-    $userId = null;
-    $isLoggedIn = false;
-    
-    // Check if user is logged in
-    if (isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true) {
-        $isLoggedIn = true;
-        $userId = $_SESSION['user_id'] ?? null;
-    }
-    
-    // Priority 2: Global language selector (UI language icon - query parameter from localStorage)
-    // This represents the user's CURRENT session selection and takes precedence when explicitly provided
-    // Check this FIRST to respect immediate user selections via the UI
-    $queryLang = $_GET['lang'] ?? $_GET['language'] ?? null;
-    if ($queryLang && strlen($queryLang) >= 2) {
-        // Validate language code is reasonable (2-5 characters, alphanumeric with optional dash)
-        if (preg_match('/^[a-z]{2}(-[a-z]{2,3})?$/i', $queryLang)) {
-            $targetLanguage = strtolower($queryLang);
-            // Query parameter (UI selector) takes precedence - return immediately
-            return $targetLanguage;
-        }
-    }
-    
-    // Priority 1: Logged-in user's saved language preference (database)
-    // Only checked if no query parameter was provided (user hasn't explicitly selected via UI)
-    if ($isLoggedIn && $userId) {
-        try {
-            // Try user_preferences table first
-            $prefStmt = $pdo->prepare("SELECT preferred_language FROM user_preferences WHERE user_id = ? LIMIT 1");
-            $prefStmt->execute([$userId]);
-            $pref = $prefStmt->fetch();
-            
+            $stmt = $pdo->prepare("SELECT preferred_language FROM user_preferences WHERE user_id = ? LIMIT 1");
+            $stmt->execute([$userId]);
+            $pref = $stmt->fetch();
             if ($pref && !empty($pref['preferred_language'])) {
                 $targetLanguage = $pref['preferred_language'];
-            } else {
-                // Fallback to users table for backward compatibility
-                $userStmt = $pdo->prepare("SELECT preferred_language FROM users WHERE id = ? LIMIT 1");
-                $userStmt->execute([$userId]);
-                $user = $userStmt->fetch();
+            }
+        } catch (PDOException $e) {
+            // Fallback to users table
+            try {
+                $stmt = $pdo->prepare("SELECT preferred_language FROM users WHERE id = ? LIMIT 1");
+                $stmt->execute([$userId]);
+                $user = $stmt->fetch();
                 if ($user && !empty($user['preferred_language'])) {
                     $targetLanguage = $user['preferred_language'];
                 }
+            } catch (PDOException $e2) {
+                // Ignore
             }
-        } catch (PDOException $e) {
-            error_log("Error getting user language preference: " . $e->getMessage());
         }
     }
+    // Priority 3: Browser language
+    if ($targetLanguage === 'en' && isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
+        $acceptLang = $_SERVER['HTTP_ACCEPT_LANGUAGE'];
+        if (preg_match('/^([a-z]{2})/i', $acceptLang, $matches)) {
+            $targetLanguage = strtolower($matches[1]);
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error determining language: " . $e->getMessage());
+    $targetLanguage = 'en';
+}
+
+// Get query parameters
+$category = isset($_GET['category']) && $_GET['category'] !== '' && $_GET['category'] !== 'all' ? trim($_GET['category']) : null;
+$status = isset($_GET['status']) && $_GET['status'] !== '' ? trim($_GET['status']) : 'active';
+$limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 50;
+$lastId = isset($_GET['last_id']) ? max(0, (int)$_GET['last_id']) : 0;
+$timeFilter = isset($_GET['time_filter']) && in_array($_GET['time_filter'], ['recent', 'older', 'all']) ? $_GET['time_filter'] : 'recent';
+$severityFilter = isset($_GET['severity_filter']) && in_array($_GET['severity_filter'], ['emergency_only', 'warnings_only']) ? $_GET['severity_filter'] : null;
+
+// Build query
+$query = "
+    SELECT 
+        a.id,
+        a.title,
+        a.message,
+        a.content,
+        a.status,
+        a.created_at,
+        a.updated_at,
+        COALESCE(ac.name, 'General') as category_name,
+        COALESCE(ac.icon, 'fa-exclamation-triangle') as category_icon,
+        COALESCE(ac.color, '#95a5a6') as category_color
+    FROM alerts a
+    LEFT JOIN alert_categories ac ON a.category_id = ac.id
+    WHERE a.status = :status
+";
+
+$params = [':status' => $status];
+
+// Category filter
+if ($category) {
+    $query .= " AND (ac.name = :category OR a.category = :category)";
+    $params[':category'] = $category;
+}
+
+// Time filter
+if ($timeFilter === 'recent' && $lastId == 0) {
+    $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+} elseif ($timeFilter === 'older' && $lastId == 0) {
+    $query .= " AND a.created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+}
+
+// Severity filter
+if ($severityFilter === 'emergency_only') {
+    $query .= " AND (a.category = 'Emergency Alert' OR a.title LIKE '%[EXTREME]%' OR a.title LIKE '%EXTREME%')";
+} elseif ($severityFilter === 'warnings_only') {
+    $query .= " AND a.category = 'Warning'";
+}
+
+// Incremental updates
+if ($lastId > 0) {
+    $query .= " AND a.id > :last_id";
+    $params[':last_id'] = $lastId;
+}
+
+$query .= " ORDER BY a.created_at DESC, a.id DESC LIMIT " . (int)$limit;
+
+// Execute query
+$alerts = [];
+try {
+    $stmt = $pdo->prepare($query);
+    foreach ($params as $key => $value) {
+        $stmt->bindValue($key, $value);
+    }
+    $stmt->execute();
+    $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Priority 3: Guest browser language detection (Accept-Language header)
-    if (!$targetLanguage) {
-        $acceptLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
-        if ($acceptLanguage) {
-            // Parse Accept-Language header (e.g., "en-US,en;q=0.9,es;q=0.8")
-            $languages = [];
-            preg_match_all('/([a-z]{1,8}(?:-[a-z]{1,8})?)(?:;q=([0-9.]+))?/i', $acceptLanguage, $matches);
+    if (!is_array($alerts)) {
+        $alerts = [];
+    }
+} catch (PDOException $e) {
+    error_log("Error fetching alerts: " . $e->getMessage());
+    $alerts = [];
+}
+
+// Apply translations if needed
+if ($targetLanguage && $targetLanguage !== 'en' && $translationHelper && !empty($alerts)) {
+    foreach ($alerts as &$alert) {
+        try {
+            if (!isset($alert['id'])) {
+                continue;
+            }
             
-            if (!empty($matches[1])) {
-                foreach ($matches[1] as $index => $lang) {
-                    $quality = isset($matches[2][$index]) ? (float)$matches[2][$index] : 1.0;
-                    $langCode = strtolower(explode('-', $lang)[0]); // Get base language code
-                    $languages[$langCode] = $quality;
-                }
-                
-                // Sort by quality (highest first)
-                arsort($languages);
-                
-                // Use the highest quality language
-                $detectedLang = array_key_first($languages);
-                if ($detectedLang && strlen($detectedLang) === 2) {
-                    // Map common browser languages to supported codes
-                    $langMap = [
-                        'en' => 'en', 'fil' => 'fil', 'tl' => 'fil',
-                        'es' => 'es', 'fr' => 'fr', 'de' => 'de',
-                        'it' => 'it', 'pt' => 'pt', 'zh' => 'zh',
-                        'ja' => 'ja', 'ko' => 'ko', 'ar' => 'ar',
-                        'hi' => 'hi', 'th' => 'th', 'vi' => 'vi',
-                        'id' => 'id', 'ms' => 'ms', 'ru' => 'ru'
-                    ];
-                    $targetLanguage = $langMap[$detectedLang] ?? $detectedLang;
+            $translated = $translationHelper->getTranslatedAlert($alert['id'], $targetLanguage, null, $targetLanguage);
+            
+            if ($translated && isset($translated['language']) && $translated['language'] !== 'en') {
+                $alert['title'] = $translated['title'];
+                if (isset($translated['message']) && !empty($translated['message'])) {
+                    $alert['message'] = $translated['message'];
+                    if (isset($translated['content']) && !empty($translated['content'])) {
+                        $alert['content'] = $translated['content'];
+                    } else {
+                        $alert['content'] = $translated['message'];
+                    }
                 }
             }
+        } catch (Exception $e) {
+            error_log("Translation error for alert {$alert['id']}: " . $e->getMessage());
         }
     }
-    
-    // Priority 4: System default language (English)
-    if (!$targetLanguage || $targetLanguage === 'en') {
-        $targetLanguage = 'en';
-    }
-    
-    return $targetLanguage;
+    unset($alert);
+}
+
+// Format timestamps
+foreach ($alerts as &$alert) {
+    $alert['timestamp'] = $alert['created_at'] ?? '';
+    $alert['time_ago'] = getTimeAgo($alert['created_at'] ?? '');
+}
+unset($alert);
+
+// Clean output and return response
+if (ob_get_level()) {
+    @ob_clean();
+}
+
+echo json_encode([
+    'success' => true,
+    'alerts' => $alerts,
+    'count' => count($alerts),
+    'timestamp' => date('c'),
+    'language' => $targetLanguage,
+    'translation_applied' => ($targetLanguage !== 'en' && $translationHelper !== null)
+], JSON_UNESCAPED_UNICODE);
+
+if (ob_get_level()) {
+    @ob_end_flush();
 }
 
 /**
  * Calculate time ago string
  */
 function getTimeAgo($datetime) {
+    if (empty($datetime)) {
+        return 'Recently';
+    }
+    
     $timestamp = strtotime($datetime);
+    if ($timestamp === false) {
+        return 'Recently';
+    }
+    
     $diff = time() - $timestamp;
     
     if ($diff < 60) {
@@ -864,4 +294,3 @@ function getTimeAgo($datetime) {
     }
 }
 ?>
-

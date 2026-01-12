@@ -93,7 +93,7 @@ try {
     // Log the warning
     error_log("Weather Warning Created: {$title} - {$message} (Alert ID: {$alertId})");
     
-    // Auto-translate alert for subscribed users
+    // Get translations for subscribed users (from database)
     require_once 'alert-translation-helper.php';
     $translationHelper = new AlertTranslationHelper($pdo);
     
@@ -114,7 +114,7 @@ try {
             $translatedAlerts = $translationHelper->translateAlertForUsers($alertId, $subscribedUsers);
             
             // Log translation activity
-            error_log("Auto-translated alert #{$alertId} for " . count($translatedAlerts) . " users");
+            error_log("Retrieved translations for alert #{$alertId} for " . count($translatedAlerts) . " users");
             
             // Here you would send notifications to users with translated content
             // Example: sendSMS($userPhone, $translatedAlert['message']);

@@ -2,7 +2,7 @@
 /**
  * Mass Notification System API
  * Handle SMS, Email, and PA System notifications
- * Automatically translates alerts using Gemini AI based on user language preferences
+ * Uses translations from alert_translations table based on user language preferences
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             // Get user's preferred language
             $userLanguage = $subscriber['preferred_language'] ?? 'en';
             
-            // Get translated alert for user's preferred language (auto-translates if needed)
+            // Get translated alert for user's preferred language (from database)
             $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $userLanguage, $userId);
             
             if (!$translatedAlert) {
@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             
             // Track translation stats
             $translationStats['total']++;
-            if ($translatedAlert['language'] !== 'en' && isset($translatedAlert['method']) && $translatedAlert['method'] === 'ai') {
+            if ($translatedAlert['language'] !== 'en') {
                 $translationStats['translated']++;
             } else {
                 $translationStats['english']++;
@@ -267,7 +267,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         if ($adminId) {
             $translationNote = '';
             if ($translationStats['translated'] > 0) {
-                $translationNote = " ({$translationStats['translated']} auto-translated using AI)";
+                $translationNote = " ({$translationStats['translated']} translated)";
             }
             logAdminActivity($adminId, 'send_mass_notification', 
                 "Sent {$channel} notification to {$sentCount} recipient(s) via {$source}. Priority: {$priority}.{$translationNote}");
@@ -275,12 +275,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         
         echo json_encode([
             'success' => true,
-            'message' => 'Notification sent successfully with automatic translation.',
+            'message' => 'Notification sent successfully.',
             'alert_id' => $alertId,
             'sent_count' => $sentCount,
             'translation_stats' => $translationStats,
             'note' => $translationStats['translated'] > 0 ? 
-                "Alerts automatically translated to {$translationStats['translated']} different languages using Gemini AI" : 
+                "Alerts translated to {$translationStats['translated']} different languages" : 
                 'All alerts sent in English'
         ]);
     } catch (PDOException $e) {

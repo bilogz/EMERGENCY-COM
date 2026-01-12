@@ -35,7 +35,7 @@ return [
     'DB_FALLBACK_PASS' => '',
     
     // ===========================================
-    // AI/TRANSLATION API KEYS
+    // AI/ANALYSIS API KEYS (not used for alert translation)
     // ===========================================
     
     // AI Provider: 'libretranslate', 'gemini', 'openai', or 'mymemory'
@@ -44,17 +44,7 @@ return [
     
     // API Keys (get from respective providers)
     'AI_API_KEY' => '',                 // Default AI key
-    'AI_API_KEY_TRANSLATION' => '',     // AI-Alert-Translator: For alert translations (user preference-based)
-    'AI_API_KEY_TRANSLATION_BACKUP' => '',  // Backup key for translations (used when primary quota exceeded)
-    'AI_API_KEY_ANALYSIS' => '',        // For AI analysis
-    
-    // Argos Translate (OFFLINE - no API key needed, runs locally)
-    'ARGOS_TRANSLATE_URL' => 'http://localhost:5001/translate',
-    'TRANSLATION_PROVIDER' => 'argos',  // 'argos', 'libretranslate', or 'auto' (tries argos first, falls back to libretranslate)
-    
-    // LibreTranslate (FREE - no API key needed for public servers, fallback option)
-    'LIBRETRANSLATE_URL' => 'https://libretranslate.com/translate',
-    'LIBRETRANSLATE_API_KEY' => '',     // Leave empty for public servers
+    'AI_API_KEY_ANALYSIS' => '',        // For AI analysis only
     
     // ===========================================
     // GOOGLE OAUTH CREDENTIALS

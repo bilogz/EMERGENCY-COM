@@ -74,20 +74,11 @@ function getDatabaseConfig() {
  */
 function getApiConfig() {
     return [
-        // AI/Translation
+        // AI/Analysis (not used for alert translation)
         'ai_provider' => getSecureConfig('AI_PROVIDER', 'libretranslate'),
         'gemini_model' => getSecureConfig('GEMINI_MODEL', 'gemini-2.5-flash'),
         'ai_api_key' => getSecureConfig('AI_API_KEY', ''),
-        'ai_api_key_translation' => getSecureConfig('AI_API_KEY_TRANSLATION', ''),
         'ai_api_key_analysis' => getSecureConfig('AI_API_KEY_ANALYSIS', ''),
-        
-        // Argos Translate (offline, no key needed)
-        'argos_translate_url' => getSecureConfig('ARGOS_TRANSLATE_URL', 'http://localhost:5001/translate'),
-        'translation_provider' => getSecureConfig('TRANSLATION_PROVIDER', 'argos'),
-        
-        // LibreTranslate (free, no key needed, fallback)
-        'libretranslate_url' => getSecureConfig('LIBRETRANSLATE_URL', 'https://libretranslate.com/translate'),
-        'libretranslate_api_key' => getSecureConfig('LIBRETRANSLATE_API_KEY', ''),
         
         // Google OAuth
         'google_client_id' => getSecureConfig('GOOGLE_CLIENT_ID', ''),

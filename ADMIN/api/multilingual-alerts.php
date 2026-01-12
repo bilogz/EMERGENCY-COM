@@ -1,18 +1,16 @@
 <?php
 /**
  * Enhanced Multilingual Support for Alerts API
- * Manage alert translations with AI support
+ * Manage alert translations manually
  * 
- * NOTE: Alerts are automatically translated when sent to users based on their
- * language preference (from login or guest login). This API is mainly for
- * viewing translation history and manual translations if needed.
+ * NOTE: Alerts use translations from the alert_translations table.
+ * This API is for viewing translation history and creating manual translations.
  */
 
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
 require_once 'activity_logger.php';
-require_once 'ai-translation-service.php';
 
 // Check admin authentication for write operations
 function checkAdminAuth() {
@@ -35,137 +33,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $targetLanguage = $input['target_language'] ?? $_POST['target_language'] ?? '';
     $translatedTitle = $input['translated_title'] ?? $_POST['translated_title'] ?? '';
     $translatedContent = $input['translated_content'] ?? $_POST['translated_content'] ?? '';
-    $useAI = isset($input['use_ai']) ? (bool)$input['use_ai'] : (isset($_POST['use_ai']) ? (bool)$_POST['use_ai'] : false);
-    $sourceLanguage = $input['source_language'] ?? $_POST['source_language'] ?? 'en';
     
     if (empty($alertId) || empty($targetLanguage)) {
         echo json_encode(['success' => false, 'message' => 'Alert ID and target language are required.']);
         exit;
     }
     
+    // Manual translation only
+    if (empty($translatedTitle) || empty($translatedContent)) {
+        echo json_encode(['success' => false, 'message' => 'Translated title and content are required.']);
+        exit;
+    }
+    
     try {
-        // If AI translation is requested
-        if ($useAI) {
-            // Get original alert content
-            $stmt = $pdo->prepare("SELECT title, message, content FROM alerts WHERE id = ?");
-            $stmt->execute([$alertId]);
-            $alert = $stmt->fetch();
-            
-            if (!$alert) {
-                echo json_encode(['success' => false, 'message' => 'Alert not found.']);
-                exit;
-            }
-            
-            $originalTitle = $alert['title'];
-            $originalContent = $alert['message'] ?? $alert['content'] ?? '';
-            
-            // Use AI translation service
-            $aiService = new AITranslationService($pdo);
-            
-            if (!$aiService->isAvailable()) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'AI translation is not available. Please configure Gemini API key or provide manual translation.'
-                ]);
-                exit;
-            }
-            
-            $result = $aiService->translateAlert($alertId, $originalTitle, $originalContent, $targetLanguage, $adminId);
-            
-            if ($result['success']) {
-                // Log translation activity
-                $stmt = $pdo->prepare("
-                    INSERT INTO translation_activity_logs 
-                    (admin_id, action_type, alert_id, translation_id, source_language, target_language, translation_method, success, ip_address, user_agent)
-                    VALUES (?, 'ai_translate', ?, ?, ?, ?, 'ai', 1, ?, ?)
-                ");
-                $stmt->execute([
-                    $adminId,
-                    $alertId,
-                    $result['translation_id'],
-                    $sourceLanguage,
-                    $targetLanguage,
-                    $_SERVER['REMOTE_ADDR'] ?? null,
-                    $_SERVER['HTTP_USER_AGENT'] ?? null
-                ]);
-                
-                echo json_encode([
-                    'success' => true,
-                    'message' => 'AI translation completed successfully.',
-                    'translation_id' => $result['translation_id'],
-                    'translated_title' => $result['title_translation'],
-                    'translated_content' => $result['content_translation'],
-                    'method' => 'ai'
-                ]);
-            } else {
-                // Log failed translation
-                $stmt = $pdo->prepare("
-                    INSERT INTO translation_activity_logs 
-                    (admin_id, action_type, alert_id, source_language, target_language, translation_method, success, error_message, ip_address, user_agent)
-                    VALUES (?, 'ai_translate', ?, ?, ?, 'ai', 0, ?, ?, ?)
-                ");
-                $stmt->execute([
-                    $adminId,
-                    $alertId,
-                    $sourceLanguage,
-                    $targetLanguage,
-                    implode('; ', $result['errors']),
-                    $_SERVER['REMOTE_ADDR'] ?? null,
-                    $_SERVER['HTTP_USER_AGENT'] ?? null
-                ]);
-                
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'AI translation failed: ' . implode('; ', $result['errors'])
-                ]);
-            }
-        } else {
-            // Manual translation
-            if (empty($translatedTitle) || empty($translatedContent)) {
-                echo json_encode(['success' => false, 'message' => 'Translated title and content are required for manual translation.']);
-                exit;
-            }
-            
-            $stmt = $pdo->prepare("
-                INSERT INTO alert_translations (
-                    alert_id, target_language, translated_title, translated_content, 
-                    status, translated_at, translated_by_admin_id, translation_method
-                )
-                VALUES (?, ?, ?, ?, 'active', NOW(), ?, 'manual')
-                ON DUPLICATE KEY UPDATE 
-                    translated_title = VALUES(translated_title),
-                    translated_content = VALUES(translated_content),
-                    translated_at = NOW(),
-                    translated_by_admin_id = VALUES(translated_by_admin_id),
-                    translation_method = 'manual'
-            ");
-            $stmt->execute([$alertId, $targetLanguage, $translatedTitle, $translatedContent, $adminId]);
-            $translationId = $pdo->lastInsertId();
-            
-            // Log activity
-            logAdminActivity($adminId, 'create_translation', "Created manual translation for alert #{$alertId} to {$targetLanguage}");
-            
-            $stmt = $pdo->prepare("
-                INSERT INTO translation_activity_logs 
-                (admin_id, action_type, alert_id, translation_id, target_language, translation_method, success, ip_address, user_agent)
-                VALUES (?, 'create_translation', ?, ?, ?, 'manual', 1, ?, ?)
-            ");
-            $stmt->execute([
-                $adminId,
-                $alertId,
-                $translationId,
-                $targetLanguage,
-                $_SERVER['REMOTE_ADDR'] ?? null,
-                $_SERVER['HTTP_USER_AGENT'] ?? null
-            ]);
-            
-            echo json_encode([
-                'success' => true,
-                'message' => 'Translation saved successfully.',
-                'translation_id' => $translationId,
-                'method' => 'manual'
-            ]);
-        }
+        $stmt = $pdo->prepare("
+            INSERT INTO alert_translations (
+                alert_id, target_language, translated_title, translated_content, 
+                status, translated_at, translated_by_admin_id, translation_method
+            )
+            VALUES (?, ?, ?, ?, 'active', NOW(), ?, 'manual')
+            ON DUPLICATE KEY UPDATE 
+                translated_title = VALUES(translated_title),
+                translated_content = VALUES(translated_content),
+                translated_at = NOW(),
+                translated_by_admin_id = VALUES(translated_by_admin_id),
+                translation_method = 'manual'
+        ");
+        $stmt->execute([$alertId, $targetLanguage, $translatedTitle, $translatedContent, $adminId]);
+        $translationId = $pdo->lastInsertId();
+        
+        // Log activity
+        logAdminActivity($adminId, 'create_translation', "Created manual translation for alert #{$alertId} to {$targetLanguage}");
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO translation_activity_logs 
+            (admin_id, action_type, alert_id, translation_id, target_language, translation_method, success, ip_address, user_agent)
+            VALUES (?, 'create_translation', ?, ?, ?, 'manual', 1, ?, ?)
+        ");
+        $stmt->execute([
+            $adminId,
+            $alertId,
+            $translationId,
+            $targetLanguage,
+            $_SERVER['REMOTE_ADDR'] ?? null,
+            $_SERVER['HTTP_USER_AGENT'] ?? null
+        ]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Translation saved successfully.',
+            'translation_id' => $translationId,
+            'method' => 'manual'
+        ]);
     } catch (PDOException $e) {
         error_log("Multilingual Alert Error: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Database error occurred: ' . $e->getMessage()]);

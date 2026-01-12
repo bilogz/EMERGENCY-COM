@@ -874,7 +874,7 @@ $current = 'alerts.php';
         }
         
         function startAutoRefresh() {
-            // Refresh every 10 seconds for real-time updates
+            // Refresh every 5 seconds for real-time updates
             refreshInterval = setInterval(() => {
                 loadAlerts(true); // Load only new alerts
             }, REFRESH_INTERVAL);
