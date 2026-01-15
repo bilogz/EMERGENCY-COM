@@ -8,6 +8,54 @@ const translations = {
         'nav.support': 'Support',
         'nav.emergency': 'Emergency Call',
         'nav.login': 'Login / Sign Up',
+        'nav.user': 'User',
+        'nav.editInfo': 'Edit Information',
+        'nav.logOut': 'Log Out',
+        
+        // Sidebar
+        'sidebar.user': 'User',
+        'sidebar.emergency': 'Emergency',
+        'sidebar.editInfo': 'Edit Information',
+        'sidebar.logOut': 'Log Out',
+        
+        // Chat
+        'chat.title': 'Quick Assistance',
+        'chat.hint': 'Please provide your information to start chatting',
+        'chat.fullName': 'Full Name',
+        'chat.contactNumber': 'Contact Number',
+        'chat.location': 'Location',
+        'chat.concern': 'What is your concern?',
+        'chat.selectConcern': 'Select a concern...',
+        'chat.emergency': 'Emergency',
+        'chat.medical': 'Medical Assistance',
+        'chat.fire': 'Fire Emergency',
+        'chat.police': 'Police Assistance',
+        'chat.disaster': 'Disaster/Weather',
+        'chat.general': 'General Inquiry',
+        'chat.complaint': 'Complaint',
+        'chat.other': 'Other',
+        'chat.startChat': 'Start Chat',
+        'chat.typeMessage': 'Type your message...',
+        'chat.send': 'Send',
+        'chat.close': 'Close chat',
+        
+        // Login additional
+        'login.login': 'Login',
+        'login.createAccount': 'Create Account',
+        'login.or': 'OR',
+        'login.withGoogle': 'Login with Google',
+        'login.withPhone': 'Login with Phone Number (OTP)',
+        'login.verifyEmail': 'Verify Your Email',
+        'login.verifyPhone': 'Verify Your Phone',
+        'login.verificationCode': 'Verification Code',
+        'login.enterCode': 'Enter 6-digit code',
+        'login.codeHint': 'Enter the 6-digit code sent to your email',
+        'login.codeHintPhone': 'Enter the 6-digit code sent to your phone',
+        'login.verifyLogin': 'Verify & Login',
+        'login.resendCode': 'Resend Code',
+        'login.back': 'Back',
+        'login.sendOtpEmail': 'Send OTP to Email',
+        'login.emailHint': 'We\'ll send you a verification code via email',
         
         // Home page
         'home.title': 'QUEZON CITY EMERGENCY COMMUNICATION PORTAL',
@@ -81,6 +129,65 @@ const translations = {
         'common.cancel': 'Cancel',
         'common.close': 'Close',
         'common.loading': 'Loading...',
+        'common.submit': 'Submit',
+        'common.delete': 'Delete',
+        'common.edit': 'Edit',
+        'common.update': 'Update',
+        'common.add': 'Add',
+        'common.remove': 'Remove',
+        'common.search': 'Search',
+        'common.filter': 'Filter',
+        'common.clear': 'Clear',
+        'common.apply': 'Apply',
+        'common.reset': 'Reset',
+        'common.pleaseWait': 'Please wait...',
+        'common.error': 'Error',
+        'common.success': 'Success',
+        'common.warning': 'Warning',
+        'common.info': 'Info',
+        'common.yes': 'Yes',
+        'common.no': 'No',
+        'common.ok': 'OK',
+        'common.confirm': 'Confirm',
+        'common.back': 'Back',
+        'common.next': 'Next',
+        'common.previous': 'Previous',
+        'common.continue': 'Continue',
+        'common.finish': 'Finish',
+        'common.select': 'Select',
+        'common.choose': 'Choose',
+        'common.view': 'View',
+        'common.details': 'Details',
+        'common.more': 'More',
+        'common.less': 'Less',
+        'common.show': 'Show',
+        'common.hide': 'Hide',
+        'common.download': 'Download',
+        'common.upload': 'Upload',
+        'common.send': 'Send',
+        'common.receive': 'Receive',
+        'common.refresh': 'Refresh',
+        'common.reload': 'Reload',
+        
+        // Form elements
+        'form.fullName': 'Full Name',
+        'form.email': 'Email Address',
+        'form.mobileNumber': 'Mobile Number',
+        'form.phoneNumber': 'Phone Number',
+        'form.address': 'Address',
+        'form.city': 'City',
+        'form.country': 'Country',
+        'form.nationality': 'Nationality',
+        'form.password': 'Password',
+        'form.confirmPassword': 'Confirm Password',
+        'form.username': 'Username',
+        'form.enterName': 'Enter your name',
+        'form.enterEmail': 'Enter your email',
+        'form.enterPhone': 'Enter your phone',
+        'form.select': 'Select...',
+        'form.choose': 'Choose...',
+        'form.required': 'Required',
+        'form.optional': 'Optional',
     },
     fil: {
         // Navigation
@@ -90,6 +197,54 @@ const translations = {
         'nav.support': 'Suporta',
         'nav.emergency': 'Tawag sa Emergency',
         'nav.login': 'Mag-login / Mag-sign Up',
+        'nav.user': 'User',
+        'nav.editInfo': 'I-edit ang Impormasyon',
+        'nav.logOut': 'Mag-logout',
+        
+        // Sidebar
+        'sidebar.user': 'User',
+        'sidebar.emergency': 'Emergency',
+        'sidebar.editInfo': 'I-edit ang Impormasyon',
+        'sidebar.logOut': 'Mag-logout',
+        
+        // Chat
+        'chat.title': 'Mabilis na Tulong',
+        'chat.hint': 'Mangyaring magbigay ng iyong impormasyon upang magsimulang mag-chat',
+        'chat.fullName': 'Buong Pangalan',
+        'chat.contactNumber': 'Numero ng Kontakto',
+        'chat.location': 'Lokasyon',
+        'chat.concern': 'Ano ang iyong alalahanin?',
+        'chat.selectConcern': 'Pumili ng alalahanin...',
+        'chat.emergency': 'Emergency',
+        'chat.medical': 'Tulong Medikal',
+        'chat.fire': 'Emergency sa Sunog',
+        'chat.police': 'Tulong ng Pulis',
+        'chat.disaster': 'Kalamidad/Panahon',
+        'chat.general': 'Pangkalahatang Tanong',
+        'chat.complaint': 'Reklamo',
+        'chat.other': 'Iba pa',
+        'chat.startChat': 'Simulan ang Chat',
+        'chat.typeMessage': 'I-type ang iyong mensahe...',
+        'chat.send': 'Ipadala',
+        'chat.close': 'Isara ang chat',
+        
+        // Login additional
+        'login.login': 'Mag-login',
+        'login.createAccount': 'Gumawa ng Account',
+        'login.or': 'O',
+        'login.withGoogle': 'Mag-login gamit ang Google',
+        'login.withPhone': 'Mag-login gamit ang Numero ng Telepono (OTP)',
+        'login.verifyEmail': 'I-verify ang Iyong Email',
+        'login.verifyPhone': 'I-verify ang Iyong Telepono',
+        'login.verificationCode': 'Verification Code',
+        'login.enterCode': 'Ilagay ang 6-digit code',
+        'login.codeHint': 'Ilagay ang 6-digit code na ipinadala sa iyong email',
+        'login.codeHintPhone': 'Ilagay ang 6-digit code na ipinadala sa iyong telepono',
+        'login.verifyLogin': 'I-verify at Mag-login',
+        'login.resendCode': 'Ipadala ulit ang Code',
+        'login.back': 'Bumalik',
+        'login.sendOtpEmail': 'Ipadala ang OTP sa Email',
+        'login.emailHint': 'Magpapadala kami ng verification code sa pamamagitan ng email',
         
         // Home page
         'home.title': 'QUEZON CITY EMERGENCY COMMUNICATION PORTAL',
@@ -163,6 +318,65 @@ const translations = {
         'common.cancel': 'Kanselahin',
         'common.close': 'Isara',
         'common.loading': 'Naglo-load...',
+        'common.submit': 'Ipadala',
+        'common.delete': 'Tanggalin',
+        'common.edit': 'I-edit',
+        'common.update': 'I-update',
+        'common.add': 'Magdagdag',
+        'common.remove': 'Tanggalin',
+        'common.search': 'Maghanap',
+        'common.filter': 'I-filter',
+        'common.clear': 'Linisin',
+        'common.apply': 'Ilapat',
+        'common.reset': 'I-reset',
+        'common.pleaseWait': 'Mangyaring maghintay...',
+        'common.error': 'Error',
+        'common.success': 'Tagumpay',
+        'common.warning': 'Babala',
+        'common.info': 'Impormasyon',
+        'common.yes': 'Oo',
+        'common.no': 'Hindi',
+        'common.ok': 'OK',
+        'common.confirm': 'Kumpirmahin',
+        'common.back': 'Bumalik',
+        'common.next': 'Susunod',
+        'common.previous': 'Nakaraan',
+        'common.continue': 'Magpatuloy',
+        'common.finish': 'Tapusin',
+        'common.select': 'Pumili',
+        'common.choose': 'Pumili',
+        'common.view': 'Tingnan',
+        'common.details': 'Mga Detalye',
+        'common.more': 'Higit pa',
+        'common.less': 'Mas kaunti',
+        'common.show': 'Ipakita',
+        'common.hide': 'Itago',
+        'common.download': 'I-download',
+        'common.upload': 'I-upload',
+        'common.send': 'Ipadala',
+        'common.receive': 'Tumanggap',
+        'common.refresh': 'I-refresh',
+        'common.reload': 'I-reload',
+        
+        // Form elements
+        'form.fullName': 'Buong Pangalan',
+        'form.email': 'Email Address',
+        'form.mobileNumber': 'Numero ng Mobile',
+        'form.phoneNumber': 'Numero ng Telepono',
+        'form.address': 'Address',
+        'form.city': 'Lungsod',
+        'form.country': 'Bansa',
+        'form.nationality': 'Nasyonalidad',
+        'form.password': 'Password',
+        'form.confirmPassword': 'Kumpirmahin ang Password',
+        'form.username': 'Username',
+        'form.enterName': 'Ilagay ang iyong pangalan',
+        'form.enterEmail': 'Ilagay ang iyong email',
+        'form.enterPhone': 'Ilagay ang iyong telepono',
+        'form.select': 'Pumili...',
+        'form.choose': 'Pumili...',
+        'form.required': 'Kailangan',
+        'form.optional': 'Opsiyonal',
     }
 };
 
@@ -448,6 +662,13 @@ async function applyTranslations() {
     }
     
         console.log(`✓ Translations applied for language: ${lang}`);
+        
+        // Trigger global translator after translations are applied
+        if (window.globalTranslator) {
+            setTimeout(() => {
+                window.globalTranslator.translateAll();
+            }, 100);
+        }
     } finally {
         isApplyingTranslations = false;
     }
@@ -545,6 +766,11 @@ async function autoDetectAndSetLanguage() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🌍 Translation system initializing...');
     
+    // Load global translator if available
+    if (typeof GlobalTranslator !== 'undefined' && !window.globalTranslator) {
+        window.globalTranslator = new GlobalTranslator();
+    }
+    
     // Auto-detect and set language if not already set
     const currentLang = getCurrentLanguage();
     if (currentLang === 'en' && localStorage.getItem('user_language_set') !== 'true') {
@@ -554,16 +780,27 @@ document.addEventListener('DOMContentLoaded', function() {
             document.documentElement.setAttribute('data-lang', newLang);
             document.documentElement.setAttribute('lang', newLang);
             applyTranslations();
+            // Also run global translator
+            if (window.globalTranslator) {
+                window.globalTranslator.translateAll();
+            }
         });
     } else {
         document.documentElement.setAttribute('data-lang', currentLang);
         document.documentElement.setAttribute('lang', currentLang);
         applyTranslations();
+        // Also run global translator
+        if (window.globalTranslator) {
+            window.globalTranslator.translateAll();
+        }
     }
     
     // Also apply after a short delay to catch dynamically loaded content
     setTimeout(() => {
         applyTranslations();
+        if (window.globalTranslator) {
+            window.globalTranslator.translateAll();
+        }
     }, 500);
 });
 
@@ -581,6 +818,13 @@ document.addEventListener('languageChanged', function(event) {
     
     // Apply translations
     applyTranslations();
+    
+    // Also run global translator after a short delay to ensure translations are loaded
+    setTimeout(() => {
+        if (window.globalTranslator) {
+            window.globalTranslator.translateAll();
+        }
+    }, 100);
 });
 
 // Also listen for languagesUpdated event
