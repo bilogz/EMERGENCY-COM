@@ -27,6 +27,7 @@ $assetBase = '../ADMIN/header/';
     </script>
     <script src="js/translations.js"></script>
     <script src="js/language-manager.js"></script>
+    <script src="js/global-translator.js"></script>
     <script src="js/language-selector-modal.js"></script>
     <script src="js/language-sync.js"></script>
     <script>

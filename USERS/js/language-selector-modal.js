@@ -159,8 +159,11 @@ class LanguageSelectorModal {
             `;
         }
         
+        // Use selectedLanguage if set, otherwise fall back to currentLanguage
+        const selectedLangCode = this.selectedLanguage || this.currentLanguage;
+        
         return this.filteredLanguages.map(lang => {
-            const isSelected = lang.language_code === this.currentLanguage;
+            const isSelected = lang.language_code === selectedLangCode;
             const isAISupported = lang.is_ai_supported ? '<span class="ai-badge" title="AI Translation Available"><i class="fas fa-robot"></i></span>' : '';
             
             return `
@@ -317,6 +320,13 @@ class LanguageSelectorModal {
         applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applying...';
         
         try {
+            // Get auto-detect checkbox state
+            const autoDetectCheckbox = this.modal.querySelector('#autoDetectLanguageCheckbox');
+            const autoDetectEnabled = autoDetectCheckbox ? autoDetectCheckbox.checked : false;
+            
+            // Save auto-detect preference to localStorage
+            localStorage.setItem('autoDetectLanguage', autoDetectEnabled ? 'true' : 'false');
+            
             // Save to language manager if available
             if (window.languageManager) {
                 await window.languageManager.setLanguage(this.selectedLanguage);
@@ -324,19 +334,31 @@ class LanguageSelectorModal {
                 // Fallback: save directly
                 localStorage.setItem('preferredLanguage', this.selectedLanguage);
                 localStorage.setItem('user_language_set', 'true');
-                
-                // Save to server
-                try {
-                    const apiPath = this.getApiPath('api/user-language-preference.php');
-                    await fetch(apiPath, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({language: this.selectedLanguage})
-                    });
-                } catch (e) {
-                    console.error('Error saving language preference:', e);
-                }
             }
+            
+            // Save to server (both language and auto-detect preference)
+            try {
+                const apiPath = this.getApiPath('api/user-language-preference.php');
+                const response = await fetch(apiPath, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        language: this.selectedLanguage,
+                        auto_translate_enabled: autoDetectEnabled
+                    })
+                });
+                
+                const result = await response.json();
+                if (!result.success) {
+                    console.warn('Server save warning:', result.message);
+                }
+            } catch (e) {
+                console.error('Error saving language preference to server:', e);
+                // Continue anyway - preference is saved locally
+            }
+            
+            // Update current language
+            this.currentLanguage = this.selectedLanguage;
             
             // Apply translations immediately
             if (typeof applyTranslations === 'function') {
@@ -345,7 +367,10 @@ class LanguageSelectorModal {
             
             // Trigger language change event
             document.dispatchEvent(new CustomEvent('languageChanged', {
-                detail: {language: this.selectedLanguage}
+                detail: {
+                    language: this.selectedLanguage,
+                    autoDetectEnabled: autoDetectEnabled
+                }
             }));
             
             // Show success message
@@ -390,12 +415,23 @@ class LanguageSelectorModal {
         languageList.innerHTML = this.renderLanguageList();
         resultCount.textContent = `${this.filteredLanguages.length} language${this.filteredLanguages.length !== 1 ? 's' : ''} available`;
         
-        // Re-attach click handlers
+        // Re-attach click handlers and restore selection
         languageList.querySelectorAll('.language-item').forEach(item => {
             item.addEventListener('click', () => {
                 this.selectLanguage(item.dataset.langCode);
             });
+            
+            // Restore selection state if this was the selected language
+            if (this.selectedLanguage && item.dataset.langCode === this.selectedLanguage) {
+                item.classList.add('selected');
+            }
         });
+        
+        // Enable Apply button if a language is selected
+        if (this.selectedLanguage) {
+            const applyBtn = this.modal.querySelector('#applyBtn');
+            if (applyBtn) applyBtn.disabled = false;
+        }
     }
     
     async open() {
@@ -408,6 +444,21 @@ class LanguageSelectorModal {
         
         // Always refresh languages from admin-managed database when opening
         await this.loadLanguages(true);
+        
+        // Initialize selected language to current language
+        this.selectedLanguage = this.currentLanguage;
+        
+        // Update UI to show current selection and enable Apply button if language is already selected
+        if (this.selectedLanguage) {
+            const items = this.modal.querySelectorAll('.language-item');
+            items.forEach(item => {
+                if (item.dataset.langCode === this.selectedLanguage) {
+                    item.classList.add('selected');
+                }
+            });
+            const applyBtn = this.modal.querySelector('#applyBtn');
+            if (applyBtn) applyBtn.disabled = false;
+        }
         
         this.modal.classList.add('show');
         document.body.style.overflow = 'hidden';

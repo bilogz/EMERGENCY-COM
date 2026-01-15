@@ -20,6 +20,7 @@ $assetBase = '../ADMIN/header/';
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script src="js/translations.js"></script>
     <script src="js/language-manager.js"></script>
+    <script src="js/global-translator.js"></script>
     <script src="js/language-selector-modal.js"></script>
     <script src="js/language-sync.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -76,7 +77,7 @@ $assetBase = '../ADMIN/header/';
                         
                         <button type="submit" class="btn btn-primary btn-large" id="loginButton">
                             <i class="fas fa-sign-in-alt"></i>
-                            <span class="btn-text">Login</span>
+                            <span class="btn-text" data-translate="login.login">Login</span>
                             <span class="btn-spinner" style="display: none;">
                                 <i class="fas fa-spinner fa-spin"></i>
                             </span>
@@ -147,7 +148,7 @@ $assetBase = '../ADMIN/header/';
                         <div class="modal-backdrop"></div>
                         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="emailOtpLoginModalTitle">
                             <button class="modal-close" id="emailOtpLoginModalClose" aria-label="Close">&times;</button>
-                            <h3 id="emailOtpLoginModalTitle">Verify Your Email</h3>
+                            <h3 id="emailOtpLoginModalTitle" data-translate="login.verifyEmail">Verify Your Email</h3>
                             <p class="modal-sub">We've sent a 6-digit verification code to <strong id="emailOtpEmailDisplay"></strong></p>
 
                             <div id="emailOtpLoginSentBanner" style="display:none; margin-bottom:0.75rem; padding:0.75rem; border-radius:6px; background: rgba(40,167,69,0.12); border:1px solid rgba(40,167,69,0.2); color: #28a745;">Verification code sent successfully.</div>
@@ -194,7 +195,7 @@ $assetBase = '../ADMIN/header/';
                         <div class="modal-backdrop"></div>
                         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="otpLoginModalTitle">
                             <button class="modal-close" id="otpLoginModalClose" aria-label="Close">&times;</button>
-                            <h3 id="otpLoginModalTitle">Verify Your Phone</h3>
+                            <h3 id="otpLoginModalTitle" data-translate="login.verifyPhone">Verify Your Phone</h3>
                             <p class="modal-sub">We've sent a 6-digit verification code to <strong id="otpPhoneDisplay"></strong></p>
 
                             <div id="otpLoginSentBanner" style="display:none; margin-bottom:0.75rem; padding:0.75rem; border-radius:6px; background: rgba(40,167,69,0.12); border:1px solid rgba(40,167,69,0.2); color: #28a745;">Verification code sent successfully.</div>
@@ -238,7 +239,7 @@ $assetBase = '../ADMIN/header/';
 
                     <!-- Alternative Login Options -->
                     <div class="auth-divider">
-                        <span>OR</span>
+                        <span data-translate="login.or">OR</span>
                     </div>
                     <div class="alternative-login-buttons" style="display: flex; gap: 1rem; flex-wrap: wrap;">
                         <!-- Google OAuth Login -->
@@ -253,13 +254,13 @@ $assetBase = '../ADMIN/header/';
                                     </g>
                                 </svg>
                             </span>
-                            <span class="google-text">Login with Google</span>
+                            <span class="google-text" data-translate="login.withGoogle">Login with Google</span>
                         </button>
 
                         <!-- Phone OTP Login -->
                         <button type="button" id="phoneOtpLoginBtn" class="btn btn-phone-otp" style="flex: 1; min-width: 200px;">
                             <i class="fas fa-mobile-alt"></i>
-                            <span>Login with Phone Number (OTP)</span>
+                            <span data-translate="login.withPhone">Login with Phone Number (OTP)</span>
                         </button>
                     </div>
 
@@ -267,7 +268,7 @@ $assetBase = '../ADMIN/header/';
                     <div class="auth-switch" style="margin-top: 1rem;">
                         <a href="signup.php" class="btn btn-secondary sign-up-btn" style="width: 100%; justify-content: center;">
                             <i class="fas fa-user-plus"></i>
-                            <span>Create Account</span>
+                            <span data-translate="login.createAccount">Create Account</span>
                         </a>
                     </div>
                 </section>

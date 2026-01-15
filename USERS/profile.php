@@ -24,6 +24,7 @@ $current = 'profile.php';
     <script src="js/language-manager.js"></script>
     <script src="js/language-selector-modal.js"></script>
     <script src="js/language-sync.js"></script>
+    <script src="js/global-translator.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const langBtn = document.getElementById('languageSelectorBtn');
@@ -164,6 +165,7 @@ $current = 'profile.php';
     <script src="js/language-manager.js"></script>
     <script src="js/language-selector-modal.js"></script>
     <script src="js/language-sync.js"></script>
+    <script src="js/global-translator.js"></script>
     <script>
         // Connect language selector button to modal
         document.addEventListener('DOMContentLoaded', function() {

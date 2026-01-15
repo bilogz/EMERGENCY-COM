@@ -46,36 +46,36 @@ include __DIR__ . '/guest-monitoring-notice.php';
     <div class="sidebar-content">
         <nav class="sidebar-nav">
             <div class="sidebar-section">
-                <h3 class="sidebar-section-title">User</h3>
+                <h3 class="sidebar-section-title" data-translate="sidebar.user">User</h3>
                 <ul class="sidebar-menu">
                     <li class="sidebar-menu-item">
                         <a href="<?= $isRootContext ? 'index.php' : '../index.php' ?>" class="sidebar-link <?= ($current === 'index.php' || $current === 'home.php') ? 'active' : '' ?>">
                             <i class="fas fa-home"></i>
-                            <span>Home</span>
+                            <span data-translate="nav.home">Home</span>
                         </a>
                     </li>
                     <li class="sidebar-menu-item">
                         <a href="<?= $basePath ?><?= $linkPrefix ?>alerts.php" class="sidebar-link <?= $current === 'alerts.php' ? 'active' : '' ?>">
                             <i class="fas fa-bell"></i>
-                            <span>Alerts</span>
+                            <span data-translate="nav.alerts">Alerts</span>
                         </a>
                     </li>
                     <li class="sidebar-menu-item">
                         <a href="<?= $basePath ?><?= $linkPrefix ?>support.php" class="sidebar-link <?= $current === 'support.php' ? 'active' : '' ?>">
                             <i class="fas fa-life-ring"></i>
-                            <span>Support</span>
+                            <span data-translate="nav.support">Support</span>
                         </a>
                     </li>
                 </ul>
             </div>
 
             <div class="sidebar-section">
-                <h3 class="sidebar-section-title">Emergency</h3>
+                <h3 class="sidebar-section-title" data-translate="sidebar.emergency">Emergency</h3>
                 <ul class="sidebar-menu">
                     <li class="sidebar-menu-item">
                         <a href="<?= $basePath ?><?= $linkPrefix ?>emergency-call.php" class="sidebar-link <?= $current === 'emergency-call.php' ? 'active' : '' ?>">
                             <i class="fas fa-phone-alt"></i>
-                            <span>Emergency Call</span>
+                            <span data-translate="nav.emergency">Emergency Call</span>
                         </a>
                     </li>
                 </ul>
@@ -118,10 +118,10 @@ include __DIR__ . '/guest-monitoring-notice.php';
                 </div>
                 <div class="user-dropdown-actions">
                     <a href="<?= $basePath ?><?= $linkPrefix ?>profile.php" class="user-dropdown-link">
-                        <i class="fas fa-edit"></i> Edit Information
+                        <i class="fas fa-edit"></i> <span data-translate="sidebar.editInfo">Edit Information</span>
                     </a>
                     <button class="user-dropdown-link user-logout-btn" id="userLogoutBtn">
-                        <span>Log Out</span>
+                        <span data-translate="sidebar.logOut">Log Out</span>
                         <i class="fas fa-arrow-right"></i>
                     </button>
                 </div>
@@ -137,7 +137,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
 <div class="chat-modal" id="chatModal" aria-hidden="true">
     <div class="chat-modal-content">
         <div class="chat-modal-header">
-            <h3>Quick Assistance</h3>
+            <h3 data-translate="chat.title">Quick Assistance</h3>
             <button class="chat-close-btn" id="chatCloseBtn" aria-label="Close chat">
                 <i class="fas fa-times"></i>
             </button>
@@ -145,20 +145,20 @@ include __DIR__ . '/guest-monitoring-notice.php';
         <div class="chat-modal-body">
             <!-- User Info Form (shown for anonymous/guest users) -->
             <div class="chat-user-info-form" id="chatUserInfoForm" style="display: none;">
-                <p class="chat-hint" style="margin-bottom: 1.25rem;">Please provide your information to start chatting</p>
+                <p class="chat-hint" style="margin-bottom: 1.25rem;" data-translate="chat.hint">Please provide your information to start chatting</p>
                 <form id="userInfoForm" class="chat-form">
                     <div class="chat-form-group">
-                        <label for="userNameInput">Full Name <span class="required-asterisk">*</span></label>
-                        <input type="text" id="userNameInput" name="name" required placeholder="Enter your full name" class="chat-form-input">
+                        <label for="userNameInput"><span data-translate="chat.fullName">Full Name</span> <span class="required-asterisk">*</span></label>
+                        <input type="text" id="userNameInput" name="name" required data-translate-placeholder="form.enterName" placeholder="Enter your full name" class="chat-form-input">
                     </div>
                     <div class="chat-form-group">
-                        <label for="userContactInput">Contact Number <span class="required-asterisk">*</span></label>
-                        <input type="tel" id="userContactInput" name="contact" required placeholder="09XX XXX XXXX" class="chat-form-input">
+                        <label for="userContactInput"><span data-translate="chat.contactNumber">Contact Number</span> <span class="required-asterisk">*</span></label>
+                        <input type="tel" id="userContactInput" name="contact" required data-translate-placeholder="form.enterPhone" placeholder="09XX XXX XXXX" class="chat-form-input">
                     </div>
                     <div class="chat-form-group">
-                        <label for="userLocationSearch">Location <span class="required-asterisk">*</span></label>
+                        <label for="userLocationSearch"><span data-translate="chat.location">Location</span> <span class="required-asterisk">*</span></label>
                         <div class="searchable-select-wrapper">
-                            <input type="text" id="userLocationSearch" class="chat-form-input searchable-select-input" placeholder="Search barangay..." autocomplete="off" aria-label="Location">
+                            <input type="text" id="userLocationSearch" class="chat-form-input searchable-select-input" data-translate-placeholder="form.select" placeholder="Search barangay..." autocomplete="off" aria-label="Location">
                             <input type="hidden" id="userLocationInput" name="location" required>
                             <div class="searchable-select-dropdown" id="locationDropdown" style="display: none;">
                                 <div class="searchable-select-list">
@@ -167,20 +167,20 @@ include __DIR__ . '/guest-monitoring-notice.php';
                         </div>
                     </div>
                     <div class="chat-form-group">
-                        <label for="userConcernSelect">What is your concern? <span class="required-asterisk">*</span></label>
+                        <label for="userConcernSelect"><span data-translate="chat.concern">What is your concern?</span> <span class="required-asterisk">*</span></label>
                         <select id="userConcernSelect" name="concern" required class="chat-form-select">
-                            <option value="">Select a concern...</option>
-                            <option value="emergency">Emergency</option>
-                            <option value="medical">Medical Assistance</option>
-                            <option value="fire">Fire Emergency</option>
-                            <option value="police">Police Assistance</option>
-                            <option value="disaster">Disaster/Weather</option>
-                            <option value="general">General Inquiry</option>
-                            <option value="complaint">Complaint</option>
-                            <option value="other">Other</option>
+                            <option value="" data-translate="chat.selectConcern">Select a concern...</option>
+                            <option value="emergency" data-translate="chat.emergency">Emergency</option>
+                            <option value="medical" data-translate="chat.medical">Medical Assistance</option>
+                            <option value="fire" data-translate="chat.fire">Fire Emergency</option>
+                            <option value="police" data-translate="chat.police">Police Assistance</option>
+                            <option value="disaster" data-translate="chat.disaster">Disaster/Weather</option>
+                            <option value="general" data-translate="chat.general">General Inquiry</option>
+                            <option value="complaint" data-translate="chat.complaint">Complaint</option>
+                            <option value="other" data-translate="chat.other">Other</option>
                         </select>
                     </div>
-                    <button type="submit" class="chat-form-submit" disabled>Start Chat</button>
+                    <button type="submit" class="chat-form-submit" disabled data-translate="chat.startChat">Start Chat</button>
                 </form>
             </div>
 
