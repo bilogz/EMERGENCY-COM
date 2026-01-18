@@ -290,12 +290,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
 } elseif ($action === 'list') {
     try {
         $stmt = $pdo->query("
-            SELECT id, channel, message, recipient, recipients, status, sent_at
+            SELECT id, channel, message, recipients, status, sent_at, response
             FROM notification_logs
             ORDER BY sent_at DESC
-            LIMIT 100
+            LIMIT 50
         ");
-        $notifications = $stmt->fetchAll();
+        $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Ensure status and progress are calculated correctly for UI
+        foreach ($notifications as &$notif) {
+            $stats = json_decode($notif['response'] ?? '', true);
+            if ($stats) {
+                $notif['progress'] = $stats['progress'] ?? 0;
+                $notif['stats'] = $stats;
+            } else {
+                // If no stats yet, it's either pending in script or just finished queuing (sent)
+                // In both cases, background worker hasn't started yet.
+                $notif['progress'] = ($notif['status'] === 'completed' || $notif['status'] === 'success') ? 100 : 0;
+            }
+        }
         
         echo json_encode([
             'success' => true,
@@ -304,6 +317,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
     } catch (PDOException $e) {
         error_log("List Notifications Error: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
+    }
+} elseif ($action === 'get_options') {
+    try {
+        // Fetch Barangays
+        $bStmt = $pdo->query("SELECT DISTINCT barangay FROM users WHERE barangay IS NOT NULL AND barangay != '' ORDER BY barangay");
+        $barangays = $bStmt->fetchAll(PDO::FETCH_COLUMN);
+
+        // Fetch Categories with visual metadata
+        $cStmt = $pdo->query("SELECT id, name, icon, color FROM alert_categories ORDER BY name");
+        $categories = $cStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Fetch Templates
+        $tStmt = $pdo->query("SELECT t.*, c.name as category_name FROM notification_templates t LEFT JOIN alert_categories c ON t.category_id = c.id ORDER BY t.created_at DESC");
+        $templates = $tStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true,
+            'barangays' => $barangays,
+            'categories' => $categories,
+            'templates' => $templates
+        ]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
     }
 } else {
     echo json_encode(['success' => false, 'message' => 'Invalid action.']);

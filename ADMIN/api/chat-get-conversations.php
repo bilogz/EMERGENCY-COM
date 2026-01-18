@@ -37,26 +37,35 @@ try {
     
     $stmt = $pdo->prepare("
         SELECT 
-            conversation_id,
-            user_id,
-            user_name,
-            user_email,
-            user_phone,
-            user_location,
-            user_concern,
-            is_guest,
-            device_info,
-            ip_address,
-            user_agent,
-            status,
-            last_message,
-            last_message_time,
-            assigned_to,
-            created_at,
-            updated_at
-        FROM conversations 
-        WHERE status = ?
-        ORDER BY updated_at DESC
+            c.conversation_id,
+            c.user_id,
+            c.user_name,
+            c.user_email,
+            c.user_phone,
+            c.user_location,
+            c.user_concern,
+            c.is_guest,
+            c.device_info,
+            c.ip_address,
+            c.user_agent,
+            c.status,
+            c.assigned_to,
+            c.created_at,
+            c.updated_at,
+            COALESCE(m.message_text, c.last_message) as last_message,
+            COALESCE(m.created_at, c.last_message_time) as last_message_time
+        FROM conversations c
+        LEFT JOIN (
+            SELECT m1.conversation_id, m1.message_text, m1.created_at
+            FROM chat_messages m1
+            INNER JOIN (
+                SELECT conversation_id, MAX(created_at) as max_created_at
+                FROM chat_messages
+                GROUP BY conversation_id
+            ) m2 ON m1.conversation_id = m2.conversation_id AND m1.created_at = m2.max_created_at
+        ) m ON c.conversation_id = m.conversation_id
+        WHERE c.status = ?
+        ORDER BY c.updated_at DESC
         LIMIT ? OFFSET ?
     ");
     $stmt->execute([$status, $limit, $offset]);

@@ -96,6 +96,9 @@ try {
         case 'analyze':
             analyzeEarthquakeImpact();
             break;
+        case 'assess_risk':
+            assessEarthquakeRisk();
+            break;
         case 'test':
             // Diagnostic endpoint to test API connectivity
             ob_clean();
@@ -831,5 +834,113 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
     $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
     
     return $earthRadius * $c;
+}
+
+/**
+ * Assess earthquake risk specifically for prediction and planning
+ */
+function assessEarthquakeRisk() {
+    global $pdo;
+    
+    // Check if AI analysis is enabled for earthquake
+    if (!isAIAnalysisEnabled('earthquake')) {
+        ob_clean();
+        http_response_code(403);
+        $output = json_encode([
+            'success' => false, 
+            'message' => 'AI earthquake analysis is currently disabled.'
+        ], JSON_UNESCAPED_UNICODE);
+        echo $output;
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
+        exit();
+    }
+    
+    try {
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        
+        if (!$data || !isset($data['earthquakes'])) {
+            throw new Exception('No earthquake data provided');
+        }
+        
+        $earthquakes = $data['earthquakes'];
+        $baseRisk = $data['base_risk'] ?? 'unknown';
+        
+        // Get API key
+        $apiKey = getGeminiApiKey('analysis');
+        if (empty($apiKey)) {
+            $apiKey = getGeminiApiKey('default');
+        }
+        
+        if (empty($apiKey)) {
+            throw new Exception('API key not configured');
+        }
+        
+        // Build prompt
+        $prompt = buildRiskAssessmentPrompt($earthquakes, $baseRisk);
+        
+        // Call API
+        $response = callGeminiAI($apiKey, $prompt);
+        
+        if ($response['success']) {
+            ob_clean();
+            echo json_encode([
+                'success' => true,
+                'analysis' => $response['content'],
+                'timestamp' => date('Y-m-d H:i:s')
+            ], JSON_UNESCAPED_UNICODE);
+        } else {
+            throw new Exception($response['error'] ?? 'AI processing failed');
+        }
+        
+    } catch (Exception $e) {
+        ob_clean();
+        http_response_code(500);
+        echo json_encode([
+            'success' => false, 
+            'message' => $e->getMessage()
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
+    exit();
+}
+
+/**
+ * Build prompt for risk assessment and prediction
+ */
+function buildRiskAssessmentPrompt($earthquakes, $baseRisk) {
+    // Summarize earthquake data for the prompt
+    $count = count($earthquakes);
+    $qcLat = 14.6488;
+    $qcLon = 121.0509;
+    
+    $prompt = "Act as an expert Seismic Risk Analyst for the Quezon City Local Government Unit (LGU).\n";
+    $prompt .= "Analyze the following recent earthquake data (last 30 days) relative to Quezon City (Lat: $qcLat, Lon: $qcLon).\n";
+    $prompt .= "The calculated base risk level based on distance/magnitude is: " . strtoupper($baseRisk) . ".\n\n";
+    
+    $prompt .= "Recent Seismic Activity ($count events):\n";
+    // Limit to top 10 most relevant for brevity in prompt
+    $relevant = array_slice($earthquakes, 0, 10);
+    foreach ($relevant as $eq) {
+        $prompt .= "- Mag {$eq['magnitude']} | Depth {$eq['depth']}km | Dist {$eq['distanceFromQC']}km\n";
+    }
+    
+    $prompt .= "\nBased on these patterns, generate a structured Risk Analysis & Prediction Report specifically for Quezon City.\n";
+    $prompt .= "Output MUST be valid JSON with the following fields:\n";
+    $prompt .= "{\n";
+    $prompt .= "  \"ai_risk_level\": \"Low | Moderate | High\",\n";
+    $prompt .= "  \"risk_summary\": \"Concise summary of the current seismic threat level.\",\n";
+    $prompt .= "  \"prediction\": \"Short-term prediction (7-14 days) with confidence level (Low/Medium/High). Analyze trends (swarms, aftershocks, increasing intensity).\",\n";
+    $prompt .= "  \"impact_analysis\": \"Potential effects on Quezon City's people, infrastructure (bridges, tall buildings), and utilities if activity escalates.\",\n";
+    $prompt .= "  \"recommendations\": \"Specific, actionable preparedness and mitigation steps for the LGU.\"\n";
+    $prompt .= "}\n";
+    $prompt .= "Tone: Official, authoritative, forecast-oriented. No markdown formatting, just raw JSON.";
+    
+    return $prompt;
 }
 
