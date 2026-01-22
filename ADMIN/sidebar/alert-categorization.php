@@ -42,133 +42,363 @@ $pageTitle = 'Alert Categorization';
 </head>
 <body>
     <style>
-        .preview-container {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
+        /* Enhanced Alert Categorization Styles */
+        :root {
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --transition-speed: 0.2s;
+        }
+
+        .module-card {
+            background: var(--card-bg-1);
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color-1);
+            overflow: hidden;
+            height: 100%;
+            transition: box-shadow var(--transition-speed) ease;
+        }
+
+        .module-card:hover {
+            box-shadow: var(--card-shadow-hover);
+        }
+
+        .module-card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color-1);
+            background: var(--bg-color-1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .module-card-header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-color-1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .module-card-content {
             padding: 1.5rem;
-            margin-top: 1rem;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 150px;
         }
-        .category-preview-card {
-            padding: 1rem 2rem;
-            border-radius: 12px;
-            color: white;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            font-size: 1.25rem;
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
             font-weight: 600;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            transition: all 0.3s ease;
+            color: var(--text-color-1);
+            font-size: 0.9rem;
         }
-        .category-preview-card i {
-            font-size: 1.5rem;
+
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: var(--bg-color-1);
+            color: var(--text-color-1);
+            transition: border-color var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
         }
+
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--primary-color-1);
+            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        /* Icon Grid */
         .icon-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
-            gap: 0.5rem;
+            grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+            gap: 0.75rem;
             margin-top: 0.5rem;
-            max-height: 150px;
+            max-height: 160px;
             overflow-y: auto;
-            padding: 0.5rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            background: var(--bg-color-1);
         }
+
         .icon-option {
             display: flex;
             align-items: center;
             justify-content: center;
             height: 40px;
-            border: 1px solid #eee;
-            border-radius: 4px;
+            border: 1px solid var(--border-color-1);
+            border-radius: 6px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all var(--transition-speed) ease;
+            color: var(--text-secondary-1);
+            background: var(--card-bg-1);
         }
+
         .icon-option:hover {
-            background: #f0f0f0;
+            background: rgba(76, 138, 137, 0.1);
             border-color: var(--primary-color-1);
+            color: var(--primary-color-1);
         }
+
         .icon-option.selected {
             background: var(--primary-color-1);
             color: white;
             border-color: var(--primary-color-1);
+            box-shadow: 0 2px 4px rgba(76, 138, 137, 0.3);
         }
-        .status-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
+
+        /* Live Preview */
+        .preview-container {
+            background: var(--bg-color-1);
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            padding: 2rem;
+            margin-top: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 180px;
+            position: relative;
+        }
+
+        .category-preview-card {
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            transition: all 0.3s ease;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-        .status-active { background: #e8f5e9; color: #2e7d32; }
-        .status-inactive { background: #ffebee; color: #c62828; }
-        .muted-row { opacity: 0.6; filter: grayscale(0.5); }
+
+        .category-preview-card i {
+            font-size: 1.4rem;
+        }
+
+        /* Data Table Enhancements */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th, .data-table td {
+            padding: 1rem 1.25rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color-1);
+        }
+
+        .data-table th {
+            background-color: var(--bg-color-1);
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary-1);
+        }
+
+        .data-table tr:hover {
+            background-color: rgba(0,0,0,0.02);
+        }
+
+        .expand-btn {
+            cursor: pointer;
+            color: var(--text-secondary-1);
+            transition: transform 0.2s ease, color 0.2s ease;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+
+        .expand-btn:hover {
+            background-color: rgba(0,0,0,0.05);
+            color: var(--primary-color-1);
+        }
+
+        .expand-btn.active {
+            transform: rotate(180deg);
+            color: var(--primary-color-1);
+        }
+
+        /* Badges */
+        .status-badge {
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            display: inline-block;
+        }
+
+        .status-active { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
+        .status-inactive { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
+        
+        .muted-row { opacity: 0.6; }
 
         /* Analytics and Audit Log UI */
-        .details-row { background: #fdfdfd !important; display: none; }
-        .details-content { padding: 1.5rem; border: 1px solid #eee; border-top: none; }
-        .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-box { background: white; padding: 1rem; border-radius: 8px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
-        .stat-box .label { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
-        .stat-box .value { font-size: 1.25rem; font-weight: 700; color: var(--primary-color-1); }
-        .audit-list { font-size: 0.85rem; max-height: 200px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px; background: white; }
-        .audit-item { padding: 8px 12px; border-bottom: 1px solid #f5f5f5; display: flex; justify-content: space-between; align-items: center; }
+        .details-row { background: var(--bg-color-1) !important; display: none; }
+        .details-content { padding: 1.5rem; border-top: 1px solid var(--border-color-1); }
+        
+        .analytics-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
+            gap: 1rem; 
+            margin-bottom: 1.5rem; 
+        }
+        
+        .stat-box { 
+            background: var(--card-bg-1); 
+            padding: 1rem; 
+            border-radius: 8px; 
+            border: 1px solid var(--border-color-1); 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+        }
+        
+        .stat-box .label { 
+            font-size: 0.7rem; 
+            color: var(--text-secondary-1); 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px; 
+            margin-bottom: 0.5rem; 
+            font-weight: 600;
+        }
+        
+        .stat-box .value { 
+            font-size: 1.4rem; 
+            font-weight: 700; 
+            color: var(--text-color-1); 
+        }
+        
+        .audit-list { 
+            font-size: 0.85rem; 
+            max-height: 250px; 
+            overflow-y: auto; 
+            border: 1px solid var(--border-color-1); 
+            border-radius: 8px; 
+            background: var(--card-bg-1); 
+        }
+        
+        .audit-item { 
+            padding: 0.75rem 1rem; 
+            border-bottom: 1px solid var(--border-color-1); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        
         .audit-item:last-child { border-bottom: none; }
-        .audit-date { color: #999; font-size: 0.75rem; white-space: nowrap; margin-left: 10px; }
-        .expand-btn { cursor: pointer; color: var(--primary-color-1); transition: transform 0.2s; }
-        .expand-btn.active { transform: rotate(180deg); }
-        .access-denied { opacity: 0.7; pointer-events: none; position: relative; }
-        .access-denied::after { content: '\f023  Restricted'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; z-index: 10; }
+        
+        .audit-date { 
+            color: var(--text-secondary-1); 
+            font-size: 0.75rem; 
+            white-space: nowrap; 
+            margin-left: 1rem; 
+        }
+        
+        .access-denied { 
+            opacity: 0.6; 
+            pointer-events: none; 
+            position: relative; 
+        }
+        
+        .access-denied::after { 
+            content: '\f023  Restricted'; 
+            font-family: 'Font Awesome 6 Free'; 
+            font-weight: 900; 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            background: rgba(0,0,0,0.7); 
+            color: white; 
+            padding: 0.5rem 1.25rem; 
+            border-radius: 50px; 
+            font-size: 0.9rem; 
+            z-index: 10; 
+            backdrop-filter: blur(4px);
+        }
 
         /* Impact Warnings & AI Suggestions */
         .impact-warning {
             display: inline-flex;
             align-items: center;
-            gap: 5px;
-            background: #fff3e0;
-            color: #e65100;
-            padding: 3px 8px;
+            gap: 0.35rem;
+            background: rgba(243, 156, 18, 0.1);
+            color: #f39c12;
+            padding: 0.25rem 0.6rem;
             border-radius: 12px;
             font-size: 0.7rem;
-            font-weight: 600;
-            margin-left: 10px;
-            border: 1px solid #ffe0b2;
+            font-weight: 700;
+            margin-left: 0.75rem;
+            border: 1px solid rgba(243, 156, 18, 0.2);
         }
+        
         .ai-suggestion-box {
-            background: #f3e5f5;
+            background: rgba(156, 39, 176, 0.05);
             border-left: 4px solid #9c27b0;
-            padding: 10px 15px;
-            border-radius: 4px;
-            margin: 10px 0;
-            font-size: 0.85rem;
-            color: #4a148c;
+            padding: 1rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+            color: var(--text-color-1);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
+        
         .ai-badge {
             background: #9c27b0;
             color: white;
-            padding: 2px 6px;
+            padding: 0.2rem 0.5rem;
             border-radius: 4px;
             font-size: 0.65rem;
             font-weight: 800;
-            margin-right: 5px;
+            margin-right: 0.5rem;
+            text-transform: uppercase;
         }
+        
         .chart-container {
-            height: 180px;
-            margin-top: 10px;
+            height: 200px;
+            margin-top: 0.5rem;
         }
+        
         .export-actions {
             display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+
+        @media (max-width: 992px) {
+            .page-content > div { grid-template-columns: 1fr !important; }
         }
     </style>
 
@@ -187,13 +417,8 @@ $pageTitle = 'Alert Categorization';
                 <nav class="breadcrumb" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list">
                         <li class="breadcrumb-item">
-                            <a href="/" class="breadcrumb-link">
-                                <span>Home</span>
-                            </a>
-                        </li>
-                        <li class="breadcrumb-item">
-                            <a href="#" class="breadcrumb-link">
-                                <span>Emergency Communication</span>
+                            <a href="dashboard.php" class="breadcrumb-link">
+                                <span>Dashboard</span>
                             </a>
                         </li>
                         <li class="breadcrumb-item active" aria-current="page">
@@ -201,13 +426,13 @@ $pageTitle = 'Alert Categorization';
                         </li>
                     </ol>
                 </nav>
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
                     <div>
-                        <h1>Alert Categorization</h1>
+                        <h1><i class="fas fa-tags" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Alert Categorization</h1>
                         <p>Organize and manage alert categories for effective emergency communication.</p>
                     </div>
-                    <div style="text-align: right;">
-                        <span class="badge" style="background: #e3f2fd; color: #1976d2; padding: 8px 15px; border-radius: 20px; font-weight: 600;">
+                    <div>
+                        <span class="badge" style="background: rgba(52, 152, 219, 0.1); color: #3498db; padding: 0.5rem 1rem; border-radius: 20px; font-weight: 600; border: 1px solid rgba(52, 152, 219, 0.2);">
                             <i class="fas fa-user-shield"></i> Role: <?php echo ucwords(str_replace('_', ' ', $adminRole)); ?>
                         </span>
                     </div>
@@ -245,7 +470,7 @@ $pageTitle = 'Alert Categorization';
                                     <div class="form-row">
                                         <div class="form-group">
                                             <label for="categoryColor">Identity Color *</label>
-                                            <input type="color" id="categoryColor" name="color" value="#4c8a89" <?php echo !$canEdit ? 'disabled' : ''; ?>>
+                                            <input type="color" id="categoryColor" name="color" value="#4c8a89" style="height: 42px; padding: 0.25rem;" <?php echo !$canEdit ? 'disabled' : ''; ?>>
                                         </div>
                                         <div class="form-group">
                                             <label for="categoryStatus">Status</label>
@@ -257,10 +482,10 @@ $pageTitle = 'Alert Categorization';
                                     </div>
                                     <div class="form-actions">
                                         <?php if ($canEdit): ?>
-                                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                                        <button type="submit" class="btn btn-primary" id="submitBtn" style="padding: 0.75rem 1.5rem;">
                                             <i class="fas fa-save"></i> Save Category
                                         </button>
-                                        <button type="button" class="btn btn-secondary" id="resetBtn" style="display:none;">
+                                        <button type="button" class="btn btn-secondary" id="resetBtn" style="display:none; padding: 0.75rem 1.5rem;">
                                             <i class="fas fa-times"></i> Cancel Edit
                                         </button>
                                         <?php endif; ?>
@@ -275,7 +500,7 @@ $pageTitle = 'Alert Categorization';
                                 <h2><i class="fas fa-eye"></i> Live Preview</h2>
                             </div>
                             <div class="module-card-content">
-                                <p style="font-size: 0.85rem; color: #666; margin-bottom: 1rem;">Citizens see this visual style in their alert feed.</p>
+                                <p style="font-size: 0.9rem; color: var(--text-secondary-1); margin-bottom: 1rem;">Citizens see this visual style in their alert feed.</p>
                                 <div class="preview-container">
                                     <div id="livePreview" class="category-preview-card">
                                         <i class="fas fa-exclamation-triangle" id="previewIcon"></i>
@@ -292,20 +517,22 @@ $pageTitle = 'Alert Categorization';
                             <h2><i class="fas fa-list"></i> Managed Categories</h2>
                         </div>
                         <div class="module-card-content">
-                            <table class="data-table" id="categoriesTable">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 40px;"></th>
-                                        <th>Name</th>
-                                        <th>Visual</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <!-- Data loaded via API -->
-                                </tbody>
-                            </table>
+                            <div style="overflow-x: auto;">
+                                <table class="data-table" id="categoriesTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 40px;"></th>
+                                            <th>Name</th>
+                                            <th>Visual Identity</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Data loaded via API -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -446,7 +673,7 @@ $pageTitle = 'Alert Categorization';
                                     </div>
                                 </td>
                                 <td>
-                                    <div style="background:${cat.color}; color:white; padding:5px 12px; border-radius:15px; display:inline-flex; align-items:center; gap:8px; font-size:0.85rem;">
+                                    <div style="background:${cat.color}; color:white; padding:0.35rem 0.75rem; border-radius:50px; display:inline-flex; align-items:center; gap:0.5rem; font-size:0.8rem; font-weight: 600; text-transform: uppercase;">
                                         <i class="fas ${cat.icon}"></i> ${cat.name}
                                     </div>
                                 </td>
@@ -553,8 +780,8 @@ $pageTitle = 'Alert Categorization';
             const canExport = adminRole === 'super_admin' || adminRole === 'admin';
 
             container.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1.5rem;">
+                    <div style="flex: 1; min-width: 300px;">
                         <div class="analytics-grid">
                             <div class="stat-box">
                                 <div class="label">Total Alerts</div>
@@ -571,7 +798,7 @@ $pageTitle = 'Alert Categorization';
                         </div>
                         ${aiSuggestion}
                     </div>
-                    <div style="flex: 1; margin-left: 20px;">
+                    <div style="flex: 1; min-width: 300px;">
                         <div class="stat-box" style="height: auto;">
                             <div class="label">7-Day Usage Trend</div>
                             <div class="chart-container">
@@ -586,11 +813,11 @@ $pageTitle = 'Alert Categorization';
                     <button class="btn btn-sm btn-secondary" onclick="exportCategoryData(${id}, 'pdf')"><i class="fas fa-file-pdf"></i> Export PDF</button>
                 </div>
 
-                <div class="module-card" style="box-shadow: none; border: 1px solid #eee; margin-top: 15px;">
-                    <div class="module-card-header" style="padding: 10px 15px;">
-                        <h4 style="margin:0; font-size:0.9rem;"><i class="fas fa-history"></i> Recent Audit Trail</h4>
+                <div class="module-card" style="box-shadow: none; border: 1px solid var(--border-color-1); margin-top: 1rem;">
+                    <div class="module-card-header" style="padding: 0.75rem 1rem;">
+                        <h4 style="margin:0; font-size:0.9rem; font-weight: 700;"><i class="fas fa-history"></i> Recent Audit Trail</h4>
                     </div>
-                    <div class="audit-list">
+                    <div class="audit-list" style="border: none;">
                         ${auditLogsHtml}
                     </div>
                 </div>

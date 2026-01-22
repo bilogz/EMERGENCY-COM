@@ -33,57 +33,78 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
     <style>
+        /* Enhanced Communication Interface Styles */
+        :root {
+            --chat-sidebar-width: 320px;
+            --message-radius: 18px;
+            --transition-speed: 0.2s;
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
         .communication-container {
             display: grid;
-            grid-template-columns: 320px 1fr;
+            grid-template-columns: var(--chat-sidebar-width) 1fr;
             gap: 1.5rem;
-            height: calc(100vh - 280px);
-            min-height: 500px;
+            height: calc(100vh - 240px);
+            min-height: 600px;
+            position: relative;
         }
+
+        /* Sidebar / Conversations List */
         .conversations-list-container {
             display: flex;
             flex-direction: column;
             background: var(--card-bg-1);
             border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color-1);
             overflow: hidden;
             height: 100%;
         }
+
         .chat-tabs {
             display: flex;
             border-bottom: 1px solid var(--border-color-1);
             background: var(--bg-color-1);
             flex-shrink: 0;
         }
+
         .chat-tab {
             flex: 1;
             padding: 1rem;
             text-align: center;
             cursor: pointer;
-            font-weight: 500;
+            font-weight: 600;
+            font-size: 0.9rem;
             color: var(--text-secondary-1);
-            transition: all 0.2s ease;
-            border-bottom: 2px solid transparent;
+            transition: all var(--transition-speed) ease;
+            border-bottom: 3px solid transparent;
             user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
         }
+
         .chat-tab:hover {
             color: var(--primary-color-1);
             background: rgba(76, 138, 137, 0.05);
         }
+
         .chat-tab.active {
             color: var(--primary-color-1);
             border-bottom-color: var(--primary-color-1);
-            background: white;
-        }
-        [data-theme="dark"] .chat-tab.active {
             background: var(--card-bg-1);
         }
+
         .conversations-list {
             flex: 1;
-            padding: 0.5rem;
+            padding: 0.75rem;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
         }
+
+        /* Custom Scrollbar */
         .conversations-list::-webkit-scrollbar {
             width: 6px;
         }
@@ -94,173 +115,200 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             background: var(--border-color-1);
             border-radius: 3px;
         }
+
         .conversation-item {
             padding: 1rem;
-            border-bottom: 1px solid var(--border-color-1);
-            cursor: pointer;
-            transition: background-color 0.2s ease, transform 0.2s ease, opacity 0.3s ease, height 0.3s ease, margin 0.3s ease;
             border-radius: 8px;
+            cursor: pointer;
+            transition: all var(--transition-speed) ease;
             margin-bottom: 0.5rem;
             color: var(--text-color-1);
+            border: 1px solid transparent;
             position: relative;
         }
-        .conversation-item:last-child {
-            margin-bottom: 0;
-        }
+
         .conversation-item:hover {
-            background: rgba(76, 138, 137, 0.1);
+            background: rgba(76, 138, 137, 0.05);
+            border-color: rgba(76, 138, 137, 0.1);
         }
-        [data-theme="dark"] .conversation-item:hover {
-            background: rgba(76, 138, 137, 0.2);
-        }
+
         .conversation-item.active {
             background: var(--primary-color-1);
             color: white;
-            box-shadow: 0 2px 8px rgba(76, 138, 137, 0.3);
+            box-shadow: 0 4px 12px rgba(76, 138, 137, 0.3);
+            border-color: var(--primary-color-1);
         }
-        /* Fix text colors inside active item */
+
         .conversation-item.active * {
             color: white !important;
+            opacity: 1 !important;
         }
+
         .conversation-item.closed {
             opacity: 0.7;
-            background: #f5f5f5;
+            background: var(--bg-color-1);
+            border-color: var(--border-color-1);
         }
-        [data-theme="dark"] .conversation-item.closed {
-            background: #2d2d2d;
-        }
+
         .status-dot {
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
-            background: #4caf50;
+            background: #2ecc71;
             display: inline-block;
             margin-right: 0.5rem;
             flex-shrink: 0;
         }
+
         .conversation-item.closed .status-dot {
-            background: #9e9e9e;
+            background: #95a5a6;
         }
+
+        /* Main Chat Window */
         .chat-window {
             display: flex;
             flex-direction: column;
             background: var(--card-bg-1);
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color-1);
             height: 100%;
         }
+
         .chat-header {
             padding: 1rem 1.5rem;
             border-bottom: 1px solid var(--border-color-1);
-            background: var(--primary-color-1);
-            color: white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            background: var(--card-bg-1);
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-shrink: 0;
+            z-index: 10;
         }
+
         .chat-header-info {
-            min-width: 0; /* Enable truncation */
             flex: 1;
+            min-width: 0;
         }
+
         .chat-header-info h3 {
             margin: 0;
             font-size: 1.1rem;
-            font-weight: 600;
+            font-weight: 700;
+            color: var(--text-color-1);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
+
         .chat-header-info small {
             display: block;
             margin-top: 0.25rem;
-            opacity: 0.9;
+            color: var(--text-secondary-1);
             font-size: 0.85rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            font-weight: 500;
         }
+
         .chat-messages {
             flex: 1;
             padding: 1.5rem;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
-            background: linear-gradient(to bottom, var(--bg-color-1) 0%, var(--card-bg-1) 100%);
+            gap: 1rem;
+            background: var(--bg-color-1);
             scroll-behavior: smooth;
         }
+
+        /* Message Bubbles */
         .message {
             display: flex;
             gap: 0.75rem;
-            max-width: 85%;
-            margin-bottom: 0.5rem;
-            animation: fadeIn 0.2s ease-in;
+            max-width: 80%;
+            animation: slideInUp 0.3s ease;
         }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
+
+        @keyframes slideInUp {
+            from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
         .message.admin {
             align-self: flex-end;
             flex-direction: row-reverse;
         }
+
         .message.user {
             align-self: flex-start;
         }
+
         .message-avatar {
-            width: 36px;
-            height: 36px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             flex-shrink: 0;
             object-fit: cover;
-            border: 2px solid var(--border-color-1);
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+
         .message-content {
             padding: 0.75rem 1rem;
-            border-radius: 18px;
-            background: var(--border-color-1);
-            color: var(--text-color-1);
-            word-wrap: break-word;
-            line-height: 1.4;
+            border-radius: var(--message-radius);
+            position: relative;
             font-size: 0.95rem;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            line-height: 1.5;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            word-wrap: break-word;
         }
+
+        .message.user .message-content {
+            background: white;
+            color: var(--text-color-1);
+            border-top-left-radius: 4px;
+            border: 1px solid var(--border-color-1);
+        }
+
         .message.admin .message-content {
             background: var(--primary-color-1);
             color: white;
-            border-bottom-right-radius: 4px;
+            border-top-right-radius: 4px;
         }
-        .message.user .message-content {
-            background: var(--card-bg-1);
-            color: var(--text-color-1);
-            border: 1px solid var(--border-color-1);
-            border-bottom-left-radius: 4px;
+
+        .message-meta {
+            font-size: 0.7rem;
+            margin-top: 4px;
+            opacity: 0.7;
+            text-align: right;
         }
+
+        .message.user .message-meta {
+            text-align: left;
+            color: var(--text-secondary-1);
+        }
+
         .date-separator {
             display: flex;
             align-items: center;
-            text-align: center;
-            margin: 1.5rem 0;
+            margin: 1rem 0;
             color: var(--text-secondary-1);
-            font-size: 0.8rem;
-            font-weight: 500;
-            opacity: 0.7;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
+
         .date-separator::before,
         .date-separator::after {
             content: '';
             flex: 1;
             border-bottom: 1px solid var(--border-color-1);
         }
-        .date-separator:not(:empty)::before {
-            margin-right: 1rem;
-        }
-        .date-separator:not(:empty)::after {
-            margin-left: 1rem;
-        }
+
+        .date-separator::before { margin-right: 1rem; }
+        .date-separator::after { margin-left: 1rem; }
+
         .chat-input {
             padding: 1rem;
             border-top: 1px solid var(--border-color-1);
@@ -270,48 +318,55 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             align-items: center;
             flex-shrink: 0;
         }
+
         .chat-input input {
             flex: 1;
-            padding: 0.75rem 1rem;
-            border: 2px solid var(--border-color-1);
+            padding: 0.85rem 1.25rem;
+            border: 1px solid var(--border-color-1);
             border-radius: 24px;
             background: var(--bg-color-1);
             color: var(--text-color-1);
             font-size: 0.95rem;
+            transition: all 0.2s ease;
         }
+
         .chat-input input:focus {
             outline: none;
             border-color: var(--primary-color-1);
+            background: var(--card-bg-1);
+            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
         }
-        .load-more-container {
-            text-align: center;
-            padding: 1rem;
-        }
+
         .btn-load-more {
-            background: transparent;
+            background: var(--bg-color-1);
             border: 1px solid var(--border-color-1);
             color: var(--text-secondary-1);
             padding: 0.5rem 1rem;
             border-radius: 20px;
             cursor: pointer;
-            font-size: 0.85rem;
-            transition: all 0.2s;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            margin: 1rem auto;
+            display: block;
         }
+
         .btn-load-more:hover {
-            background: var(--bg-color-1);
-            color: var(--text-color-1);
+            background: var(--card-bg-1);
+            color: var(--primary-color-1);
+            border-color: var(--primary-color-1);
         }
-        
-        /* Mobile Improvements */
+
+        /* Mobile Responsive */
         .mobile-back-btn {
             display: none;
             background: none;
             border: none;
-            color: white;
+            color: var(--text-secondary-1);
             font-size: 1.2rem;
-            margin-right: 1rem;
+            margin-right: 0.75rem;
             cursor: pointer;
-            padding: 0.5rem;
+            padding: 0.25rem;
         }
 
         @media (max-width: 992px) {
@@ -323,12 +378,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         @media (max-width: 768px) {
             .communication-container {
                 grid-template-columns: 1fr;
-                height: calc(100vh - 140px); /* Adjust based on your mobile header height */
-                position: relative;
+                height: calc(100vh - 140px);
                 overflow: hidden;
             }
             
-            /* Logic for toggling views */
             .conversations-list-container {
                 width: 100%;
                 position: absolute;
@@ -346,13 +399,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 left: 0;
                 bottom: 0;
                 z-index: 20;
-                transform: translateX(100%); /* Hidden by default */
+                transform: translateX(100%);
                 transition: transform 0.3s ease;
             }
             
-            /* When chat is active */
             .communication-container.chat-active .conversations-list-container {
-                transform: translateX(-30%); /* Parallax effect */
+                transform: translateX(-20%);
                 opacity: 0;
                 pointer-events: none;
             }
@@ -384,24 +436,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <div class="main-content">
         <div class="main-container">
             <div class="title">
-                <nav class="breadcrumb" aria-label="Breadcrumb">
+                <nav aria-label="Breadcrumb">
                     <ol class="breadcrumb-list">
                         <li class="breadcrumb-item">
-                            <a href="/" class="breadcrumb-link">
-                                <span>Home</span>
-                            </a>
+                            <a href="dashboard.php" class="breadcrumb-link">Dashboard</a>
                         </li>
-                        <li class="breadcrumb-item">
-                            <a href="/emergency-communication" class="breadcrumb-link">
-                                <span>Emergency Communication</span>
-                            </a>
-                        </li>
-                        <li class="breadcrumb-item active" aria-current="page">
-                            <span>Two-Way Communication</span>
-                        </li>
+                        <li class="breadcrumb-item active" aria-current="page">Two-Way Communication</li>
                     </ol>
                 </nav>
-                <h1>Two-Way Communication Interface</h1>
+                <h1><i class="fas fa-comments" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Two-Way Communication Interface</h1>
                 <p>Interactive communication platform allowing administrators and citizens to exchange messages in real-time.</p>
             </div>
             
@@ -412,10 +455,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         <div class="conversations-list-container">
                             <div class="chat-tabs">
                                 <div class="chat-tab active" onclick="switchTab('active')">
-                                    Active <span id="activeCount" class="badge"></span>
+                                    <i class="fas fa-inbox"></i> Active <span id="activeCount" class="badge"></span>
                                 </div>
                                 <div class="chat-tab" onclick="switchTab('closed')">
-                                    Closed
+                                    <i class="fas fa-check-circle"></i> Closed
                                 </div>
                             </div>
                             <div class="conversations-list" id="scrollableList">
@@ -452,13 +495,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 </div>
                             </div>
                             <div class="chat-messages" id="chatMessages">
-                                <p style="text-align: center; color: var(--text-secondary-1); padding: 2rem;">
-                                    Select a conversation to start messaging
-                                </p>
+                                <div style="text-align: center; color: var(--text-secondary-1); padding: 3rem; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
+                                    <div style="font-size: 3rem; opacity: 0.2; margin-bottom: 1rem;"><i class="fas fa-comments"></i></div>
+                                    <p>Select a conversation from the list to start messaging</p>
+                                </div>
                             </div>
                             <div class="chat-input">
                                 <input type="text" id="messageInput" placeholder="Type a message..." disabled>
-                                <button class="btn btn-primary" id="sendButton" disabled>
+                                <button class="btn btn-primary" id="sendButton" disabled style="padding: 0.8rem 1rem; border-radius: 50%;">
                                     <i class="fas fa-paper-plane"></i>
                                 </button>
                             </div>
@@ -497,7 +541,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             
             // UI Update
             document.querySelectorAll('.chat-tab').forEach(tab => {
-                tab.classList.toggle('active', tab.textContent.trim().toLowerCase().startsWith(status));
+                tab.classList.toggle('active', tab.textContent.trim().toLowerCase().includes(status));
             });
 
             // Reset List
@@ -572,7 +616,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 
             } catch (error) {
                 console.error('Error loading conversations:', error);
-                if (isInitial) listContainer.innerHTML = '<p style="color: red; text-align: center;">Failed to load data</p>';
+                if (isInitial) listContainer.innerHTML = '<p style="color: #e74c3c; text-align: center; padding: 1rem;">Failed to load data</p>';
             } finally {
                 isLoading = false;
             }
@@ -680,13 +724,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         
         function getConversationHTML(conv) {
-            const guestBadge = conv.isGuest ? '<span style="background: #ff9800; color: white; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; margin-left: 0.5rem; vertical-align: middle;">GUEST</span>' : '';
-            const concernBadge = conv.userConcern ? `<span style="background: #2196f3; color: white; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; margin-left: 0.5rem; text-transform: capitalize; vertical-align: middle;">${conv.userConcern}</span>` : '';
+            const guestBadge = conv.isGuest ? '<span style="background: #ff9800; color: white; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; margin-left: 0.5rem; vertical-align: middle; font-weight: 700;">GUEST</span>' : '';
+            const concernBadge = conv.userConcern ? `<span style="background: rgba(33, 150, 243, 0.15); color: #2196f3; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; margin-left: 0.5rem; text-transform: capitalize; vertical-align: middle; font-weight: 600;">${conv.userConcern}</span>` : '';
             const statusDot = `<span class="status-dot"></span>`;
             
             const time = conv.lastMessageTime ? new Date(conv.lastMessageTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
             const date = conv.lastMessageTime ? new Date(conv.lastMessageTime).toLocaleDateString() : '';
-            const displayTime = time ? `<small style="float: right; color: var(--text-secondary-1); font-size: 0.75rem;">${time}</small>` : '';
+            const displayTime = time ? `<small style="float: right; opacity: 0.7; font-size: 0.75rem;">${time}</small>` : '';
 
             // User Info Line
             const userInfo = [];
@@ -698,17 +742,17 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (conv.ipAddress) userInfo.push(`<i class="fas fa-network-wired"></i>`);
             
             return `
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
-                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 0.5rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 0.5rem; font-size: 0.95rem;">
                         ${statusDot}
                         <strong>${conv.userName || 'Unknown'}</strong>${guestBadge}${concernBadge}
                     </div>
                     ${displayTime}
                 </div>
-                <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                <p style="margin: 0; font-size: 0.85rem; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                     ${conv.lastMessage || 'No messages'}
                 </p>
-                <div style="margin-top: 0.4rem; font-size: 0.75rem; color: var(--text-secondary-1); opacity: 0.8;">
+                <div style="margin-top: 0.5rem; font-size: 0.75rem; opacity: 0.6;">
                     ${userInfo.join(' &nbsp; ')} &nbsp; ${conv.userLocation || ''}
                 </div>
             `;
@@ -736,7 +780,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const nameEl = document.getElementById('chatUserName');
             const statusEl = document.getElementById('chatUserStatus');
             
-            const guestBadge = data.isGuest ? ' <span style="font-size: 0.7rem; background: #ff9800; padding: 2px 6px; border-radius: 4px;">GUEST</span>' : '';
+            const guestBadge = data.isGuest ? ' <span style="font-size: 0.7rem; background: #ff9800; color: white; padding: 2px 6px; border-radius: 4px; vertical-align: middle;">GUEST</span>' : '';
             nameEl.innerHTML = (data.userName || 'Unknown') + guestBadge;
             
             // Detailed Info for Status Bar
@@ -829,7 +873,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         }
 
                         // Clear chat window and reset state
-                        document.getElementById('chatMessages').innerHTML = '<p style="text-align: center; color: var(--text-secondary-1); padding: 2rem;">Select a conversation</p>';
+                        document.getElementById('chatMessages').innerHTML = '<div style="text-align: center; color: var(--text-secondary-1); padding: 3rem; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;"><div style="font-size: 3rem; opacity: 0.2; margin-bottom: 1rem;"><i class="fas fa-comments"></i></div><p>Select a conversation from the list to start messaging</p></div>';
                         document.getElementById('chatUserName').textContent = 'Select a conversation';
                         document.getElementById('chatUserStatus').textContent = '';
                         document.getElementById('messageInput').disabled = true;
@@ -905,6 +949,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             // Remove placeholders
             const p = container.querySelector('p');
             if (p) p.remove();
+            // Remove center container placeholders if any
+            if (container.children.length === 1 && container.children[0].style.textAlign === 'center') {
+                container.innerHTML = '';
+            }
 
             const msgDate = new Date(msg.timestamp);
             const dateStr = msgDate.toLocaleDateString('en-US', { 
@@ -941,7 +989,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 <img src="${avatar}" class="message-avatar" alt="">
                 <div class="message-content">
                     ${escapeHtml(msg.text)}
-                    <div style="font-size: 0.7rem; opacity: 0.6; margin-top: 4px; text-align: ${type === 'admin' ? 'right' : 'left'}">
+                    <div class="message-meta">
                         ${fullStamp}
                     </div>
                 </div>

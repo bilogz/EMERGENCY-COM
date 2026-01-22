@@ -32,6 +32,222 @@ $pageTitle = 'Log and Audit Trail';
     <link rel="stylesheet" href="css/hero.css">
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
+    <style>
+        /* Enhanced Audit Trail Styles */
+        :root {
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --transition-speed: 0.2s;
+        }
+
+        .module-card {
+            background: var(--card-bg-1);
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color-1);
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            transition: box-shadow var(--transition-speed) ease;
+        }
+
+        .module-card:hover {
+            box-shadow: var(--card-shadow-hover);
+        }
+
+        .module-card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color-1);
+            background: var(--bg-color-1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .module-card-header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-color-1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .module-card-content {
+            padding: 1.5rem;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg-1);
+            padding: 1.5rem;
+            border-radius: 10px;
+            border: 1px solid var(--border-color-1);
+            text-align: center;
+            transition: transform var(--transition-speed) ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--primary-color-1);
+        }
+
+        .stat-value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin: 0 0 0.5rem 0;
+            line-height: 1.2;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary-1);
+            font-weight: 500;
+        }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.25rem;
+            align-items: flex-end;
+        }
+
+        .form-group {
+            margin-bottom: 0;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--text-color-1);
+            font-size: 0.9rem;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: var(--bg-color-1);
+            color: var(--text-color-1);
+            transition: border-color var(--transition-speed) ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--primary-color-1);
+            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .modal-content {
+            background: var(--card-bg-1);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 700px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color-1);
+        }
+
+        .modal-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color-1);
+            background: var(--bg-color-1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .detail-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-secondary-1);
+            letter-spacing: 0.5px;
+        }
+
+        .detail-value {
+            font-size: 0.95rem;
+            color: var(--text-color-1);
+            font-weight: 500;
+        }
+
+        .badge {
+            padding: 0.35rem 0.65rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            display: inline-block;
+        }
+        
+        .badge.success { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
+        .badge.failed { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
+        .badge.pending { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
+
+        .table-responsive {
+            overflow-x: auto;
+            width: 100%;
+        }
+
+        .data-table th {
+            background: var(--bg-color-1);
+            color: var(--text-secondary-1);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        @media (max-width: 768px) {
+            .stat-grid, .filter-grid, .details-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Include Sidebar Component -->
@@ -49,26 +265,13 @@ $pageTitle = 'Log and Audit Trail';
                 <nav class="breadcrumb" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list">
                         <li class="breadcrumb-item">
-                            <a href="/" class="breadcrumb-link">
-                                <span>Home</span>
-                            </a>
+                            <a href="dashboard.php" class="breadcrumb-link">Dashboard</a>
                         </li>
-                        <li class="breadcrumb-item">
-                            <a href="/emergency-communication" class="breadcrumb-link">
-                                <span>Emergency Communication</span>
-                            </a>
-                        </li>
-                        <li class="breadcrumb-item active" aria-current="page">
-                            <span>Log and Audit Trail</span>
-                        </li>
+                        <li class="breadcrumb-item active" aria-current="page">Log and Audit Trail</li>
                     </ol>
                 </nav>
-                <h1>Log and Audit Trail for Sent Notifications</h1>
+                <h1><i class="fas fa-history" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Log and Audit Trail</h1>
                 <p>Comprehensive logging and audit trail system to track all sent notifications for accountability, compliance, and system monitoring.</p>
-                <div class="info-box" style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 1rem; border-radius: 4px; margin-top: 1rem;">
-                    <i class="fas fa-info-circle" style="color: #2196f3;"></i>
-                    <strong>How to use:</strong> This page shows a complete record of all notifications sent. Use the filters to find specific notifications by date, channel, or status. Click "View" to see detailed information about any notification.
-                </div>
             </div>
             
             <div class="sub-container">
@@ -78,32 +281,22 @@ $pageTitle = 'Log and Audit Trail';
                         <div class="module-card-header">
                             <h2><i class="fas fa-chart-line"></i> Audit Statistics</h2>
                         </div>
-                        <div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem;">
-                                <div class="stat-card" style="text-align: center;">
-                                    <div>
-                                        <h3 style="font-size: 2.5rem; margin: 0; color: #4c8a89;" id="totalNotifications">0</h3>
-                                        <p>Total Notifications Sent</p>
-                                    </div>
-                                </div>
-                                <div class="stat-card" style="text-align: center;">
-                                    <div>
-                                        <h3 style="font-size: 2.5rem; margin: 0; color: var(--primary-color-1);" id="successfulNotifications">0</h3>
-                                        <p>Successful</p>
-                                    </div>
-                                </div>
-                                <div class="stat-card" style="text-align: center;">
-                                    <div>
-                                        <h3 style="font-size: 2.5rem; margin: 0; color: var(--primary-color-1);" id="failedNotifications">0</h3>
-                                        <p>Failed</p>
-                                    </div>
-                                </div>
-                                <div class="stat-card" style="text-align: center;">
-                                    <div>
-                                        <h3 style="font-size: 2.5rem; margin: 0; color: #4c8a89;" id="todayNotifications">0</h3>
-                                        <p>Sent Today</p>
-                                    </div>
-                                </div>
+                        <div class="stat-grid">
+                            <div class="stat-card">
+                                <div class="stat-value" id="totalNotifications" style="color: #4c8a89;">0</div>
+                                <div class="stat-label">Total Notifications</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="successfulNotifications" style="color: #2ecc71;">0</div>
+                                <div class="stat-label">Successful</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="failedNotifications" style="color: #e74c3c;">0</div>
+                                <div class="stat-label">Failed</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="todayNotifications" style="color: #3498db;">0</div>
+                                <div class="stat-label">Sent Today</div>
                             </div>
                         </div>
                     </div>
@@ -113,8 +306,8 @@ $pageTitle = 'Log and Audit Trail';
                         <div class="module-card-header">
                             <h2><i class="fas fa-filter"></i> Filters</h2>
                         </div>
-                        <div>
-                            <form id="filterForm" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                        <div class="module-card-content">
+                            <form id="filterForm" class="filter-grid">
                                 <div class="form-group">
                                     <label for="filterDateFrom">Date From</label>
                                     <input type="date" id="filterDateFrom" name="date_from">
@@ -141,11 +334,11 @@ $pageTitle = 'Log and Audit Trail';
                                         <option value="pending">Pending</option>
                                     </select>
                                 </div>
-                                <div class="form-group" style="display: flex; align-items: flex-end;">
-                                    <button type="button" class="btn btn-primary" onclick="applyFilters()">
-                                        <i class="fas fa-search"></i> Apply Filters
+                                <div class="form-group filter-actions">
+                                    <button type="button" class="btn btn-primary" onclick="applyFilters()" style="flex: 2;">
+                                        <i class="fas fa-search"></i> Apply
                                     </button>
-                                    <button type="button" class="btn btn-secondary" onclick="resetFilters()" style="margin-left: 0.5rem;">
+                                    <button type="button" class="btn btn-secondary" onclick="resetFilters()" style="flex: 1;">
                                         <i class="fas fa-redo"></i> Reset
                                     </button>
                                 </div>
@@ -155,13 +348,13 @@ $pageTitle = 'Log and Audit Trail';
 
                     <!-- Audit Trail Table -->
                     <div class="module-card">
-                        <div class="module-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div class="module-card-header">
                             <h2><i class="fas fa-list"></i> Audit Trail</h2>
-                            <button class="btn btn-primary" onclick="exportAuditTrail()">
+                            <button class="btn btn-sm btn-primary" onclick="exportAuditTrail()">
                                 <i class="fas fa-download"></i> Export
                             </button>
                         </div>
-                        <div>
+                        <div class="module-card-content table-responsive">
                             <table class="data-table" id="auditTrailTable">
                                 <thead>
                                     <tr>
@@ -189,7 +382,7 @@ $pageTitle = 'Log and Audit Trail';
 
     <!-- View Details Modal -->
     <div id="detailsModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-content">
             <div class="modal-header">
                 <h2>Notification Details</h2>
                 <button class="modal-close" onclick="closeDetailsModal()">&times;</button>
@@ -216,13 +409,13 @@ $pageTitle = 'Log and Audit Trail';
                             const row = document.createElement('tr');
                             row.innerHTML = `
                                 <td>${log.id}</td>
-                                <td>${log.timestamp}</td>
-                                <td><span class="badge">${log.channel.toUpperCase()}</span></td>
+                                <td><small>${log.timestamp}</small></td>
+                                <td><span class="badge" style="background: rgba(76, 138, 137, 0.1); color: var(--primary-color-1); font-weight: 700;">${log.channel.toUpperCase()}</span></td>
                                 <td>${log.recipient}</td>
-                                <td>${log.message.substring(0, 50)}${log.message.length > 50 ? '...' : ''}</td>
+                                <td><div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${log.message}</div></td>
                                 <td><span class="badge ${log.status}">${log.status}</span></td>
                                 <td>${log.sent_by || 'System'}</td>
-                                <td>${log.ip_address || 'N/A'}</td>
+                                <td><small>${log.ip_address || 'N/A'}</small></td>
                                 <td>
                                     <button class="btn btn-sm btn-primary" onclick="viewDetails(${log.id})">
                                         <i class="fas fa-eye"></i>
@@ -274,26 +467,60 @@ $pageTitle = 'Log and Audit Trail';
                         const log = data.log;
                         const content = document.getElementById('detailsContent');
                         content.innerHTML = `
-                            <div style="display: grid; gap: 1rem;">
-                                <div><strong>ID:</strong> ${log.id}</div>
-                                <div><strong>Timestamp:</strong> ${log.timestamp}</div>
-                                <div><strong>Channel:</strong> ${log.channel.toUpperCase()}</div>
-                                <div><strong>Recipient:</strong> ${log.recipient}</div>
-                                <div><strong>Message:</strong> ${log.message}</div>
-                                <div><strong>Status:</strong> <span class="badge ${log.status}">${log.status}</span></div>
-                                <div><strong>Sent By:</strong> ${log.sent_by || 'System'}</div>
-                                <div><strong>IP Address:</strong> ${log.ip_address || 'N/A'}</div>
-                                <div><strong>Response:</strong> ${log.response || 'N/A'}</div>
-                                <div><strong>Error Message:</strong> ${log.error_message || 'None'}</div>
+                            <div class="details-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">Log ID</span>
+                                    <span class="detail-value">#${log.id}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Timestamp</span>
+                                    <span class="detail-value">${log.timestamp}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Channel</span>
+                                    <span class="detail-value"><span class="badge" style="background: rgba(76, 138, 137, 0.1); color: var(--primary-color-1); font-weight: 700;">${log.channel.toUpperCase()}</span></span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Status</span>
+                                    <span class="detail-value"><span class="badge ${log.status}">${log.status}</span></span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Recipient</span>
+                                    <span class="detail-value">${log.recipient}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Sent By</span>
+                                    <span class="detail-value">${log.sent_by || 'System'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">IP Address</span>
+                                    <span class="detail-value">${log.ip_address || 'N/A'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Response Code</span>
+                                    <span class="detail-value">${log.response || 'N/A'}</span>
+                                </div>
+                                <div class="detail-item" style="grid-column: span 2; margin-top: 1rem;">
+                                    <span class="detail-label">Message Content</span>
+                                    <div style="background: var(--bg-color-1); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color-1); margin-top: 0.5rem; line-height: 1.5;">${log.message}</div>
+                                </div>
+                                ${log.error_message ? `
+                                <div class="detail-item" style="grid-column: span 2; margin-top: 1rem;">
+                                    <span class="detail-label" style="color: #e74c3c;">Error Message</span>
+                                    <div style="color: #e74c3c; font-weight: 500;">${log.error_message}</div>
+                                </div>
+                                ` : ''}
                             </div>
                         `;
-                        document.getElementById('detailsModal').style.display = 'block';
+                        document.getElementById('detailsModal').style.display = 'flex';
+                        document.body.style.overflow = 'hidden';
                     }
                 });
         }
 
         function closeDetailsModal() {
             document.getElementById('detailsModal').style.display = 'none';
+            document.body.style.overflow = '';
         }
 
         function exportAuditTrail() {
@@ -310,4 +537,3 @@ $pageTitle = 'Log and Audit Trail';
     </script>
 </body>
 </html>
-

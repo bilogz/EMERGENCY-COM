@@ -32,6 +32,277 @@ $pageTitle = 'Automated Warning Integration';
     <link rel="stylesheet" href="css/hero.css">
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
+    <style>
+        /* Enhanced Automated Warnings Styles */
+        :root {
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --transition-speed: 0.2s;
+        }
+
+        .module-card {
+            background: var(--card-bg-1);
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color-1);
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            transition: box-shadow var(--transition-speed) ease;
+        }
+
+        .module-card:hover {
+            box-shadow: var(--card-shadow-hover);
+        }
+
+        .module-card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color-1);
+            background: var(--bg-color-1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .module-card-header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-color-1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+
+        .channel-card {
+            background: var(--card-bg-1);
+            border: 1px solid var(--border-color-1);
+            border-radius: 10px;
+            padding: 1.5rem;
+            transition: all var(--transition-speed) ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 100%;
+        }
+
+        .channel-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--primary-color-1);
+            box-shadow: var(--card-shadow);
+        }
+
+        .channel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .channel-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .channel-title h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-color-1);
+        }
+
+        .channel-desc {
+            color: var(--text-secondary-1);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 1.25rem;
+        }
+
+        .channel-footer {
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color-1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Settings Grid */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+
+        .settings-card {
+            background: var(--card-bg-1);
+            border: 1px solid var(--border-color-1);
+            border-radius: 10px;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            cursor: pointer;
+            transition: all var(--transition-speed) ease;
+        }
+
+        .settings-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--primary-color-1);
+            background: rgba(76, 138, 137, 0.05);
+        }
+
+        .settings-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(76, 138, 137, 0.1);
+            color: var(--primary-color-1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+
+        .settings-info h3 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-color-1);
+        }
+
+        .settings-info p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--text-secondary-1);
+        }
+
+        /* AI Analysis Display */
+        .ai-analysis-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 2rem;
+            color: white;
+            position: relative;
+            overflow: hidden;
+            margin: 1.5rem;
+        }
+
+        .ai-analysis-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .ai-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .ai-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .ai-title h3 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .ai-content {
+            position: relative;
+            z-index: 1;
+            min-height: 150px;
+        }
+
+        .ai-footer {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Modal Enhancements */
+        .settings-modal .modal-content {
+            border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border: 1px solid var(--border-color-1);
+        }
+
+        .settings-modal .modal-header {
+            padding: 1.25rem 1.5rem;
+            background: var(--bg-color-1);
+            border-bottom: 1px solid var(--border-color-1);
+        }
+
+        /* Form Groups */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--text-color-1);
+            font-size: 0.9rem;
+        }
+
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            background: var(--bg-color-1);
+            color: var(--text-color-1);
+            font-size: 0.95rem;
+            transition: all var(--transition-speed) ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color-1);
+            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
+        }
+
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 0.75rem;
+            padding: 1rem;
+            background: var(--bg-color-1);
+            border-radius: 8px;
+            border: 1px solid var(--border-color-1);
+        }
+
+        @media (max-width: 768px) {
+            .ai-analysis-card {
+                margin: 1rem;
+                padding: 1.5rem;
+            }
+            .status-grid, .settings-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Include Sidebar Component -->
@@ -55,25 +326,18 @@ $pageTitle = 'Automated Warning Integration';
                 <nav class="breadcrumb" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list">
                         <li class="breadcrumb-item">
-                            <a href="/" class="breadcrumb-link">
-                                <span>Home</span>
-                            </a>
+                            <a href="dashboard.php" class="breadcrumb-link">Dashboard</a>
                         </li>
-                        <li class="breadcrumb-item">
-                            <a href="/emergency-communication" class="breadcrumb-link">
-                                <span>Emergency Communication</span>
-                            </a>
-                        </li>
-                        <li class="breadcrumb-item active" aria-current="page">
-                            <span>Automated Warning Integration</span>
-                        </li>
+                        <li class="breadcrumb-item active" aria-current="page">Automated Warning Integration</li>
                     </ol>
                 </nav>
-                <h1>Automated Warning Integration</h1>
+                <h1><i class="fas fa-robot" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Automated Warning Integration</h1>
                 <p>Integrate with external warning feeds from PAGASA (weather) and PHIVOLCS (earthquake) for automated alert distribution.</p>
-                <div class="info-box" style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 1rem; border-radius: 4px; margin-top: 1rem;">
-                    <i class="fas fa-info-circle" style="color: #2196f3;"></i>
-                    <strong>How to use:</strong> Monitor the integration status for PAGASA (weather) and PHIVOLCS (earthquake). Configure AI-powered warnings by entering your Gemini 2.5 API key and selecting the disaster types you want to monitor. Warnings will automatically sync and can be sent to subscribers.
+                <div class="info-box">
+                    <i class="fas fa-info-circle"></i>
+                    <div>
+                        <strong>How to use:</strong> Monitor the integration status for PAGASA (weather) and PHIVOLCS (earthquake). Configure AI-powered warnings by entering your Gemini 2.5 API key and selecting the disaster types you want to monitor. Warnings will automatically sync and can be sent to subscribers.
+                    </div>
                 </div>
             </div>
             
@@ -84,43 +348,44 @@ $pageTitle = 'Automated Warning Integration';
                         <div class="module-card-header">
                             <h2><i class="fas fa-plug"></i> Integration Status</h2>
                         </div>
-                        <div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
-                                <div class="channel-card" id="pagasaCard">
-                                    <div>
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                            <h3><i class="fas fa-cloud-sun" style="color: #4c8a89;"></i> PAGASA</h3>
-                                            <span class="badge" id="pagasaStatus">Connecting...</span>
-                                        </div>
-                                        <p>Philippine Atmospheric, Geophysical and Astronomical Services Administration</p>
-                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                                            <small style="color: var(--text-secondary-1);">Status: <span id="pagasaStatusText">Checking...</span></small>
-                                        </div>
+                        <div class="status-grid">
+                            <div class="channel-card" id="pagasaCard">
+                                <div class="channel-header">
+                                    <div class="channel-title">
+                                        <i class="fas fa-cloud-sun" style="color: #3498db; font-size: 1.5rem;"></i>
+                                        <h3>PAGASA</h3>
                                     </div>
+                                    <span class="badge" id="pagasaStatus">Connecting...</span>
                                 </div>
-                                <div class="channel-card" id="phivolcsCard">
-                                    <div>
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                            <h3><i class="fas fa-mountain" style="color: #4c8a89;"></i> PHIVOLCS</h3>
-                                            <span class="badge" id="phivolcsStatus">Connecting...</span>
-                                        </div>
-                                        <p>Philippine Institute of Volcanology and Seismology</p>
-                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                                            <small style="color: var(--text-secondary-1);">Status: <span id="phivolcsStatusText">Checking...</span></small>
-                                        </div>
-                                    </div>
+                                <p class="channel-desc">Philippine Atmospheric, Geophysical and Astronomical Services Administration</p>
+                                <div class="channel-footer">
+                                    <small>Status: <span id="pagasaStatusText">Checking...</span></small>
                                 </div>
-                                <div class="channel-card" id="geminiCard">
-                                    <div>
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                            <h3><i class="fas fa-robot" style="color: #4c8a89;"></i> AI Powered (Gemini 2.5)</h3>
-                                            <span class="badge" id="geminiStatus">Checking...</span>
-                                        </div>
-                                        <p>Google Gemini 2.5 AI Integration for Advanced Warning Analysis</p>
-                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                                            <small style="color: var(--text-secondary-1);">Status: <span id="geminiStatusText">API Key Required</span></small>
-                                        </div>
+                            </div>
+                            <div class="channel-card" id="phivolcsCard">
+                                <div class="channel-header">
+                                    <div class="channel-title">
+                                        <i class="fas fa-mountain" style="color: #e74c3c; font-size: 1.5rem;"></i>
+                                        <h3>PHIVOLCS</h3>
                                     </div>
+                                    <span class="badge" id="phivolcsStatus">Connecting...</span>
+                                </div>
+                                <p class="channel-desc">Philippine Institute of Volcanology and Seismology</p>
+                                <div class="channel-footer">
+                                    <small>Status: <span id="phivolcsStatusText">Checking...</span></small>
+                                </div>
+                            </div>
+                            <div class="channel-card" id="geminiCard">
+                                <div class="channel-header">
+                                    <div class="channel-title">
+                                        <i class="fas fa-robot" style="color: #9b59b6; font-size: 1.5rem;"></i>
+                                        <h3>AI Powered</h3>
+                                    </div>
+                                    <span class="badge" id="geminiStatus">Checking...</span>
+                                </div>
+                                <p class="channel-desc">Google Gemini 2.5 AI Integration for Advanced Warning Analysis</p>
+                                <div class="channel-footer">
+                                    <small>Status: <span id="geminiStatusText">API Key Required</span></small>
                                 </div>
                             </div>
                         </div>
@@ -131,32 +396,22 @@ $pageTitle = 'Automated Warning Integration';
                         <div class="module-card-header">
                             <h2><i class="fas fa-cog"></i> Settings</h2>
                         </div>
-                        <div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
-                                <div class="channel-card" style="cursor: pointer; transition: transform 0.2s;" onclick="openIntegrationSettingsModal()">
-                                    <div>
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                            <h3><i class="fas fa-sync-alt" style="color: #4c8a89;"></i> Integration Settings</h3>
-                                            <i class="fas fa-chevron-right" style="color: var(--text-secondary-1);"></i>
-                                        </div>
-                                        <p>Configure sync intervals, auto-publish, and notification channels</p>
-                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                                            <small style="color: var(--text-secondary-1);">Click to configure</small>
-                                        </div>
-                                    </div>
+                        <div class="settings-grid">
+                            <div class="settings-card" onclick="openIntegrationSettingsModal()">
+                                <div class="settings-icon"><i class="fas fa-sync-alt"></i></div>
+                                <div class="settings-info">
+                                    <h3>Integration Settings</h3>
+                                    <p>Configure sync intervals and auto-publish</p>
                                 </div>
-                                <div class="channel-card" style="cursor: pointer; transition: transform 0.2s;" onclick="openAISettingsModal()">
-                                    <div>
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                            <h3><i class="fas fa-robot" style="color: #4c8a89;"></i> AI Warning Settings</h3>
-                                            <i class="fas fa-chevron-right" style="color: var(--text-secondary-1);"></i>
-                                        </div>
-                                        <p>Configure Gemini 2.5 API, disaster types, and AI thresholds</p>
-                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                                            <small style="color: var(--text-secondary-1);">Click to configure</small>
-                                        </div>
-                                    </div>
+                                <i class="fas fa-chevron-right" style="margin-left: auto; opacity: 0.3;"></i>
+                            </div>
+                            <div class="settings-card" onclick="openAISettingsModal()">
+                                <div class="settings-icon"><i class="fas fa-robot"></i></div>
+                                <div class="settings-info">
+                                    <h3>AI Warning Settings</h3>
+                                    <p>Configure Gemini API and disaster types</p>
                                 </div>
+                                <i class="fas fa-chevron-right" style="margin-left: auto; opacity: 0.3;"></i>
                             </div>
                         </div>
                     </div>
@@ -166,29 +421,26 @@ $pageTitle = 'Automated Warning Integration';
                         <div class="module-card-header">
                             <h2><i class="fas fa-shield-alt"></i> Disaster Monitoring Analysis</h2>
                         </div>
-                        <div>
-                            <div id="aiWeatherAnalysisCard" class="ai-analysis-display-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 2rem; color: white; position: relative; overflow: hidden;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                                    <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                        <i class="fas fa-robot" style="font-size: 1.5rem;"></i>
-                                        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Disaster Monitoring Analysis</h3>
-                                    </div>
-                                    <span id="analysisStatusBadge" class="badge" style="background: rgba(255,255,255,0.2); color: white; padding: 0.5rem 1rem; border-radius: 20px;">Loading...</span>
+                        <div id="aiWeatherAnalysisCard" class="ai-analysis-card">
+                            <div class="ai-header">
+                                <div class="ai-title">
+                                    <i class="fas fa-robot"></i>
+                                    <h3>AI Insights Engine</h3>
                                 </div>
-                                
-                                <div id="analysisContent" style="min-height: 200px;">
-                                    <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.8);">
-                                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-                                        <p>Loading disaster monitoring analysis...</p>
-                                    </div>
+                                <span id="analysisStatusBadge" class="badge" style="background: rgba(255,255,255,0.2);">Loading...</span>
+                            </div>
+                            
+                            <div id="analysisContent" class="ai-content">
+                                <div style="text-align: center; padding: 2rem; opacity: 0.8;">
+                                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                                    <p>Analyzing current conditions...</p>
                                 </div>
-                                
-                                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.2);">
-                                    <button onclick="refreshWeatherAnalysis()" class="btn btn-primary" style="width: 100%; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 0.75rem; border-radius: 8px; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                                        <i class="fas fa-sync-alt"></i>
-                                        <span>Refresh Analysis</span>
-                                    </button>
-                                </div>
+                            </div>
+                            
+                            <div class="ai-footer">
+                                <button onclick="refreshWeatherAnalysis()" class="btn btn-primary" style="width: 100%; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-weight: 600;">
+                                    <i class="fas fa-sync-alt"></i> Refresh AI Analysis
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -198,24 +450,26 @@ $pageTitle = 'Automated Warning Integration';
                         <div class="module-card-header">
                             <h2><i class="fas fa-exclamation-triangle"></i> Recent Automated Warnings</h2>
                         </div>
-                        <div>
-                            <table class="data-table" id="warningsTable">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Source</th>
-                                        <th>Type</th>
-                                        <th>Title</th>
-                                        <th>Severity</th>
-                                        <th>Status</th>
-                                        <th>Received At</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <!-- Data will be loaded via API -->
-                                </tbody>
-                            </table>
+                        <div style="padding: 0 1.5rem 1.5rem 1.5rem;">
+                            <div style="overflow-x: auto;">
+                                <table class="data-table" id="warningsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Source</th>
+                                            <th>Type</th>
+                                            <th>Title</th>
+                                            <th>Severity</th>
+                                            <th>Status</th>
+                                            <th>Received At</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Data will be loaded via API -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -236,7 +490,7 @@ $pageTitle = 'Automated Warning Integration';
                     <div class="form-group">
                         <label for="syncInterval">Sync Interval (minutes)</label>
                         <input type="number" id="syncInterval" name="sync_interval" value="15" min="1" max="60">
-                        <small>How often to check for new warnings from external sources</small>
+                        <small>Frequency of checks for new external warnings</small>
                     </div>
                     <div class="form-group">
                         <label for="autoPublish">Auto-Publish Warnings</label>
@@ -244,21 +498,19 @@ $pageTitle = 'Automated Warning Integration';
                             <input type="checkbox" id="autoPublish" name="auto_publish">
                             <span class="slider"></span>
                         </label>
-                        <small>Automatically publish warnings from external sources without manual review</small>
+                        <small>Automatically send warnings without manual approval</small>
                     </div>
                     <div class="form-group">
-                        <label for="notificationChannels">Notification Channels</label>
-                        <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
-                            <label><input type="checkbox" name="channels[]" value="sms" checked> SMS</label>
-                            <label><input type="checkbox" name="channels[]" value="email" checked> Email</label>
-                            <label><input type="checkbox" name="channels[]" value="pa"> PA System</label>
+                        <label>Notification Channels</label>
+                        <div style="display: flex; gap: 1rem; margin-top: 0.5rem; background: var(--bg-color-1); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color-1);">
+                            <label style="display: flex; align-items: center; gap: 0.5rem;"><input type="checkbox" name="channels[]" value="sms" checked> SMS</label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem;"><input type="checkbox" name="channels[]" value="email" checked> Email</label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem;"><input type="checkbox" name="channels[]" value="pa"> PA System</label>
                         </div>
                     </div>
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" onclick="closeIntegrationSettingsModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> Save Settings
-                        </button>
+                    <div class="form-actions" style="margin-top: 2rem; display: flex; gap: 1rem;">
+                        <button type="button" class="btn btn-secondary" onclick="closeIntegrationSettingsModal()" style="flex: 1;">Cancel</button>
+                        <button type="submit" class="btn btn-primary" style="flex: 2;">Save Settings</button>
                     </div>
                 </form>
             </div>
@@ -270,327 +522,75 @@ $pageTitle = 'Automated Warning Integration';
         <div class="modal-overlay" onclick="closeAISettingsModal()"></div>
         <div class="modal-content modal-content-large">
             <div class="modal-header">
-                <h2><i class="fas fa-robot"></i> AI-Powered Auto Warning System (Gemini 2.5)</h2>
+                <h2><i class="fas fa-robot"></i> AI Auto Warning System</h2>
                 <button class="modal-close" onclick="closeAISettingsModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="aiWarningSettingsForm">
                     <div class="form-group">
                         <label for="geminiApiKey">Gemini 2.5 API Key</label>
-                        <input type="password" id="geminiApiKey" name="gemini_api_key" placeholder="Enter your Gemini 2.5 API key" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
-                        <small>Enter your Google Gemini 2.5 API key to enable AI-powered warning analysis</small>
+                        <input type="password" id="geminiApiKey" name="gemini_api_key" placeholder="Enter API key">
+                        <small>Required for AI-powered warning analysis</small>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="aiEnabled">Enable AI Auto Warnings</label>
-                        <label class="switch">
-                            <input type="checkbox" id="aiEnabled" name="ai_enabled">
-                            <span class="slider"></span>
-                        </label>
-                        <small>Use AI to automatically detect dangerous weather conditions and send mass notifications</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="aiCheckInterval">AI Analysis Interval (minutes)</label>
-                        <input type="number" id="aiCheckInterval" name="ai_check_interval" value="30" min="5" max="120">
-                        <small>How often AI analyzes weather data for dangerous conditions</small>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                        <div class="form-group">
+                            <label for="aiEnabled">Enable AI Analysis</label>
+                            <label class="switch">
+                                <input type="checkbox" id="aiEnabled" name="ai_enabled">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="aiCheckInterval">Analysis Interval (min)</label>
+                            <input type="number" id="aiCheckInterval" name="ai_check_interval" value="30" min="5" max="120">
+                        </div>
                     </div>
                     
                     <div class="form-group">
                         <label>Danger Thresholds</label>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 0.5rem;">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; background: var(--bg-color-1); padding: 1rem; border-radius: 8px;">
                             <div>
-                                <label for="windThreshold">Wind Speed (km/h)</label>
-                                <input type="number" id="windThreshold" name="wind_threshold" value="60" min="0" step="5">
-                                <small>Alert if wind exceeds this speed</small>
+                                <label style="font-size: 0.8rem;">Wind (km/h)</label>
+                                <input type="number" id="windThreshold" name="wind_threshold" value="60">
                             </div>
                             <div>
-                                <label for="rainThreshold">Rainfall (mm/hour)</label>
-                                <input type="number" id="rainThreshold" name="rain_threshold" value="20" min="0" step="1">
-                                <small>Alert if rainfall exceeds this rate</small>
+                                <label style="font-size: 0.8rem;">Rain (mm/h)</label>
+                                <input type="number" id="rainThreshold" name="rain_threshold" value="20">
                             </div>
                             <div>
-                                <label for="earthquakeThreshold">Earthquake Magnitude</label>
-                                <input type="number" id="earthquakeThreshold" name="earthquake_threshold" value="5.0" min="0" step="0.1">
-                                <small>Alert if earthquake magnitude exceeds this</small>
+                                <label style="font-size: 0.8rem;">Earthquake (Mag)</label>
+                                <input type="number" id="earthquakeThreshold" name="earthquake_threshold" value="5.0" step="0.1">
                             </div>
                         </div>
                     </div>
                     
                     <div class="form-group">
-                        <label>Possible Disaster Alert Types</label>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0.75rem; margin-top: 0.5rem;">
-                            <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" name="warning_types[]" value="heavy_rain" checked>
-                                <span><i class="fas fa-cloud-rain" style="color: #2196F3;"></i> Heavy Raining</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" name="warning_types[]" value="flooding" checked>
-                                <span><i class="fas fa-water" style="color: #2196F3;"></i> Flooding</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" name="warning_types[]" value="earthquake" checked>
-                                <span><i class="fas fa-mountain" style="color: #E91E63;"></i> Earthquake</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" name="warning_types[]" value="strong_winds" checked>
-                                <span><i class="fas fa-wind" style="color: #9C27B0;"></i> Strong Winds</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" name="warning_types[]" value="tsunami" checked>
-                                <span><i class="fas fa-water" style="color: #00BCD4;"></i> Tsunami</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" name="warning_types[]" value="landslide" checked>
-                                <span><i class="fas fa-mountain" style="color: #FF9800;"></i> Landslide</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" name="warning_types[]" value="thunderstorm" checked>
-                                <span><i class="fas fa-bolt" style="color: #FFC107;"></i> Thunder Storm</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" name="warning_types[]" value="ash_fall" checked>
-                                <span><i class="fas fa-volcano" style="color: #795548;"></i> Ash Fall</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" name="warning_types[]" value="fire_incident" checked>
-                                <span><i class="fas fa-fire" style="color: #F44336;"></i> Fire Incident</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" name="warning_types[]" value="typhoon" checked>
-                                <span><i class="fas fa-hurricane" style="color: #F44336;"></i> Typhoon/Storm</span>
-                            </label>
+                        <label>Disaster Monitor Types</label>
+                        <div class="checkbox-group">
+                            <label style="display: flex; align-items: center; gap: 0.5rem;"><input type="checkbox" name="warning_types[]" value="heavy_rain" checked> Heavy Rain</label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem;"><input type="checkbox" name="warning_types[]" value="flooding" checked> Flooding</label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem;"><input type="checkbox" name="warning_types[]" value="earthquake" checked> Earthquake</label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem;"><input type="checkbox" name="warning_types[]" value="strong_winds" checked> Strong Winds</label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem;"><input type="checkbox" name="warning_types[]" value="typhoon" checked> Typhoon</label>
                         </div>
                     </div>
                     
                     <div class="form-group">
                         <label>Monitored Areas</label>
-                        <div style="margin-top: 0.5rem;">
-                            <textarea id="monitoredAreas" name="monitored_areas" rows="4" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" placeholder="Enter areas to monitor (one per line):&#10;Quezon City&#10;Manila&#10;Makati"></textarea>
-                            <small>List areas to monitor for flooding/landslide risks (one per line)</small>
-                        </div>
+                        <textarea id="monitoredAreas" name="monitored_areas" rows="3" placeholder="List areas (one per line)"></textarea>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="aiNotificationChannels">AI Warning Channels</label>
-                        <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
-                            <label><input type="checkbox" name="ai_channels[]" value="sms" checked> SMS</label>
-                            <label><input type="checkbox" name="ai_channels[]" value="email" checked> Email</label>
-                            <label><input type="checkbox" name="ai_channels[]" value="pa" checked> PA System</label>
-                        </div>
-                    </div>
-                    
-                    <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(142, 68, 173, 0.1); border-left: 4px solid #8e44ad; border-radius: 4px;">
-                        <h3 style="margin-top: 0; color: #8e44ad; display: flex; align-items: center; gap: 0.5rem;">
-                            <i class="fas fa-cloud-sun"></i> AI Weather Analysis Auto-Send
-                        </h3>
-                        <p style="margin: 0.5rem 0 1rem 0; color: var(--text-secondary-1);">Automatically send AI-powered weather analysis to users via mass notifications</p>
-                        
-                        <div class="form-group">
-                            <label for="weatherAnalysisAutoSend">Enable AI Weather Analysis Auto-Send</label>
-                            <label class="switch">
-                                <input type="checkbox" id="weatherAnalysisAutoSend" name="weather_analysis_auto_send">
-                                <span class="slider"></span>
-                            </label>
-                            <small>Automatically send AI weather analysis to subscribed users via SMS, Email, and PA System</small>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="weatherAnalysisInterval">Weather Analysis Send Interval (minutes)</label>
-                            <input type="number" id="weatherAnalysisInterval" name="weather_analysis_interval" value="60" min="15" max="360">
-                            <small>How often to send weather analysis to users (minimum 15 minutes)</small>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="weatherAnalysisVerificationKey">Verification Key</label>
-                            <input type="text" id="weatherAnalysisVerificationKey" name="weather_analysis_verification_key" placeholder="Enter verification key (optional)" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
-                            <small>Key to verify weather analysis authenticity (included in notifications)</small>
-                        </div>
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" onclick="closeAISettingsModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> Save AI Settings
-                        </button>
-                        <button type="button" class="btn btn-info" onclick="testAIWarning()">
-                            <i class="fas fa-vial"></i> Test AI Warning
-                        </button>
-                        <button type="button" class="btn btn-info" onclick="checkAIWarnings(event)">
-                            <i class="fas fa-search"></i> Check Now
-                        </button>
+                    <div class="form-actions" style="margin-top: 2rem; display: flex; gap: 1rem;">
+                        <button type="button" class="btn btn-secondary" onclick="closeAISettingsModal()" style="flex: 1;">Cancel</button>
+                        <button type="submit" class="btn btn-primary" style="flex: 2;">Save AI Settings</button>
+                        <button type="button" class="btn btn-info" onclick="checkAIWarnings(event)" style="flex: 1;">Check Now</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
-
-    <style>
-        /* Settings Modal Styles */
-        .settings-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(4px);
-        }
-
-        .settings-modal .modal-content {
-            position: relative;
-            background-color: var(--card-bg-1);
-            border-radius: 0.75rem;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
-            width: 90%;
-            max-height: 90vh;
-            display: flex;
-            flex-direction: column;
-            z-index: 2001;
-            animation: modalSlideIn 0.3s ease-out;
-        }
-
-        .settings-modal .modal-content-large {
-            max-width: 900px;
-        }
-
-        @keyframes modalSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-20px) scale(0.95);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
-
-        .settings-modal .modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--border-color-1);
-            background-color: var(--header-bg-1);
-            border-radius: 0.75rem 0.75rem 0 0;
-        }
-
-        .settings-modal .modal-header h2 {
-            margin: 0;
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--text-color-1);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .settings-modal .modal-close {
-            background: none;
-            border: none;
-            color: var(--text-secondary-1);
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            transition: all 0.2s ease;
-            line-height: 1;
-        }
-
-        .settings-modal .modal-close:hover {
-            background-color: var(--sidebar-hover-bg-1);
-            color: var(--primary-color-1);
-        }
-
-        .settings-modal .modal-body {
-            padding: 1.5rem;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .settings-modal .modal-body::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .settings-modal .modal-body::-webkit-scrollbar-track {
-            background: var(--sidebar-bg-1);
-            border-radius: 4px;
-        }
-
-        .settings-modal .modal-body::-webkit-scrollbar-thumb {
-            background: var(--text-secondary-1);
-            border-radius: 4px;
-        }
-
-        .settings-modal .modal-body::-webkit-scrollbar-thumb:hover {
-            background: var(--primary-color-1);
-        }
-
-        .channel-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-
-        .ai-analysis-display-card {
-            position: relative;
-        }
-
-        .ai-analysis-display-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
-            opacity: 0.3;
-            pointer-events: none;
-        }
-
-        .ai-analysis-display-card > * {
-            position: relative;
-            z-index: 1;
-        }
-
-        .ai-analysis-display-card button:hover {
-            background: rgba(255,255,255,0.3) !important;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        }
-
-        @media (max-width: 768px) {
-            .settings-modal .modal-content {
-                width: 95%;
-                max-height: 95vh;
-            }
-
-            .settings-modal .modal-content-large {
-                max-width: 95%;
-            }
-
-            .settings-modal .modal-header {
-                padding: 1rem;
-            }
-
-            .settings-modal .modal-body {
-                padding: 1rem;
-            }
-        }
-    </style>
-
 
     <script>
         function loadIntegrationStatus() {
@@ -666,12 +666,12 @@ $pageTitle = 'Automated Warning Integration';
                             const row = document.createElement('tr');
                             row.innerHTML = `
                                 <td>${warning.id}</td>
-                                <td><span class="badge">${warning.source.toUpperCase()}</span></td>
+                                <td><span class="badge" style="background: rgba(76, 138, 137, 0.1); color: var(--primary-color-1); font-weight: 700;">${warning.source.toUpperCase()}</span></td>
                                 <td>${warning.type}</td>
-                                <td>${warning.title}</td>
-                                <td><span class="badge ${warning.severity}">${warning.severity}</span></td>
-                                <td><span class="badge ${warning.status}">${warning.status}</span></td>
-                                <td>${warning.received_at}</td>
+                                <td><strong>${warning.title}</strong></td>
+                                <td><span class="badge ${warning.severity.toLowerCase()}">${warning.severity}</span></td>
+                                <td><span class="badge ${warning.status.toLowerCase()}">${warning.status}</span></td>
+                                <td><small>${warning.received_at}</small></td>
                                 <td>
                                     <button class="btn btn-sm btn-primary" onclick="viewWarning(${warning.id})">
                                         <i class="fas fa-eye"></i>

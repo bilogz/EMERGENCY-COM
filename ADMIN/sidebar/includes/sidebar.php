@@ -49,7 +49,21 @@
                             <span>Admin Approvals</span>
                         </a>
                     </li>
+
+                    <li class="sidebar-menu-item">
+                        <a href="language-management.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'language-management.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-language" style="margin-right: 0.5rem;"></i>
+                            <span>Language Management</span>
+                        </a>
+                    </li>
                     
+                    <li class="sidebar-menu-item">
+                        <a href="profile.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'profile.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-user-circle" style="margin-right: 0.5rem;"></i>
+                            <span>My Profile</span>
+                        </a>
+                    </li>
+
                     <li class="sidebar-menu-item">
                         <a href="general-settings.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'general-settings.php' ? 'active' : ''; ?>">
                             <i class="fas fa-cog" style="margin-right: 0.5rem;"></i>
@@ -83,6 +97,7 @@
                             <span>Two-Way Communication</span>
                         </a>
                     </li>
+
                     
                     <li class="sidebar-menu-item">
                         <a href="automated-warnings.php" class="sidebar-link sidebar-submenu-toggle <?php echo (basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' || basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php' || basename($_SERVER['PHP_SELF']) == 'earthquake-monitoring.php') ? 'active' : ''; ?>">

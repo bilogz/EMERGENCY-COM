@@ -68,6 +68,40 @@ $adminEmail = $_SESSION['admin_email'] ?? 'admin@example.com';
 <link rel="stylesheet" href="css/message-content-modal.css">
 <!-- Emergency Alert System -->
 <link rel="stylesheet" href="../header/css/emergency-alert.css">
+<style>
+/* Date Time Display */
+.datetime-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-right: 1.5rem;
+    color: var(--text-color-1);
+    font-size: 0.9rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.datetime-display .date-part {
+    color: var(--text-secondary-1);
+}
+
+.datetime-display .time-separator {
+    color: var(--border-color-1);
+    margin: 0 0.25rem;
+}
+
+.datetime-display .time-part {
+    font-variant-numeric: tabular-nums;
+    color: var(--primary-color-1);
+    font-weight: 600;
+}
+
+@media (max-width: 1024px) {
+    .datetime-display {
+        display: none;
+    }
+}
+</style>
 
 <!-- Admin Header Component -->
 <header class="admin-header">
@@ -82,6 +116,13 @@ $adminEmail = $_SESSION['admin_email'] ?? 'admin@example.com';
     </div>
     
     <div class="admin-header-right">
+        <!-- Date and Time Display -->
+        <div class="datetime-display" id="headerDateTime">
+            <span class="date-part"></span>
+            <span class="time-separator">|</span>
+            <span class="time-part"></span>
+        </div>
+
         <div class="header-actions">
             <!-- Theme Toggle Buttons -->
             <div class="theme-toggle-container">
@@ -942,4 +983,25 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof window.API_BASE_PATH === 'undefined') {
         window.API_BASE_PATH = '../api/';
     }
+
+    // Date Time Update
+    document.addEventListener('DOMContentLoaded', function() {
+        function updateHeaderTime() {
+            const now = new Date();
+            const dateOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+            const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+            
+            const dateStr = now.toLocaleDateString('en-US', dateOptions);
+            const timeStr = now.toLocaleTimeString('en-US', timeOptions);
+            
+            const container = document.getElementById('headerDateTime');
+            if (container) {
+                container.querySelector('.date-part').textContent = dateStr;
+                container.querySelector('.time-part').textContent = timeStr;
+            }
+        }
+    
+        setInterval(updateHeaderTime, 1000);
+        updateHeaderTime(); // Initial call
+    });
 </script>

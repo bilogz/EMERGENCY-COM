@@ -33,69 +33,256 @@ $pageTitle = 'Multilingual Support for Alerts';
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
     <style>
+        /* Enhanced Multilingual Support Styles */
+        :root {
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --transition-speed: 0.2s;
+        }
+
+        .module-card {
+            background: var(--card-bg-1);
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color-1);
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            transition: box-shadow var(--transition-speed) ease;
+        }
+
+        .module-card:hover {
+            box-shadow: var(--card-shadow-hover);
+        }
+
+        .module-card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color-1);
+            background: var(--bg-color-1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .module-card-header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-color-1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
         /* Modal Styles */
         .modal {
             display: none;
             position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
+            z-index: 2000;
+            left: 0; top: 0; width: 100%; height: 100%;
             overflow: auto;
             background-color: rgba(0, 0, 0, 0.5);
-            animation: fadeIn 0.3s;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.3s ease;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
         }
         
         .modal-content {
-            background-color: #fff;
-            margin: 5% auto;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            animation: slideDown 0.3s;
+            background-color: var(--card-bg-1);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color-1);
+            animation: slideUp 0.3s ease;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
         }
         
-        @keyframes slideDown {
-            from {
-                transform: translateY(-50px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .modal-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color-1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-color-1);
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-color-1);
         }
         
         .modal-close {
-            color: #999;
-            font-size: 28px;
-            font-weight: bold;
-            transition: color 0.2s;
+            color: var(--text-secondary-1);
+            font-size: 1.5rem;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
         }
         
-        .modal-close:hover,
-        .modal-close:focus {
-            color: #333;
-            text-decoration: none;
+        .modal-close:hover {
+            background-color: rgba(0,0,0,0.05);
+            color: var(--text-color-1);
         }
         
-        .language-list-item {
-            cursor: default;
+        .modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
         }
-        
-        .language-list-item:hover {
-            background-color: #f8f9fa !important;
+
+        .modal-footer {
+            padding: 1.25rem 1.5rem;
+            border-top: 1px solid var(--border-color-1);
+            text-align: right;
+            background: var(--bg-color-1);
         }
-        
-        #languageSearch:focus {
+
+        .language-search-box {
+            position: relative;
+            margin-bottom: 1.25rem;
+        }
+
+        .language-search-box input {
+            width: 100%;
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            background: var(--bg-color-1);
+            color: var(--text-color-1);
+            font-size: 0.95rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .language-search-box i {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary-1);
+        }
+
+        .language-search-box input:focus {
             outline: none;
-            border-color: #2196f3;
-            box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+            border-color: var(--primary-color-1);
+            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
+        }
+
+        .language-list-item {
+            transition: background 0.2s ease;
+            border-radius: 8px;
+            margin-bottom: 0.25rem;
+        }
+
+        .language-list-item:hover {
+            background-color: rgba(76, 138, 137, 0.05) !important;
+        }
+
+        .info-card {
+            padding: 1.5rem;
+            background: var(--bg-color-1);
+            border-radius: 10px;
+            border: 1px solid var(--border-color-1);
+        }
+
+        .info-card h3 {
+            margin-top: 0;
+            color: var(--primary-color-1);
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .info-card ol {
+            padding-left: 1.25rem;
+            margin: 0;
+        }
+
+        .info-card li {
+            margin-bottom: 0.75rem;
+            color: var(--text-color-1);
+            line-height: 1.6;
+        }
+
+        .status-box {
+            margin-top: 1.5rem;
+            padding: 1rem 1.25rem;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .status-box.active {
+            background: rgba(46, 204, 113, 0.1);
+            border-left: 4px solid #2ecc71;
+            color: #2ecc71;
+        }
+
+        .status-box.inactive {
+            background: rgba(231, 76, 60, 0.1);
+            border-left: 4px solid #e74c3c;
+            color: #e74c3c;
+        }
+
+        .badge {
+            padding: 0.35rem 0.65rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            display: inline-block;
+        }
+        
+        .badge.success { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
+        .badge.warning { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
+        .badge.ai { background: rgba(155, 89, 182, 0.15); color: #9b59b6; }
+
+        .table-responsive {
+            overflow-x: auto;
+            width: 100%;
+        }
+
+        .data-table th {
+            background: var(--bg-color-1);
+            color: var(--text-secondary-1);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-box {
+            background-color: rgba(76, 138, 137, 0.1);
+            border-left: 4px solid var(--primary-color-1);
+            color: var(--text-color-1);
+            padding: 1.25rem;
+            border-radius: 8px;
+            margin-top: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .info-box i {
+            color: var(--primary-color-1);
+            font-size: 1.25rem;
         }
     </style>
 </head>
@@ -115,25 +302,18 @@ $pageTitle = 'Multilingual Support for Alerts';
                 <nav class="breadcrumb" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list">
                         <li class="breadcrumb-item">
-                            <a href="/" class="breadcrumb-link">
-                                <span>Home</span>
-                            </a>
+                            <a href="dashboard.php" class="breadcrumb-link">Dashboard</a>
                         </li>
-                        <li class="breadcrumb-item">
-                            <a href="/emergency-communication" class="breadcrumb-link">
-                                <span>Emergency Communication</span>
-                            </a>
-                        </li>
-                        <li class="breadcrumb-item active" aria-current="page">
-                            <span>Multilingual Support</span>
-                        </li>
+                        <li class="breadcrumb-item active" aria-current="page">Multilingual Support</li>
                     </ol>
                 </nav>
-                <h1>Multilingual Support for Alerts</h1>
+                <h1><i class="fas fa-language" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Multilingual Support for Alerts</h1>
                 <p>AI-powered automatic translation ensures alerts are delivered in each user's preferred language.</p>
-                <div class="info-box" style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 1rem; border-radius: 4px; margin-top: 1rem;">
-                    <i class="fas fa-robot" style="color: #2196f3;"></i>
-                    <strong>Automatic Translation:</strong> When alerts are sent, the AI automatically translates them based on each user's language preference (from login) or guest language preference. No manual translation needed!
+                <div class="info-box">
+                    <i class="fas fa-robot"></i>
+                    <div>
+                        <strong>Automatic Translation:</strong> When alerts are sent, the AI automatically translates them based on each user's language preference. No manual translation needed!
+                    </div>
                 </div>
             </div>
             
@@ -142,38 +322,37 @@ $pageTitle = 'Multilingual Support for Alerts';
                     <!-- Supported Languages Info -->
                     <div class="module-card">
                         <div class="module-card-header">
-                            <h2><i class="fas fa-language"></i> Supported Languages</h2>
-                            <p style="margin-top: 0.5rem; color: #666; font-size: 0.9rem;">
-                                <i class="fas fa-info-circle"></i> AI can translate alerts to any language supported by Gemini AI
-                            </p>
-                        </div>
-                        <div>
+                            <h2><i class="fas fa-globe"></i> Supported Languages</h2>
                             <button class="btn btn-primary" onclick="openLanguagesModal()">
-                                <i class="fas fa-list"></i> View Supported Languages (<span id="languageCount">-</span>)
+                                <i class="fas fa-list"></i> View All (<span id="languageCount">-</span>)
                             </button>
+                        </div>
+                        <div class="module-card-content">
+                            <p style="margin: 0; color: var(--text-secondary-1); font-size: 0.95rem;">
+                                <i class="fas fa-info-circle"></i> AI can translate alerts to any language supported by Gemini AI. Current system supports <span id="languageCountText">-</span> languages.
+                            </p>
                         </div>
                     </div>
 
                     <!-- Languages Modal -->
-                    <div id="languagesModal" class="modal" style="display: none;">
-                        <div class="modal-content" style="max-width: 600px; max-height: 80vh;">
-                            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid #ddd;">
-                                <h3 style="margin: 0;"><i class="fas fa-language"></i> Supported Languages</h3>
-                                <span class="modal-close" onclick="closeLanguagesModal()" style="cursor: pointer; font-size: 1.5rem; color: #999;">&times;</span>
+                    <div id="languagesModal" class="modal">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h3><i class="fas fa-language"></i> Supported Languages</h3>
+                                <span class="modal-close" onclick="closeLanguagesModal()">&times;</span>
                             </div>
-                            <div class="modal-body" style="padding: 1rem; max-height: 60vh; overflow-y: auto;">
-                                <div style="margin-bottom: 1rem;">
-                                    <input type="text" id="languageSearch" placeholder="Search languages..." 
-                                           style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"
-                                           onkeyup="filterLanguages()">
+                            <div class="modal-body">
+                                <div class="language-search-box">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="languageSearch" placeholder="Search languages..." onkeyup="filterLanguages()">
                                 </div>
-                                <div id="languagesList" style="list-style: none; padding: 0; margin: 0;">
-                                    <div style="text-align: center; padding: 2rem; color: #999;">
+                                <div id="languagesList">
+                                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary-1);">
                                         <i class="fas fa-spinner fa-spin"></i> Loading languages...
                                     </div>
                                 </div>
                             </div>
-                            <div class="modal-footer" style="padding: 1rem; border-top: 1px solid #ddd; text-align: right;">
+                            <div class="modal-footer">
                                 <button class="btn btn-secondary" onclick="closeLanguagesModal()">Close</button>
                             </div>
                         </div>
@@ -182,22 +361,18 @@ $pageTitle = 'Multilingual Support for Alerts';
                     <!-- Automatic Translation Info -->
                     <div class="module-card">
                         <div class="module-card-header">
-                            <h2><i class="fas fa-robot"></i> Automatic AI Translation</h2>
+                            <h2><i class="fas fa-magic"></i> How It Works</h2>
                         </div>
-                        <div>
-                            <div style="padding: 1.5rem; background: #f8f9fa; border-radius: 8px;">
-                                <h3 style="margin-top: 0; color: #2196f3;">
-                                    <i class="fas fa-magic"></i> How It Works
-                                </h3>
-                                <ol style="line-height: 2; color: #555;">
-                                    <li><strong>User Language Preference:</strong> When users log in or login as guests, their language preference is automatically detected and saved.</li>
-                                    <li><strong>Automatic Translation:</strong> When alerts are sent, the AI automatically translates each alert to match the recipient's preferred language.</li>
-                                    <li><strong>No Manual Work:</strong> Admins don't need to manually translate alerts - the AI handles it automatically!</li>
-                                    <li><strong>Real-time:</strong> Translations happen in real-time when alerts are sent, ensuring accuracy and freshness.</li>
+                        <div class="module-card-content">
+                            <div class="info-card">
+                                <ol>
+                                    <li><strong>User Language Preference:</strong> When users log in, their language preference is automatically saved.</li>
+                                    <li><strong>Automatic Translation:</strong> When alerts are sent, the AI translates each alert to match the recipient's preferred language.</li>
+                                    <li><strong>No Manual Work:</strong> Admins don't need to manually translate - the AI handles it automatically!</li>
+                                    <li><strong>Real-time:</strong> Translations happen in real-time, ensuring accuracy and freshness.</li>
                                 </ol>
-                                <div style="margin-top: 1.5rem; padding: 1rem; background: #e8f5e9; border-left: 4px solid #4caf50; border-radius: 4px;">
-                                    <i class="fas fa-check-circle" style="color: #4caf50;"></i>
-                                    <strong>Status:</strong> <span id="aiServiceStatus">Checking AI service...</span>
+                                <div id="aiServiceStatus" class="status-box">
+                                    <i class="fas fa-spinner fa-spin"></i> Checking AI service...
                                 </div>
                             </div>
                         </div>
@@ -211,7 +386,7 @@ $pageTitle = 'Multilingual Support for Alerts';
                                 <i class="fas fa-sync"></i> Refresh
                             </button>
                         </div>
-                        <div>
+                        <div class="module-card-content table-responsive">
                             <table class="data-table" id="activityLogsTable" style="display: none;">
                                 <thead>
                                     <tr>
@@ -240,18 +415,18 @@ $pageTitle = 'Multilingual Support for Alerts';
                         <div class="module-card-header">
                             <h2><i class="fas fa-history"></i> Translation History</h2>
                         </div>
-                        <div>
+                        <div class="module-card-content table-responsive">
                             <table class="data-table" id="translationsTable">
                                 <thead>
                                     <tr>
                                         <th>Alert ID</th>
-                                        <th>Original Language</th>
-                                        <th>Translated Language</th>
+                                        <th>Original</th>
+                                        <th>Translated</th>
                                         <th>Title</th>
                                         <th>Method</th>
-                                        <th>Translated By</th>
+                                        <th>By</th>
                                         <th>Status</th>
-                                        <th>Translated At</th>
+                                        <th>Date</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -278,16 +453,19 @@ $pageTitle = 'Multilingual Support for Alerts';
                     aiServiceAvailable = data.available === true;
                     const statusElement = document.getElementById('aiServiceStatus');
                     if (aiServiceAvailable) {
-                        statusElement.innerHTML = '<span style="color: #4caf50;"><i class="fas fa-check-circle"></i> AI Translation Service is Active and Ready</span>';
+                        statusElement.className = 'status-box active';
+                        statusElement.innerHTML = '<i class="fas fa-check-circle"></i> AI Translation Service is Active and Ready';
                     } else {
-                        statusElement.innerHTML = '<span style="color: #f44336;"><i class="fas fa-exclamation-triangle"></i> AI Translation Service is Not Available. Please configure Gemini API key.</span>';
+                        statusElement.className = 'status-box inactive';
+                        statusElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> AI Translation Service is Not Available. Please configure Gemini API key.';
                     }
                 })
                 .catch(error => {
                     console.error('Error checking AI availability:', error);
                     aiServiceAvailable = false;
                     const statusElement = document.getElementById('aiServiceStatus');
-                    statusElement.innerHTML = '<span style="color: #f44336;"><i class="fas fa-exclamation-triangle"></i> Error checking AI service status.</span>';
+                    statusElement.className = 'status-box inactive';
+                    statusElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error checking AI service status.';
                 });
         }
         
@@ -299,6 +477,7 @@ $pageTitle = 'Multilingual Support for Alerts';
                     if (data.success && data.languages) {
                         supportedLanguages = data.languages;
                         document.getElementById('languageCount').textContent = data.languages.length;
+                        document.getElementById('languageCountText').textContent = data.languages.length;
                         loadLanguagesList();
                     }
                 })
@@ -314,7 +493,7 @@ $pageTitle = 'Multilingual Support for Alerts';
             list.innerHTML = '';
             
             if (supportedLanguages.length === 0) {
-                list.innerHTML = '<div style="text-align: center; padding: 2rem; color: #999;">No languages found</div>';
+                list.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary-1);">No languages found</div>';
                 return;
             }
             
@@ -322,12 +501,10 @@ $pageTitle = 'Multilingual Support for Alerts';
                 const listItem = document.createElement('div');
                 listItem.className = 'language-list-item';
                 listItem.dataset.languageName = (lang.language_name + ' ' + (lang.native_name || '') + ' ' + lang.language_code).toLowerCase();
-                listItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; border-bottom: 1px solid #f0f0f0; transition: background 0.2s;';
-                listItem.onmouseover = function() { this.style.background = '#f8f9fa'; };
-                listItem.onmouseout = function() { this.style.background = ''; };
+                listItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-color-1); transition: background 0.2s;';
                 
                 const leftSection = document.createElement('div');
-                leftSection.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; flex: 1;';
+                leftSection.style.cssText = 'display: flex; align-items: center; gap: 1rem; flex: 1;';
                 
                 const flag = document.createElement('span');
                 flag.style.cssText = 'font-size: 1.5rem;';
@@ -337,27 +514,26 @@ $pageTitle = 'Multilingual Support for Alerts';
                 info.style.cssText = 'flex: 1;';
                 
                 const name = document.createElement('div');
-                name.style.cssText = 'font-weight: 600; color: #333; margin-bottom: 0.25rem;';
+                name.style.cssText = 'font-weight: 700; color: var(--text-color-1); margin-bottom: 0.15rem; font-size: 0.95rem;';
                 name.textContent = lang.language_name;
                 
                 const native = document.createElement('div');
-                native.style.cssText = 'font-size: 0.85rem; color: #666;';
+                native.style.cssText = 'font-size: 0.85rem; color: var(--text-secondary-1); font-weight: 500;';
                 native.textContent = lang.native_name || lang.language_name;
                 
                 info.appendChild(name);
                 info.appendChild(native);
                 
                 const rightSection = document.createElement('div');
-                rightSection.style.cssText = 'display: flex; align-items: center; gap: 0.5rem;';
+                rightSection.style.cssText = 'display: flex; align-items: center; gap: 0.75rem;';
                 
                 const statusBadge = document.createElement('span');
                 statusBadge.className = 'badge ' + (lang.is_active ? 'success' : 'warning');
-                statusBadge.style.cssText = 'font-size: 0.75rem; padding: 0.25rem 0.5rem;';
                 statusBadge.textContent = lang.is_active ? 'Active' : 'Inactive';
                 
                 const aiBadge = document.createElement('span');
                 if (lang.is_ai_supported) {
-                    aiBadge.style.cssText = 'color: #2196f3; font-size: 1rem;';
+                    aiBadge.style.cssText = 'color: #9b59b6; font-size: 1rem;';
                     aiBadge.innerHTML = '<i class="fas fa-robot" title="AI Supported"></i>';
                 }
                 
@@ -392,7 +568,7 @@ $pageTitle = 'Multilingual Support for Alerts';
         // Open languages modal
         function openLanguagesModal() {
             const modal = document.getElementById('languagesModal');
-            modal.style.display = 'block';
+            modal.style.display = 'flex';
             document.getElementById('languageSearch').focus();
             
             // Load languages if not already loaded
@@ -430,27 +606,29 @@ $pageTitle = 'Multilingual Support for Alerts';
                         data.translations.forEach(trans => {
                             const row = document.createElement('tr');
                             const methodBadge = trans.translation_method === 'ai' 
-                                ? '<span class="badge" style="background: #2196f3;"><i class="fas fa-robot"></i> AI</span>'
-                                : '<span class="badge" style="background: #666;"><i class="fas fa-user"></i> Manual</span>';
+                                ? '<span class="badge ai"><i class="fas fa-robot"></i> AI</span>'
+                                : '<span class="badge" style="background: rgba(108, 117, 125, 0.15); color: #6c757d;"><i class="fas fa-user"></i> Manual</span>';
                             const languageName = trans.language_name || trans.target_language;
                             const flagEmoji = trans.flag_emoji || '🌐';
                             
                             row.innerHTML = `
-                                <td>${trans.alert_id}</td>
-                                <td>${trans.original_language || 'en'}</td>
-                                <td>${flagEmoji} ${languageName}</td>
-                                <td>${trans.translated_title}</td>
+                                <td>#${trans.alert_id}</td>
+                                <td><code style="background: var(--bg-color-1); padding: 0.2rem 0.4rem; border-radius: 4px;">${trans.original_language || 'en'}</code></td>
+                                <td><strong>${flagEmoji} ${languageName}</strong></td>
+                                <td><div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${trans.translated_title}</div></td>
                                 <td>${methodBadge}</td>
                                 <td>${trans.translated_by_name || 'System'}</td>
                                 <td><span class="badge ${trans.status === 'active' ? 'success' : 'warning'}">${trans.status}</span></td>
-                                <td>${new Date(trans.translated_at).toLocaleString()}</td>
+                                <td><small style="color: var(--text-secondary-1);">${new Date(trans.translated_at).toLocaleDateString()}</small></td>
                                 <td>
-                                    <button class="btn btn-sm btn-primary" onclick="editTranslation(${trans.id})" title="Edit">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteTranslation(${trans.id})" title="Delete">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-primary" onclick="editTranslation(${trans.id})" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteTranslation(${trans.id})" title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
                                 </td>
                             `;
                             tbody.appendChild(row);
@@ -500,7 +678,7 @@ $pageTitle = 'Multilingual Support for Alerts';
                         tbody.innerHTML = '';
                         
                         if (data.logs.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #999;">No activity logs found</td></tr>';
+                            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary-1);">No activity logs found</td></tr>';
                         } else {
                             data.logs.forEach(log => {
                                 const row = document.createElement('tr');
@@ -508,16 +686,16 @@ $pageTitle = 'Multilingual Support for Alerts';
                                     ? '<span class="badge success">Success</span>'
                                     : '<span class="badge error">Failed</span>';
                                 const methodBadge = log.translation_method === 'ai'
-                                    ? '<span class="badge" style="background: #2196f3;"><i class="fas fa-robot"></i> AI</span>'
+                                    ? '<span class="badge ai"><i class="fas fa-robot"></i> AI</span>'
                                     : log.translation_method === 'manual'
-                                    ? '<span class="badge" style="background: #666;"><i class="fas fa-user"></i> Manual</span>'
+                                    ? '<span class="badge" style="background: rgba(108, 117, 125, 0.15); color: #6c757d;"><i class="fas fa-user"></i> Manual</span>'
                                     : '';
                                 
                                 row.innerHTML = `
-                                    <td>${new Date(log.created_at).toLocaleString()}</td>
-                                    <td><code>${log.action_type}</code></td>
-                                    <td>${log.alert_title || 'Alert #' + (log.alert_id || 'N/A')}</td>
-                                    <td>${log.source_language || 'en'} → ${log.target_language || 'N/A'}</td>
+                                    <td><small>${new Date(log.created_at).toLocaleString()}</small></td>
+                                    <td><code style="background: var(--bg-color-1); padding: 0.2rem 0.4rem; border-radius: 4px;">${log.action_type}</code></td>
+                                    <td><div style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${log.alert_title || 'Alert #' + (log.alert_id || 'N/A')}</div></td>
+                                    <td><strong>${log.source_language || 'en'} → ${log.target_language || 'N/A'}</strong></td>
                                     <td>${methodBadge}</td>
                                     <td>${statusBadge}</td>
                                 `;
@@ -528,12 +706,12 @@ $pageTitle = 'Multilingual Support for Alerts';
                         table.style.display = 'table';
                         loadingDiv.style.display = 'none';
                     } else {
-                        loadingDiv.innerHTML = '<span style="color: #f44336;">Error loading activity logs: ' + (data.message || 'Unknown error') + '</span>';
+                        loadingDiv.innerHTML = '<span style="color: #e74c3c;">Error loading activity logs: ' + (data.message || 'Unknown error') + '</span>';
                     }
                 })
                 .catch(error => {
                     console.error('Error loading activity logs:', error);
-                    loadingDiv.innerHTML = '<span style="color: #f44336;">Error loading activity logs. Please try again.</span>';
+                    loadingDiv.innerHTML = '<span style="color: #e74c3c;">Error loading activity logs. Please try again.</span>';
                 });
         }
 
@@ -546,4 +724,3 @@ $pageTitle = 'Multilingual Support for Alerts';
     </script>
 </body>
 </html>
-
