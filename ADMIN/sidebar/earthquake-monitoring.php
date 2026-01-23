@@ -672,10 +672,11 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         function renderAIRiskContent(analysis, time) {
             document.getElementById('aiRiskTimestamp').textContent = `LIVE | Updated: ${new Date(time).toLocaleTimeString()}`;
             
-            // Defensive coding to prevent "undefined"
-            const summary = analysis.risk_summary || "No significant seismic anomalies detected in the current data stream.";
-            const prediction = analysis.prediction || "Predictive models show stable seismic activity for the next 7 days.";
-            const riskLevel = analysis.ai_risk_level?.toUpperCase() || "LOW";
+            // Defensive coding to prevent "undefined" and handle new API structure
+            // New keys: seismic_summary, predictive_outlook, risk_level, actionable_recommendations
+            const summary = analysis.seismic_summary || analysis.risk_summary || "No significant seismic anomalies detected in the current data stream.";
+            const prediction = analysis.predictive_outlook || analysis.prediction || "Predictive models show stable seismic activity for the next 7 days.";
+            const riskLevel = (analysis.risk_level || analysis.ai_risk_level || "LOW").toUpperCase();
 
             // Update Badge
             const badgeText = document.getElementById('qcRiskBadgeText');
@@ -697,7 +698,18 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 typeWriter('aiPredictionText', prediction, 15);
             }, 500);
             
-            const recs = analysis.recommendations || ["Continue monitoring standard channels."];
+            // Handle recommendations: New API returns a string, old returned array
+            let recs = [];
+            if (analysis.actionable_recommendations) {
+                // If it's a string (new format), wrap in array. If it's already array (unlikely but safe), use it.
+                recs = Array.isArray(analysis.actionable_recommendations) ? analysis.actionable_recommendations : [analysis.actionable_recommendations];
+            } else if (analysis.recommendations) {
+                // Fallback for old format
+                recs = analysis.recommendations;
+            } else {
+                recs = ["Continue monitoring standard channels."];
+            }
+
             document.getElementById('aiRecommendations').innerHTML = recs.map(r => 
                 `<div class="recommendation-item"><i class="fas fa-check-circle"></i> ${r}</div>`
             ).join('');

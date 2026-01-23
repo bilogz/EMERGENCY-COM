@@ -963,31 +963,63 @@ function assessEarthquakeRisk() {
  */
 function buildRiskAssessmentPrompt($earthquakes, $baseRisk) {
     // Summarize earthquake data for the prompt
-    $count = count($earthquakes);
     $qcLat = 14.6488;
     $qcLon = 121.0509;
     
-    $prompt = "Act as an expert Seismic Risk Analyst for the Quezon City Local Government Unit (LGU).\n";
-    $prompt .= "Analyze the following recent earthquake data (last 30 days) relative to Quezon City (Lat: $qcLat, Lon: $qcLon).\n";
-    $prompt .= "The calculated base risk level based on distance/magnitude is: " . strtoupper($baseRisk) . ".\n\n";
-    
-    $prompt .= "Recent Seismic Activity ($count events):\n";
-    // Limit to top 10 most relevant for brevity in prompt
-    $relevant = array_slice($earthquakes, 0, 10);
+    // Format earthquake list for the prompt
+    $eqList = "";
+    // Limit to top 15 most relevant for better context
+    $relevant = array_slice($earthquakes, 0, 15);
     foreach ($relevant as $eq) {
-        $prompt .= "- Mag {$eq['magnitude']} | Depth {$eq['depth']}km | Dist {$eq['distanceFromQC']}km\n";
+        $mag = $eq['magnitude'] ?? 0;
+        $depth = $eq['depth'] ?? 0;
+        $dist = $eq['distanceFromQC'] ?? 0;
+        $loc = $eq['location'] ?? 'Unknown';
+        $time = isset($eq['time']) ? date('Y-m-d H:i:s', $eq['time'] / 1000) : 'Unknown';
+        
+        $eqList .= sprintf("- Mag %.1f | Depth %.1fkm | Dist %.1fkm | %s | %s\n", $mag, $depth, $dist, $loc, $time);
     }
     
-    $prompt .= "\nBased on these patterns, generate a structured Risk Analysis & Prediction Report specifically for Quezon City.\n";
-    $prompt .= "Output MUST be valid JSON with the following fields:\n";
-    $prompt .= "{\n";
-    $prompt .= "  \"ai_risk_level\": \"Low | Moderate | High\",\n";
-    $prompt .= "  \"risk_summary\": \"Concise summary of the current seismic threat level.\",\n";
-    $prompt .= "  \"prediction\": \"Short-term prediction (7-14 days) with confidence level (Low/Medium/High). Analyze trends (swarms, aftershocks, increasing intensity).\",\n";
-    $prompt .= "  \"impact_analysis\": \"Potential effects on Quezon City's people, infrastructure (bridges, tall buildings), and utilities if activity escalates.\",\n";
-    $prompt .= "  \"recommendations\": \"Specific, actionable preparedness and mitigation steps for the LGU.\"\n";
-    $prompt .= "}\n";
-    $prompt .= "Tone: Official, authoritative, forecast-oriented. No markdown formatting, just raw JSON.";
+    $prompt = <<<EOT
+You are an AI Seismic Risk Analyst for the Quezon City Local Government Unit (LGU).
+
+1. CONTEXT & GEOGRAPHY
+Focus on the West Valley Fault (WVF) passing through Bagong Silangan, Batasan Hills, Blue Ridge, Ugong Norte.
+Consider soil and liquefaction potential in areas like Eastwood, near the Marikina River, or other soft-soil zones.
+If an earthquake occurs outside QC, calculate felt intensity and expected ground motion specifically in QC.
+Take into account local urban density, infrastructure vulnerability, and recent seismic history.
+
+2. LOGICAL FLOW
+Your report must follow a predictive, data-driven flow:
+- Assess Seismic Parameters: Use magnitude, depth, epicenter, and time. Evaluate distance to QC and fault interaction.
+- Estimate Risk Level: Classify as "LOW", "MODERATE", "HIGH", or "CRITICAL". Consider WVF proximity, liquefaction-prone areas, building density, and recent seismic events.
+- Generate Seismic Summary: Provide a concise technical description of ground motion. Mention affected barangays or zones if applicable. Include observed or expected intensity and shaking patterns.
+- Predictive Outlook: Forecast 7-day aftershock probability and fault stress transfer. Use probabilistic language (<10% likelihood, moderate chance of aftershocks, etc.). Identify areas of higher caution or monitoring priority.
+- Actionable Recommendations: Provide one clear, imperative instruction for residents or responders. Ensure it is location-specific, safety-focused, and immediate (e.g., "Inspect high-rise structures in Cubao").
+
+3. OUTPUT FORMAT
+Must output strictly valid JSON.
+Do not include Markdown, code fences, or explanatory text.
+JSON structure:
+{
+  "risk_level": "LOW" | "MODERATE" | "HIGH" | "CRITICAL",
+  "seismic_summary": "Concise technical summary of ground motion; include QC-specific barangays if relevant.",
+  "predictive_outlook": "7-day aftershock forecast using probabilistic language; note fault stress transfer and affected areas.",
+  "actionable_recommendations": "One clear, imperative instruction for QC residents or responders."
+}
+
+4. DATA INPUT (Dynamic)
+Quezon City Coordinates: Lat $qcLat, Lon $qcLon
+Base Calculated Risk: $baseRisk
+Recent Seismic Events:
+$eqList
+
+5. RULES & PREDICTIVE LOGIC
+Always reference specific QC barangays or zones where relevant.
+Use quantitative and probabilistic reasoning where possible (e.g., <5% chance, moderate likelihood).
+Only return JSON output. Do not write explanations, tables, or lists outside JSON.
+Ensure actionable recommendations are feasible, specific, and safety-oriented.
+EOT;
     
     return $prompt;
 }
