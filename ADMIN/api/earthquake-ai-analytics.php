@@ -859,30 +859,69 @@ function assessEarthquakeRisk() {
     
     try {
         $input = file_get_contents('php://input');
+        
+        if (empty($input)) {
+            throw new Exception('No input data received');
+        }
+        
         $data = json_decode($input, true);
         
-        if (!$data || !isset($data['earthquakes'])) {
-            throw new Exception('No earthquake data provided');
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception('Invalid JSON input: ' . json_last_error_msg());
+        }
+        
+        if (!isset($data['earthquakes']) || !is_array($data['earthquakes'])) {
+            throw new Exception('No earthquake data provided or invalid format');
         }
         
         $earthquakes = $data['earthquakes'];
         $baseRisk = $data['base_risk'] ?? 'unknown';
         
-        // Get API key
-        $apiKey = getGeminiApiKey('analysis');
-        if (empty($apiKey)) {
-            $apiKey = getGeminiApiKey('default');
+        // Get API key for analysis
+        $apiKey = null;
+        $backupApiKey = null;
+        
+        try {
+            // Check if function exists
+            if (!function_exists('getGeminiApiKey')) {
+                throw new Exception('getGeminiApiKey function not found');
+            }
+            
+            // Try earthquake-specific key first, then analysis, then default
+            $apiKey = getGeminiApiKey('earthquake');
+            if (empty($apiKey)) {
+                $apiKey = getGeminiApiKey('analysis');
+            }
+            if (empty($apiKey)) {
+                $apiKey = getGeminiApiKey('default');
+            }
+            
+            // Get backup key for quota exceeded scenarios
+            $backupApiKey = getGeminiApiKey('analysis_backup');
+        } catch (Throwable $e) {
+            error_log('Error getting Gemini API key in assessEarthquakeRisk: ' . $e->getMessage());
         }
         
         if (empty($apiKey)) {
-            throw new Exception('API key not configured');
+            ob_clean();
+            http_response_code(503);
+            $output = json_encode([
+                'success' => false, 
+                'message' => 'AI API key not configured. Please configure Gemini API key settings.',
+                'error_code' => 'API_KEY_MISSING'
+            ], JSON_UNESCAPED_UNICODE);
+            echo $output;
+            if (ob_get_level()) {
+                ob_end_flush();
+            }
+            exit();
         }
         
         // Build prompt
         $prompt = buildRiskAssessmentPrompt($earthquakes, $baseRisk);
         
-        // Call API
-        $response = callGeminiAI($apiKey, $prompt);
+        // Call API with backup key support
+        $response = callGeminiAI($apiKey, $prompt, $backupApiKey);
         
         if ($response['success']) {
             ob_clean();
@@ -892,15 +931,24 @@ function assessEarthquakeRisk() {
                 'timestamp' => date('Y-m-d H:i:s')
             ], JSON_UNESCAPED_UNICODE);
         } else {
-            throw new Exception($response['error'] ?? 'AI processing failed');
+            // Log the specific AI error but return a generic message if it's sensitive
+            error_log('AI Analysis Failed: ' . ($response['error'] ?? 'Unknown error'));
+            throw new Exception('AI processing failed. The service might be temporarily unavailable.');
         }
         
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         ob_clean();
+        // Log the full error details for admins
+        error_log('assessEarthquakeRisk Error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+        
+        // Return 500 status code
         http_response_code(500);
+        
+        // Return safe, generic error message to frontend
         echo json_encode([
             'success' => false, 
-            'message' => $e->getMessage()
+            'message' => 'An error occurred while assessing risk. Please check server logs for details.',
+            'error_code' => 'INTERNAL_SERVER_ERROR'
         ], JSON_UNESCAPED_UNICODE);
     }
     
