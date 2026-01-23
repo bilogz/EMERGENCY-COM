@@ -61,6 +61,11 @@ if (!isset($_SESSION['admin_username']) || !isset($_SESSION['admin_email'])) {
 // Set defaults if still not set
 $adminUsername = $_SESSION['admin_username'] ?? 'Admin User';
 $adminEmail = $_SESSION['admin_email'] ?? 'admin@example.com';
+
+// Determine if we should show notifications based on current page
+// Hide for Multilingual Support module pages
+$currentScript = $_SERVER['PHP_SELF'];
+$hideNotifications = (strpos($currentScript, '/multilingual-support/') !== false);
 ?>
 
 <link rel="stylesheet" href="css/notification-modal.css">
@@ -136,12 +141,14 @@ $adminEmail = $_SESSION['admin_email'] ?? 'admin@example.com';
                 </button>
             </div>
             
+            <?php if (!$hideNotifications): ?>
             <div class="notification-item">
                 <button class="notification-btn" aria-label="Notifications">
                     <i class="fas fa-bell"></i>
                     <span class="notification-badge">3</span>
                 </button>
             </div>
+            <?php endif; ?>
             
             <div class="notification-item">
                 <button class="notification-btn" aria-label="Messages">
@@ -199,6 +206,7 @@ $adminEmail = $_SESSION['admin_email'] ?? 'admin@example.com';
     </div>
 </div>
 
+<?php if (!$hideNotifications): ?>
 <!-- Notification Modal -->
 <div class="notification-modal" id="notificationModal">
     <div class="modal-content">
@@ -245,6 +253,7 @@ $adminEmail = $_SESSION['admin_email'] ?? 'admin@example.com';
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Message Modal -->
 <div class="notification-modal" id="messageModal">

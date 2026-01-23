@@ -13,6 +13,8 @@ header('Content-Type: application/json; charset=utf-8');
 try {
     require_once 'db_connect.php';
     require_once 'activity_logger.php';
+    // Include Translation Helper
+    require_once 'alert-translation-helper.php';
 
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
@@ -53,10 +55,23 @@ try {
         throw new Exception('Required fields missing: ' . implode(', ', $missing));
     }
 
-    // 5. Build Recipient Query
-    $sql = "SELECT u.id, u.name, u.email, u.phone, d.fcm_token 
+    // 5. Create Entry in Alerts table FIRST for global monitoring and ID generation
+    // This allows us to link translations to this specific alert
+    $aStmt = $pdo->prepare("
+        INSERT INTO alerts (title, message, content, category_id, severity, status, created_at) 
+        VALUES (?, ?, ?, ?, ?, 'active', NOW())
+    ");
+    $aStmt->execute([$title, $body, $body, $categoryId, $severity]);
+    $alertId = $pdo->lastInsertId();
+
+    // 6. Build Recipient Query
+    // Updated to include language preference and auto-translate setting
+    $sql = "SELECT u.id, u.name, u.email, u.phone, d.fcm_token, 
+                   COALESCE(up.preferred_language, 'en') as preferred_language,
+                   COALESCE(up.auto_translate_enabled, 1) as auto_translate_enabled
             FROM users u 
             LEFT JOIN user_devices d ON u.id = d.user_id AND d.is_active = 1
+            LEFT JOIN user_preferences up ON u.id = up.user_id
             WHERE u.status = 'active'";
     $params = [];
 
@@ -80,7 +95,7 @@ try {
         throw new Exception('No active recipients found for the selected audience.');
     }
 
-    // 6. Insert Pending Log Entry
+    // 7. Insert Pending Log Entry
     $channelStr = implode(',', $channels);
     $audienceStr = $audienceType . ($barangay ? ": $barangay" : "") . ($role ? ": $role" : "") . ($categoryId ? ": Cat $categoryId" : "");
     
@@ -98,9 +113,42 @@ try {
     ]);
     $logId = $pdo->lastInsertId();
 
-    // 7. Queue Dispatch Jobs
+    // 8. Prepare Translations
+    // Collect all unique target languages
+    $targetLanguages = [];
+    foreach ($recipients as $recipient) {
+        $lang = $recipient['preferred_language'];
+        $autoTranslate = $recipient['auto_translate_enabled'];
+        
+        if ($lang !== 'en' && $autoTranslate) {
+            $targetLanguages[] = $lang;
+        }
+    }
+    
+    // Initialize Translation Helper and Pre-generate necessary translations
+    $translationHelper = new AlertTranslationHelper($pdo);
+    if (!empty($targetLanguages)) {
+        $translationHelper->preGenerateTranslations($alertId, $title, $body, $targetLanguages);
+    }
+
+    // 9. Queue Dispatch Jobs
     $queueCount = 0;
     foreach ($recipients as $recipient) {
+        $recipientLang = $recipient['preferred_language'];
+        $autoTranslate = $recipient['auto_translate_enabled'];
+        
+        // Determine content based on language
+        $msgTitle = $title;
+        $msgBody = $body;
+        
+        if ($recipientLang !== 'en' && $autoTranslate) {
+            $translated = $translationHelper->getTranslatedAlert($alertId, $recipientLang, $title, $body);
+            if ($translated) {
+                $msgTitle = $translated['title'];
+                $msgBody = $translated['message'];
+            }
+        }
+
         foreach ($channels as $channel) {
             $value = '';
             $type = '';
@@ -121,13 +169,14 @@ try {
                     INSERT INTO notification_queue (log_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
                     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
                 ");
-                $qStmt->execute([$logId, $recipient['id'], $type, $value, $channel, $title, $body]);
+                // Insert the (potentially translated) title and message
+                $qStmt->execute([$logId, $recipient['id'], $type, $value, $channel, $msgTitle, $msgBody]);
                 $queueCount++;
             }
         }
     }
 
-    // Handle Public Address System
+    // Handle Public Address System (Always uses base language)
     if (in_array('pa', $channels)) {
         $qStmt = $pdo->prepare("
             INSERT INTO notification_queue (log_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
@@ -137,22 +186,15 @@ try {
         $queueCount++;
     }
 
-    // 8. Create Entry in Alerts table for global monitoring
-    $aStmt = $pdo->prepare("
-        INSERT INTO alerts (title, message, content, category_id, severity, status, created_at) 
-        VALUES (?, ?, ?, ?, ?, 'active', NOW())
-    ");
-    $aStmt->execute([$title, $body, $body, $categoryId, $severity]);
-
-    // 9. Update Log Status to 'sent' (Queued successfully)
+    // 10. Update Log Status to 'sent' (Queued successfully)
     // Note: 'updated_at' is omitted as it does not exist in the schema.
     $updateStmt = $pdo->prepare("UPDATE notification_logs SET status = 'sent' WHERE id = ?");
     $updateStmt->execute([$logId]);
 
-    // 10. Audit Activity
+    // 11. Audit Activity
     logAdminActivity($adminId, 'mass_notification_queued', "Queued $queueCount messages for $audienceStr. Log ID: $logId");
 
-    // 11. Final Clean Output
+    // 12. Final Clean Output
     ob_end_clean();
     echo json_encode([
         'success' => true,
@@ -172,7 +214,7 @@ try {
             // Silence inner exception
         }
     }
-
+    
     // Discard any accidental buffered output
     if (ob_get_length()) ob_end_clean();
     
