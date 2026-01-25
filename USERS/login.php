@@ -18,11 +18,11 @@ $assetBase = '../ADMIN/header/';
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <script src="js/translations.js"></script>
-    <script src="js/language-manager.js"></script>
-    <script src="js/global-translator.js"></script>
-    <script src="js/language-selector-modal.js"></script>
-    <script src="js/language-sync.js"></script>
+    <script src="js/translations.js?v=<?= @filemtime(__DIR__ . '/js/translations.js') ?>"></script>
+    <script src="js/language-manager.js?v=<?= @filemtime(__DIR__ . '/js/language-manager.js') ?>"></script>
+    <script src="js/global-translator.js?v=<?= @filemtime(__DIR__ . '/js/global-translator.js') ?>"></script>
+    <script src="js/language-selector-modal.js?v=<?= @filemtime(__DIR__ . '/js/language-selector-modal.js') ?>"></script>
+    <script src="js/language-sync.js?v=<?= @filemtime(__DIR__ . '/js/language-sync.js') ?>"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -38,7 +38,7 @@ $assetBase = '../ADMIN/header/';
 <body>
     <?php include 'includes/sidebar.php'; ?>
 
-    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()">
+    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
         <i class="fas fa-bars"></i>
     </button>
 
@@ -243,7 +243,7 @@ $assetBase = '../ADMIN/header/';
                     </div>
                     <div class="alternative-login-buttons" style="display: flex; gap: 1rem; flex-wrap: wrap;">
                         <!-- Google OAuth Login -->
-                        <button type="button" id="googleLoginBtn" class="btn btn-google" style="flex: 1; min-width: 200px;">
+                        <button type="button" id="googleLoginBtn" class="btn btn-google" data-no-translate style="flex: 1; min-width: 200px;">
                             <span class="google-logo-wrapper">
                                 <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
                                     <g fill="#000" fill-rule="evenodd">
@@ -254,7 +254,7 @@ $assetBase = '../ADMIN/header/';
                                     </g>
                                 </svg>
                             </span>
-                            <span class="google-text" data-translate="login.withGoogle">Login with Google</span>
+                            <span class="google-text">Login with Google</span>
                         </button>
 
                         <!-- Phone OTP Login -->
@@ -1235,8 +1235,10 @@ $assetBase = '../ADMIN/header/';
                 console.log('Backend response status:', response.status);
                 if (!response.ok) {
                     const errorText = await response.text();
-                    console.error('Backend error:', errorText);
-                    throw new Error('Server error: HTTP ' + response.status + ' - ' + errorText);
+                    // Escape HTML to prevent syntax errors
+                    const safeErrorText = errorText.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    console.error('Backend error:', safeErrorText);
+                    throw new Error('Server error: HTTP ' + response.status + ' - ' + safeErrorText);
                 }
 
                 const data = await response.json();

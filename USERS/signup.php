@@ -18,11 +18,11 @@ $assetBase = '../ADMIN/header/';
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <script src="js/translations.js"></script>
-    <script src="js/language-manager.js"></script>
-    <script src="js/global-translator.js"></script>
-    <script src="js/language-selector-modal.js"></script>
-    <script src="js/language-sync.js"></script>
+    <script src="js/translations.js?v=<?= @filemtime(__DIR__ . '/js/translations.js') ?>"></script>
+    <script src="js/language-manager.js?v=<?= @filemtime(__DIR__ . '/js/language-manager.js') ?>"></script>
+    <script src="js/global-translator.js?v=<?= @filemtime(__DIR__ . '/js/global-translator.js') ?>"></script>
+    <script src="js/language-selector-modal.js?v=<?= @filemtime(__DIR__ . '/js/language-selector-modal.js') ?>"></script>
+    <script src="js/language-sync.js?v=<?= @filemtime(__DIR__ . '/js/language-sync.js') ?>"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const langBtn = document.getElementById('languageSelectorBtn');
@@ -37,7 +37,7 @@ $assetBase = '../ADMIN/header/';
 <body>
     <?php include 'includes/sidebar.php'; ?>
 
-    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()">
+    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
         <i class="fas fa-bars"></i>
     </button>
 
@@ -94,7 +94,6 @@ $assetBase = '../ADMIN/header/';
                                 <option value="5">District 5</option>
                                 <option value="6">District 6</option>
                             </select>
-                            <small class="form-hint">Select your district first, then choose your barangay</small>
                         </div>
                         <div class="form-group">
                             <label for="barangay">
@@ -102,7 +101,6 @@ $assetBase = '../ADMIN/header/';
                             </label>
                             <input type="text" id="barangay" name="barangay" placeholder="Select district first, then type to search barangay..." required autocomplete="off" disabled>
                             <div id="barangaySuggestions" class="suggestions-dropdown" style="display: none;"></div>
-                            <small class="form-hint">Start typing to search for your barangay</small>
                         </div>
                         <div class="form-group">
                             <label for="house_number">House / Unit No.</label>
@@ -113,7 +111,6 @@ $assetBase = '../ADMIN/header/';
                                 <i class="fas fa-road"></i> Street (Quezon City)
                             </label>
                             <input type="text" id="street" name="street" placeholder="Enter your street name" required>
-                            <small class="form-hint">Enter your street name</small>
                         </div>
                         
                         <div class="error-message" id="errorMessage" style="display: none;">
@@ -122,7 +119,7 @@ $assetBase = '../ADMIN/header/';
                         </div>
                         
                         <div class="auth-actions">
-                            <button type="submit" class="btn btn-primary" id="signupButton">
+                            <button type="submit" class="btn btn-primary" id="signupButton" data-no-translate>
                                 <i class="fas fa-user-plus"></i>
                                 <span class="btn-text">Sign Up</span>
                                 <span class="btn-spinner" style="display: none;">
@@ -135,7 +132,7 @@ $assetBase = '../ADMIN/header/';
                         <div class="auth-divider">
                             <span>OR</span>
                         </div>
-                        <button type="button" id="googleSignupBtn" class="btn btn-google">
+                        <button type="button" id="googleSignupBtn" class="btn btn-google" data-no-translate>
                             <span class="google-logo-wrapper">
                                 <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
                                     <g fill="#000" fill-rule="evenodd">
@@ -151,7 +148,7 @@ $assetBase = '../ADMIN/header/';
 
                         <div class="auth-switch">
                             <span>Already have an account?</span>
-                            <a href="login.php" class="btn btn-secondary login-btn">
+                            <a href="login.php" class="btn btn-secondary login-btn" data-no-translate>
                                 <i class="fas fa-sign-in-alt"></i>
                                 <span>Login</span>
                             </a>

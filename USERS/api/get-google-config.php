@@ -16,26 +16,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Try .env file first
-$envFile = __DIR__ . '/.env';
+$envFile = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.env';
 $googleClientId = null;
 
-if (file_exists($envFile)) {
-    $envContent = file_get_contents($envFile);
-    $lines = explode("\n", $envContent);
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if (empty($line) || strpos($line, '#') === 0) {
-            continue;
-        }
-        if (strpos($line, '=') !== false) {
-            list($key, $value) = explode('=', $line, 2);
-            $key = trim($key);
-            $value = trim($value);
-            $value = trim($value, '"\'');
-            if ($key === 'GOOGLE_CLIENT_ID') {
-                $googleClientId = $value;
-                break;
-            }
+if (file_exists(__DIR__ . '/config.env.php')) {
+    require_once __DIR__ . '/config.env.php';
+    if (function_exists('getApiConfig')) {
+        $apiCfg = getApiConfig();
+        if (is_array($apiCfg)) {
+            $googleClientId = $apiCfg['google_client_id'] ?? null;
         }
     }
 }

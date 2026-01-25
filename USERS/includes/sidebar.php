@@ -285,6 +285,77 @@ include __DIR__ . '/guest-monitoring-notice.php';
 })();
 </script>
 <script>
+// Ensure sidebar toggle is available immediately (before DOMContentLoaded)
+// This prevents onclick handlers from failing if called before the script runs
+(function() {
+    window.sidebarToggle = window.sidebarToggle || function() {
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        if (sidebar) {
+            sidebar.classList.toggle('sidebar-open');
+            if (sidebarOverlay) {
+                sidebarOverlay.classList.toggle('sidebar-overlay-open');
+            }
+            document.body.classList.toggle('sidebar-open');
+            console.log('Sidebar toggled via window.sidebarToggle (IIFE)');
+        } else {
+            console.error('Sidebar element not found in window.sidebarToggle (IIFE)');
+        }
+    };
+    
+    window.sidebarClose = window.sidebarClose || function() {
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        if (sidebar) {
+            sidebar.classList.remove('sidebar-open');
+            if (sidebarOverlay) {
+                sidebarOverlay.classList.remove('sidebar-overlay-open');
+            }
+            document.body.classList.remove('sidebar-open');
+        }
+    };
+    
+    // Try to attach listeners to buttons immediately if they exist
+    function attachSidebarListeners() {
+        const buttons = document.querySelectorAll('.sidebar-toggle-btn');
+        if (buttons.length > 0) {
+            buttons.forEach((btn, index) => {
+                // Remove onclick to avoid conflicts
+                if (btn.hasAttribute('onclick')) {
+                    btn.removeAttribute('onclick');
+                }
+                
+                // Clone to remove existing listeners
+                const newBtn = btn.cloneNode(true);
+                if (btn.parentNode) {
+                    btn.parentNode.replaceChild(newBtn, btn);
+                }
+                
+                const freshBtn = document.querySelectorAll('.sidebar-toggle-btn')[index];
+                if (freshBtn) {
+                    freshBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.sidebarToggle();
+                    });
+                    freshBtn.style.pointerEvents = 'auto';
+                    freshBtn.style.cursor = 'pointer';
+                }
+            });
+        }
+    }
+    
+    // Try immediately
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attachSidebarListeners);
+    } else {
+        // DOM already loaded
+        attachSidebarListeners();
+    }
+    
+    // Also try after a short delay as fallback
+    setTimeout(attachSidebarListeners, 200);
+})();
 
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');
@@ -448,14 +519,137 @@ document.addEventListener('DOMContentLoaded', function() {
     window.sidebarToggle = toggleSidebar;
     window.sidebarClose = closeSidebar;
     
+    // Also attach event listeners to toggle buttons as fallback
+    // This ensures buttons work even if onclick handlers fail
+    setTimeout(() => {
+        const toggleButtons = document.querySelectorAll('.sidebar-toggle-btn');
+        console.log(`Found ${toggleButtons.length} sidebar toggle buttons`);
+        
+        toggleButtons.forEach((btn, index) => {
+            // Remove existing onclick attribute to avoid conflicts
+            if (btn.hasAttribute('onclick')) {
+                btn.removeAttribute('onclick');
+            }
+            
+            // Remove all existing event listeners by cloning
+            const newBtn = btn.cloneNode(true);
+            if (btn.parentNode) {
+                btn.parentNode.replaceChild(newBtn, btn);
+            }
+            
+            // Get the fresh button
+            const freshBtn = document.querySelectorAll('.sidebar-toggle-btn')[index];
+            if (freshBtn) {
+                // Add clean event listener
+                freshBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    console.log(`Sidebar toggle button ${index} clicked, calling toggleSidebar`);
+                    if (typeof toggleSidebar === 'function') {
+                        toggleSidebar();
+                    } else if (window.sidebarToggle) {
+                        window.sidebarToggle();
+                    } else {
+                        // Ultimate fallback
+                        const sidebarEl = document.getElementById('sidebar');
+                        const overlayEl = document.getElementById('sidebarOverlay');
+                        if (sidebarEl) {
+                            sidebarEl.classList.toggle('sidebar-open');
+                            if (overlayEl) {
+                                overlayEl.classList.toggle('sidebar-overlay-open');
+                            }
+                            document.body.classList.toggle('sidebar-open');
+                        }
+                    }
+                }, { capture: false, passive: false });
+                
+                // Ensure button is clickable
+                freshBtn.style.pointerEvents = 'auto';
+                freshBtn.style.cursor = 'pointer';
+                freshBtn.style.touchAction = 'manipulation';
+                
+                console.log(`Sidebar toggle button ${index} configured successfully`);
+            }
+        });
+    }, 100);
+    
     if (sidebarOverlay) {
         sidebarOverlay.addEventListener('click', closeSidebar);
     }
     
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && sidebar.classList.contains('sidebar-open')) {
+        if (e.key === 'Escape' && sidebar && sidebar.classList.contains('sidebar-open')) {
             closeSidebar();
         }
+    });
+    
+    // Add functionality to sidebar navigation links
+    function setupSidebarNavigation() {
+        const sidebarLinks = document.querySelectorAll('.sidebar-link');
+        console.log(`Setting up ${sidebarLinks.length} sidebar navigation links`);
+        
+        sidebarLinks.forEach((link) => {
+            // Ensure link is clickable
+            link.style.pointerEvents = 'auto';
+            link.style.cursor = 'pointer';
+            link.style.touchAction = 'manipulation';
+            
+            // Add click handler to close sidebar on mobile/tablet
+            link.addEventListener('click', function(e) {
+                // Don't prevent default - let the link navigate normally
+                // But close sidebar if it's open (especially on mobile)
+                if (sidebar && sidebar.classList.contains('sidebar-open')) {
+                    // Check if we're on mobile/tablet (screen width < 1024px)
+                    const isMobile = window.innerWidth < 1024;
+                    
+                    if (isMobile) {
+                        // On mobile, close sidebar immediately when link is clicked
+                        setTimeout(() => {
+                            closeSidebar();
+                        }, 100); // Small delay to allow navigation to start
+                    } else {
+                        // On desktop, close sidebar after a short delay for better UX
+                        setTimeout(() => {
+                            closeSidebar();
+                        }, 200);
+                    }
+                }
+                
+                // Add active state visual feedback
+                link.classList.add('clicked');
+                setTimeout(() => {
+                    link.classList.remove('clicked');
+                }, 300);
+            });
+            
+            // Add hover effect for better UX
+            link.addEventListener('mouseenter', function() {
+                if (!link.classList.contains('active')) {
+                    link.style.opacity = '0.8';
+                }
+            });
+            
+            link.addEventListener('mouseleave', function() {
+                link.style.opacity = '';
+            });
+        });
+        
+        console.log('Sidebar navigation links configured successfully');
+    }
+    
+    // Setup sidebar navigation after DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(setupSidebarNavigation, 150);
+        });
+    } else {
+        setTimeout(setupSidebarNavigation, 150);
+    }
+    
+    // Also setup on window load as fallback
+    window.addEventListener('load', function() {
+        setTimeout(setupSidebarNavigation, 200);
     });
 
     // Chat modal behaviour - keep it open until user closes it
@@ -1218,25 +1412,30 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log('Starting Firebase chat initialization...');
         
-        // Load Firebase SDKs
+        // Load Firebase SDKs using compat version (works without ES modules)
         if (typeof firebase === 'undefined') {
-            // Load Firebase scripts
+            // Use Firebase compat build which works with regular script tags
             const firebaseAppScript = document.createElement('script');
-            firebaseAppScript.type = 'module';
-            firebaseAppScript.src = 'https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js';
+            firebaseAppScript.src = 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js';
             document.head.appendChild(firebaseAppScript);
             
             const firebaseDatabaseScript = document.createElement('script');
-            firebaseDatabaseScript.type = 'module';
-            firebaseDatabaseScript.src = 'https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js';
+            firebaseDatabaseScript.src = 'https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js';
             document.head.appendChild(firebaseDatabaseScript);
             
             // Wait for Firebase to load
-            await new Promise((resolve) => {
+            await new Promise((resolve, reject) => {
+                let attempts = 0;
+                const maxAttempts = 50; // 5 seconds max
                 const checkFirebase = setInterval(() => {
+                    attempts++;
                     if (typeof firebase !== 'undefined' && firebase.database) {
                         clearInterval(checkFirebase);
                         resolve();
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(checkFirebase);
+                        console.error('Firebase failed to load after 5 seconds');
+                        reject(new Error('Firebase loading timeout'));
                     }
                 }, 100);
             });
@@ -1254,12 +1453,29 @@ document.addEventListener('DOMContentLoaded', function() {
             measurementId: "G-ESQ63CMP9B"
         };
         
-        if (!window.firebaseApp) {
-            window.firebaseApp = firebase.initializeApp(firebaseConfig);
+        // Check if firebase is available before initializing
+        if (typeof firebase === 'undefined') {
+            console.error('Firebase SDK not loaded. Cannot initialize Firebase.');
+            return;
         }
-        const database = firebase.database();
-        // Make database globally accessible
-        window.chatDatabase = database;
+        
+        if (!window.firebaseApp) {
+            try {
+                window.firebaseApp = firebase.initializeApp(firebaseConfig);
+            } catch (error) {
+                console.error('Error initializing Firebase:', error);
+                return;
+            }
+        }
+        
+        try {
+            const database = firebase.database();
+            // Make database globally accessible
+            window.chatDatabase = database;
+        } catch (error) {
+            console.error('Error getting Firebase database:', error);
+            return;
+        }
         
         // Get user info from PHP session or localStorage
         let userId = sessionStorage.getItem('user_id');

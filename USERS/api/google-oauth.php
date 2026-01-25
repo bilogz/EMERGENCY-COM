@@ -25,33 +25,18 @@ if (!isset($pdo) || $pdo === null) {
 }
 
 // Load Google OAuth credentials
-// First try .env file (preferred), then fall back to config.local.php
+// First try project root .env via config.env.php, then fall back to config.local.php
 $googleClientId = null;
 $googleClientSecret = null;
 
-// Try .env file first
-$envFile = __DIR__ . '/.env';
-if (file_exists($envFile)) {
-    $envContent = file_get_contents($envFile);
-    $lines = explode("\n", $envContent);
-    foreach ($lines as $line) {
-        $line = trim($line);
-        // Skip empty lines and comments
-        if (empty($line) || strpos($line, '#') === 0) {
-            continue;
-        }
-        // Parse KEY=VALUE format
-        if (strpos($line, '=') !== false) {
-            list($key, $value) = explode('=', $line, 2);
-            $key = trim($key);
-            $value = trim($value);
-            // Remove quotes if present
-            $value = trim($value, '"\'');
-            if ($key === 'GOOGLE_CLIENT_ID') {
-                $googleClientId = $value;
-            } elseif ($key === 'GOOGLE_CLIENT_SECRET') {
-                $googleClientSecret = $value;
-            }
+// Try project root .env via config.env.php first
+if (file_exists(__DIR__ . '/config.env.php')) {
+    require_once __DIR__ . '/config.env.php';
+    if (function_exists('getApiConfig')) {
+        $apiCfg = getApiConfig();
+        if (is_array($apiCfg)) {
+            $googleClientId = $apiCfg['google_client_id'] ?? null;
+            $googleClientSecret = $apiCfg['google_client_secret'] ?? null;
         }
     }
 }
@@ -69,9 +54,17 @@ if (empty($googleClientId) || empty($googleClientSecret)) {
 }
 
 if (!$googleClientId || !$googleClientSecret) {
+    $missing = [];
+    if (empty($googleClientId)) {
+        $missing[] = 'GOOGLE_CLIENT_ID';
+    }
+    if (empty($googleClientSecret)) {
+        $missing[] = 'GOOGLE_CLIENT_SECRET';
+    }
     echo json_encode([
         "success" => false,
-        "message" => "Google OAuth is not configured. Please contact administrator."
+        "message" => "Google OAuth is not configured. Missing: " . implode(', ', $missing) . ".",
+        "error_code" => "GOOGLE_OAUTH_NOT_CONFIGURED"
     ]);
     exit();
 }

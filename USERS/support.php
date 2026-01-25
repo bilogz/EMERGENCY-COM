@@ -38,7 +38,7 @@ $current = 'support.php';
 <body>
     <?php include 'includes/sidebar.php'; ?>
 
-    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()">
+    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
         <i class="fas fa-bars"></i>
     </button>
 

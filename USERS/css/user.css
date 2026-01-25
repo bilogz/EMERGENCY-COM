@@ -175,11 +175,20 @@
     margin-top: 2rem;
 }
 
+.auth-actions .btn {
+    width: 100%;
+}
+
 .auth-switch {
     margin-top: 2.5rem;
     text-align: center;
     padding-top: 2rem;
     border-top: 2px solid var(--card-border, #e5e7eb);
+}
+
+.auth-switch .login-btn {
+    width: 100%;
+    max-width: 100%;
 }
 
 .auth-switch span {
@@ -3120,6 +3129,29 @@ textarea:focus {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+}
+
+/* Sidebar link click feedback */
+.sidebar-link {
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.sidebar-link.clicked {
+    transform: scale(0.98);
+    opacity: 0.9;
+}
+
+.sidebar-link:active {
+    transform: scale(0.97);
+}
+
+/* Ensure sidebar links are clickable and have proper cursor */
+.sidebar-link,
+.sidebar-menu-item a {
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: rgba(76, 138, 137, 0.2);
 }
 
 /* Tablet and below (768px and below) */

@@ -9,7 +9,9 @@ class GlobalTranslator {
         this.autoTranslateEnabled = true;
         this.excludedSelectors = [
             'script', 'style', 'noscript', '[data-no-translate]', 
-            '.no-translate', 'input[type="hidden"]', '.translation-ignore'
+            '.no-translate', 'input[type="hidden"]', '.translation-ignore',
+            '.sidebar-toggle-btn', 'button[onclick]',
+            '.sidebar-link', 'a.sidebar-link', '.sidebar-menu-item a'
         ];
         this.init();
     }
@@ -90,6 +92,15 @@ class GlobalTranslator {
             return true;
         }
         
+        // Exclude sidebar navigation links (but allow spans with data-translate inside them)
+        if (element.classList.contains('sidebar-link') || 
+            (element.tagName === 'A' && element.closest('.sidebar-nav'))) {
+            // Only exclude if it's not a span with data-translate (those should be translated)
+            if (!(element.tagName === 'SPAN' && element.hasAttribute('data-translate'))) {
+                return true;
+            }
+        }
+        
         return false;
     }
     
@@ -138,13 +149,13 @@ class GlobalTranslator {
         console.log(`🌍 GlobalTranslator: Translating ${document.querySelectorAll('[data-translate]').length} elements with data-translate`);
         this.translateWithAttributes(translation);
         
-        // Translate common UI text automatically
-        this.translateCommonUI(translation);
+        // Translate button text ONLY (preserve functionality)
+        this.translateButtonText(translation);
         
         // Translate buttons, labels, and other common elements
         this.translateCommonElements(translation);
         
-        // Translate ALL text nodes (comprehensive translation)
+        // Translate ALL text nodes (comprehensive translation) - but exclude interactive elements
         this.translateAllTextNodes(translation);
         
         console.log(`✓ GlobalTranslator: Translation complete for ${lang}`);
@@ -230,6 +241,18 @@ class GlobalTranslator {
                     if (!node.textContent || !node.textContent.trim()) {
                         return NodeFilter.FILTER_REJECT;
                     }
+                    // Skip if parent is a button with onclick or sidebar toggle - don't interfere with button functionality
+                    const parent = node.parentElement;
+                    if (parent && (parent.classList.contains('sidebar-toggle-btn') || parent.hasAttribute('onclick'))) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    // Skip if inside sidebar navigation links - they use data-translate on child spans
+                    if (parent && (parent.closest('.sidebar-nav') || parent.closest('.sidebar-link'))) {
+                        // Only allow if it's a span with data-translate (those should be translated)
+                        if (!(parent.tagName === 'SPAN' && parent.hasAttribute('data-translate'))) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                    }
                     // Don't skip data-translate elements - they need translation too
                     return NodeFilter.FILTER_ACCEPT;
                 }
@@ -278,14 +301,49 @@ class GlobalTranslator {
             }
         });
         
-        // Also translate specific element types
-        ['span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'div', 'li', 'td', 'th', 'a'].forEach(tag => {
+        // Also translate specific element types (exclude buttons and links with onclick, and sidebar links)
+        // But include buttons for comprehensive translation
+        ['span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'div', 'li', 'td', 'th', 'button'].forEach(tag => {
             document.querySelectorAll(tag).forEach(element => {
                 if (this.isExcluded(element)) return;
                 if (element.hasAttribute('data-translate') || element.hasAttribute('data-translated')) return;
                 
+                // For buttons, skip if it's a sidebar toggle or has onclick (unless it has data-translate)
+                if (tag === 'button') {
+                    if (element.classList.contains('sidebar-toggle-btn') || 
+                        (element.hasAttribute('onclick') && !element.hasAttribute('data-translate'))) {
+                        return;
+                    }
+                }
+                
+                // Skip if inside a button with onclick or is a sidebar toggle button
+                if (element.closest('button[onclick]') || element.closest('.sidebar-toggle-btn')) {
+                    return;
+                }
+                // Skip if inside sidebar navigation links - they use data-translate on child spans
+                if (element.closest('.sidebar-nav') || element.closest('.sidebar-link')) {
+                    // Only skip if it's not a span with data-translate (those should be translated)
+                    if (!(element.tagName === 'SPAN' && element.hasAttribute('data-translate'))) {
+                        return;
+                    }
+                }
+                
                 const text = element.textContent.trim();
                 if (!text || text.length < 2) return;
+                
+                // For buttons, check if it has .btn-text child first
+                if (tag === 'button' && element.querySelector('.btn-text')) {
+                    const btnTextElement = element.querySelector('.btn-text');
+                    const btnText = btnTextElement.textContent.trim();
+                    if (textMap[btnText] && translation[textMap[btnText]]) {
+                        btnTextElement.setAttribute('data-translated', 'true');
+                        if (!btnTextElement.hasAttribute('data-original-text')) {
+                            btnTextElement.setAttribute('data-original-text', btnText);
+                        }
+                        btnTextElement.textContent = translation[textMap[btnText]];
+                    }
+                    return;
+                }
                 
                 // Check exact matches
                 if (textMap[text] && translation[textMap[text]]) {
@@ -296,6 +354,36 @@ class GlobalTranslator {
                     element.textContent = translation[textMap[text]];
                 }
             });
+        });
+        
+        // Translate links (a tags) but exclude those with onclick handlers, sidebar toggles, or sidebar links
+        document.querySelectorAll('a:not([onclick]):not(.sidebar-toggle-btn):not(.sidebar-link)').forEach(element => {
+            if (this.isExcluded(element)) return;
+            // Skip sidebar navigation links - they use data-translate on child spans
+            if (element.closest('.sidebar-nav') || element.classList.contains('sidebar-link')) return;
+            if (element.hasAttribute('data-translate') || element.hasAttribute('data-translated')) return;
+            
+            const text = element.textContent.trim();
+            if (!text || text.length < 2) return;
+            
+            // Check exact matches
+            if (textMap[text] && translation[textMap[text]]) {
+                element.setAttribute('data-translated', 'true');
+                if (!element.hasAttribute('data-original-text')) {
+                    element.setAttribute('data-original-text', text);
+                }
+                // For links, only translate if they don't have icons/elements as children
+                if (element.children.length === 0) {
+                    element.textContent = translation[textMap[text]];
+                } else {
+                    // Has icons - only replace text nodes, preserve children
+                    const textNodes = Array.from(element.childNodes).filter(node => node.nodeType === Node.TEXT_NODE);
+                    textNodes.forEach(node => node.remove());
+                    if (element.firstChild) {
+                        element.insertBefore(document.createTextNode(translation[textMap[text]]), element.firstChild);
+                    }
+                }
+            }
         });
     }
     
@@ -331,14 +419,64 @@ class GlobalTranslator {
                     element.setAttribute('data-original-text', originalText);
                 }
                 
+                // Handle buttons specifically
+                if (element.tagName === 'BUTTON' || element.classList.contains('btn') || element.getAttribute('role') === 'button') {
+                    // Check if button has .btn-text child element
+                    const btnTextElement = element.querySelector('.btn-text');
+                    if (btnTextElement) {
+                        // Translate the .btn-text element
+                        if (!btnTextElement.hasAttribute('data-original-text')) {
+                            btnTextElement.setAttribute('data-original-text', btnTextElement.textContent.trim());
+                        }
+                        btnTextElement.textContent = translation[key];
+                        btnTextElement.setAttribute('data-translated', 'true');
+                    } else {
+                        // Button doesn't have .btn-text, translate button directly
+                        const textNodes = Array.from(element.childNodes).filter(node => node.nodeType === Node.TEXT_NODE);
+                        if (textNodes.length > 0 && element.children.length === 0) {
+                            // Button has only text, safe to replace
+                            element.textContent = translation[key];
+                        } else if (textNodes.length > 0 && element.children.length > 0) {
+                            // Button has icons/elements, only replace text nodes
+                            textNodes.forEach(node => node.remove());
+                            if (element.firstChild) {
+                                element.insertBefore(document.createTextNode(translation[key]), element.firstChild);
+                            } else {
+                                element.textContent = translation[key];
+                            }
+                        } else {
+                            // No text nodes, append translation
+                            element.textContent = translation[key];
+                        }
+                    }
+                    element.setAttribute('data-translated', 'true');
+                }
                 // For spans (like in sidebar), just replace textContent
                 // Spans with data-translate typically only contain text, icons are siblings
-                if (element.tagName === 'SPAN') {
+                else if (element.tagName === 'SPAN') {
                     // Simple replacement for spans - they usually only have text
-                    element.textContent = translation[key];
+                    // Preserve any child elements (like icons) if they exist
+                    const hasChildren = element.children.length > 0;
+                    if (hasChildren) {
+                        // If span has children, only replace text nodes
+                        const textNodes = Array.from(element.childNodes).filter(node => node.nodeType === Node.TEXT_NODE);
+                        textNodes.forEach(node => node.remove());
+                        // Insert translation before any child elements
+                        if (element.firstChild) {
+                            element.insertBefore(document.createTextNode(translation[key]), element.firstChild);
+                        } else {
+                            element.textContent = translation[key];
+                        }
+                    } else {
+                        // No children, safe to replace all content
+                        element.textContent = translation[key];
+                    }
+                    // Mark as translated to prevent further interference
+                    element.setAttribute('data-translated', 'true');
                 } else if (element.children.length === 0) {
                     // Element has no children, safe to replace textContent
                     element.textContent = translation[key];
+                    element.setAttribute('data-translated', 'true');
                 } else {
                     // Element has children, be more careful
                     // Find text nodes and replace them
@@ -354,6 +492,7 @@ class GlobalTranslator {
                         // No text nodes, append translation
                         element.insertBefore(document.createTextNode(translation[key]), element.firstChild);
                     }
+                    element.setAttribute('data-translated', 'true');
                 }
                 
                 console.debug(`Translated "${key}": "${originalText}" -> "${translation[key]}"`);
@@ -390,12 +529,13 @@ class GlobalTranslator {
     }
     
     /**
-     * Translate common UI text patterns
+     * Translate button text only (preserve functionality)
+     * Now handles ALL button text, including buttons with data-translate and buttons with child elements
      */
-    translateCommonUI(translation) {
+    translateButtonText(translation) {
         if (!translation) return;
         
-        // Common button texts
+        // Common button texts mapping
         const buttonTexts = {
             'Save': 'common.save',
             'Cancel': 'common.cancel',
@@ -442,16 +582,126 @@ class GlobalTranslator {
             'Reload': 'common.reload'
         };
         
-        // Translate buttons
-        document.querySelectorAll('button, .btn, [role="button"]').forEach(btn => {
+        // Find ALL buttons (including those with data-translate, but exclude sidebar toggle and onclick buttons)
+        const allButtons = document.querySelectorAll('button:not(.sidebar-toggle-btn):not([data-no-translate]), .btn:not(.sidebar-toggle-btn):not([data-no-translate]), [role="button"]:not([data-no-translate]), a.btn:not([data-no-translate])');
+        
+        allButtons.forEach(btn => {
             if (this.isExcluded(btn)) return;
             
-            const text = btn.textContent.trim();
-            if (buttonTexts[text] && translation[buttonTexts[text]]) {
-                if (!btn.hasAttribute('data-original-text')) {
-                    btn.setAttribute('data-original-text', text);
+            // Skip buttons with onclick handlers (unless they have data-translate)
+            if (btn.hasAttribute('onclick') && !btn.hasAttribute('data-translate')) {
+                return;
+            }
+            
+            // If button has data-translate, it's already handled by translateWithAttributes
+            // But we still need to handle buttons with child elements that have data-translate
+            if (btn.hasAttribute('data-translate')) {
+                // Already handled, but check for child elements with text that need translation
+                const childSpans = btn.querySelectorAll('span[data-translate]');
+                childSpans.forEach(span => {
+                    const key = span.getAttribute('data-translate');
+                    if (translation[key] && !span.hasAttribute('data-translated')) {
+                        const originalText = span.textContent.trim();
+                        if (!span.hasAttribute('data-original-text') && originalText) {
+                            span.setAttribute('data-original-text', originalText);
+                        }
+                        span.textContent = translation[key];
+                        span.setAttribute('data-translated', 'true');
+                    }
+                });
+                return; // Skip further processing for buttons with data-translate
+            }
+            
+            // Handle buttons with child spans that have data-translate
+            const childSpanWithTranslate = btn.querySelector('span[data-translate]');
+            if (childSpanWithTranslate) {
+                const key = childSpanWithTranslate.getAttribute('data-translate');
+                if (translation[key] && !childSpanWithTranslate.hasAttribute('data-translated')) {
+                    const originalText = childSpanWithTranslate.textContent.trim();
+                    if (!childSpanWithTranslate.hasAttribute('data-original-text') && originalText) {
+                        childSpanWithTranslate.setAttribute('data-original-text', originalText);
+                    }
+                    childSpanWithTranslate.textContent = translation[key];
+                    childSpanWithTranslate.setAttribute('data-translated', 'true');
                 }
-                btn.textContent = translation[buttonTexts[text]];
+                return; // Child span handles translation
+            }
+            
+            // Handle buttons with .btn-text class (common pattern)
+            const btnTextElement = btn.querySelector('.btn-text');
+            if (btnTextElement && !btnTextElement.hasAttribute('data-translated')) {
+                const btnText = btnTextElement.textContent.trim();
+                if (buttonTexts[btnText] && translation[buttonTexts[btnText]]) {
+                    if (!btnTextElement.hasAttribute('data-original-text')) {
+                        btnTextElement.setAttribute('data-original-text', btnText);
+                    }
+                    btnTextElement.textContent = translation[buttonTexts[btnText]];
+                    btnTextElement.setAttribute('data-translated', 'true');
+                    return;
+                }
+            }
+            
+            // Get all text nodes in the button
+            const textNodes = Array.from(btn.childNodes).filter(node => node.nodeType === Node.TEXT_NODE);
+            const buttonText = btn.textContent.trim();
+            
+            // Skip if button is empty or only has whitespace
+            if (!buttonText || buttonText.length < 1) return;
+            
+            // Skip if already translated
+            if (btn.hasAttribute('data-translated')) return;
+            
+            // Try to find translation for the button text
+            if (buttonTexts[buttonText] && translation[buttonTexts[buttonText]]) {
+                // Store original if not already stored
+                if (!btn.hasAttribute('data-original-text')) {
+                    btn.setAttribute('data-original-text', buttonText);
+                }
+                
+                // If button has only text nodes (no icons or other elements), replace textContent
+                if (textNodes.length > 0 && btn.children.length === 0) {
+                    // Button has only text, safe to replace
+                    btn.textContent = translation[buttonTexts[buttonText]];
+                    btn.setAttribute('data-translated', 'true');
+                } else if (textNodes.length > 0 && btn.children.length > 0) {
+                    // Button has icons/elements, only replace text nodes
+                    textNodes.forEach(node => node.remove());
+                    // Insert translated text before first child element
+                    if (btn.firstChild) {
+                        btn.insertBefore(document.createTextNode(translation[buttonTexts[buttonText]]), btn.firstChild);
+                    } else {
+                        btn.textContent = translation[buttonTexts[buttonText]];
+                    }
+                    btn.setAttribute('data-translated', 'true');
+                }
+            } else {
+                // Button text not in predefined list - try to find it in translation object
+                // Look for common patterns like "button.{text}" or "{text}.btn"
+                const normalizedText = buttonText.toLowerCase().replace(/\s+/g, '');
+                for (const [key, value] of Object.entries(translation)) {
+                    if (typeof value === 'string') {
+                        const normalizedValue = value.toLowerCase().replace(/\s+/g, '');
+                        if (normalizedValue === normalizedText && (key.includes('btn') || key.includes('button'))) {
+                            // Found a match, translate it
+                            if (!btn.hasAttribute('data-original-text')) {
+                                btn.setAttribute('data-original-text', buttonText);
+                            }
+                            if (textNodes.length > 0 && btn.children.length === 0) {
+                                btn.textContent = value;
+                                btn.setAttribute('data-translated', 'true');
+                            } else if (textNodes.length > 0 && btn.children.length > 0) {
+                                textNodes.forEach(node => node.remove());
+                                if (btn.firstChild) {
+                                    btn.insertBefore(document.createTextNode(value), btn.firstChild);
+                                } else {
+                                    btn.textContent = value;
+                                }
+                                btn.setAttribute('data-translated', 'true');
+                            }
+                            break;
+                        }
+                    }
+                }
             }
         });
         

@@ -13,12 +13,63 @@ if (!defined('SECURE_ACCESS')) {
     define('SECURE_ACCESS', true);
 }
 
+function loadRootEnv() {
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+    $loaded = true;
+
+    $rootEnvPath = dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . '.env';
+    if (!file_exists($rootEnvPath)) {
+        return;
+    }
+
+    $lines = @file($rootEnvPath, FILE_IGNORE_NEW_LINES);
+    if (!is_array($lines)) {
+        return;
+    }
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || strpos($line, '#') === 0) {
+            continue;
+        }
+        if (strpos($line, 'export ') === 0) {
+            $line = trim(substr($line, 7));
+        }
+        if (strpos($line, '=') === false) {
+            continue;
+        }
+        list($key, $value) = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value);
+        if ($key === '') {
+            continue;
+        }
+        $value = trim($value, " \t\n\r\0\x0B");
+        $first = substr($value, 0, 1);
+        $last = substr($value, -1);
+        if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
+            $value = substr($value, 1, -1);
+        }
+
+        if (getenv($key) === false) {
+            putenv($key . '=' . $value);
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+        }
+    }
+}
+
 /**
  * Get configuration value from environment or local config
  * Priority: Environment Variable > Local Config File > Default
  */
 function getSecureConfig($key, $default = null) {
     static $localConfig = null;
+
+    loadRootEnv();
     
     // First, try environment variable
     $envValue = getenv($key);

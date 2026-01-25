@@ -50,7 +50,7 @@ $assetBase = 'ADMIN/header/';
     include 'USERS/includes/sidebar.php'; 
     ?>
 
-    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()">
+    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
         <i class="fas fa-bars"></i>
     </button>
 
@@ -108,7 +108,7 @@ $assetBase = 'ADMIN/header/';
                                 <h3 data-translate="home.hotlines.helpline">QC HELPLINE</h3>
                             </div>
                             <div class="emergency-number-large" data-translate="home.hotlines.dial">DIAL 122</div>
-                            <a href="tel:122" class="btn btn-primary">
+                            <a href="tel:122" class="btn btn-primary" data-no-translate>
                                 <i class="fas fa-phone"></i> <span data-translate="home.hotlines.call122">Call 122</span>
                             </a>
                         </div>
@@ -122,8 +122,8 @@ $assetBase = 'ADMIN/header/';
                                 <p><strong>8988 4242</strong> local 7245</p>
                             </div>
                             <div class="action-buttons">
-                                <a href="tel:+639770312892" class="btn btn-primary" data-translate="home.hotlines.callGlobe">Call Globe</a>
-                                <a href="tel:+639478859929" class="btn btn-secondary" data-translate="home.hotlines.callSmart">Call Smart</a>
+                                <a href="tel:+639770312892" class="btn btn-primary" data-no-translate><span data-translate="home.hotlines.callGlobe">Call Globe</span></a>
+                                <a href="tel:+639478859929" class="btn btn-secondary" data-no-translate><span data-translate="home.hotlines.callSmart">Call Smart</span></a>
                             </div>
                         </div>
                         <div class="card emergency-card">
@@ -135,8 +135,8 @@ $assetBase = 'ADMIN/header/';
                                 <p><strong>8928 4396</strong></p>
                             </div>
                             <div class="action-buttons">
-                                <a href="tel:+639478847498" class="btn btn-primary" data-translate="home.hotlines.callEMS">Call EMS</a>
-                                <a href="tel:0289284396" class="btn btn-secondary">Call 8928-4396</a>
+                                <a href="tel:+639478847498" class="btn btn-primary" data-no-translate><span data-translate="home.hotlines.callEMS">Call EMS</span></a>
+                                <a href="tel:0289284396" class="btn btn-secondary" data-no-translate>Call 8928-4396</a>
                             </div>
                         </div>
                         <div class="card emergency-card">
@@ -148,8 +148,8 @@ $assetBase = 'ADMIN/header/';
                                 <p><strong>8928-4396</strong></p>
                             </div>
                             <div class="action-buttons">
-                                <a href="tel:0289275914" class="btn btn-primary">Call 8927-5914</a>
-                                <a href="tel:0289284396" class="btn btn-secondary">Call 8928-4396</a>
+                                <a href="tel:0289275914" class="btn btn-primary" data-no-translate>Call 8927-5914</a>
+                                <a href="tel:0289284396" class="btn btn-secondary" data-no-translate>Call 8928-4396</a>
                             </div>
                         </div>
                     </div>

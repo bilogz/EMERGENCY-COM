@@ -44,7 +44,7 @@ $assetBase = '../ADMIN/header/';
 <body>
     <?php include 'includes/sidebar.php'; ?>
 
-    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()">
+    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
         <i class="fas fa-bars"></i>
     </button>
 
@@ -93,8 +93,8 @@ $assetBase = '../ADMIN/header/';
                                 <h3>QC HELPLINE</h3>
                             </div>
                             <div class="emergency-number-large">DIAL 122</div>
-                            <a href="tel:122" class="btn btn-primary">
-                                <i class="fas fa-phone"></i> Call 122
+                            <a href="tel:122" class="btn btn-primary" data-no-translate>
+                                <i class="fas fa-phone"></i> <span data-translate="home.hotlines.call122">Call 122</span>
                             </a>
                         </div>
                         <div class="card emergency-card">
@@ -107,9 +107,9 @@ $assetBase = '../ADMIN/header/';
                                 <p><strong>8988 4242</strong> local 7245</p>
                             </div>
                             <div class="action-buttons">
-                                <a href="tel:+639770312892" class="btn btn-primary">Call Globe</a>
-                                <a href="tel:+639478859929" class="btn btn-secondary">Call Smart</a>
-                                <a href="tel:0289884242,,7245" class="btn btn-secondary">Call Local 7245</a>
+                                <a href="tel:+639770312892" class="btn btn-primary" data-no-translate><span data-translate="home.hotlines.callGlobe">Call Globe</span></a>
+                                <a href="tel:+639478859929" class="btn btn-secondary" data-no-translate><span data-translate="home.hotlines.callSmart">Call Smart</span></a>
+                                <a href="tel:0289884242,,7245" class="btn btn-secondary" data-no-translate>Call Local 7245</a>
                             </div>
                         </div>
                         <div class="card emergency-card">
@@ -121,8 +121,8 @@ $assetBase = '../ADMIN/header/';
                                 <p><strong>8928 4396</strong></p>
                             </div>
                             <div class="action-buttons">
-                                <a href="tel:+639478847498" class="btn btn-primary">Call EMS</a>
-                                <a href="tel:0289284396" class="btn btn-secondary">Call 8928-4396</a>
+                                <a href="tel:+639478847498" class="btn btn-primary" data-no-translate><span data-translate="home.hotlines.callEMS">Call EMS</span></a>
+                                <a href="tel:0289284396" class="btn btn-secondary" data-no-translate>Call 8928-4396</a>
                             </div>
                         </div>
                         <div class="card emergency-card">
@@ -134,8 +134,8 @@ $assetBase = '../ADMIN/header/';
                                 <p><strong>8928-4396</strong></p>
                             </div>
                             <div class="action-buttons">
-                                <a href="tel:0289275914" class="btn btn-primary">Call 8927-5914</a>
-                                <a href="tel:0289284396" class="btn btn-secondary">Call 8928-4396</a>
+                                <a href="tel:0289275914" class="btn btn-primary" data-no-translate>Call 8927-5914</a>
+                                <a href="tel:0289284396" class="btn btn-secondary" data-no-translate>Call 8928-4396</a>
                             </div>
                         </div>
                     </div>
@@ -146,9 +146,7 @@ $assetBase = '../ADMIN/header/';
 
     <?php include 'includes/footer-snippet.php'; ?>
 
-    <!-- Firebase SDK (for chat) -->
-    <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js"></script>
+    <!-- Firebase SDK (for chat) - Loaded dynamically by sidebar.php to avoid conflicts -->
     
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>

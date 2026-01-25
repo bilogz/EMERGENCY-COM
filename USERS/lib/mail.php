@@ -5,16 +5,44 @@
  */
 
 function load_mail_config() {
+    $cfg = [];
+
+    $secureCfgPath = __DIR__ . '/../api/config.env.php';
+    if (file_exists($secureCfgPath)) {
+        require_once $secureCfgPath;
+        if (function_exists('getEmailConfig')) {
+            $emailCfg = getEmailConfig();
+            if (is_array($emailCfg)) {
+                $cfg = [
+                    'host' => $emailCfg['smtp_host'] ?? null,
+                    'port' => $emailCfg['smtp_port'] ?? null,
+                    'username' => $emailCfg['smtp_user'] ?? null,
+                    'password' => $emailCfg['smtp_pass'] ?? null,
+                    'from_email' => $emailCfg['smtp_from'] ?? null,
+                    'from_name' => $emailCfg['smtp_from_name'] ?? null,
+                    'auth' => true,
+                    'secure' => 'tls',
+                ];
+            }
+        }
+    }
+
     $example = __DIR__ . '/../config/mail_config.php.example';
     $actual = __DIR__ . '/../config/mail_config.php';
 
     if (file_exists($actual)) {
-        return include $actual;
+        $fileCfg = include $actual;
+        if (is_array($fileCfg)) {
+            $cfg = array_merge($cfg, $fileCfg);
+        }
     }
     if (file_exists($example)) {
-        return include $example;
+        $fileCfg = include $example;
+        if (is_array($fileCfg)) {
+            $cfg = array_merge($cfg, $fileCfg);
+        }
     }
-    return [];
+    return $cfg;
 }
 
 function sendSMTPMail($to, $subject, $body, $isHtml = false, &$error = null) {
