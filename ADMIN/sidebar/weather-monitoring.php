@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Weather Monitoring Page
  * Real-time weather monitoring with map, AI analysis, and Google Weather style display
@@ -30,709 +30,324 @@ $pageTitle = 'Weather Monitoring';
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        /* Colors are inherited from global.css - using consistent color scheme */
-        
-        .weather-container {
-            display: flex;
-            gap: 1.5rem;
-            height: calc(100vh - 120px);
-            padding: 1rem;
-            min-height: 600px;
-        }
-        
-        @media (max-width: 1200px) {
+        <style>
+            /* Enhanced Weather Monitoring Styles */
+            :root {
+                --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+                --transition-speed: 0.2s;
+            }
+    
             .weather-container {
-                flex-direction: column;
-                height: auto;
+                display: grid;
+                grid-template-columns: 1fr 420px;
+                gap: 1.5rem;
+                height: calc(100vh - 240px);
+                min-height: 700px;
+                padding: 0.5rem 0;
+            }
+            
+            @media (max-width: 1200px) {
+                .weather-container {
+                    grid-template-columns: 1fr;
+                    height: auto;
+                }
+                .weather-sidebar { max-width: 100%; }
             }
             
             .map-section {
-                height: 500px;
+                position: relative;
+                background: var(--card-bg-1);
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: var(--card-shadow);
+                border: 1px solid var(--border-color-1);
+                min-height: 500px;
             }
             
+            #weatherMap { width: 100%; height: 100%; z-index: 1; }
+            
             .weather-sidebar {
+                display: flex;
+                flex-direction: column;
+                gap: 1.25rem;
+                overflow-y: auto;
+                padding-right: 0.5rem;
+            }
+            
+            .weather-sidebar::-webkit-scrollbar { width: 6px; }
+            .weather-sidebar::-webkit-scrollbar-thumb { background: var(--border-color-1); border-radius: 3px; }
+            
+            .weather-card {
+                background: var(--card-bg-1);
+                border-radius: 12px;
+                padding: 1.5rem;
+                box-shadow: var(--card-shadow);
+                border: 1px solid var(--border-color-1);
+                transition: box-shadow var(--transition-speed) ease;
+            }
+    
+            .weather-card:hover {
+                box-shadow: var(--card-shadow-hover);
+            }
+            
+            .weather-card h3 {
+                margin: 0 0 1.25rem 0;
+                font-size: 1rem;
+                font-weight: 700;
+                color: var(--text-color-1);
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            
+            /* Google Weather Style Enhancement */
+            .google-weather-card {
+                background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+                color: white;
+                border: none;
+                padding: 0;
+                overflow: hidden;
+            }
+            
+            .google-weather-display { padding: 2rem; }
+            
+            .gw-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 1.5rem;
+                gap: 1.5rem;
+            }
+            
+            .gw-temp-value { font-size: 4.5rem; font-weight: 200; line-height: 1; }
+            .gw-temp-unit { font-size: 1.5rem; opacity: 0.7; margin-top: 0.75rem; }
+            
+            .gw-details {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 1rem;
+                margin-top: 1.5rem;
+                font-size: 0.85rem;
+                opacity: 0.9;
+            }
+            
+            .gw-detail-item { display: flex; align-items: center; gap: 0.5rem; }
+            
+            .gw-day { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem; }
+            .gw-condition { opacity: 0.8; font-size: 1rem; margin-bottom: 0.5rem; }
+            .gw-location { font-size: 0.85rem; opacity: 0.6; display: flex; align-items: center; gap: 0.35rem; }
+            
+            /* Weather Tabs */
+            .weather-tabs {
+                display: flex;
+                background: var(--bg-color-1);
+                border-radius: 8px;
+                padding: 0.25rem;
+                margin-bottom: 1.25rem;
+                border: 1px solid var(--border-color-1);
+            }
+            
+            .weather-tab {
+                flex: 1;
+                padding: 0.6rem;
+                background: none;
+                border: none;
+                color: var(--text-secondary-1);
+                cursor: pointer;
+                font-size: 0.85rem;
+                font-weight: 600;
+                transition: all 0.2s;
+                border-radius: 6px;
+            }
+            
+            .weather-tab.active {
+                background: var(--card-bg-1);
+                color: var(--primary-color-1);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            }
+            
+            /* Weekly Forecast Enhancement - Refactored */
+            .forecast-day-row {
+                display: grid;
+                /* Fixed widths for Name, Icon, Precip. Flexible for Temp Bar */
+                grid-template-columns: 48px 32px 1fr 48px; 
+                align-items: center; /* Center vertically */
+                padding: 10px 0;
+                border-bottom: 1px solid var(--border-color-1);
+                gap: 12px;
+            }
+            
+            .forecast-day-row:last-child { border-bottom: none; }
+            
+            .forecast-day-name { 
+                font-weight: 600; 
+                font-size: 0.9rem; 
+                color: var(--text-color-1); 
+                line-height: 1;
+            }
+            
+            .forecast-day-icon {
+                width: 32px;
+                height: 32px;
+                object-fit: contain;
+                display: block;
+            }
+            
+            .forecast-temp-bar {
+                display: flex;
+                align-items: center;
+                gap: 8px;
                 width: 100%;
             }
-        }
-        
-        .map-section {
-            flex: 1;
-            position: relative;
-            background: var(--card-bg-1);
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            border: 1px solid var(--border-color-1);
-            min-width: 0;
-            min-height: 500px;
-        }
-        
-        #weatherMap {
-            width: 100%;
-            height: 100%;
-        }
-        
-        .weather-sidebar {
-            width: 420px;
-            min-width: 350px;
-            max-width: 450px;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            overflow-y: auto;
-            padding-right: 0.5rem;
-        }
-        
-        .weather-sidebar::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .weather-sidebar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        
-        .weather-sidebar::-webkit-scrollbar-thumb {
-            background: var(--border-color-1);
-            border-radius: 3px;
-        }
-        
-        .weather-card {
-            background: var(--card-bg-1);
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            border: 1px solid var(--border-color-1);
-        }
-        
-        .weather-card h3 {
-            margin: 0 0 1rem 0;
-            font-size: 1.1rem;
-            color: var(--text-color-1);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        /* Google Weather Style */
-        .google-weather-card {
-            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-            color: white;
-            border: none;
-            padding: 0;
-            overflow: visible;
-            min-height: 280px;
-        }
-        
-        .google-weather-display {
-            padding: 2rem;
-            overflow: visible;
-            word-wrap: break-word;
-        }
-        
-        .gw-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 1.5rem;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-        }
-        
-        .gw-left {
-            flex: 1;
-            min-width: 220px;
-        }
-        
-        .gw-main-temp {
-            display: flex;
-            align-items: flex-start;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
-        
-        .gw-temp-value {
-            font-size: 4rem;
-            font-weight: 300;
-            line-height: 1;
-            white-space: nowrap;
-        }
-        
-        .gw-temp-unit {
-            font-size: 1.5rem;
-            opacity: 0.8;
-            margin-top: 0.5rem;
-        }
-        
-        .gw-icon {
-            width: 64px;
-            height: 64px;
-            flex-shrink: 0;
-        }
-        
-        .gw-details {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1.25rem;
-            font-size: 0.9rem;
-            opacity: 0.9;
-            margin-top: 1.25rem;
-        }
-        
-        .gw-detail-item {
-            display: flex;
-            align-items: center;
-            gap: 0.3rem;
-            white-space: nowrap;
-        }
-        
-        .gw-right {
-            text-align: left;
-            min-width: 180px;
-            flex-shrink: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            justify-content: flex-start;
-        }
-        
-        .gw-day {
-            font-size: 1.2rem;
-            font-weight: 500;
-            white-space: nowrap;
-            text-align: left;
-            width: 100%;
-            margin-bottom: 0.25rem;
-        }
-        
-        .gw-condition {
-            opacity: 0.8;
-            font-size: 0.95rem;
-            margin-top: 0;
-            margin-bottom: 0.5rem;
-            word-break: break-word;
-            text-align: left;
-            width: 100%;
-        }
-        
-        .gw-location {
-            font-size: 0.8rem;
-            opacity: 0.7;
-            margin-top: 0;
-            word-break: break-word;
-            text-align: left;
-            width: 100%;
-        }
-        
-        /* Weather Tabs */
-        .weather-tabs {
-            display: flex;
-            border-bottom: 1px solid var(--border-color-1);
-            margin-bottom: 1rem;
-        }
-        
-        .weather-tab {
-            flex: 1;
-            padding: 0.75rem;
-            background: none;
-            border: none;
-            color: var(--text-secondary-1);
-            cursor: pointer;
-            font-size: 0.9rem;
-            font-weight: 500;
-            transition: all 0.2s;
-            position: relative;
-        }
-        
-        .weather-tab:hover {
-            color: var(--text-color-1);
-        }
-        
-        .weather-tab.active {
-            color: var(--primary-color-1);
-        }
-        
-        .weather-tab.active::after {
-            content: '';
-            position: absolute;
-            bottom: -1px;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: var(--primary-color-1);
-        }
-        
-        .hourly-graph {
-            padding: 0.5rem;
-            min-height: 120px;
-        }
-        
-        /* Weekly Forecast */
-        .weekly-forecast {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-        
-        .forecast-day-row {
-            display: grid;
-            grid-template-columns: 70px 50px 1fr 70px;
-            align-items: center;
-            padding: 0.75rem;
-            border-radius: 8px;
-            transition: background 0.2s;
-            gap: 0.75rem;
-            min-width: 0;
-        }
-        
-        @media (max-width: 450px) {
-            .forecast-day-row {
-                grid-template-columns: 60px 40px 1fr 50px;
+            
+            .forecast-temp-min { 
+                width: 28px;
+                text-align: right;
+                color: var(--text-secondary-1); 
+                font-size: 0.85rem; 
+                font-weight: 500;
+            }
+            
+            .forecast-temp-max { 
+                width: 28px;
+                text-align: left;
+                color: var(--text-color-1); 
+                font-weight: 700; 
+                font-size: 0.85rem; 
+            }
+            
+            .forecast-bar-container {
+                flex: 1;
+                height: 6px;
+                background: var(--bg-color-1);
+                border-radius: 10px;
+                overflow: hidden;
+                position: relative;
+            }
+            
+            .forecast-bar {
+                height: 100%;
+                border-radius: 10px;
+                background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+                opacity: 0.8;
+            }
+            
+            .forecast-precip {
+                display: flex;
+                justify-content: flex-end;
+                align-items: center;
+                gap: 4px;
+                font-size: 0.8rem;
+                color: #3498db;
+                font-weight: 500;
+            }
+            
+            /* Map Controls Enhancement */
+            .map-controls {
+                position: absolute;
+                top: 1.25rem;
+                right: 1.25rem;
+                z-index: 1000;
+                display: flex;
+                flex-direction: column;
                 gap: 0.5rem;
-                padding: 0.5rem;
             }
-        }
-        
-        .forecast-day-row:hover {
-            background: var(--bg-color-1);
-        }
-        
-        .forecast-day-name {
-            font-weight: 500;
-            color: var(--text-color-1);
-        }
-        
-        .forecast-day-name.today {
-            color: var(--primary-color-1);
-        }
-        
-        .forecast-day-icon {
-            width: 36px;
-            height: 36px;
-        }
-        
-        .forecast-temp-bar {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .forecast-temp-min {
-            color: var(--text-secondary-1);
-            font-size: 0.9rem;
-            min-width: 30px;
-            text-align: right;
-        }
-        
-        .forecast-temp-max {
-            color: var(--text-color-1);
-            font-weight: 600;
-            font-size: 0.9rem;
-            min-width: 30px;
-        }
-        
-        .forecast-bar-container {
-            flex: 1;
-            height: 6px;
-            background: var(--bg-color-1);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        
-        .forecast-bar {
-            height: 100%;
-            border-radius: 3px;
-            background: linear-gradient(90deg, var(--primary-color-1), #3d6f6e);
-        }
-        
-        .forecast-precip {
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-            font-size: 0.8rem;
-            color: var(--primary-color-1);
-        }
-        
-        /* Map Controls */
-        .map-controls {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-        
-        .map-control-btn {
-            background: var(--card-bg-1);
-            border: 1px solid var(--border-color-1);
-            border-radius: 6px;
-            padding: 0.5rem 0.75rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.85rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: all 0.2s;
-            color: var(--text-color-1);
-        }
-        
-        .map-control-btn:hover {
-            background: var(--bg-color-1);
-        }
-        
-        .map-control-btn.active {
-            background: var(--primary-color-1);
-            color: white;
-            border-color: var(--primary-color-1);
-        }
-        
-        /* Weather Markers */
-        .weather-marker-icon {
-            background: rgba(255, 255, 255, 0.75);
-            border-radius: 50%;
-            padding: 0.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.25rem;
-            min-width: 80px;
-            transition: all 0.3s ease;
-            opacity: 0.25; /* Low opacity for better map visibility */
-            backdrop-filter: blur(4px);
-        }
-        
-        .weather-marker-icon:hover {
-            opacity: 0.9;
-            background: rgba(255, 255, 255, 0.95);
-        }
-        
-        .weather-marker-icon img {
-            width: 40px;
-            height: 40px;
-            opacity: 0.8;
-        }
-        
-        .weather-marker-temp {
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--text-color-1);
-        }
-        
-        .weather-marker-city {
-            font-size: 0.7rem;
-            color: var(--text-secondary-1);
-            white-space: nowrap;
-        }
-        
-        /* AI Analysis */
-        .ai-analysis-card {
-            background: linear-gradient(135deg, #1a1a2e 0%, #2d1b4e 100%);
-            border: 1px solid #8e44ad;
-        }
-        
-        .ai-status {
-            font-size: 0.7rem;
-            padding: 0.2rem 0.5rem;
-            border-radius: 10px;
-            background: #27ae60;
-            color: white;
-            margin-left: 0.5rem;
-            font-weight: normal;
-        }
-        
-        .ai-status.loading {
-            background: var(--primary-color-1);
-            animation: pulse 1s infinite;
-        }
-        
-        .ai-status.error {
-            background: #e74c3c;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        .ai-analyze-btn {
-            width: 100%;
-            padding: 1rem;
-            background: linear-gradient(135deg, #8e44ad, #9b59b6);
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            transition: all 0.3s;
-        }
-        
-        .ai-analyze-btn:hover {
-            background: linear-gradient(135deg, #9b59b6, #8e44ad);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(142, 68, 173, 0.4);
-        }
-        
-        .ai-result {
-            background: rgba(255,255,255,0.05);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-top: 1rem;
-        }
-        
-        .ai-result-section {
-            margin-bottom: 1rem;
-        }
-        
-        .ai-result-title {
-            font-weight: 600;
-            color: #9b59b6;
-            margin-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .ai-result-content {
-            color: rgba(255,255,255,0.9);
-            font-size: 0.9rem;
-            line-height: 1.6;
-        }
-        
-        .ai-alert-item {
-            background: rgba(231, 76, 60, 0.2);
-            border-left: 3px solid #e74c3c;
-            padding: 0.75rem;
-            margin-bottom: 0.5rem;
-            border-radius: 0 6px 6px 0;
-        }
-        
-        .ai-recommendation {
-            display: flex;
-            align-items: flex-start;
-            gap: 0.5rem;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .ai-recommendation:last-child {
-            border-bottom: none;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-secondary-1);
-        }
-        
-        .error-message {
-            color: #e74c3c;
-            padding: 1rem;
-            text-align: center;
-        }
-        
-        /* Zoom Indicator */
-        #zoomIndicator {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            z-index: 1000;
-            background: rgba(0,0,0,0.75);
-            color: white;
-            padding: 0.4rem 0.75rem;
-            border-radius: 6px;
-            font-size: 0.75rem;
-            font-family: monospace;
-            backdrop-filter: blur(4px);
-        }
-        
-        /* Quezon City Focus Status */
-        .quezon-city-status {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            z-index: 1000;
-            background: linear-gradient(135deg, var(--primary-color-1), #3d6f6e);
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            box-shadow: 0 4px 12px rgba(76, 138, 137, 0.4);
-            animation: pulseFocus 2s ease-in-out infinite;
-        }
-        
-        .quezon-city-status i {
-            font-size: 1rem;
-            animation: bounceMarker 2s ease-in-out infinite;
-        }
-        
-        @keyframes pulseFocus {
-            0%, 100% { 
-                transform: scale(1);
-                box-shadow: 0 4px 12px rgba(76, 138, 137, 0.4);
+            
+            .map-control-btn {
+                background: var(--card-bg-1);
+                border: 1px solid var(--border-color-1);
+                border-radius: 8px;
+                padding: 0.65rem 0.85rem;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 0.65rem;
+                font-size: 0.8rem;
+                font-weight: 700;
+                color: var(--text-color-1);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                transition: all var(--transition-speed) ease;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
             }
-            50% { 
-                transform: scale(1.02);
-                box-shadow: 0 6px 16px rgba(76, 138, 137, 0.6);
+            
+            .map-control-btn:hover {
+                transform: translateX(-3px);
+                border-color: var(--primary-color-1);
+                color: var(--primary-color-1);
             }
-        }
-        
-        @keyframes bounceMarker {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-3px); }
-        }
-        
-        /* Wind Flow Canvas */
-        .leaflet-zoom-animated {
-            pointer-events: none;
-            z-index: 500;
-        }
-        
-        canvas.leaflet-zoom-animated {
-            position: absolute;
-            top: 0;
-            left: 0;
-        }
-        
-        /* Map always shows natural green land and blue ocean colors - not affected by dark mode */
-        #weatherMap {
-            filter: none !important;
-        }
-        
-        .leaflet-container {
-            background-color: #a3ccff; /* Light blue ocean background - only shows when tiles haven't loaded */
-        }
-        
-        /* Ensure tiles display with natural colors - always light mode */
-        .leaflet-tile-container img {
-            filter: none !important;
-        }
-        
-        /* Prevent dark mode from affecting map container */
-        [data-theme="dark"] #weatherMap {
-            filter: none !important;
-        }
-        
-        [data-theme="dark"] .leaflet-container {
-            background-color: #a3ccff !important;
-        }
-        
-        [data-theme="dark"] .leaflet-tile-container img {
-            filter: none !important;
-        }
-        
-        /* Precipitation Info Box */
-        .precipitation-info {
-            position: absolute;
-            top: 60px;
-            right: 20px;
-            background: var(--card-bg-1);
-            backdrop-filter: blur(10px);
-            border-radius: 8px;
-            padding: 1rem;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            border: 1px solid var(--border-color-1);
-            z-index: 1000;
-            max-width: 280px;
-            font-size: 0.9rem;
-        }
-        
-        .precipitation-info-header {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.75rem;
-            font-weight: 600;
-            color: var(--primary-color-1);
-        }
-        
-        .precipitation-info-content p {
-            margin: 0.5rem 0;
-            color: var(--text-color-1);
-        }
-        
-        .precipitation-legend {
-            margin-top: 0.75rem;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.5rem;
-        }
-        
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.85rem;
-        }
-        
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            border-radius: 4px;
-            border: 1px solid rgba(0,0,0,0.2);
-        }
-        
-        /* Automated Warning Status */
-        .auto-warning-status {
-            position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1001;
-            background: linear-gradient(135deg, #e74c3c, #c0392b);
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-weight: 600;
-            animation: pulseWarning 2s infinite;
-            max-width: 90%;
-            text-align: center;
-        }
-        
-        .auto-warning-status.warning {
-            background: linear-gradient(135deg, #f39c12, #e67e22);
-            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.4);
-        }
-        
-        .auto-warning-status.info {
-            background: linear-gradient(135deg, var(--primary-color-1), #3d6f6e);
-            box-shadow: 0 4px 12px rgba(76, 138, 137, 0.4);
-        }
-        
-        @keyframes pulseWarning {
-            0%, 100% { transform: translateX(-50%) scale(1); }
-            50% { transform: translateX(-50%) scale(1.02); }
-        }
-        
-        .auto-warning-status i {
-            font-size: 1.2rem;
-            animation: rotateWarning 3s linear infinite;
-        }
-        
-        @keyframes rotateWarning {
-            0% { transform: rotate(0deg); }
-            25% { transform: rotate(-10deg); }
-            50% { transform: rotate(0deg); }
-            75% { transform: rotate(10deg); }
-            100% { transform: rotate(0deg); }
-        }
-    </style>
+            
+            .map-control-btn.active {
+                background: var(--primary-color-1);
+                color: white;
+                border-color: var(--primary-color-1);
+            }
+    
+            /* AI Analysis Enhancement */
+            .ai-analysis-card {
+                background: linear-gradient(135deg, #1a1a2e 0%, #2d1b4e 100%);
+                border: 1px solid rgba(142, 68, 173, 0.5);
+            }
+            
+            .ai-analyze-btn {
+                width: 100%;
+                padding: 0.85rem;
+                background: linear-gradient(135deg, #8e44ad, #9b59b6);
+                border: none;
+                border-radius: 8px;
+                color: white;
+                font-weight: 700;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.5rem;
+                transition: all 0.3s;
+                text-transform: uppercase;
+                font-size: 0.85rem;
+                letter-spacing: 0.5px;
+            }
+            
+            .ai-analyze-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(142, 68, 173, 0.4);
+            }
+    
+            #zoomIndicator {
+                position: absolute;
+                bottom: 1.25rem;
+                left: 1.25rem;
+                z-index: 1000;
+                background: rgba(0,0,0,0.6);
+                color: white;
+                padding: 0.35rem 0.75rem;
+                border-radius: 20px;
+                font-size: 0.7rem;
+                font-weight: 700;
+                backdrop-filter: blur(4px);
+            }
+    
+            .quezon-city-status {
+                position: absolute;
+                bottom: 1.25rem;
+                right: 1.25rem;
+                z-index: 1000;
+                background: var(--primary-color-1);
+                color: white;
+                padding: 0.65rem 1rem;
+                border-radius: 30px;
+                font-size: 0.8rem;
+                font-weight: 700;
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                box-shadow: 0 4px 15px rgba(76, 138, 137, 0.4);
+            }
+        </style>
+    
 </head>
 <body>
     <?php include 'includes/sidebar.php'; ?>

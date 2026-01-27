@@ -96,6 +96,9 @@ try {
         case 'analyze':
             analyzeEarthquakeImpact();
             break;
+        case 'assess_risk':
+            assessEarthquakeRisk();
+            break;
         case 'test':
             // Diagnostic endpoint to test API connectivity
             ob_clean();
@@ -831,5 +834,193 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
     $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
     
     return $earthRadius * $c;
+}
+
+/**
+ * Assess earthquake risk specifically for prediction and planning
+ */
+function assessEarthquakeRisk() {
+    global $pdo;
+    
+    // Check if AI analysis is enabled for earthquake
+    if (!isAIAnalysisEnabled('earthquake')) {
+        ob_clean();
+        http_response_code(403);
+        $output = json_encode([
+            'success' => false, 
+            'message' => 'AI earthquake analysis is currently disabled.'
+        ], JSON_UNESCAPED_UNICODE);
+        echo $output;
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
+        exit();
+    }
+    
+    try {
+        $input = file_get_contents('php://input');
+        
+        if (empty($input)) {
+            throw new Exception('No input data received');
+        }
+        
+        $data = json_decode($input, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception('Invalid JSON input: ' . json_last_error_msg());
+        }
+        
+        if (!isset($data['earthquakes']) || !is_array($data['earthquakes'])) {
+            throw new Exception('No earthquake data provided or invalid format');
+        }
+        
+        $earthquakes = $data['earthquakes'];
+        $baseRisk = $data['base_risk'] ?? 'unknown';
+        
+        // Get API key for analysis
+        $apiKey = null;
+        $backupApiKey = null;
+        
+        try {
+            // Check if function exists
+            if (!function_exists('getGeminiApiKey')) {
+                throw new Exception('getGeminiApiKey function not found');
+            }
+            
+            // Try earthquake-specific key first, then analysis, then default
+            $apiKey = getGeminiApiKey('earthquake');
+            if (empty($apiKey)) {
+                $apiKey = getGeminiApiKey('analysis');
+            }
+            if (empty($apiKey)) {
+                $apiKey = getGeminiApiKey('default');
+            }
+            
+            // Get backup key for quota exceeded scenarios
+            $backupApiKey = getGeminiApiKey('analysis_backup');
+        } catch (Throwable $e) {
+            error_log('Error getting Gemini API key in assessEarthquakeRisk: ' . $e->getMessage());
+        }
+        
+        if (empty($apiKey)) {
+            ob_clean();
+            http_response_code(503);
+            $output = json_encode([
+                'success' => false, 
+                'message' => 'AI API key not configured. Please configure Gemini API key settings.',
+                'error_code' => 'API_KEY_MISSING'
+            ], JSON_UNESCAPED_UNICODE);
+            echo $output;
+            if (ob_get_level()) {
+                ob_end_flush();
+            }
+            exit();
+        }
+        
+        // Build prompt
+        $prompt = buildRiskAssessmentPrompt($earthquakes, $baseRisk);
+        
+        // Call API with backup key support
+        $response = callGeminiAI($apiKey, $prompt, $backupApiKey);
+        
+        if ($response['success']) {
+            ob_clean();
+            echo json_encode([
+                'success' => true,
+                'analysis' => $response['content'],
+                'timestamp' => date('Y-m-d H:i:s')
+            ], JSON_UNESCAPED_UNICODE);
+        } else {
+            // Log the specific AI error but return a generic message if it's sensitive
+            error_log('AI Analysis Failed: ' . ($response['error'] ?? 'Unknown error'));
+            throw new Exception('AI processing failed. The service might be temporarily unavailable.');
+        }
+        
+    } catch (Throwable $e) {
+        ob_clean();
+        // Log the full error details for admins
+        error_log('assessEarthquakeRisk Error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+        
+        // Return 500 status code
+        http_response_code(500);
+        
+        // Return safe, generic error message to frontend
+        echo json_encode([
+            'success' => false, 
+            'message' => 'An error occurred while assessing risk. Please check server logs for details.',
+            'error_code' => 'INTERNAL_SERVER_ERROR'
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    
+    if (ob_get_level()) {
+        ob_end_flush();
+    }
+    exit();
+}
+
+/**
+ * Build prompt for risk assessment and prediction
+ */
+function buildRiskAssessmentPrompt($earthquakes, $baseRisk) {
+    // Summarize earthquake data for the prompt
+    $qcLat = 14.6488;
+    $qcLon = 121.0509;
+    
+    // Format earthquake list for the prompt
+    $eqList = "";
+    // Limit to top 15 most relevant for better context
+    $relevant = array_slice($earthquakes, 0, 15);
+    foreach ($relevant as $eq) {
+        $mag = $eq['magnitude'] ?? 0;
+        $depth = $eq['depth'] ?? 0;
+        $dist = $eq['distanceFromQC'] ?? 0;
+        $loc = $eq['location'] ?? 'Unknown';
+        $time = isset($eq['time']) ? date('Y-m-d H:i:s', $eq['time'] / 1000) : 'Unknown';
+        
+        $eqList .= sprintf("- Mag %.1f | Depth %.1fkm | Dist %.1fkm | %s | %s\n", $mag, $depth, $dist, $loc, $time);
+    }
+    
+    $prompt = <<<EOT
+You are an AI Seismic Risk Analyst for the Quezon City Local Government Unit (LGU).
+
+1. CONTEXT & GEOGRAPHY
+Focus on the West Valley Fault (WVF) passing through Bagong Silangan, Batasan Hills, Blue Ridge, Ugong Norte.
+Consider soil and liquefaction potential in areas like Eastwood, near the Marikina River, or other soft-soil zones.
+If an earthquake occurs outside QC, calculate felt intensity and expected ground motion specifically in QC.
+Take into account local urban density, infrastructure vulnerability, and recent seismic history.
+
+2. LOGICAL FLOW
+Your report must follow a predictive, data-driven flow:
+- Assess Seismic Parameters: Use magnitude, depth, epicenter, and time. Evaluate distance to QC and fault interaction.
+- Estimate Risk Level: Classify as "LOW", "MODERATE", "HIGH", or "CRITICAL". Consider WVF proximity, liquefaction-prone areas, building density, and recent seismic events.
+- Generate Seismic Summary: Provide a concise technical description of ground motion. Mention affected barangays or zones if applicable. Include observed or expected intensity and shaking patterns.
+- Predictive Outlook: Forecast 7-day aftershock probability and fault stress transfer. Use probabilistic language (<10% likelihood, moderate chance of aftershocks, etc.). Identify areas of higher caution or monitoring priority.
+- Actionable Recommendations: Provide one clear, imperative instruction for residents or responders. Ensure it is location-specific, safety-focused, and immediate (e.g., "Inspect high-rise structures in Cubao").
+
+3. OUTPUT FORMAT
+Must output strictly valid JSON.
+Do not include Markdown, code fences, or explanatory text.
+JSON structure:
+{
+  "risk_level": "LOW" | "MODERATE" | "HIGH" | "CRITICAL",
+  "seismic_summary": "Concise technical summary of ground motion; include QC-specific barangays if relevant.",
+  "predictive_outlook": "7-day aftershock forecast using probabilistic language; note fault stress transfer and affected areas.",
+  "actionable_recommendations": "One clear, imperative instruction for QC residents or responders."
+}
+
+4. DATA INPUT (Dynamic)
+Quezon City Coordinates: Lat $qcLat, Lon $qcLon
+Base Calculated Risk: $baseRisk
+Recent Seismic Events:
+$eqList
+
+5. RULES & PREDICTIVE LOGIC
+Always reference specific QC barangays or zones where relevant.
+Use quantitative and probabilistic reasoning where possible (e.g., <5% chance, moderate likelihood).
+Only return JSON output. Do not write explanations, tables, or lists outside JSON.
+Ensure actionable recommendations are feasible, specific, and safety-oriented.
+EOT;
+    
+    return $prompt;
 }
 

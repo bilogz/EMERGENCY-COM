@@ -33,328 +33,225 @@ $pageTitle = 'General Settings';
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
     <style>
-        .settings-section h2 {
-            margin-bottom: 1.5rem;
+        /* Enhanced General Settings Styles */
+        :root {
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --transition-speed: 0.2s;
+        }
+
+        .settings-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .module-card {
+            background: var(--card-bg-1);
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color-1);
+            overflow: hidden;
+            transition: box-shadow var(--transition-speed) ease;
+        }
+
+        .module-card:hover {
+            box-shadow: var(--card-shadow-hover);
+        }
+
+        .module-card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color-1);
+            background: var(--bg-color-1);
+        }
+
+        .module-card-header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
             color: var(--text-color-1);
             display: flex;
             align-items: center;
             gap: 0.5rem;
         }
+
+        .settings-list {
+            padding: 0 1.5rem;
+        }
+
         .setting-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 1.5rem 0;
             border-bottom: 1px solid var(--border-color-1);
+            gap: 2rem;
         }
+
         .setting-item:last-child {
             border-bottom: none;
         }
+
         .setting-info {
             flex: 1;
         }
+
         .setting-title {
-            font-weight: 600;
-            margin-bottom: 0.5rem;
+            font-weight: 700;
+            margin-bottom: 0.35rem;
             color: var(--text-color-1);
+            font-size: 1rem;
         }
+
         .setting-description {
             font-size: 0.9rem;
             color: var(--text-secondary-1);
+            line-height: 1.5;
         }
+
+        /* Theme Options Grid */
         .theme-options {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
             gap: 1rem;
-            flex-wrap: wrap;
+            min-width: 360px;
         }
+
         .theme-option {
-            flex: 1;
-            min-width: 120px;
-            padding: 1rem;
+            padding: 1.25rem 1rem;
             border: 2px solid var(--border-color-1);
-            border-radius: 8px;
+            border-radius: 10px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.2s;
-            background: var(--card-bg-1);
+            transition: all var(--transition-speed) ease;
+            background: var(--bg-color-1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
         }
+
         .theme-option:hover {
             border-color: var(--primary-color-1);
+            background: var(--card-bg-1);
             transform: translateY(-2px);
         }
+
         .theme-option.active {
             border-color: var(--primary-color-1);
-            background: var(--primary-color-1);
-            color: white;
+            background: rgba(76, 138, 137, 0.1);
+            color: var(--primary-color-1);
         }
+
         .theme-option i {
             font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-            display: block;
         }
+
+        .theme-option div {
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Modern Toggle Switch */
         .switch {
             position: relative;
             display: inline-block;
-            width: 60px;
-            height: 34px;
+            width: 52px;
+            height: 28px;
+            flex-shrink: 0;
         }
+
         .switch input {
             opacity: 0;
             width: 0;
             height: 0;
         }
+
         .slider {
             position: absolute;
             cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #e2e8f0;
+            transition: .3s;
             border-radius: 34px;
         }
+
+        [data-theme="dark"] .slider {
+            background-color: #4a5568;
+        }
+
         .slider:before {
             position: absolute;
             content: "";
-            height: 26px;
-            width: 26px;
+            height: 20px;
+            width: 20px;
             left: 4px;
             bottom: 4px;
             background-color: white;
-            transition: .4s;
+            transition: .3s;
             border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+
         input:checked + .slider {
             background-color: var(--primary-color-1);
         }
+
         input:checked + .slider:before {
-            transform: translateX(26px);
+            transform: translateX(24px);
         }
+
+        /* Info Box */
         .info-box {
-            background: #e3f2fd;
-            border-left: 4px solid #2196f3;
-            padding: 1rem;
-            border-radius: 4px;
-            margin-bottom: 1.5rem;
-        }
-        [data-theme="dark"] .info-box {
-            background: rgba(33, 150, 243, 0.1);
-            border-left-color: #2196f3;
-        }
-        .info-box i {
-            color: #2196f3;
-            margin-right: 0.5rem;
+            background-color: rgba(76, 138, 137, 0.1);
+            border-left: 4px solid var(--primary-color-1);
+            color: var(--text-color-1);
+            padding: 1.25rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
         }
         
-        /* Settings Modal Styles */
-        .settings-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(4px);
-        }
-
-        .settings-modal .modal-content {
-            position: relative;
-            background-color: var(--card-bg-1);
-            border-radius: 0.75rem;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
-            width: 90%;
-            max-height: 90vh;
-            display: flex;
-            flex-direction: column;
-            z-index: 2001;
-            animation: modalSlideIn 0.3s ease-out;
-        }
-
-        .modal-content-xlarge {
-            max-width: 1100px;
-        }
-
-        @keyframes modalSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-20px) scale(0.95);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
-
-        .settings-modal .modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--border-color-1);
-            background-color: var(--header-bg-1);
-            border-radius: 0.75rem 0.75rem 0 0;
-        }
-
-        .settings-modal .modal-header h2 {
-            margin: 0;
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--text-color-1);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .settings-modal .modal-close {
-            background: none;
-            border: none;
-            color: var(--text-secondary-1);
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            transition: all 0.2s ease;
-            line-height: 1;
-        }
-
-        .settings-modal .modal-close:hover {
-            background-color: var(--sidebar-hover-bg-1);
+        .info-box i {
             color: var(--primary-color-1);
+            font-size: 1.25rem;
         }
 
-        .settings-modal .modal-body {
-            padding: 1.5rem;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .settings-modal .modal-body::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .settings-modal .modal-body::-webkit-scrollbar-track {
-            background: var(--sidebar-bg-1);
-            border-radius: 4px;
-        }
-
-        .settings-modal .modal-body::-webkit-scrollbar-thumb {
-            background: var(--text-secondary-1);
-            border-radius: 4px;
-        }
-
-        .settings-modal .modal-body::-webkit-scrollbar-thumb:hover {
-            background: var(--primary-color-1);
-        }
-
-        .api-key-card {
-            background: var(--card-bg-1);
+        /* Select & Range Styling */
+        select.form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
             border: 1px solid var(--border-color-1);
             border-radius: 8px;
-            padding: 1.5rem;
-            transition: all 0.3s ease;
-        }
-
-        .api-key-card:hover {
-            border-color: var(--primary-color-1);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .api-key-input {
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-        }
-
-        .key-status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.25rem;
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .key-status-active {
-            background: #e8f5e9;
-            color: #2e7d32;
-        }
-
-        [data-theme="dark"] .key-status-active {
-            background: rgba(46, 125, 50, 0.2);
-            color: #81c784;
-        }
-
-        .key-status-inactive {
-            background: #ffebee;
-            color: #c62828;
-        }
-
-        [data-theme="dark"] .key-status-inactive {
-            background: rgba(198, 40, 40, 0.2);
-            color: #e57373;
-        }
-
-        .category-header {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem 1rem;
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            border-left: 4px solid var(--primary-color-1);
-        }
-
-        .category-header h3 {
-            margin: 0;
-            font-size: 1rem;
+            background: var(--bg-color-1);
             color: var(--text-color-1);
+            font-size: 0.95rem;
         }
 
-        .stat-item {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem;
-            background: rgba(0, 0, 0, 0.02);
-            border-radius: 4px;
-            font-size: 0.85rem;
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary-color-1);
         }
 
-        [data-theme="dark"] .stat-item {
-            background: rgba(255, 255, 255, 0.02);
+        #testSoundBtn {
+            font-weight: 600;
+            padding: 0.75rem;
         }
 
         @media (max-width: 768px) {
-            .settings-modal .modal-content {
-                width: 95%;
-                max-height: 95vh;
+            .setting-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
             }
-
-            .modal-content-xlarge {
-                max-width: 95%;
-            }
-
-            .settings-modal .modal-header {
-                padding: 1rem;
-            }
-
-            .settings-modal .modal-body {
-                padding: 1rem;
+            .theme-options {
+                width: 100%;
+                min-width: unset;
             }
         }
     </style>

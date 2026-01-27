@@ -26,135 +26,199 @@ $pageTitle = 'Chat Queue';
     <link rel="stylesheet" href="css/admin-header.css">
     <link rel="stylesheet" href="css/buttons.css">
     <link rel="stylesheet" href="css/forms.css">
+    <link rel="stylesheet" href="css/modules.css">
     <style>
+        /* Enhanced Chat Queue Styles */
+        :root {
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --transition-speed: 0.2s;
+        }
+
         .chat-queue-container {
             display: grid;
-            grid-template-columns: 350px 1fr;
+            grid-template-columns: 380px 1fr;
             gap: 1.5rem;
-            height: calc(100vh - 200px);
+            height: calc(100vh - 240px);
+            min-height: 600px;
         }
+
+        @media (max-width: 992px) {
+            .chat-queue-container { grid-template-columns: 1fr; height: auto; }
+        }
+
+        .queue-sidebar {
+            display: flex;
+            flex-direction: column;
+            background: var(--card-bg-1);
+            border-radius: 12px;
+            border: 1px solid var(--border-color-1);
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+        }
+
+        .queue-header-area {
+            padding: 1.25rem 1.5rem;
+            background: var(--bg-color-1);
+            border-bottom: 1px solid var(--border-color-1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .queue-header-area h3 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-color-1);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         .queue-list {
-            background: var(--card-bg);
-            border-radius: 8px;
+            flex: 1;
             padding: 1rem;
             overflow-y: auto;
         }
+
         .queue-item {
-            padding: 1rem;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
+            padding: 1.25rem;
+            background: var(--bg-color-1);
+            border: 1px solid var(--border-color-1);
+            border-radius: 10px;
             margin-bottom: 1rem;
             cursor: pointer;
-            transition: all 0.2s;
-            background: var(--card-bg);
+            transition: all var(--transition-speed) ease;
+            position: relative;
         }
+
         .queue-item:hover {
-            border-color: var(--primary-color);
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-color: var(--primary-color-1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         }
-        .queue-item.pending {
-            border-left: 4px solid #ff9800;
-        }
-        .queue-item.accepted {
-            border-left: 4px solid #4caf50;
-        }
-        .queue-header {
+
+        .queue-item.pending { border-left: 4px solid #f39c12; }
+        .queue-item.active { border-left: 4px solid var(--primary-color-1); background: rgba(76, 138, 137, 0.05); }
+
+        .queue-item-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 0.5rem;
         }
-        .queue-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
+
+        .queue-item-name { font-weight: 700; color: var(--text-color-1); font-size: 0.95rem; }
+        
+        .badge {
+            padding: 0.25rem 0.65rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
         }
-        .badge-pending {
-            background: #fff3cd;
-            color: #856404;
-        }
+
+        /* Chat Window Enhancement */
         .chat-window {
             display: flex;
             flex-direction: column;
-            background: var(--card-bg);
-            border-radius: 8px;
+            background: var(--card-bg-1);
+            border-radius: 12px;
+            border: 1px solid var(--border-color-1);
+            box-shadow: var(--card-shadow);
             overflow: hidden;
         }
+
         .chat-header {
-            padding: 1rem;
-            border-bottom: 1px solid var(--border-color);
-            background: var(--primary-color);
-            color: white;
+            padding: 1.25rem 1.5rem;
+            background: var(--card-bg-1);
+            border-bottom: 1px solid var(--border-color-1);
+            z-index: 10;
         }
+
+        .chat-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-color-1);
+        }
+
         .chat-messages {
             flex: 1;
-            padding: 1rem;
+            padding: 1.5rem;
+            background: var(--bg-color-1);
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 1rem;
         }
-        .message {
-            display: flex;
-            gap: 0.5rem;
-            max-width: 70%;
-        }
-        .message.user {
-            align-self: flex-start;
-        }
-        .message.admin {
-            align-self: flex-end;
-            flex-direction: row-reverse;
-        }
+
+        .message { max-width: 80%; display: flex; flex-direction: column; gap: 0.25rem; }
+        .message.user { align-self: flex-start; }
+        .message.admin { align-self: flex-end; align-items: flex-end; }
+
         .message-content {
             padding: 0.75rem 1rem;
-            border-radius: 12px;
-            background: var(--border-color);
+            border-radius: 18px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
-        .message.admin .message-content {
-            background: var(--primary-color);
-            color: white;
-        }
-        .chat-input {
-            padding: 1rem;
-            border-top: 1px solid var(--border-color);
+
+        .user .message-content { background: white; color: var(--text-color-1); border: 1px solid var(--border-color-1); border-bottom-left-radius: 4px; }
+        .admin .message-content { background: var(--primary-color-1); color: white; border-bottom-right-radius: 4px; }
+
+        .message-time { font-size: 0.7rem; color: var(--text-secondary-1); opacity: 0.7; }
+
+        .chat-input-area {
+            padding: 1.25rem;
+            background: var(--card-bg-1);
+            border-top: 1px solid var(--border-color-1);
             display: flex;
-            gap: 0.5rem;
+            gap: 0.75rem;
+            align-items: center;
         }
-        .chat-input input {
+
+        .chat-input-area input {
             flex: 1;
-            padding: 0.75rem;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
+            padding: 0.85rem 1.25rem;
+            border: 1px solid var(--border-color-1);
+            border-radius: 24px;
+            background: var(--bg-color-1);
+            color: var(--text-color-1);
+            transition: all 0.2s ease;
         }
-        .notification-modal {
-            display: none;
+
+        .chat-input-area input:focus {
+            outline: none;
+            border-color: var(--primary-color-1);
+            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
+        }
+
+        /* Notification Modal Enhancement */
+        .notification-toast {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            top: 2rem;
+            right: 2rem;
+            background: var(--card-bg-1);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
             padding: 1.5rem;
-            max-width: 400px;
+            width: 350px;
             z-index: 10000;
-            animation: slideIn 0.3s ease;
+            border: 1px solid var(--border-color-1);
+            transform: translateX(120%);
+            transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
         }
-        .notification-modal.show {
-            display: block;
+
+        .notification-toast.show { transform: translateX(0); }
+
+        .notification-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
         }
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
+
+        .notification-title { font-weight: 700; color: var(--primary-color-1); font-size: 1rem; }
     </style>
 </head>
 <body>
@@ -164,38 +228,49 @@ $pageTitle = 'Chat Queue';
     <div class="main-content">
         <div class="main-container">
             <div class="title">
-                <h1>Chat Queue</h1>
-                <p>Manage incoming chat requests from users</p>
+                <nav class="breadcrumb" aria-label="Breadcrumb">
+                    <ol class="breadcrumb-list">
+                        <li class="breadcrumb-item"><a href="dashboard.php" class="breadcrumb-link">Dashboard</a></li>
+                        <li class="breadcrumb-item active">Chat Queue</li>
+                    </ol>
+                </nav>
+                <h1><i class="fas fa-comments" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Chat Queue</h1>
+                <p>Manage incoming chat requests from users in real-time.</p>
             </div>
             
             <div class="sub-container">
                 <div class="page-content">
                     <div class="chat-queue-container">
-                        <!-- Queue List -->
-                        <div class="queue-list">
-                            <h3 style="margin-bottom: 1rem;">Incoming Chats</h3>
-                            <div id="queueList">
-                                <p style="text-align: center; color: var(--text-secondary); padding: 2rem;">
-                                    No pending chats
-                                </p>
+                        <!-- Queue Sidebar -->
+                        <div class="queue-sidebar">
+                            <div class="queue-header-area">
+                                <h3><i class="fas fa-inbox"></i> Incoming Requests</h3>
+                                <span id="queueCount" class="badge" style="background: var(--primary-color-1); color: white;">0</span>
+                            </div>
+                            <div class="queue-list" id="queueList">
+                                <div style="text-align: center; padding: 3rem; opacity: 0.5;">
+                                    <i class="fas fa-comment-slash fa-3x" style="margin-bottom: 1rem;"></i>
+                                    <p>No pending chats</p>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Chat Window -->
                         <div class="chat-window">
                             <div class="chat-header">
-                                <h3 id="chatUserName">Select a chat from queue</h3>
-                                <small id="chatUserStatus"></small>
+                                <h3 id="chatUserName">Select a chat request</h3>
+                                <small id="chatUserStatus" style="color: var(--text-secondary-1); font-weight: 500;"></small>
                             </div>
                             <div class="chat-messages" id="chatMessages">
-                                <p style="text-align: center; color: var(--text-secondary); padding: 2rem;">
-                                    Select a chat to start messaging
-                                </p>
+                                <div style="text-align: center; padding: 4rem; opacity: 0.3; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
+                                    <i class="fas fa-comments fa-4x" style="margin-bottom: 1rem;"></i>
+                                    <p>Select a chat from the queue to start messaging</p>
+                                </div>
                             </div>
-                            <div class="chat-input">
-                                <input type="text" id="messageInput" placeholder="Type a message..." disabled>
-                                <button class="btn btn-primary" id="sendButton" disabled>
-                                    <i class="fas fa-paper-plane"></i> Send
+                            <div class="chat-input-area">
+                                <input type="text" id="messageInput" placeholder="Type a response..." disabled>
+                                <button class="btn btn-primary" id="sendButton" disabled style="padding: 0.8rem 1.2rem; border-radius: 30px;">
+                                    <i class="fas fa-paper-plane"></i>
                                 </button>
                             </div>
                         </div>
@@ -205,22 +280,22 @@ $pageTitle = 'Chat Queue';
         </div>
     </div>
 
-    <!-- Notification Modal -->
-    <div class="notification-modal" id="notificationModal">
-        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
-            <div>
-                <h4 style="margin: 0 0 0.5rem 0;">New Chat Request</h4>
-                <p id="notificationUserName" style="margin: 0; font-weight: 600;"></p>
-                <p id="notificationMessage" style="margin: 0.5rem 0 0 0; color: var(--text-secondary);"></p>
-            </div>
-            <button onclick="closeNotification()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+    <!-- Notification Toast -->
+    <div class="notification-toast" id="notificationModal">
+        <div class="notification-header">
+            <span class="notification-title"><i class="fas fa-bell"></i> New Chat Request</span>
+            <button onclick="closeNotification()" style="background: none; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-secondary-1);">&times;</button>
         </div>
-        <div style="display: flex; gap: 0.5rem;">
-            <button class="btn btn-primary" id="acceptChatBtn" style="flex: 1;">
-                <i class="fas fa-check"></i> Accept
+        <div style="margin-bottom: 1.5rem;">
+            <p id="notificationUserName" style="margin: 0; font-weight: 700; color: var(--text-color-1);"></p>
+            <p id="notificationMessage" style="margin: 0.5rem 0 0 0; color: var(--text-secondary-1); font-size: 0.9rem; line-height: 1.4;"></p>
+        </div>
+        <div style="display: flex; gap: 0.75rem;">
+            <button class="btn btn-primary" id="acceptChatBtn" style="flex: 2; font-weight: 700;">
+                <i class="fas fa-check"></i> Accept Chat
             </button>
             <button class="btn btn-secondary" onclick="closeNotification()" style="flex: 1;">
-                <i class="fas fa-times"></i> Dismiss
+                Dismiss
             </button>
         </div>
     </div>
@@ -315,35 +390,36 @@ $pageTitle = 'Chat Queue';
             
             queueRef.on('value', (snapshot) => {
                 const queueList = document.getElementById('queueList');
+                const queueCount = document.getElementById('queueCount');
                 queueList.innerHTML = '';
                 
                 if (!snapshot.exists()) {
-                    queueList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No pending chats</p>';
+                    queueList.innerHTML = '<div style="text-align: center; padding: 3rem; opacity: 0.5;"><i class="fas fa-comment-slash fa-3x" style="margin-bottom: 1rem;"></i><p>No pending chats</p></div>';
+                    queueCount.textContent = '0';
                     return;
                 }
 
                 const queueItems = snapshot.val();
-                Object.keys(queueItems).forEach(queueId => {
+                const keys = Object.keys(queueItems);
+                queueCount.textContent = keys.length;
+
+                keys.forEach(queueId => {
                     const item = queueItems[queueId];
                     const queueItem = document.createElement('div');
                     queueItem.className = 'queue-item pending';
-                    const guestBadge = item.isGuest ? '<span style="background: #ff9800; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem;">GUEST</span>' : '';
-                    const userInfo = [];
-                    if (item.userEmail) userInfo.push(`<i class="fas fa-envelope"></i> ${item.userEmail}`);
-                    if (item.userPhone) userInfo.push(`<i class="fas fa-phone"></i> ${item.userPhone}`);
-                    if (item.userLocation) userInfo.push(`<i class="fas fa-map-marker-alt"></i> ${item.userLocation}`);
-                    const userInfoHtml = userInfo.length > 0 ? `<div style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">${userInfo.join(' | ')}</div>` : '';
-                    const concernBadge = item.userConcern ? `<span style="background: #2196f3; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; text-transform: capitalize;">${item.userConcern}</span>` : '';
+                    const guestBadge = item.isGuest ? '<span class="badge" style="background: #f39c12; color: white; margin-left: 0.5rem;">GUEST</span>' : '';
+                    const concernBadge = item.userConcern ? `<span class="badge" style="background: rgba(33, 150, 243, 0.1); color: #2196f3; margin-left: 0.5rem; border: 1px solid rgba(33, 150, 243, 0.2);">${item.userConcern}</span>` : '';
+                    
                     queueItem.innerHTML = `
-                        <div class="queue-header">
-                            <div>
-                                <strong>${item.userName}</strong>${guestBadge}${concernBadge}
-                            </div>
-                            <span class="queue-badge badge-pending">Pending</span>
+                        <div class="queue-item-header">
+                            <span class="queue-item-name">${item.userName}</span>
+                            ${guestBadge}
                         </div>
-                        <p style="margin: 0.5rem 0; font-size: 0.9rem;">${item.message}</p>
-                        ${userInfoHtml}
-                        <small style="color: var(--text-secondary);">${new Date(item.timestamp).toLocaleString()}</small>
+                        <p style="margin: 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.message}</p>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem;">
+                            ${concernBadge}
+                            <small style="color: var(--text-secondary-1); font-size: 0.7rem; opacity: 0.7;">${new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</small>
+                        </div>
                     `;
                     queueItem.addEventListener('click', () => {
                         selectQueueItem(queueId, item);
@@ -359,35 +435,13 @@ $pageTitle = 'Chat Queue';
             
             const userNameEl = document.getElementById('chatUserName');
             const userStatusEl = document.getElementById('chatUserStatus');
-            const guestBadge = item.isGuest ? ' <span style="background: #ff9800; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem;">GUEST</span>' : '';
-            const concernBadge = item.userConcern ? ` <span style="background: #2196f3; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: capitalize;">${item.userConcern}</span>` : '';
-            userNameEl.innerHTML = item.userName + guestBadge + concernBadge;
-            
-            // Also try to get from conversation if not in item
-            if (window.firebaseDatabase && item.conversationId) {
-                window.firebaseDatabase.ref(`conversations/${item.conversationId}`).once('value', (snapshot) => {
-                    const conversation = snapshot.val();
-                    if (conversation) {
-                        const userInfo = [];
-                        if (conversation.userEmail || item.userEmail) userInfo.push(`Email: ${conversation.userEmail || item.userEmail}`);
-                        if (conversation.userPhone || item.userPhone) userInfo.push(`Phone: ${conversation.userPhone || item.userPhone}`);
-                        if (conversation.userLocation || item.userLocation) userInfo.push(`Location: ${conversation.userLocation || item.userLocation}`);
-                        if (conversation.userConcern || item.userConcern) userInfo.push(`Concern: ${conversation.userConcern || item.userConcern}`);
-                        if (conversation.userId || item.userId) userInfo.push(`ID: ${conversation.userId || item.userId}`);
-                        userStatusEl.textContent = userInfo.length > 0 ? userInfo.join(' | ') : 'Pending';
-                    }
-                });
-            }
+            const guestBadge = item.isGuest ? ' <span class="badge" style="background: #f39c12; color: white;">GUEST</span>' : '';
+            userNameEl.innerHTML = item.userName + guestBadge;
             
             const userInfo = [];
-            if (item.userEmail) userInfo.push(`Email: ${item.userEmail}`);
-            if (item.userPhone) userInfo.push(`Phone: ${item.userPhone}`);
-            if (item.userLocation) userInfo.push(`Location: ${item.userLocation}`);
-            if (item.userConcern) userInfo.push(`Concern: ${item.userConcern}`);
-            if (item.userId) userInfo.push(`ID: ${item.userId}`);
-            if (userInfo.length > 0) {
-                userStatusEl.textContent = userInfo.join(' | ');
-            }
+            if (item.userLocation) userInfo.push(item.userLocation);
+            if (item.userConcern) userInfo.push(item.userConcern);
+            userStatusEl.textContent = userInfo.join(' • ') || 'Awaiting acceptance';
             
             document.getElementById('messageInput').disabled = false;
             document.getElementById('sendButton').disabled = false;
@@ -419,10 +473,10 @@ $pageTitle = 'Chat Queue';
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${senderType}`;
             
-            const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+            const time = timestamp ? new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             messageDiv.innerHTML = `
                 <div class="message-content">${text}</div>
-                <small>${time}</small>
+                <span class="message-time">${time}</span>
             `;
             messagesDiv.appendChild(messageDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -444,7 +498,7 @@ $pageTitle = 'Chat Queue';
                     assignedTo: sessionStorage.getItem('admin_id') || 'admin'
                 });
 
-                document.getElementById('chatUserStatus').textContent = 'Active';
+                document.getElementById('chatUserStatus').textContent = 'Conversation Active';
                 closeNotification();
                 loadChatQueue();
             } catch (error) {
@@ -471,32 +525,8 @@ $pageTitle = 'Chat Queue';
             currentQueueId = queueId;
             currentConversationId = conversationId;
             
-            const guestBadge = isGuest ? ' <span style="background: #ff9800; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem;">GUEST</span>' : '';
-            const concernBadge = userConcern ? ` <span style="background: #2196f3; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: capitalize;">${userConcern}</span>` : '';
-            document.getElementById('notificationUserName').innerHTML = userName + guestBadge + concernBadge;
+            document.getElementById('notificationUserName').innerHTML = userName + (isGuest ? ' (Guest)' : '');
             document.getElementById('notificationMessage').textContent = message;
-            
-            // Show user info if available
-            const userInfo = [];
-            if (userEmail) userInfo.push(`Email: ${userEmail}`);
-            if (userPhone) userInfo.push(`Phone: ${userPhone}`);
-            const userLocation = e.detail.userLocation || null;
-            const userConcern = e.detail.userConcern || null;
-            if (userLocation) userInfo.push(`Location: ${userLocation}`);
-            if (userConcern) userInfo.push(`Concern: ${userConcern}`);
-            if (userInfo.length > 0) {
-                const infoEl = document.createElement('small');
-                infoEl.style.display = 'block';
-                infoEl.style.marginTop = '0.5rem';
-                infoEl.style.color = 'var(--text-secondary)';
-                infoEl.textContent = userInfo.join(' | ');
-                const notificationMessage = document.getElementById('notificationMessage');
-                if (notificationMessage.nextSibling) {
-                    notificationMessage.parentNode.insertBefore(infoEl, notificationMessage.nextSibling);
-                } else {
-                    notificationMessage.parentNode.appendChild(infoEl);
-                }
-            }
             
             const modal = document.getElementById('notificationModal');
             modal.classList.add('show');

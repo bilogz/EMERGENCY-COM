@@ -32,6 +32,284 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
     <link rel="stylesheet" href="css/hero.css">
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
+    <style>
+        /* Enhanced Citizen Subscriptions Styles */
+        :root {
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --transition-speed: 0.2s;
+        }
+
+        .module-card {
+            background: var(--card-bg-1);
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color-1);
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            transition: box-shadow var(--transition-speed) ease;
+        }
+
+        .module-card:hover {
+            box-shadow: var(--card-shadow-hover);
+        }
+
+        .module-card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color-1);
+            background: var(--bg-color-1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .module-card-header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-color-1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg-1);
+            padding: 1.5rem;
+            border-radius: 10px;
+            border: 1px solid var(--border-color-1);
+            text-align: center;
+            transition: transform var(--transition-speed) ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--primary-color-1);
+        }
+
+        .stat-value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin: 0 0 0.5rem 0;
+            line-height: 1.2;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary-1);
+            font-weight: 500;
+        }
+
+        .search-container {
+            padding: 1.5rem 1.5rem 0 1.5rem;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.85rem 1.25rem;
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: var(--bg-color-1);
+            color: var(--text-color-1);
+            transition: all var(--transition-speed) ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary-color-1);
+            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
+        }
+
+        /* Modal Enhancements */
+        .modal-content {
+            border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border: 1px solid var(--border-color-1);
+        }
+
+        .modal-header {
+            padding: 1.25rem 1.5rem;
+            background: var(--bg-color-1);
+            border-bottom: 1px solid var(--border-color-1);
+        }
+
+        .modal-header h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        /* Tab Navigation */
+        .modal-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color-1);
+            margin-bottom: 1.5rem;
+            gap: 1.5rem;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            padding: 0.75rem 0;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: var(--text-secondary-1);
+            transition: all var(--transition-speed) ease;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+
+        .tab-btn:hover {
+            color: var(--primary-color-1);
+        }
+
+        .tab-btn.active {
+            color: var(--primary-color-1);
+            border-bottom-color: var(--primary-color-1);
+            font-weight: 600;
+        }
+
+        .tab-content h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-color-1);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color-1);
+        }
+
+        /* Info Items */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: var(--text-secondary-1);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-value {
+            color: var(--text-color-1);
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        /* Device & Activity Lists */
+        .list-item {
+            padding: 1rem;
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            background: var(--bg-color-1);
+            transition: background var(--transition-speed) ease;
+        }
+
+        .list-item:hover {
+            background: var(--card-bg-1);
+            border-color: var(--primary-color-1);
+        }
+
+        .list-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .list-item-title {
+            font-weight: 600;
+            color: var(--text-color-1);
+            font-size: 0.95rem;
+        }
+
+        .list-item-meta {
+            color: var(--text-secondary-1);
+            font-size: 0.85rem;
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        /* Checkbox Groups */
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: var(--bg-color-1);
+            border-radius: 8px;
+            border: 1px solid var(--border-color-1);
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: var(--text-color-1);
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            width: 1.1rem;
+            height: 1.1rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* Responsive Table */
+        .table-responsive {
+            overflow-x: auto;
+            width: 100%;
+        }
+
+        .data-table th {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: var(--bg-color-1);
+            color: var(--text-secondary-1);
+        }
+
+        @media (max-width: 768px) {
+            .stat-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .modal-tabs {
+                gap: 1rem;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Include Sidebar Component -->
@@ -49,13 +327,8 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                 <nav class="breadcrumb" aria-label="Breadcrumb">
                     <ol class="breadcrumb-list">
                         <li class="breadcrumb-item">
-                            <a href="/" class="breadcrumb-link">
-                                <span>Home</span>
-                            </a>
-                        </li>
-                        <li class="breadcrumb-item">
-                            <a href="/emergency-communication" class="breadcrumb-link">
-                                <span>Emergency Communication</span>
+                            <a href="dashboard.php" class="breadcrumb-link">
+                                <span>Dashboard</span>
                             </a>
                         </li>
                         <li class="breadcrumb-item active" aria-current="page">
@@ -63,11 +336,13 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                         </li>
                     </ol>
                 </nav>
-                <h1>Citizen Subscription and Alert Preferences</h1>
+                <h1><i class="fas fa-users-cog" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Citizen Subscriptions</h1>
                 <p>Manage citizen subscriptions and allow citizens to customize their alert preferences for personalized emergency notifications.</p>
-                <div class="info-box" style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 1rem; border-radius: 4px; margin-top: 1rem;">
-                    <i class="fas fa-info-circle" style="color: #2196f3;"></i>
-                    <strong>How to use:</strong> View all subscribers and their preferences. Click "View" to see or edit a subscriber's alert categories, notification channels, and preferred language. Use the search box to find specific subscribers.
+                <div class="info-box">
+                    <i class="fas fa-info-circle"></i>
+                    <div>
+                        <strong>How to use:</strong> View all subscribers and their preferences. Click "View" to see or edit a subscriber's alert categories, notification channels, and preferred language. Use the search box to find specific subscribers.
+                    </div>
                 </div>
             </div>
             
@@ -78,48 +353,38 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                         <div class="module-card-header">
                             <h2><i class="fas fa-chart-bar"></i> Subscription Statistics</h2>
                         </div>
-                        <div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem;">
-                                <div class="stat-card" style="text-align: center;">
-                                    <div>
-                                        <h3 style="font-size: 2.5rem; margin: 0; color: #4c8a89;" id="totalSubscribers">0</h3>
-                                        <p>Total Subscribers</p>
-                                    </div>
-                                </div>
-                                <div class="stat-card" style="text-align: center;">
-                                    <div>
-                                        <h3 style="font-size: 2.5rem; margin: 0; color: var(--primary-color-1);" id="activeSubscribers">0</h3>
-                                        <p>Active Subscribers</p>
-                                    </div>
-                                </div>
-                                <div class="stat-card" style="text-align: center;">
-                                    <div>
-                                        <h3 style="font-size: 2.5rem; margin: 0; color: var(--primary-color-1);" id="weatherSubscribers">0</h3>
-                                        <p>Weather Alert Subscribers</p>
-                                    </div>
-                                </div>
-                                <div class="stat-card" style="text-align: center;">
-                                    <div>
-                                        <h3 style="font-size: 2.5rem; margin: 0; color: #4c8a89;" id="earthquakeSubscribers">0</h3>
-                                        <p>Earthquake Alert Subscribers</p>
-                                    </div>
-                                </div>
+                        <div class="stat-grid">
+                            <div class="stat-card">
+                                <div class="stat-value" id="totalSubscribers" style="color: #4c8a89;">0</div>
+                                <div class="stat-label">Total Subscribers</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="activeSubscribers" style="color: var(--primary-color-1);">0</div>
+                                <div class="stat-label">Active Subscribers</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="weatherSubscribers" style="color: #3498db;">0</div>
+                                <div class="stat-label">Weather Alert Subscribers</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="earthquakeSubscribers" style="color: #e74c3c;">0</div>
+                                <div class="stat-label">Earthquake Alert Subscribers</div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Subscribers List -->
                     <div class="module-card">
-                        <div class="module-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div class="module-card-header">
                             <h2><i class="fas fa-users"></i> Subscribers</h2>
                             <button class="btn btn-primary" onclick="exportSubscribers()">
                                 <i class="fas fa-download"></i> Export
                             </button>
                         </div>
-                        <div>
-                            <div style="margin-bottom: 1rem;">
-                                <input type="text" id="searchSubscribers" placeholder="Search subscribers..." style="width: 100%; padding: 0.75rem;">
-                            </div>
+                        <div class="search-container">
+                            <input type="text" id="searchSubscribers" class="search-input" placeholder="Search subscribers by name, email, or phone...">
+                        </div>
+                        <div class="module-card-content table-responsive">
                             <table class="data-table" id="subscribersTable">
                                 <thead>
                                     <tr>
@@ -132,7 +397,7 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                                         <th>Last Active</th>
                                         <th>Categories</th>
                                         <th>Channels</th>
-                                        <th>Language</th>
+                                        <th>Lang</th>
                                         <th>Status</th>
                                         <th>Actions</th>
                                     </tr>
@@ -148,12 +413,12 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                     <div id="subscriptionModal" class="modal" style="display: none;">
                         <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
                             <div class="modal-header">
-                                <h2 id="modalTitle">User Details & Subscription</h2>
+                                <h2 id="modalTitle"><i class="fas fa-user-edit"></i> User Details & Subscription</h2>
                                 <button class="modal-close" onclick="closeSubscriptionModal()">&times;</button>
                             </div>
                             <div class="modal-body">
                                 <!-- Tabs for different sections -->
-                                <div style="margin-bottom: 1rem; border-bottom: 2px solid #e5e7eb;">
+                                <div class="modal-tabs">
                                     <button class="tab-btn active" onclick="switchTab('user-info')">User Info</button>
                                     <button class="tab-btn" onclick="switchTab('subscription')">Subscription</button>
                                     <button class="tab-btn" onclick="switchTab('devices')">Devices</button>
@@ -164,7 +429,7 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                                 <!-- User Info Tab -->
                                 <div id="tab-user-info" class="tab-content">
                                     <h3>User Information</h3>
-                                    <div id="userInfoDetails" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                    <div id="userInfoDetails" class="info-grid">
                                         <!-- Will be populated by JavaScript -->
                                     </div>
                                 </div>
@@ -173,38 +438,46 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                                 <div id="tab-subscription" class="tab-content" style="display: none;">
                                     <form id="subscriptionForm">
                                         <input type="hidden" id="subscriberId" name="subscriber_id">
-                                        <div class="form-group">
-                                            <label>Subscribed Categories</label>
-                                            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
-                                                <label><input type="checkbox" name="categories[]" value="weather"> Weather Alerts</label>
-                                                <label><input type="checkbox" name="categories[]" value="earthquake"> Earthquake Alerts</label>
-                                                <label><input type="checkbox" name="categories[]" value="bomb"> Bomb Threat Alerts</label>
-                                                <label><input type="checkbox" name="categories[]" value="fire"> Fire Alerts</label>
-                                                <label><input type="checkbox" name="categories[]" value="general"> General Alerts</label>
+                                        
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Subscribed Categories</label>
+                                                <div class="checkbox-group">
+                                                    <label class="checkbox-label"><input type="checkbox" name="categories[]" value="weather"> Weather Alerts</label>
+                                                    <label class="checkbox-label"><input type="checkbox" name="categories[]" value="earthquake"> Earthquake Alerts</label>
+                                                    <label class="checkbox-label"><input type="checkbox" name="categories[]" value="bomb"> Bomb Threat Alerts</label>
+                                                    <label class="checkbox-label"><input type="checkbox" name="categories[]" value="fire"> Fire Alerts</label>
+                                                    <label class="checkbox-label"><input type="checkbox" name="categories[]" value="general"> General Alerts</label>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="form-group">
+                                                <label>Notification Channels</label>
+                                                <div class="checkbox-group">
+                                                    <label class="checkbox-label"><input type="checkbox" name="channels[]" value="sms"> SMS</label>
+                                                    <label class="checkbox-label"><input type="checkbox" name="channels[]" value="email"> Email</label>
+                                                    <label class="checkbox-label"><input type="checkbox" name="channels[]" value="push"> Push Notification</label>
+                                                </div>
                                             </div>
                                         </div>
-                                        <div class="form-group">
-                                            <label>Notification Channels</label>
-                                            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
-                                                <label><input type="checkbox" name="channels[]" value="sms"> SMS</label>
-                                                <label><input type="checkbox" name="channels[]" value="email"> Email</label>
-                                                <label><input type="checkbox" name="channels[]" value="push"> Push Notification</label>
+
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="preferredLanguage">Preferred Language</label>
+                                                <select id="preferredLanguage" name="preferred_language">
+                                                    <option value="">Loading languages...</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="subscriptionStatus">Status</label>
+                                                <select id="subscriptionStatus" name="status">
+                                                    <option value="active">Active</option>
+                                                    <option value="inactive">Inactive</option>
+                                                    <option value="suspended">Suspended</option>
+                                                </select>
                                             </div>
                                         </div>
-                                        <div class="form-group">
-                                            <label for="preferredLanguage">Preferred Language</label>
-                                            <select id="preferredLanguage" name="preferred_language">
-                                                <option value="">Loading languages...</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="subscriptionStatus">Status</label>
-                                            <select id="subscriptionStatus" name="status">
-                                                <option value="active">Active</option>
-                                                <option value="inactive">Inactive</option>
-                                                <option value="suspended">Suspended</option>
-                                            </select>
-                                        </div>
+
                                         <div class="form-actions">
                                             <button type="button" class="btn btn-secondary" onclick="closeSubscriptionModal()">Cancel</button>
                                             <button type="submit" class="btn btn-primary">
@@ -240,43 +513,6 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                             </div>
                         </div>
                     </div>
-                    
-                    <style>
-                        .tab-btn {
-                            padding: 0.5rem 1rem;
-                            background: none;
-                            border: none;
-                            border-bottom: 2px solid transparent;
-                            cursor: pointer;
-                            font-size: 0.9rem;
-                            color: #6b7280;
-                            margin-right: 0.5rem;
-                        }
-                        .tab-btn:hover {
-                            color: #4c8a89;
-                        }
-                        .tab-btn.active {
-                            color: #4c8a89;
-                            border-bottom-color: #4c8a89;
-                            font-weight: 600;
-                        }
-                        .tab-content {
-                            padding: 1rem 0;
-                        }
-                        .info-item {
-                            margin-bottom: 0.75rem;
-                        }
-                        .info-label {
-                            font-weight: 600;
-                            color: #374151;
-                            font-size: 0.85rem;
-                            margin-bottom: 0.25rem;
-                        }
-                        .info-value {
-                            color: #6b7280;
-                            font-size: 0.9rem;
-                        }
-                    </style>
                 </div>
             </div>
         </div>
@@ -303,7 +539,7 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                             
                             row.innerHTML = `
                                 <td>${sub.id}</td>
-                                <td>${sub.name || 'N/A'}</td>
+                                <td><strong>${sub.name || 'N/A'}</strong></td>
                                 <td>${sub.email || 'N/A'}</td>
                                 <td>${sub.phone || 'N/A'}</td>
                                 <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${address}">${address}</td>
@@ -373,7 +609,7 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                             </div>
                             <div class="info-item">
                                 <div class="info-label">Email</div>
-                                <div class="info-value">${sub.email || 'N/A'} ${sub.auth && sub.auth.email_verified ? '<span style="color: green;">✓ Verified</span>' : ''}</div>
+                                <div class="info-value">${sub.email || 'N/A'} ${sub.auth && sub.auth.email_verified ? '<i class="fas fa-check-circle" style="color: #27ae60;" title="Verified"></i>' : ''}</div>
                             </div>
                             <div class="info-item">
                                 <div class="info-label">Phone</div>
@@ -422,53 +658,59 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                         // Populate Devices Tab
                         if (sub.devices && sub.devices.length > 0) {
                             const devicesHtml = sub.devices.map(device => `
-                                <div style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 0.5rem;">
-                                    <div><strong>${device.device_name || 'Unknown Device'}</strong></div>
-                                    <div style="color: #6b7280; font-size: 0.85rem;">
-                                        Type: ${device.device_type || 'N/A'} | 
-                                        Status: ${device.is_active ? '<span style="color: green;">Active</span>' : '<span style="color: red;">Inactive</span>'} | 
-                                        Last Active: ${device.last_active ? new Date(device.last_active).toLocaleString() : 'Never'}
+                                <div class="list-item">
+                                    <div class="list-item-header">
+                                        <span class="list-item-title">${device.device_name || 'Unknown Device'}</span>
+                                        ${device.is_active ? '<span class="badge active">Active</span>' : '<span class="badge inactive">Inactive</span>'}
+                                    </div>
+                                    <div class="list-item-meta">
+                                        <span><i class="fas fa-mobile-alt"></i> ${device.device_type || 'N/A'}</span>
+                                        <span><i class="fas fa-clock"></i> Last Active: ${device.last_active ? new Date(device.last_active).toLocaleString() : 'Never'}</span>
                                     </div>
                                 </div>
                             `).join('');
                             document.getElementById('devicesList').innerHTML = devicesHtml;
                         } else {
-                            document.getElementById('devicesList').innerHTML = '<p>No devices registered.</p>';
+                            document.getElementById('devicesList').innerHTML = '<div class="empty-state">No devices registered.</div>';
                         }
                         
                         // Populate Location Tab
                         if (sub.locations && sub.locations.length > 0) {
                             const locationsHtml = sub.locations.map(loc => `
-                                <div style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 0.5rem;">
-                                    <div><strong>${loc.address || 'No address'}</strong> ${loc.is_current ? '<span style="color: green;">(Current)</span>' : ''}</div>
-                                    <div style="color: #6b7280; font-size: 0.85rem;">
-                                        Coordinates: ${loc.latitude || 'N/A'}, ${loc.longitude || 'N/A'} | 
-                                        Updated: ${loc.created_at ? new Date(loc.created_at).toLocaleString() : 'N/A'}
+                                <div class="list-item">
+                                    <div class="list-item-header">
+                                        <span class="list-item-title">${loc.address || 'No address'}</span>
+                                        ${loc.is_current ? '<span class="badge active">Current</span>' : ''}
+                                    </div>
+                                    <div class="list-item-meta">
+                                        <span><i class="fas fa-map-marker-alt"></i> ${loc.latitude || 'N/A'}, ${loc.longitude || 'N/A'}</span>
+                                        <span><i class="fas fa-clock"></i> Updated: ${loc.created_at ? new Date(loc.created_at).toLocaleString() : 'N/A'}</span>
                                     </div>
                                 </div>
                             `).join('');
                             document.getElementById('locationsList').innerHTML = locationsHtml;
                         } else {
-                            document.getElementById('locationsList').innerHTML = '<p>No location data available.</p>';
+                            document.getElementById('locationsList').innerHTML = '<div class="empty-state">No location data available.</div>';
                         }
                         
                         // Populate Activity Tab
                         if (sub.activities && sub.activities.length > 0) {
                             const activitiesHtml = sub.activities.map(act => `
-                                <div style="padding: 1rem; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 0.5rem;">
-                                    <div><strong>${act.activity_type || 'Unknown'}</strong> 
-                                        <span class="badge ${act.status === 'success' ? 'success' : act.status}">${act.status || 'N/A'}</span>
+                                <div class="list-item">
+                                    <div class="list-item-header">
+                                        <span class="list-item-title">${act.activity_type || 'Unknown'}</span>
+                                        <span class="badge ${act.status === 'success' ? 'active' : 'inactive'}">${act.status || 'N/A'}</span>
                                     </div>
-                                    <div style="color: #6b7280; font-size: 0.85rem; margin-top: 0.25rem;">
-                                        ${act.description || 'No description'} | 
-                                        IP: ${act.ip_address || 'N/A'} | 
-                                        ${act.created_at ? new Date(act.created_at).toLocaleString() : 'N/A'}
+                                    <div class="list-item-meta">
+                                        <span>${act.description || 'No description'}</span>
+                                        <span>IP: ${act.ip_address || 'N/A'}</span>
+                                        <span>${act.created_at ? new Date(act.created_at).toLocaleString() : 'N/A'}</span>
                                     </div>
                                 </div>
                             `).join('');
                             document.getElementById('activitiesList').innerHTML = activitiesHtml;
                         } else {
-                            document.getElementById('activitiesList').innerHTML = '<p>No activity logs available.</p>';
+                            document.getElementById('activitiesList').innerHTML = '<div class="empty-state">No activity logs available.</div>';
                         }
                         
                         // Reset to first tab
