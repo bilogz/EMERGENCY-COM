@@ -561,7 +561,7 @@ $pageTitle = 'Weather Monitoring';
                 const zoom = map.getZoom();
                 const indicator = document.getElementById('zoomIndicator');
                 if (indicator) {
-                    indicator.textContent = `Zoom: ${zoom} ${zoom > 12 ? '(Icons hidden)' : ''}`;
+                    indicator.textContent = `Zoom: ${zoom}`;
                 }
                 if (windFlowEnabled && windFlowCanvas) {
                     createWindParticles();
@@ -1315,19 +1315,11 @@ $pageTitle = 'Weather Monitoring';
         // Update marker visibility
         function updateMarkerVisibility() {
             if (!map) return;
-            const zoom = map.getZoom();
-            const hideThreshold = 12;
-            
+            // Removed zoom threshold hiding to comply with requirements
             document.querySelectorAll('.weather-marker-icon').forEach(markerEl => {
-                if (zoom > hideThreshold) {
-                    markerEl.style.opacity = '0';
-                    markerEl.style.pointerEvents = 'none';
-                    markerEl.style.transform = 'scale(0.5)';
-                } else {
-                    markerEl.style.opacity = '1';
-                    markerEl.style.pointerEvents = 'auto';
-                    markerEl.style.transform = 'scale(1)';
-                }
+                markerEl.style.opacity = '1';
+                markerEl.style.pointerEvents = 'auto';
+                markerEl.style.transform = 'scale(1)';
             });
         }
         
