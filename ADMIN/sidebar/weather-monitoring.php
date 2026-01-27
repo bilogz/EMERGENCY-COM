@@ -73,6 +73,8 @@ $pageTitle = 'Weather Monitoring';
                 gap: 1.25rem;
                 overflow-y: auto;
                 padding-right: 0.5rem;
+                position: relative;
+                z-index: 1005;
             }
             
             .weather-sidebar::-webkit-scrollbar { width: 6px; }
@@ -109,7 +111,9 @@ $pageTitle = 'Weather Monitoring';
                 color: white;
                 border: none;
                 padding: 0;
-                overflow: hidden;
+                overflow: visible;
+                position: relative;
+                z-index: 1006;
             }
             
             .google-weather-display { padding: 2rem; }
