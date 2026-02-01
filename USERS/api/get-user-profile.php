@@ -46,7 +46,7 @@ try {
     $query = "SELECT id, name, email, phone, status, user_type, created_at, updated_at";
     
     // Check which optional columns exist
-    $optionalColumns = ['nationality', 'district', 'barangay', 'house_number', 'street', 'address'];
+    $optionalColumns = ['nationality', 'district', 'barangay', 'house_number', 'street', 'address', 'notification_sound'];
     $availableColumns = [];
     
     foreach ($optionalColumns as $column) {

@@ -128,7 +128,8 @@ try {
         'street' => $street,
         'district' => $district,
         'nationality' => $nationality,
-        'address' => $address
+        'address' => $address,
+        'notification_sound' => $data['notification_sound'] ?? null
     ];
     
     foreach ($columnsToCheck as $column => $value) {

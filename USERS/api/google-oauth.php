@@ -24,34 +24,15 @@ if (!isset($pdo) || $pdo === null) {
     exit();
 }
 
-// Load Google OAuth credentials
-// First try project root .env via config.env.php, then fall back to config.local.php
-$googleClientId = null;
-$googleClientSecret = null;
+// Load Google OAuth configuration
+require_once __DIR__ . '/config.env.php';
+$config = getApiConfig();
+$googleClientId = $config['google_client_id'];
+$googleClientSecret = $config['google_client_secret'];
 
-// Try project root .env via config.env.php first
-if (file_exists(__DIR__ . '/config.env.php')) {
-    require_once __DIR__ . '/config.env.php';
-    if (function_exists('getApiConfig')) {
-        $apiCfg = getApiConfig();
-        if (is_array($apiCfg)) {
-            $googleClientId = $apiCfg['google_client_id'] ?? null;
-            $googleClientSecret = $apiCfg['google_client_secret'] ?? null;
-        }
-    }
-}
-
-// If not found in .env, try config.local.php
-if (empty($googleClientId) || empty($googleClientSecret)) {
-    $configFile = __DIR__ . '/config.local.php';
-    $config = file_exists($configFile) ? require $configFile : [];
-    if (empty($googleClientId)) {
-        $googleClientId = $config['GOOGLE_CLIENT_ID'] ?? null;
-    }
-    if (empty($googleClientSecret)) {
-        $googleClientSecret = $config['GOOGLE_CLIENT_SECRET'] ?? null;
-    }
-}
+// Debug: Log what we got
+error_log("google-oauth.php: GOOGLE_CLIENT_ID = " . (empty($googleClientId) ? '(empty/false)' : substr($googleClientId, 0, 20) . '...'));
+error_log("google-oauth.php: GOOGLE_CLIENT_SECRET = " . (empty($googleClientSecret) ? '(empty/false)' : '(set)'));
 
 if (!$googleClientId || !$googleClientSecret) {
     $missing = [];

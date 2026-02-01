@@ -84,62 +84,6 @@ $assetBase = '../ADMIN/header/';
                     </div>
                 </section>
 
-                <section id="contacts" class="page-content emergency-hotlines-section">
-                    <h2 data-translate="emergency.hotlines.title">Quezon City Emergency Hotlines</h2>
-                    <p style="font-size: 1.1rem; margin-bottom: 2rem;" data-translate="emergency.hotlines.desc">Official QCDRRMO and Quezon City emergency numbers. Save these for quick access.</p>
-                    <div class="cards-grid">
-                        <div class="card emergency-card">
-                            <div class="emergency-card-header">
-                                <h3>QC HELPLINE</h3>
-                            </div>
-                            <div class="emergency-number-large">DIAL 122</div>
-                            <a href="tel:122" class="btn btn-primary" data-no-translate>
-                                <i class="fas fa-phone"></i> <span data-translate="home.hotlines.call122">Call 122</span>
-                            </a>
-                        </div>
-                        <div class="card emergency-card">
-                            <div class="emergency-card-header">
-                                <h3>Emergency Operations Center (EOC)</h3>
-                            </div>
-                            <div class="emergency-numbers">
-                                <p><strong>0977 031 2892</strong> (GLOBE)</p>
-                                <p><strong>0947 885 9929</strong> (SMART)</p>
-                                <p><strong>8988 4242</strong> local 7245</p>
-                            </div>
-                            <div class="action-buttons">
-                                <a href="tel:+639770312892" class="btn btn-primary" data-no-translate><span data-translate="home.hotlines.callGlobe">Call Globe</span></a>
-                                <a href="tel:+639478859929" class="btn btn-secondary" data-no-translate><span data-translate="home.hotlines.callSmart">Call Smart</span></a>
-                                <a href="tel:0289884242,,7245" class="btn btn-secondary" data-no-translate>Call Local 7245</a>
-                            </div>
-                        </div>
-                        <div class="card emergency-card">
-                            <div class="emergency-card-header">
-                                <h3>Emergency Medical Services / Urban Search and Rescue</h3>
-                            </div>
-                            <div class="emergency-numbers">
-                                <p><strong>0947 884 7498</strong> (SMART)</p>
-                                <p><strong>8928 4396</strong></p>
-                            </div>
-                            <div class="action-buttons">
-                                <a href="tel:+639478847498" class="btn btn-primary" data-no-translate><span data-translate="home.hotlines.callEMS">Call EMS</span></a>
-                                <a href="tel:0289284396" class="btn btn-secondary" data-no-translate>Call 8928-4396</a>
-                            </div>
-                        </div>
-                        <div class="card emergency-card">
-                            <div class="emergency-card-header">
-                                <h3>QCDRRMO Landline</h3>
-                            </div>
-                            <div class="emergency-numbers">
-                                <p><strong>8927-5914</strong></p>
-                                <p><strong>8928-4396</strong></p>
-                            </div>
-                            <div class="action-buttons">
-                                <a href="tel:0289275914" class="btn btn-primary" data-no-translate>Call 8927-5914</a>
-                                <a href="tel:0289284396" class="btn btn-secondary" data-no-translate>Call 8928-4396</a>
-                            </div>
-                        </div>
-                    </div>
-                </section>
             </div>
         </div>
     </main>
@@ -151,27 +95,278 @@ $assetBase = '../ADMIN/header/';
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
+    
+    <!-- Emergency Call Button and Audio -->
+    <button id="call" style="display: none;">Emergency Call</button>
+    <div id="callOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100000;">
+        <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px, 92vw); background:#0f172a; border:1px solid rgba(255,255,255,0.12); border-radius:16px; padding:22px; color:#fff; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="width:44px; height:44px; border-radius:12px; background:rgba(76,138,137,0.2); display:flex; align-items:center; justify-content:center;">
+                    <i class="fas fa-headset" style="color:#4c8a89;"></i>
+                </div>
+                <div style="flex:1;">
+                    <div style="font-weight:700; font-size:16px;">Emergency Call</div>
+                    <div id="callStatus" style="opacity:0.85; font-size:13px;">Connecting…</div>
+                </div>
+                <div id="callTimer" style="font-variant-numeric:tabular-nums; font-weight:700;">00:00</div>
+            </div>
+            <div style="margin-top:18px; display:flex; gap:10px; justify-content:flex-end;">
+                <button id="endCallBtn" class="btn btn-secondary" disabled style="opacity:0.6; pointer-events:none;">End Call</button>
+            </div>
+        </div>
+    </div>
+    <audio id="remote" autoplay></audio>
+
+    <script src="<?php echo (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['SERVER_NAME'] ?? 'localhost') . ':3000'; ?>/socket.io/socket.io.js"></script>
     <script>
-        function startInternetCall() {
-            // TODO: Integrate with your VoIP/web-call service
-            // Example: window.location.href = 'your-voip-service-url';
-            // Or: initiateWebRTC call, etc.
-            
-            Swal.fire({
-                icon: 'info',
-                title: 'Internet Call',
-                html: `
-                    <p>This feature will connect you to emergency services via Internet calling.</p>
-                    <p><strong>To implement:</strong></p>
-                    <ul style="text-align: left; margin: 1rem 0;">
-                        <li>Integrate with your VoIP service (Twilio, Vonage, etc.)</li>
-                        <li>Or implement WebRTC for browser-based calling</li>
-                        <li>Connect to your emergency dispatch system</li>
-                    </ul>
-                `,
-                confirmButtonText: 'OK',
-                footer: '<small>This is a placeholder. Connect to your VoIP/web-call service.</small>'
+        const SIGNALING_URL = `${window.location.protocol}//${window.location.hostname}:3000`;
+        let socket = null;
+        let socketBound = false;
+        const room = "emergency-room";
+
+        function ensureSocket() {
+            if (socket) return socket;
+            if (typeof window.io !== 'function') {
+                return null;
+            }
+            socket = window.io(SIGNALING_URL);
+            bindSocketHandlers();
+            return socket;
+        }
+
+        function bindSocketHandlers() {
+            if (!socket || socketBound) return;
+            socketBound = true;
+
+            socket.on("answer", payload => {
+                const sdp = payload && payload.sdp ? payload.sdp : payload;
+                const incomingCallId = payload && payload.callId ? payload.callId : null;
+                if (incomingCallId && incomingCallId !== callId) return;
+                if (pc) pc.setRemoteDescription(sdp);
             });
+
+            socket.on("candidate", payload => {
+                const cand = payload && payload.candidate ? payload.candidate : payload;
+                const incomingCallId = payload && payload.callId ? payload.callId : null;
+                if (incomingCallId && incomingCallId !== callId) return;
+                if (pc && cand) pc.addIceCandidate(cand);
+            });
+
+            socket.on('hangup', payload => {
+                const incomingCallId = payload && payload.callId ? payload.callId : null;
+                if (incomingCallId && incomingCallId !== callId) return;
+                if (callId) endCall(false);
+            });
+
+            socket.on('connect_error', () => {
+                if (callId) {
+                    setStatus('Connecting failed. Signaling server offline.');
+                    setEndEnabled(true);
+                }
+            });
+        }
+
+        let pc = null;
+        let localStream = null;
+        let callId = null;
+        let callStartedAt = null;
+        let callConnectedAt = null;
+        let timerInterval = null;
+        let locationData = null;
+
+        function formatTime(totalSeconds) {
+            const m = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+            const s = String(totalSeconds % 60).padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function setOverlayVisible(visible) {
+            document.getElementById('callOverlay').style.display = visible ? 'block' : 'none';
+        }
+
+        function setStatus(text) {
+            const el = document.getElementById('callStatus');
+            if (el) el.textContent = text;
+        }
+
+        function setTimer(seconds) {
+            const el = document.getElementById('callTimer');
+            if (el) el.textContent = formatTime(seconds);
+        }
+
+        function setEndEnabled(enabled) {
+            const btn = document.getElementById('endCallBtn');
+            if (!btn) return;
+            btn.disabled = !enabled;
+            btn.style.opacity = enabled ? '1' : '0.6';
+            btn.style.pointerEvents = enabled ? 'auto' : 'none';
+        }
+
+        function setStartButtonsDisabled(disabled) {
+            document.querySelectorAll('button[onclick="startInternetCall()"]')
+                .forEach(b => { b.disabled = disabled; });
+        }
+
+        async function tryGetLocation() {
+            return new Promise(resolve => {
+                if (!navigator.geolocation) return resolve(null);
+                navigator.geolocation.getCurrentPosition(
+                    p => resolve({
+                        lat: p.coords.latitude,
+                        lng: p.coords.longitude,
+                        accuracy: p.coords.accuracy
+                    }),
+                    () => resolve(null),
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                );
+            });
+        }
+
+        async function logCall(event, extra = {}) {
+            try {
+                const payload = {
+                    callId,
+                    room,
+                    role: 'user',
+                    event,
+                    location: locationData,
+                    ...extra
+                };
+                await fetch('api/call-log.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            } catch (e) {}
+        }
+
+        function startTimer() {
+            if (!callConnectedAt) return;
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                const seconds = Math.max(0, Math.floor((Date.now() - callConnectedAt) / 1000));
+                setTimer(seconds);
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+        }
+
+        function cleanupCall() {
+            stopTimer();
+            setEndEnabled(false);
+            if (localStream) {
+                localStream.getTracks().forEach(t => t.stop());
+                localStream = null;
+            }
+            if (pc) {
+                try { pc.close(); } catch (e) {}
+                pc = null;
+            }
+            callConnectedAt = null;
+            callStartedAt = null;
+            callId = null;
+            locationData = null;
+            setTimer(0);
+            setStartButtonsDisabled(false);
+        }
+
+        async function endCall(notifyPeer = true) {
+            const durationSec = callConnectedAt ? Math.floor((Date.now() - callConnectedAt) / 1000) : null;
+            await logCall('ended', { durationSec });
+            if (notifyPeer && callId) {
+                const s = ensureSocket();
+                if (s) {
+                    s.emit('hangup', { callId }, room);
+                }
+            }
+            setStatus('Call ended');
+            setTimeout(() => {
+                setOverlayVisible(false);
+                cleanupCall();
+            }, 800);
+        }
+
+        document.getElementById('endCallBtn').onclick = endCall;
+
+        function initPeer() {
+            pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:global.stun.twilio.com:3478?transport=udp' }
+                ]
+            });
+            pc.ontrack = e => {
+                document.getElementById("remote").srcObject = e.streams[0];
+            };
+            pc.onicecandidate = e => {
+                if (!e.candidate) return;
+                const s = ensureSocket();
+                if (s) {
+                    s.emit('candidate', { candidate: e.candidate, callId }, room);
+                }
+            };
+            pc.onconnectionstatechange = () => {
+                if (!pc) return;
+                if (pc.connectionState === 'connected' && !callConnectedAt) {
+                    callConnectedAt = Date.now();
+                    setStatus('Connected');
+                    setEndEnabled(true);
+                    startTimer();
+                    logCall('connected');
+                }
+                if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+                    if (callId) endCall();
+                }
+            };
+        }
+
+        document.getElementById("call").onclick = async () => {
+            if (callId) return;
+
+            setOverlayVisible(true);
+            setStatus('Connecting…');
+            setTimer(0);
+            setEndEnabled(false);
+
+            const s = ensureSocket();
+            if (!s) {
+                setStatus('Call service unavailable. Start the signaling server on port 3000.');
+                setEndEnabled(true);
+                return;
+            }
+
+            if (s && s.connected === false) {
+                setStatus('Connecting to call service…');
+            }
+
+            try {
+                callId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `call_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+                callStartedAt = Date.now();
+                setStartButtonsDisabled(true);
+                locationData = await tryGetLocation();
+                await logCall('started');
+
+                initPeer();
+                s.emit("join", room);
+
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                s.emit("offer", { sdp: offer, callId }, room);
+            } catch (e) {
+                setStatus('Call failed');
+                setEndEnabled(true);
+                cleanupCall();
+            }
+        };
+
+        function startInternetCall() {
+            document.getElementById("call").click();
         }
 
         function openEmergencyChat() {

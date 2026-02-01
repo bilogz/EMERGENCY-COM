@@ -65,6 +65,15 @@ function ensureTablesExist($pdo) {
                 INDEX idx_login_at (login_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
+
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS admin_preferences (
+                admin_id INT NOT NULL PRIMARY KEY,
+                notification_sound VARCHAR(50) DEFAULT 'siren',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_updated_at (updated_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
         
         return true;
     } catch (PDOException $e) {
@@ -147,6 +156,39 @@ try {
                 "profile" => $profile,
                 "login_stats" => $loginStats,
                 "activity_stats" => $activityStats
+            ]);
+            break;
+
+        case 'notification_sound_get':
+            $stmt = $pdo->prepare("SELECT notification_sound FROM admin_preferences WHERE admin_id = ? LIMIT 1");
+            $stmt->execute([$adminId]);
+            $sound = $stmt->fetchColumn();
+            if (!$sound) {
+                $stmt = $pdo->prepare("INSERT INTO admin_preferences (admin_id, notification_sound) VALUES (?, 'siren')");
+                $stmt->execute([$adminId]);
+                $sound = 'siren';
+            }
+            echo json_encode([
+                "success" => true,
+                "notification_sound" => $sound
+            ]);
+            break;
+
+        case 'notification_sound_set':
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (!is_array($data)) $data = [];
+            $sound = $data['notification_sound'] ?? '';
+            $allowed = ['siren', 'beep', 'pulse', 'silent'];
+            if (!in_array($sound, $allowed, true)) {
+                echo json_encode(["success" => false, "message" => "Invalid notification sound."]);
+                exit();
+            }
+
+            $stmt = $pdo->prepare("INSERT INTO admin_preferences (admin_id, notification_sound) VALUES (?, ?) ON DUPLICATE KEY UPDATE notification_sound = VALUES(notification_sound)");
+            $stmt->execute([$adminId, $sound]);
+            echo json_encode([
+                "success" => true,
+                "notification_sound" => $sound
             ]);
             break;
             

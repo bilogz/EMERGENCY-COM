@@ -18,36 +18,23 @@ function loadRootEnv() {
     if ($loaded) {
         return;
     }
-    $loaded = true;
 
     $rootEnvPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.env';
     if (!file_exists($rootEnvPath)) {
+        error_log("loadRootEnv: .env file not found at: " . $rootEnvPath);
         return;
     }
-
-    $lines = @file($rootEnvPath, FILE_IGNORE_NEW_LINES);
-    if (!is_array($lines)) {
-        return;
-    }
-
+    
+    $lines = file($rootEnvPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
-        $line = trim($line);
-        if ($line === '' || strpos($line, '#') === 0) {
-            continue;
-        }
-        if (strpos($line, 'export ') === 0) {
-            $line = trim(substr($line, 7));
-        }
-        if (strpos($line, '=') === false) {
-            continue;
-        }
+        if (strpos(trim($line), '#') === 0) continue;
+        if (strpos($line, '=') === false) continue;
+        
         list($key, $value) = explode('=', $line, 2);
         $key = trim($key);
         $value = trim($value);
-        if ($key === '') {
-            continue;
-        }
-        $value = trim($value, " \t\n\r\0\x0B");
+        
+        // Remove quotes if present
         $first = substr($value, 0, 1);
         $last = substr($value, -1);
         if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
@@ -59,8 +46,13 @@ function loadRootEnv() {
             putenv($key . '=' . $value);
             $_ENV[$key] = $value;
             $_SERVER[$key] = $value;
+            // Debug: Log loaded variables
+            if (strpos($key, 'GOOGLE_') === 0) {
+                error_log("loadRootEnv: Loaded $key = " . (empty($value) ? '(empty)' : '(set)'));
+            }
         }
     }
+    $loaded = true;
 }
 
 /**
@@ -134,7 +126,7 @@ function getApiConfig() {
         
         // Google OAuth
         'google_client_id' => getSecureConfig('GOOGLE_CLIENT_ID', ''),
-        'google_client_secret' => getSecureConfig('GOOGLE_CLIENT_SECRET', ''),
+        'google_client_secret' => getSecureConfig('GOOGLE_CLIENT_SECRET', '') ?: getSecureConfig('GOOGLE_SECRET', ''),
     ];
 }
 

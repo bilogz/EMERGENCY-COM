@@ -1059,5 +1059,379 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         });
         
     </script>
+
+    <div id="callOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100000;">
+        <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px, 92vw); background:#0f172a; border:1px solid rgba(255,255,255,0.12); border-radius:16px; padding:22px; color:#fff; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+            <div id="callActiveBanner" style="display:none; margin:-6px 0 12px; padding:8px 12px; border-radius:12px; background:rgba(220,38,38,0.18); border:1px solid rgba(220,38,38,0.45); color:#fecaca; font-weight:800; letter-spacing:0.6px; text-transform:uppercase; text-align:center;">CALL ON ACTIVE</div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="width:44px; height:44px; border-radius:12px; background:rgba(76,138,137,0.2); display:flex; align-items:center; justify-content:center;">
+                    <i class="fas fa-headset" style="color:#4c8a89;"></i>
+                </div>
+                <div style="flex:1;">
+                    <div style="font-weight:700; font-size:16px;">Emergency Call</div>
+                    <div id="callStatus" style="opacity:0.85; font-size:13px;">Connecting…</div>
+                </div>
+                <div id="callTimer" style="font-variant-numeric:tabular-nums; font-weight:700;">00:00</div>
+            </div>
+            <div style="margin-top:18px; display:flex; gap:10px; justify-content:flex-end;">
+                <button id="endCallBtn" class="btn btn-secondary" disabled style="opacity:0.6; pointer-events:none;">End Call</button>
+            </div>
+        </div>
+    </div>
+    <audio id="remote" autoplay></audio>
+
+    <script src="<?php echo (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['SERVER_NAME'] ?? 'localhost') . ':3000'; ?>/socket.io/socket.io.js"></script>
+    <script>
+    const SIGNALING_URL = `${window.location.protocol}//${window.location.hostname}:3000`;
+    const room = "emergency-room";
+
+    let socket = null;
+    let socketBound = false;
+    let notificationSound = 'siren';
+
+    let _soundCtx = null;
+    let _soundOsc = null;
+    let _soundGain = null;
+    let _soundTimer = null;
+
+    (function primeAudioContext() {
+        let primed = false;
+        const prime = () => {
+            if (primed) return;
+            primed = true;
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                if (!_soundCtx) _soundCtx = new AudioContext();
+                if (_soundCtx && _soundCtx.state === 'suspended') {
+                    _soundCtx.resume();
+                }
+            } catch (e) {}
+        };
+        document.addEventListener('click', prime, { once: true });
+        document.addEventListener('keydown', prime, { once: true });
+        document.addEventListener('touchstart', prime, { once: true });
+    })();
+
+    function ensureSocket() {
+        if (socket) return socket;
+        if (typeof window.io !== 'function') return null;
+        socket = window.io(SIGNALING_URL);
+        bindSocketHandlers();
+        return socket;
+    }
+
+    function bindSocketHandlers() {
+        if (!socket || socketBound) return;
+        socketBound = true;
+
+        socket.on('connect', () => {
+            socket.emit('join', room);
+        });
+
+        socket.on('connect_error', () => {
+            if (callId) {
+                setStatus('Connecting failed. Signaling server offline.');
+                setEndEnabled(true);
+            }
+        });
+    }
+
+    function _stopAlertSound() {
+        try {
+            if (_soundTimer) clearInterval(_soundTimer);
+            _soundTimer = null;
+            if (_soundGain) _soundGain.gain.value = 0;
+            if (_soundOsc) {
+                try { _soundOsc.stop(); } catch (e) {}
+                _soundOsc.disconnect();
+            }
+        } catch (e) {}
+        _soundOsc = null;
+        _soundGain = null;
+    }
+
+    function _startAlertSound(type) {
+        if (type === 'silent') return;
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        if (!_soundCtx) _soundCtx = new AudioContext();
+        const ctx = _soundCtx;
+
+        try {
+            if (ctx && ctx.state === 'suspended') ctx.resume();
+        } catch (e) {}
+
+        _stopAlertSound();
+
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        gain.connect(ctx.destination);
+
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = 800;
+        osc.connect(gain);
+        osc.start();
+
+        _soundOsc = osc;
+        _soundGain = gain;
+
+        const setOn = (on) => {
+            if (!_soundGain) return;
+            _soundGain.gain.value = on ? 0.22 : 0;
+        };
+
+        if (type === 'beep') {
+            let on = false;
+            _soundTimer = setInterval(() => {
+                on = !on;
+                osc.frequency.value = 880;
+                setOn(on);
+            }, 260);
+            setOn(true);
+            return;
+        }
+
+        if (type === 'pulse') {
+            let step = 0;
+            _soundTimer = setInterval(() => {
+                step++;
+                const on = step % 6 === 0;
+                osc.frequency.value = 950;
+                setOn(on);
+            }, 130);
+            return;
+        }
+
+        if (type === 'siren') {
+            let high = false;
+            _soundTimer = setInterval(() => {
+                high = !high;
+                osc.frequency.value = high ? 1100 : 700;
+                setOn(true);
+            }, 360);
+            setOn(true);
+        }
+    }
+
+    let pc = null;
+    let localStream = null;
+    let callId = null;
+    let callConnectedAt = null;
+    let timerInterval = null;
+    let locationData = null;
+
+    function formatTime(totalSeconds) {
+        const m = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+        const s = String(totalSeconds % 60).padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
+    function setOverlayVisible(visible) {
+        document.getElementById('callOverlay').style.display = visible ? 'block' : 'none';
+    }
+
+    function setCallActiveBannerVisible(visible) {
+        const el = document.getElementById('callActiveBanner');
+        if (!el) return;
+        el.style.display = visible ? 'block' : 'none';
+    }
+
+    function setStatus(text) {
+        const el = document.getElementById('callStatus');
+        if (el) el.textContent = text;
+    }
+
+    function setTimer(seconds) {
+        const el = document.getElementById('callTimer');
+        if (el) el.textContent = formatTime(seconds);
+    }
+
+    function setEndEnabled(enabled) {
+        const btn = document.getElementById('endCallBtn');
+        if (!btn) return;
+        btn.disabled = !enabled;
+        btn.style.opacity = enabled ? '1' : '0.6';
+        btn.style.pointerEvents = enabled ? 'auto' : 'none';
+    }
+
+    async function tryGetLocation() {
+        return new Promise(resolve => {
+            if (!navigator.geolocation) return resolve(null);
+            navigator.geolocation.getCurrentPosition(
+                p => resolve({
+                    lat: p.coords.latitude,
+                    lng: p.coords.longitude,
+                    accuracy: p.coords.accuracy
+                }),
+                () => resolve(null),
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+            );
+        });
+    }
+
+    async function logCall(event, extra = {}) {
+        try {
+            const payload = {
+                callId,
+                room,
+                role: 'admin',
+                event,
+                location: locationData,
+                ...extra
+            };
+            await fetch('../api/call-log.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } catch (e) {}
+    }
+
+    function startTimer() {
+        if (!callConnectedAt) return;
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            const seconds = Math.max(0, Math.floor((Date.now() - callConnectedAt) / 1000));
+            setTimer(seconds);
+        }, 1000);
+    }
+
+    function stopTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = null;
+    }
+
+    function cleanupCall() {
+        stopTimer();
+        setEndEnabled(false);
+        setCallActiveBannerVisible(false);
+        _stopAlertSound();
+        if (localStream) {
+            localStream.getTracks().forEach(t => t.stop());
+            localStream = null;
+        }
+        if (pc) {
+            try { pc.close(); } catch (e) {}
+            pc = null;
+        }
+        callConnectedAt = null;
+        callId = null;
+        locationData = null;
+        setTimer(0);
+    }
+
+    async function endCall(notifyPeer = true) {
+        const durationSec = callConnectedAt ? Math.floor((Date.now() - callConnectedAt) / 1000) : null;
+        await logCall('ended', { durationSec });
+        if (notifyPeer && callId) {
+            const s = ensureSocket();
+            if (s) s.emit('hangup', { callId }, room);
+        }
+        setStatus('Call ended');
+        setTimeout(() => {
+            setOverlayVisible(false);
+            cleanupCall();
+        }, 800);
+    }
+
+    document.getElementById('endCallBtn').onclick = () => endCall(true);
+
+    function initPeer() {
+        pc = new RTCPeerConnection({
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:global.stun.twilio.com:3478?transport=udp' }
+            ]
+        });
+        pc.ontrack = e => {
+            document.getElementById("remote").srcObject = e.streams[0];
+        };
+        pc.onicecandidate = e => {
+            if (!e.candidate) return;
+            const s = ensureSocket();
+            if (s) s.emit('candidate', { candidate: e.candidate, callId }, room);
+        };
+        pc.onconnectionstatechange = () => {
+            if (!pc) return;
+            if (pc.connectionState === 'connected' && !callConnectedAt) {
+                callConnectedAt = Date.now();
+                setStatus('Connected');
+                setEndEnabled(true);
+                startTimer();
+                logCall('connected');
+                _stopAlertSound();
+            }
+            if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+                if (callId) endCall(false);
+            }
+        };
+    }
+
+    (async function initNotificationSoundPref() {
+        try {
+            const res = await fetch('../api/profile.php?action=notification_sound_get');
+            const data = await res.json();
+            if (data && data.success && data.notification_sound) {
+                notificationSound = data.notification_sound;
+            }
+        } catch (e) {}
+    })();
+
+    (function initCallReceiver() {
+        const s = ensureSocket();
+        if (!s) return;
+        s.emit('join', room);
+
+        s.on("offer", async payload => {
+            const sdp = payload && payload.sdp ? payload.sdp : payload;
+            const incomingCallId = payload && payload.callId ? payload.callId : null;
+            if (!incomingCallId) return;
+            if (callId && incomingCallId !== callId) return;
+
+            callId = incomingCallId;
+            setOverlayVisible(true);
+            setCallActiveBannerVisible(true);
+            setStatus('Connecting…');
+            setTimer(0);
+            setEndEnabled(false);
+            _startAlertSound(notificationSound);
+            locationData = await tryGetLocation();
+            await logCall('incoming');
+
+            if (!pc) initPeer();
+            await pc.setRemoteDescription(sdp);
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+            } catch (e) {
+                setStatus('Microphone permission denied');
+                setEndEnabled(true);
+                _stopAlertSound();
+                return;
+            }
+
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            s.emit("answer", { sdp: answer, callId }, room);
+        });
+
+        s.on("candidate", payload => {
+            const cand = payload && payload.candidate ? payload.candidate : payload;
+            const incomingCallId = payload && payload.callId ? payload.callId : null;
+            if (incomingCallId && incomingCallId !== callId) return;
+            if (pc && cand) pc.addIceCandidate(cand);
+        });
+
+        s.on('hangup', payload => {
+            const incomingCallId = payload && payload.callId ? payload.callId : null;
+            if (incomingCallId && incomingCallId !== callId) return;
+            if (callId) endCall(false);
+        });
+    })();
+    </script>
+
 </body>
 </html>

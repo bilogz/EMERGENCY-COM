@@ -280,6 +280,7 @@ $pageTitle = 'My Profile';
                                     <button class="tab-btn active" onclick="switchTab('activity')">Recent Activity</button>
                                     <button class="tab-btn" onclick="switchTab('logins')">Login History</button>
                                     <button class="tab-btn" onclick="switchTab('security')">Security Settings</button>
+                                    <button class="tab-btn" onclick="switchTab('preferences')">Preferences</button>
                                 </div>
 
                                 <!-- Activity Tab -->
@@ -344,6 +345,27 @@ $pageTitle = 'My Profile';
                                         </form>
                                     </div>
                                 </div>
+
+                                <div id="tab-preferences" class="tab-content" style="display: none; padding: 2rem;">
+                                    <div style="max-width: 520px;">
+                                        <h3 style="margin-bottom: 1.5rem; color: var(--text-color-1);">Notification Sound</h3>
+                                        <div class="form-group">
+                                            <label for="notificationSoundSelect">Emergency Call Notification Sound</label>
+                                            <select id="notificationSoundSelect" class="form-control">
+                                                <option value="siren">Siren</option>
+                                                <option value="beep">Beep</option>
+                                                <option value="pulse">Pulse</option>
+                                                <option value="silent">Silent</option>
+                                            </select>
+                                            <small class="form-hint">Used for incoming emergency calls in Two-Way Communication.</small>
+                                        </div>
+                                        <div style="display:flex; gap:10px; align-items:center;">
+                                            <button type="button" id="previewSoundBtn" class="btn btn-secondary">Preview</button>
+                                            <button type="button" id="saveSoundBtn" class="btn btn-primary">Save</button>
+                                            <span id="soundSaveMsg" style="font-size:0.9rem; opacity:0.85;"></span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -353,6 +375,85 @@ $pageTitle = 'My Profile';
     </div>
 
     <script>
+        let _soundCtx = null;
+        let _soundOsc = null;
+        let _soundGain = null;
+        let _soundTimer = null;
+
+        function _stopSoundPreview() {
+            try {
+                if (_soundTimer) clearInterval(_soundTimer);
+                _soundTimer = null;
+                if (_soundGain) _soundGain.gain.value = 0;
+                if (_soundOsc) {
+                    try { _soundOsc.stop(); } catch (e) {}
+                    _soundOsc.disconnect();
+                }
+            } catch (e) {}
+            _soundOsc = null;
+            _soundGain = null;
+        }
+
+        function _startSoundPreview(type) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            if (type === 'silent') return;
+            if (!_soundCtx) _soundCtx = new AudioContext();
+            const ctx = _soundCtx;
+
+            _stopSoundPreview();
+
+            const gain = ctx.createGain();
+            gain.gain.value = 0;
+            gain.connect(ctx.destination);
+
+            const osc = ctx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.value = 800;
+            osc.connect(gain);
+            osc.start();
+
+            _soundOsc = osc;
+            _soundGain = gain;
+
+            const setOn = (on) => {
+                if (!_soundGain) return;
+                _soundGain.gain.value = on ? 0.18 : 0;
+            };
+
+            if (type === 'beep') {
+                let on = false;
+                _soundTimer = setInterval(() => {
+                    on = !on;
+                    osc.frequency.value = 880;
+                    setOn(on);
+                }, 300);
+                setOn(true);
+                return;
+            }
+
+            if (type === 'pulse') {
+                let step = 0;
+                _soundTimer = setInterval(() => {
+                    step++;
+                    const on = step % 6 === 0;
+                    osc.frequency.value = 950;
+                    setOn(on);
+                }, 140);
+                return;
+            }
+
+            if (type === 'siren') {
+                let high = false;
+                _soundTimer = setInterval(() => {
+                    high = !high;
+                    osc.frequency.value = high ? 1100 : 700;
+                    setOn(true);
+                }, 380);
+                setOn(true);
+            }
+        }
+
         async function loadProfile() {
             try {
                 const response = await fetch('../api/profile.php?action=profile');
@@ -374,10 +475,22 @@ $pageTitle = 'My Profile';
                     
                     loadActivityLogs();
                     loadLoginLogs();
+                    loadNotificationSound();
                 }
             } catch (error) {
                 console.error('Error loading profile:', error);
             }
+        }
+
+        async function loadNotificationSound() {
+            try {
+                const res = await fetch('../api/profile.php?action=notification_sound_get');
+                const data = await res.json();
+                if (data && data.success && data.notification_sound) {
+                    const sel = document.getElementById('notificationSoundSelect');
+                    if (sel) sel.value = data.notification_sound;
+                }
+            } catch (e) {}
         }
 
         async function loadActivityLogs() {
@@ -438,6 +551,43 @@ $pageTitle = 'My Profile';
             document.getElementById('tab-' + tabId).style.display = 'block';
             event.target.classList.add('active');
         }
+
+        document.addEventListener('click', async (e) => {
+            if (e.target && e.target.id === 'previewSoundBtn') {
+                const sel = document.getElementById('notificationSoundSelect');
+                if (!sel) return;
+                if (_soundOsc) {
+                    _stopSoundPreview();
+                    e.target.textContent = 'Preview';
+                } else {
+                    _startSoundPreview(sel.value);
+                    e.target.textContent = 'Stop';
+                }
+            }
+
+            if (e.target && e.target.id === 'saveSoundBtn') {
+                const sel = document.getElementById('notificationSoundSelect');
+                const msg = document.getElementById('soundSaveMsg');
+                if (!sel) return;
+                if (msg) msg.textContent = 'Saving…';
+                try {
+                    const res = await fetch('../api/profile.php?action=notification_sound_set', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ notification_sound: sel.value })
+                    });
+                    const data = await res.json();
+                    if (data && data.success) {
+                        if (msg) msg.textContent = 'Saved';
+                        setTimeout(() => { if (msg) msg.textContent = ''; }, 1500);
+                    } else {
+                        if (msg) msg.textContent = 'Failed';
+                    }
+                } catch (err) {
+                    if (msg) msg.textContent = 'Failed';
+                }
+            }
+        });
 
         document.getElementById('passwordForm').addEventListener('submit', async (e) => {
             e.preventDefault();
