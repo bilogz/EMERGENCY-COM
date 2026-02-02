@@ -333,6 +333,32 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             .qc-risk-content { grid-template-columns: 1fr; }
             .map-wrapper { height: 400px; }
         }
+
+        /* --- NEW LAYOUT STYLES --- */
+        .dashboard-grid-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (min-width: 1200px) {
+            .dashboard-grid-layout {
+                grid-template-columns: 3fr 1fr; /* 75% - 25% split */
+                align-items: start;
+            }
+
+            .dashboard-side-col {
+                position: sticky;
+                top: 6rem; /* Adjust for fixed header */
+                height: fit-content;
+            }
+            
+            /* Ensure AI panel content stacks vertically in narrow column */
+            .qc-risk-content {
+                grid-template-columns: 1fr !important;
+                gap: 1rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -354,138 +380,156 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             
             <div class="sub-container">
                 <div class="page-content">
-                    <!-- Statistics Grid -->
-                    <div class="stat-grid">
-                        <div class="stat-card">
-                            <div class="stat-label">Events (30d)</div>
-                            <div class="stat-value" id="totalEvents">-</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Major (5.0+)</div>
-                            <div class="stat-value" id="majorEvents" style="color: #e74c3c;">-</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Latest Magnitude</div>
-                            <div class="stat-value" id="latestMagnitude" style="color: var(--primary-color-1);">-</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Last Updated</div>
-                            <div class="stat-value" id="lastUpdate" style="font-size: 1.25rem; padding-top: 0.5rem;">-</div>
-                            <small id="realtimeIndicator" style="color: #27ae60; font-weight: 600;"><i class="fas fa-circle fa-xs"></i> LIVE</small>
-                        </div>
-                    </div>
                     
-                    <!-- NEW AI Risk Panel -->
-                    <div class="ai-glass-panel" id="qcRiskAlertPanel">
-                        <div class="qc-risk-header" onclick="toggleQCRiskMinimize()">
-                            <div style="display: flex; align-items: center; gap: 1rem;">
-                                <div style="background: rgba(139, 92, 246, 0.2); padding: 0.5rem; border-radius: 8px;">
-                                    <i class="fas fa-robot" style="font-size: 1.25rem; color: #c4b5fd;"></i>
+                    <div class="dashboard-grid-layout">
+                        <!-- Left Column: Main Data -->
+                        <div class="dashboard-main-col">
+                            <!-- Statistics Grid -->
+                            <div class="stat-grid">
+                                <div class="stat-card">
+                                    <div class="stat-label">Events (30d)</div>
+                                    <div class="stat-value" id="totalEvents">-</div>
                                 </div>
-                                <div>
-                                    <h3 style="margin: 0; font-size: 1rem; font-weight: 600; color: #fff;">AI Risk Assessment: Quezon City</h3>
-                                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.25rem;">
-                                        <div class="qc-risk-badge">
-                                            <span class="live-pulse"></span>
-                                            <span id="qcRiskBadgeText">MONITORING</span>
-                                        </div>
-                                        <span style="font-size: 0.75rem; color: #9ca3af;" id="aiRiskTimestamp">Waiting for data...</span>
+                                <div class="stat-card">
+                                    <div class="stat-label">Major (5.0+)</div>
+                                    <div class="stat-value" id="majorEvents" style="color: #e74c3c;">-</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Latest Magnitude</div>
+                                    <div class="stat-value" id="latestMagnitude" style="color: var(--primary-color-1);">-</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Last Updated</div>
+                                    <div class="stat-value" id="lastUpdate" style="font-size: 1.25rem; padding-top: 0.5rem;">-</div>
+                                    <small id="realtimeIndicator" style="color: #27ae60; font-weight: 600;"><i class="fas fa-circle fa-xs"></i> LIVE</small>
+                                </div>
+                            </div>
+
+                            <!-- Analytics Grid -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                                <div class="module-card">
+                                    <div class="module-card-header"><h2><i class="fas fa-chart-area"></i> 30-Day Trend</h2></div>
+                                    <div style="padding: 1.5rem; height: 250px;"><canvas id="trendChart"></canvas></div>
+                                </div>
+                                <div class="module-card">
+                                    <div class="module-card-header"><h2><i class="fas fa-chart-pie"></i> Severity Split</h2></div>
+                                    <div style="padding: 1.5rem; height: 250px;"><canvas id="severityChart"></canvas></div>
+                                </div>
+                            </div>
+
+                            <!-- Map Module -->
+                            <div class="module-card">
+                                <div class="module-card-header">
+                                    <h2><i class="fas fa-map-marked-alt"></i> Seismic Map</h2>
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-secondary" onclick="loadEarthquakeData()"><i class="fas fa-sync"></i></button>
+                                        <button class="btn btn-sm btn-primary" onclick="focusQuezonCity()"><i class="fas fa-crosshairs"></i> QC</button>
+                                    </div>
+                                </div>
+                                <div class="map-wrapper">
+                                    <div id="earthquakeMap"></div>
+                                    <div class="map-overlay-controls">
+                                        <button id="filterBtn" class="earthquake-control-btn"><i class="fas fa-filter"></i> <span>Filter</span></button>
+                                        <button id="snapshotBtn" class="earthquake-control-btn" onclick="downloadSnapshot()"><i class="fas fa-camera"></i> <span>Snapshot</span></button>
+                                    </div>
+                                    <div class="map-legend">
+                                        <div class="legend-title">Seismic Activity</div>
+                                        <div class="legend-item"><div class="legend-color" style="background: #e74c3c;"></div> Critical (≥5.0)</div>
+                                        <div class="legend-item"><div class="legend-color" style="background: #f39c12;"></div> Moderate (3.0-4.9)</div>
+                                        <div class="legend-item"><div class="legend-color" style="background: #2ecc71;"></div> Minor (<3.0)</div>
                                     </div>
                                 </div>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 1rem;">
-                                <button class="earthquake-control-btn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 0.4rem 0.8rem; font-size: 0.75rem;" onclick="event.stopPropagation(); generateAIRiskAssessment(earthquakeData, true);">
-                                    <i class="fas fa-sync-alt"></i> RE-ANALYZE
-                                </button>
-                                <i class="fas fa-chevron-down" id="qcRiskChevron" style="color: #9ca3af;"></i>
-                            </div>
-                        </div>
-                        
-                        <div class="qc-risk-content" id="qcRiskContent">
-                            <!-- Seismic Summary -->
-                            <div class="risk-section">
-                                <h4><i class="fas fa-wave-square"></i> Seismic Summary</h4>
-                                <div class="risk-info-box ai-mono-text" id="aiSummaryText">
-                                    <i class="fas fa-circle-notch fa-spin"></i> Initializing AI model...
-                                </div>
-                            </div>
 
-                            <!-- Predictive Outlook -->
-                            <div class="risk-section">
-                                <h4><i class="fas fa-crystal-ball"></i> Predictive Outlook (7 Days)</h4>
-                                <div class="risk-info-box ai-mono-text" id="aiPredictionText" style="border-left: 2px solid #8b5cf6;">
-                                    <span style="opacity: 0.5;">Waiting for seismic data stream...</span>
+                            <!-- History Module -->
+                            <div class="module-card">
+                                <div class="module-card-header">
+                                    <h2><i class="fas fa-table"></i> Recent Activity Log</h2>
+                                    <button class="btn btn-sm btn-primary" onclick="downloadFullReport()"><i class="fas fa-file-pdf"></i> Report</button>
                                 </div>
-                            </div>
-
-                            <!-- Recommendations -->
-                            <div class="risk-section" style="grid-column: 1 / -1;">
-                                <h4><i class="fas fa-shield-alt"></i> Actionable Recommendations</h4>
-                                <div id="aiRecommendations" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0.75rem;">
-                                    <!-- Recommendations injected here -->
+                                <div class="module-card-content table-responsive" style="padding: 0;">
+                                    <table id="earthquakeTable" class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Date & Time</th>
+                                                <th>Mag</th>
+                                                <th>Depth</th>
+                                                <th>Location</th>
+                                                <th>Dist (QC)</th>
+                                                <th>Alert</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="earthquakeTableBody">
+                                            <tr><td colspan="6" style="text-align: center; padding: 2rem;">Loading seismic data...</td></tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <!-- Analytics Grid -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
-                        <div class="module-card">
-                            <div class="module-card-header"><h2><i class="fas fa-chart-area"></i> 30-Day Trend</h2></div>
-                            <div style="padding: 1.5rem; height: 250px;"><canvas id="trendChart"></canvas></div>
-                        </div>
-                        <div class="module-card">
-                            <div class="module-card-header"><h2><i class="fas fa-chart-pie"></i> Severity Split</h2></div>
-                            <div style="padding: 1.5rem; height: 250px;"><canvas id="severityChart"></canvas></div>
-                        </div>
-                    </div>
 
-                    <!-- Map Module -->
-                    <div class="module-card">
-                        <div class="module-card-header">
-                            <h2><i class="fas fa-map-marked-alt"></i> Seismic Map</h2>
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-secondary" onclick="loadEarthquakeData()"><i class="fas fa-sync"></i></button>
-                                <button class="btn btn-sm btn-primary" onclick="focusQuezonCity()"><i class="fas fa-crosshairs"></i> QC</button>
-                            </div>
-                        </div>
-                        <div class="map-wrapper">
-                            <div id="earthquakeMap"></div>
-                            <div class="map-overlay-controls">
-                                <button id="filterBtn" class="earthquake-control-btn"><i class="fas fa-filter"></i> <span>Filter</span></button>
-                                <button id="snapshotBtn" class="earthquake-control-btn" onclick="downloadSnapshot()"><i class="fas fa-camera"></i> <span>Snapshot</span></button>
-                            </div>
-                            <div class="map-legend">
-                                <div class="legend-title">Seismic Activity</div>
-                                <div class="legend-item"><div class="legend-color" style="background: #e74c3c;"></div> Critical (≥5.0)</div>
-                                <div class="legend-item"><div class="legend-color" style="background: #f39c12;"></div> Moderate (3.0-4.9)</div>
-                                <div class="legend-item"><div class="legend-color" style="background: #2ecc71;"></div> Minor (<3.0)</div>
-                            </div>
-                        </div>
-                    </div>
+                        <!-- Right Column: AI Insights -->
+                        <div class="dashboard-side-col">
+                            <!-- NEW AI Risk Panel -->
+                            <div class="ai-glass-panel" id="qcRiskAlertPanel">
+                                <div class="qc-risk-header" onclick="toggleQCRiskMinimize()">
+                                    <div style="display: flex; align-items: center; gap: 1rem;">
+                                        <div style="background: rgba(139, 92, 246, 0.2); padding: 0.5rem; border-radius: 8px;">
+                                            <i class="fas fa-robot" style="font-size: 1.25rem; color: #c4b5fd;"></i>
+                                        </div>
+                                        <div>
+                                            <h3 style="margin: 0; font-size: 1rem; font-weight: 600; color: #fff;">AI Risk Assessment</h3>
+                                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.25rem;">
+                                                <div class="qc-risk-badge">
+                                                    <span class="live-pulse"></span>
+                                                    <span id="qcRiskBadgeText">MONITORING</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <i class="fas fa-chevron-down" id="qcRiskChevron" style="color: #9ca3af;"></i>
+                                    </div>
+                                </div>
+                                
+                                <div class="qc-risk-content" id="qcRiskContent">
+                                    <!-- Meta Info -->
+                                    <div style="margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;">
+                                        <small style="color: #9ca3af; display: block; margin-bottom: 0.25rem;">Monitoring Target</small>
+                                        <div style="font-weight: 600; color: #fff;">Quezon City, Philippines</div>
+                                        <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;" id="aiRiskTimestamp">Waiting for data...</div>
+                                    </div>
 
-                    <!-- History Module -->
-                    <div class="module-card">
-                        <div class="module-card-header">
-                            <h2><i class="fas fa-table"></i> Recent Activity Log</h2>
-                            <button class="btn btn-sm btn-primary" onclick="downloadFullReport()"><i class="fas fa-file-pdf"></i> Report</button>
-                        </div>
-                        <div class="module-card-content table-responsive" style="padding: 0;">
-                            <table id="earthquakeTable" class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Date & Time</th>
-                                        <th>Mag</th>
-                                        <th>Depth</th>
-                                        <th>Location</th>
-                                        <th>Dist (QC)</th>
-                                        <th>Alert</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="earthquakeTableBody">
-                                    <tr><td colspan="6" style="text-align: center; padding: 2rem;">Loading seismic data...</td></tr>
-                                </tbody>
-                            </table>
+                                    <!-- Seismic Summary -->
+                                    <div class="risk-section">
+                                        <h4><i class="fas fa-wave-square"></i> Seismic Summary</h4>
+                                        <div class="risk-info-box ai-mono-text" id="aiSummaryText">
+                                            <i class="fas fa-circle-notch fa-spin"></i> Initializing AI model...
+                                        </div>
+                                    </div>
+
+                                    <!-- Predictive Outlook -->
+                                    <div class="risk-section">
+                                        <h4><i class="fas fa-crystal-ball"></i> Predictive Outlook</h4>
+                                        <div class="risk-info-box ai-mono-text" id="aiPredictionText" style="border-left: 2px solid #8b5cf6;">
+                                            <span style="opacity: 0.5;">Waiting for data...</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Recommendations -->
+                                    <div class="risk-section" style="grid-column: 1 / -1;">
+                                        <h4><i class="fas fa-shield-alt"></i> Recommendations</h4>
+                                        <div id="aiRecommendations" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                            <!-- Recommendations injected here -->
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="margin-top: 1rem;">
+                                        <button class="earthquake-control-btn" style="width: 100%; justify-content: center; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white;" onclick="generateAIRiskAssessment(earthquakeData, true);">
+                                            <i class="fas fa-sync-alt"></i> Force Re-Analyze
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -632,41 +676,94 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             type();
         }
 
-        function generateAIRiskAssessment(features, force = false) {
+        // Retry mechanism for fetch requests
+        async function fetchWithRetry(url, options, retries = 1, delay = 3000) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    // Check for 503 Service Unavailable or other network-related HTTP errors
+                    // Also check if the response body contains a specific error message that indicates transient issues
+                    const errorText = await response.text(); // Read text to check for specific messages
+                    let errorData = {};
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch (e) {
+                        errorData = { message: errorText }; // Fallback to raw text if not JSON
+                    }
+
+                    if ((response.status === 503 || response.status === 500 || 
+                         (errorData.message && errorData.message.includes("Service might be temporarily unavailable"))) && retries > 0) {
+                        console.warn(`Fetch failed with status ${response.status} or transient error. Retrying in ${delay / 1000} seconds... (Retries left: ${retries})`);
+                        await new Promise(res => setTimeout(res, delay));
+                        return fetchWithRetry(url, options, retries - 1, delay);
+                    }
+                    // For other non-OK responses or exhausted retries, throw error
+                    throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            } catch (error) {
+                // Catch network errors (e.g., connection refused, DNS issues)
+                if (retries > 0) {
+                    console.warn(`Network error during fetch: ${error.message}. Retrying in ${delay / 1000} seconds... (Retries left: ${retries})`);
+                    await new Promise(res => setTimeout(res, delay));
+                    return fetchWithRetry(url, options, retries - 1, delay);
+                }
+                throw error; // Re-throw if no retries left
+            }
+        }
+
+        async function generateAIRiskAssessment(features, force = false) {
             const now = Date.now();
+            // Allow force update, or if last analysis was more than 5 minutes ago
             if (!force && now - lastAIAnalysisTime < 300000) return;
             
+            const aiSummaryTextEl = document.getElementById('aiSummaryText');
+            const aiPredictionTextEl = document.getElementById('aiPredictionText');
+            const aiRiskTimestampEl = document.getElementById('aiRiskTimestamp');
+
             // Set loading state in UI
-            const timestamp = document.getElementById('aiRiskTimestamp');
-            timestamp.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Analyzing...';
-            document.getElementById('aiSummaryText').innerHTML = '<span class="loading-dots">Analyzing seismic data stream...</span>';
-            document.getElementById('aiPredictionText').innerHTML = '<span class="loading-dots">Computing predictive model...</span>';
+            aiRiskTimestampEl.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Analyzing...';
+            aiSummaryTextEl.innerHTML = '<span class="loading-dots">Analyzing seismic data stream...</span>';
+            aiPredictionTextEl.innerHTML = '<span class="loading-dots">Computing predictive model...</span>';
+            document.getElementById('aiRecommendations').innerHTML = '<div class="recommendation-item">Loading recommendations...</div>';
             
+            // Reset risk badge
+            document.getElementById('qcRiskBadgeText').textContent = 'MONITORING';
+            document.getElementById('qcRiskAlertPanel').classList.remove('critical-alert');
+
             const relevant = features.slice(0, 15).map(f => ({
                 magnitude: f.properties.mag,
                 distanceFromQC: calculateDistanceKm(f.geometry.coordinates[1], f.geometry.coordinates[0], 14.6488, 121.0509),
                 time: f.properties.time
             }));
 
-            fetch('../api/earthquake-ai-analytics.php?action=assess_risk', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ earthquakes: relevant })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
+            try {
+                const data = await fetchWithRetry('../api/earthquake-ai-analytics.php?action=assess_risk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ earthquakes: relevant })
+                }, 1); // Retry once
+
+                if (data.success || (data.status && data.status === 'success')) {
                     lastAIAnalysisTime = Date.now();
                     renderAIRiskContent(data.analysis, data.timestamp);
                 } else {
-                    document.getElementById('aiSummaryText').textContent = "AI Analysis Unavailable. System will retry automatically.";
-                    timestamp.textContent = "Connection Failed";
+                    // Backend returned success: false or status: error
+                    const errorMessage = data.message || "AI Analysis Unavailable. Please check server logs or configuration.";
+                    aiSummaryTextEl.textContent = errorMessage;
+                    aiPredictionTextEl.textContent = "No prediction available.";
+                    aiRiskTimestampEl.textContent = "Analysis Failed";
+                    document.getElementById('aiRecommendations').innerHTML = '<div class="recommendation-item">Failed to retrieve AI recommendations.</div>';
+                    console.error('AI Risk Assessment failed:', data.message);
                 }
-            })
-            .catch(() => { 
-                document.getElementById('aiSummaryText').textContent = "AI Service Unreachable. Checking connection...";
-                timestamp.textContent = "Offline"; 
-            });
+            } catch (error) {
+                // All retries failed or a non-retryable error occurred
+                aiSummaryTextEl.textContent = "AI Service Temporarily Busy. Please try again later.";
+                aiPredictionTextEl.textContent = "No prediction available.";
+                aiRiskTimestampEl.textContent = "Connection Failed";
+                document.getElementById('aiRecommendations').innerHTML = '<div class="recommendation-item">Service temporarily busy, please try again.</div>';
+                console.error('AI Risk Assessment fetch error:', error);
+            }
         }
 
         function renderAIRiskContent(analysis, time) {

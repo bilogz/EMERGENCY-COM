@@ -35,221 +35,33 @@
 .form-control {
     width: 100%;
     padding: 0.75rem 1rem;
-    border: 2px solid var(--border-color-1);
-    border-radius: 8px;
-    font-size: 14px;
+    border: 1px solid var(--border-color-1); /* Subtle border */
+    border-radius: 10px; /* Modern rounded corners */
+    font-size: 0.95rem;
     font-family: var(--font-family-1);
-    background-color: var(--bg-color-1);
+    background-color: var(--bg-color-1); /* Use page bg or slightly lighter */
     color: var(--text-color-1);
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     outline: none;
+    box-shadow: none; /* Remove default shadow */
 }
 
 .form-control:focus {
     border-color: var(--primary-color-1);
-    box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
+    background-color: var(--card-bg-1); /* Subtle shift on focus */
+    box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15); /* Soft focus ring */
 }
 
 .form-control::placeholder {
     color: var(--text-secondary-1);
-    opacity: 0.7;
+    opacity: 0.6;
 }
 
 .form-control:disabled {
-    background-color: var(--border-color-1);
-    opacity: 0.6;
+    background-color: rgba(255, 255, 255, 0.05);
+    opacity: 0.7;
     cursor: not-allowed;
-}
-
-/* ===================================
-   FORM LABELS - Label styling and positioning
-   =================================== */
-.form-label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-    color: var(--text-color-1);
-    font-size: 14px;
-}
-
-/* ===================================
-   VALIDATION STATES - Success, error, warning states
-   =================================== */
-.form-control.is-success {
-    border-color: #28a745;
-    background-color: rgba(40, 167, 69, 0.05);
-}
-
-.form-control.is-success:focus {
-    border-color: #28a745;
-    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
-}
-
-.form-control.is-error {
-    border-color: #dc3545;
-    background-color: rgba(220, 53, 69, 0.05);
-}
-
-.form-control.is-error:focus {
-    border-color: #dc3545;
-    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
-}
-
-.form-control.is-warning {
-    border-color: #ffc107;
-    background-color: rgba(255, 193, 7, 0.05);
-}
-
-.form-control.is-warning:focus {
-    border-color: #ffc107;
-    box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.1);
-}
-
-/* ===================================
-   FORM HELP TEXT - Validation messages and hints
-   =================================== */
-.form-text {
-    display: block;
-    margin-top: 0.5rem;
-    font-size: 12px;
-    color: var(--text-secondary-1);
-}
-
-.form-text.success-text {
-    color: #28a745;
-    font-weight: 500;
-}
-
-.form-text.error-text {
-    color: #dc3545;
-    font-weight: 500;
-}
-
-.form-text.warning-text {
-    color: #ffc107;
-    font-weight: 500;
-}
-
-/* ===================================
-   CHECKBOXES - Custom checkbox styling
-   =================================== */
-.checkbox-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-.checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    cursor: pointer;
-    color: var(--text-color-1);
-    font-size: 14px;
-    transition: color 0.2s ease;
-}
-
-.checkbox-label:hover {
-    color: var(--primary-color-1);
-}
-
-.form-checkbox {
-    width: 18px;
-    height: 18px;
-    border: 2px solid var(--border-color-1);
-    border-radius: 4px;
-    background-color: var(--bg-color-1);
-    cursor: pointer;
-    position: relative;
-    transition: all 0.2s ease;
-}
-
-.form-checkbox:checked {
-    background-color: var(--primary-color-1);
-    border-color: var(--primary-color-1);
-}
-
-.form-checkbox:checked::after {
-    content: '✓';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-size: 12px;
-    font-weight: bold;
-}
-
-.form-checkbox:focus {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
-}
-
-/* ===================================
-   RADIO BUTTONS - Custom radio button styling
-   =================================== */
-.radio-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-.radio-label {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    cursor: pointer;
-    color: var(--text-color-1);
-    font-size: 14px;
-    transition: color 0.2s ease;
-}
-
-.radio-label:hover {
-    color: var(--primary-color-1);
-}
-
-.form-radio {
-    width: 18px;
-    height: 18px;
-    border: 2px solid var(--border-color-1);
-    border-radius: 50%;
-    background-color: var(--bg-color-1);
-    cursor: pointer;
-    position: relative;
-    transition: all 0.2s ease;
-}
-
-.form-radio:checked {
-    border-color: var(--primary-color-1);
-}
-
-.form-radio:checked::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background-color: var(--primary-color-1);
-}
-
-.form-radio:focus {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
-}
-
-/* ===================================
-   TEXTAREA STYLING - Special textarea adjustments
-   =================================== */
-textarea.form-control {
-    resize: vertical;
-    min-height: 100px;
-}
-
-textarea.form-control:focus {
-    transform: none;
+    border-color: transparent;
 }
 
 /* ===================================
@@ -258,15 +70,19 @@ textarea.form-control:focus {
 select.form-control {
     cursor: pointer;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2371775c'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 0.75rem center;
-    background-size: 20px;
-    padding-right: 2.5rem;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    /* Custom SVG Arrow - Teal color to match theme */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2314b8a6'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat !important;
+    background-position: right 1rem center !important;
+    background-size: 1.25rem !important;
+    padding-right: 2.75rem;
 }
 
 select.form-control:focus {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234c8a89'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    /* Slightly lighter/active arrow on focus */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232dd4bf'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
 }
 
 /* ===================================

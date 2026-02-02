@@ -602,28 +602,52 @@ $pageTitle = 'Mass Notification System';
 
         function loadOptions() {
             fetch('../api/mass-notification.php?action=get_options')
-                .then(r => r.json())
+                .then(r => {
+                    if (!r.ok) throw new Error('Network response was not ok');
+                    return r.json();
+                })
                 .then(data => {
                     if (data.success) {
                         // Populate Barangays
                         const bSel = document.getElementById('barangay');
-                        bSel.innerHTML = data.barangays.map(b => `<option value="${b}">${b}</option>`).join('');
+                        if (data.barangays && data.barangays.length > 0) {
+                            bSel.innerHTML = data.barangays.map(b => `<option value="${b}">${b}</option>`).join('');
+                        } else {
+                            bSel.innerHTML = '<option value="">No barangays found</option>';
+                        }
                         
                         // Populate Categories with metadata
-                        categoriesData = data.categories;
                         const cSel = document.getElementById('category_id');
-                        cSel.innerHTML = '<option value="">-- Select Category --</option>' + 
-                            data.categories.map(c => `<option value="${c.id}" data-icon="${c.icon}" data-color="${c.color}">${c.name}</option>`).join('');
+                        if (data.categories && data.categories.length > 0) {
+                            categoriesData = data.categories;
+                            cSel.innerHTML = '<option value="">-- Select Category --</option>' + 
+                                data.categories.map(c => `<option value="${c.id}" data-icon="${c.icon}" data-color="${c.color}">${c.name}</option>`).join('');
+                        } else {
+                            cSel.innerHTML = '<option value="">No categories available</option>';
+                        }
                         
                         // Initialize Select2 for Categories
                         initCategorySelect();
 
                         // Populate Templates
                         const tSel = document.getElementById('template');
-                        templatesData = data.templates;
-                        tSel.innerHTML = '<option value="">-- Select a Template --</option>' + 
-                            data.templates.map(t => `<option value="${t.id}">${t.title} (${t.severity})</option>`).join('');
+                        if (data.templates && data.templates.length > 0) {
+                            templatesData = data.templates;
+                            tSel.innerHTML = '<option value="">-- Select a Template --</option>' + 
+                                data.templates.map(t => `<option value="${t.id}">${t.title} (${t.severity})</option>`).join('');
+                        } else {
+                            tSel.innerHTML = '<option value="">No templates available</option>';
+                        }
+                    } else {
+                        throw new Error(data.message || 'Failed to load options');
                     }
+                })
+                .catch(error => {
+                    console.error('Error loading options:', error);
+                    const cSel = document.getElementById('category_id');
+                    cSel.innerHTML = '<option value="">Failed to load categories</option>';
+                    // Disable the dropdown to prevent interaction on error
+                    cSel.disabled = true;
                 });
         }
 

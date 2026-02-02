@@ -1,4 +1,6 @@
 <?php
+set_time_limit(120);
+
 /**
  * Earthquake AI Analytics API
  * Analyzes earthquake data and predicts impact on Quezon City
@@ -289,6 +291,16 @@ function analyzeEarthquakeImpact() {
         }
         
         if (empty($apiKey)) {
+            // --- TEMPORARY TEST-MODE FALLBACK: INSERT YOUR API KEY HERE ---
+            // !!! WARNING: DO NOT USE IN PRODUCTION AND DO NOT COMMIT TO VERSION CONTROL !!!
+            // This will ONLY be used if no API key is found by the secure-api-config.php methods.
+            // Replace 'YOUR_FALLBACK_GEMINI_API_KEY_HERE' with your actual Gemini API key for local testing.
+            if (empty($apiKey)) { // Double check to ensure no previous key was set
+                $apiKey = 'YOUR_FALLBACK_GEMINI_API_KEY_HERE'; 
+                error_log("Using temporary fallback API key in analyzeEarthquakeImpact.");
+            }
+            // --- END OF TEMPORARY TEST-MODE FALLBACK ---
+
             ob_clean();
             // Use 503 Service Unavailable for missing configuration (more appropriate than 500)
             http_response_code(503);
@@ -547,13 +559,15 @@ function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
     if (empty($apiKey)) {
         return [
             'success' => false,
-            'error' => 'API key is empty or invalid'
+            'error' => 'API key is empty or invalid',
+            'error_type' => 'API_KEY_EMPTY'
         ];
     }
     
     // Try v1 API first (for Gemini 2.5), fallback to v1beta
     $apiVersions = ['v1', 'v1beta'];
     $lastError = null;
+    $lastErrorType = null;
     
     foreach ($apiVersions as $version) {
         try {
@@ -578,6 +592,7 @@ function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
             $ch = curl_init($url);
             if ($ch === false) {
                 $lastError = "Failed to initialize cURL";
+                $lastErrorType = 'CURL_INIT_FAILED';
                 continue;
             }
             
@@ -588,8 +603,8 @@ function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
                 CURLOPT_HTTPHEADER => [
                     'Content-Type: application/json'
                 ],
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_CONNECTTIMEOUT => 10
+                CURLOPT_TIMEOUT => 60,
+                CURLOPT_CONNECTTIMEOUT => 20
             ]);
             
             $response = curl_exec($ch);
@@ -599,6 +614,7 @@ function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
             
             if ($curlError) {
                 $lastError = "cURL Error: " . $curlError;
+                $lastErrorType = 'CONNECTION_TIMEOUT'; // More general connection issue
                 error_log("Gemini API cURL error ({$version}): " . $curlError);
                 continue;
             }
@@ -628,6 +644,7 @@ function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
                     $ch = curl_init($url);
                     if ($ch === false) {
                         $lastError = "Failed to initialize cURL for backup key";
+                        $lastErrorType = 'CURL_INIT_FAILED';
                         continue;
                     }
                     
@@ -649,6 +666,7 @@ function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
                     
                     if ($curlError) {
                         $lastError = "cURL Error with backup key: " . $curlError;
+                        $lastErrorType = 'CONNECTION_TIMEOUT';
                         error_log("Gemini API cURL error with backup key ({$version}): " . $curlError);
                         continue;
                     }
@@ -659,6 +677,7 @@ function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
                             ? $errorResponse['error']['message'] 
                             : substr($response, 0, 200);
                         $lastError = "HTTP Error {$httpCode} (backup key): " . $errorMessage;
+                        $lastErrorType = 'API_ERROR';
                         error_log("Gemini API HTTP error with backup key ({$version}): {$httpCode} - " . $errorMessage);
                         continue;
                     }
@@ -667,6 +686,7 @@ function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
                     // Continue to parse response below
                 } else {
                     $lastError = "HTTP Error {$httpCode}: " . $errorMessage;
+                    $lastErrorType = 'API_ERROR';
                     error_log("Gemini API HTTP error ({$version}): {$httpCode} - " . $errorMessage);
                     continue;
                 }
@@ -678,12 +698,14 @@ function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
                 
                 if (json_last_error() !== JSON_ERROR_NONE) {
                     $lastError = "Invalid JSON response: " . json_last_error_msg();
+                    $lastErrorType = 'JSON_PARSE_ERROR';
                     error_log("Gemini API JSON decode error ({$version}): " . json_last_error_msg());
                     continue;
                 }
                 
                 if (!isset($result['candidates'][0]['content']['parts'][0]['text'])) {
                     $lastError = "Unexpected response format: Missing candidates or content";
+                    $lastErrorType = 'UNEXPECTED_RESPONSE_FORMAT';
                     error_log("Gemini API unexpected response format ({$version}): " . substr(json_encode($result), 0, 200));
                     continue;
                 }
@@ -759,19 +781,23 @@ function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
                 ];
             } catch (Exception $e) {
                 $lastError = "Error parsing response: " . $e->getMessage();
+                $lastErrorType = 'RESPONSE_PARSING_FAILED';
                 error_log("Gemini API response parsing error ({$version}): " . $e->getMessage());
                 continue;
             } catch (Error $e) {
                 $lastError = "Fatal error parsing response: " . $e->getMessage();
+                $lastErrorType = 'RESPONSE_PARSING_FAILED';
                 error_log("Gemini API fatal response parsing error ({$version}): " . $e->getMessage());
                 continue;
             }
         } catch (Exception $e) {
             $lastError = "Exception during API call: " . $e->getMessage();
+            $lastErrorType = 'API_CALL_EXCEPTION';
             error_log("Gemini API exception ({$version}): " . $e->getMessage());
             continue;
         } catch (Error $e) {
             $lastError = "Fatal error during API call: " . $e->getMessage();
+            $lastErrorType = 'API_CALL_EXCEPTION';
             error_log("Gemini API fatal error ({$version}): " . $e->getMessage());
             continue;
         }
@@ -779,7 +805,8 @@ function callGeminiAI($apiKey, $prompt, $backupApiKey = null) {
     
     return [
         'success' => false,
-        'error' => $lastError ?? 'Unknown error - All API versions failed'
+        'error' => $lastError ?? 'Unknown error - All API versions failed',
+        'error_type' => $lastErrorType ?? 'UNKNOWN'
     ];
 }
 
@@ -903,6 +930,16 @@ function assessEarthquakeRisk() {
         }
         
         if (empty($apiKey)) {
+            // --- TEMPORARY TEST-MODE FALLBACK: INSERT YOUR API KEY HERE ---
+            // !!! WARNING: DO NOT USE IN PRODUCTION AND DO NOT COMMIT TO VERSION CONTROL !!!
+            // This will ONLY be used if no API key is found by the secure-api-config.php methods.
+            // Replace 'YOUR_FALLBACK_GEMINI_API_KEY_HERE' with your actual Gemini API key for local testing.
+            if (empty($apiKey)) { // Double check to ensure no previous key was set
+                $apiKey = 'YOUR_FALLBACK_GEMINI_API_KEY_HERE'; 
+                error_log("Using temporary fallback API key in assessEarthquakeRisk.");
+            }
+            // --- END OF TEMPORARY TEST-MODE FALLBACK ---
+
             ob_clean();
             http_response_code(503);
             $output = json_encode([
@@ -931,9 +968,33 @@ function assessEarthquakeRisk() {
                 'timestamp' => date('Y-m-d H:i:s')
             ], JSON_UNESCAPED_UNICODE);
         } else {
-            // Log the specific AI error but return a generic message if it's sensitive
-            error_log('AI Analysis Failed: ' . ($response['error'] ?? 'Unknown error'));
-            throw new Exception('AI processing failed. The service might be temporarily unavailable.');
+            ob_clean(); // Ensure no prior output
+            error_log('AI Analysis Failed: ' . ($response['error'] ?? 'Unknown error') . ' | Type: ' . ($response['error_type'] ?? 'UNKNOWN'));
+            if (isset($response['error_type']) && $response['error_type'] === 'CONNECTION_TIMEOUT') {
+                http_response_code(503); // Service Unavailable
+                echo json_encode([
+                    "status" => "error", // Use "status" as requested by user
+                    "message" => "API Connection Timeout"
+                ], JSON_UNESCAPED_UNICODE);
+            } else if (isset($response['error_type']) && $response['error_type'] === 'API_KEY_EMPTY') {
+                http_response_code(503); // Service Unavailable
+                echo json_encode([
+                    "status" => "error",
+                    "message" => "AI API key not configured. Please configure Gemini API key settings."
+                ], JSON_UNESCAPED_UNICODE);
+            }
+            else {
+                // For other errors, return a generic message
+                http_response_code(500);
+                echo json_encode([
+                    "status" => "error",
+                    "message" => "AI processing failed. The service might be temporarily unavailable."
+                ], JSON_UNESCAPED_UNICODE);
+            }
+            if (ob_get_level()) {
+                ob_end_flush();
+            }
+            exit();
         }
         
     } catch (Throwable $e) {
