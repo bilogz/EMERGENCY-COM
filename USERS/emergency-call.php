@@ -193,11 +193,14 @@ $assetBase = '../ADMIN/header/';
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
+        // Enhanced Socket.IO configuration for live environment
         const SIGNALING_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
         const SIGNALING_URL = `${window.location.protocol}//${SIGNALING_HOST}:3000`;
         let socket = null;
         let socketBound = false;
         const room = "emergency-room";
+        let socketRetryCount = 0;
+        const MAX_SOCKET_RETRIES = 5;
 
         function waitForSocketConnected(s, timeoutMs = 8000) {
             return new Promise((resolve, reject) => {
@@ -226,15 +229,25 @@ $assetBase = '../ADMIN/header/';
         }
 
         function ensureSocket() {
-            if (socket) return socket;
+            if (socket && socket.connected) return socket;
             if (typeof window.io !== 'function') {
+                console.error('[socket] Socket.IO library not loaded');
                 return null;
             }
+            
+            // Reset socket if it exists but is disconnected
+            if (socket && !socket.connected) {
+                socket.disconnect();
+                socket = null;
+                socketBound = false;
+            }
+            
             socket = window.io(SIGNALING_URL, {
                 transports: ['websocket', 'polling'],
                 reconnection: true,
-                reconnectionAttempts: 10,
+                reconnectionAttempts: MAX_SOCKET_RETRIES,
                 reconnectionDelayMax: 2000,
+                timeout: 8000
             });
             bindSocketHandlers();
             return socket;
@@ -247,10 +260,31 @@ $assetBase = '../ADMIN/header/';
             socket.on('connect', () => {
                 console.log('[call][user] socket connected', socket.id);
                 socket.emit('join', room);
+                socketRetryCount = 0; // Reset retry count on successful connection
             });
 
             socket.on('disconnect', (reason) => {
-                console.log('[call][user] socket disconnected', reason);
+                console.warn('[call][user] socket disconnected', reason);
+                if (callId) {
+                    setStatus('Connection lost. Attempting to reconnect…');
+                }
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('[call][user] socket connection error:', error);
+                socketRetryCount++;
+                if (socketRetryCount >= MAX_SOCKET_RETRIES) {
+                    console.error('[call][user] Max retries reached. Giving up.');
+                    if (callId) {
+                        setStatus('Connection failed. Please refresh the page.');
+                        setEndEnabled(true);
+                    }
+                } else {
+                    console.log(`[call][user] Retry ${socketRetryCount}/${MAX_SOCKET_RETRIES}`);
+                    if (callId) {
+                        setStatus(`Connecting... (attempt ${socketRetryCount}/${MAX_SOCKET_RETRIES})`);
+                    }
+                }
             });
 
             socket.on("answer", payload => {

@@ -1275,6 +1275,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
+    // Enhanced Socket.IO configuration for live environment
     const SIGNALING_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
     const SIGNALING_URL = `${window.location.protocol}//${SIGNALING_HOST}:3000`;
     const room = "emergency-room";
@@ -1282,6 +1283,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let socket = null;
     let socketBound = false;
     let notificationSound = 'siren';
+    let socketRetryCount = 0;
+    const MAX_SOCKET_RETRIES = 5;
 
     let _soundCtx = null;
     let _soundOsc = null;
@@ -1308,9 +1311,27 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     })();
 
     function ensureSocket() {
-        if (socket) return socket;
-        if (typeof window.io !== 'function') return null;
-        socket = window.io(SIGNALING_URL);
+        if (socket && socket.connected) return socket;
+        if (typeof window.io !== 'function') {
+            console.error('[socket] Socket.IO library not loaded');
+            return null;
+        }
+        
+        // Reset socket if it exists but is disconnected
+        if (socket && !socket.connected) {
+            socket.disconnect();
+            socket = null;
+            socketBound = false;
+        }
+        
+        socket = window.io(SIGNALING_URL, {
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: MAX_SOCKET_RETRIES,
+            reconnectionDelayMax: 2000,
+            timeout: 8000
+        });
+        
         bindSocketHandlers();
         return socket;
     }
@@ -1320,7 +1341,33 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         socketBound = true;
 
         socket.on('connect', () => {
+            console.log('[socket] Connected to signaling server');
             socket.emit('join', room);
+            socketRetryCount = 0; // Reset retry count on successful connection
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.warn('[socket] Disconnected:', reason);
+            if (callId) {
+                setStatus('Connection lost. Attempting to reconnect…');
+            }
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('[socket] Connection error:', error);
+            socketRetryCount++;
+            if (socketRetryCount >= MAX_SOCKET_RETRIES) {
+                console.error('[socket] Max retries reached. Giving up.');
+                if (callId) {
+                    setStatus('Connection failed. Please refresh the page.');
+                    setEndEnabled(true);
+                }
+            } else {
+                console.log(`[socket] Retry ${socketRetryCount}/${MAX_SOCKET_RETRIES}`);
+                if (callId) {
+                    setStatus(`Connecting... (attempt ${socketRetryCount}/${MAX_SOCKET_RETRIES})`);
+                }
+            }
         });
 
         (async function initNotificationSoundPref() {
@@ -1332,13 +1379,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 }
             } catch (e) {}
         })();
-
-        socket.on('connect_error', () => {
-            if (callId) {
-                setStatus('Connecting failed. Signaling server offline.');
-                setEndEnabled(true);
-            }
-        });
     }
 
     function _stopAlertSound() {
