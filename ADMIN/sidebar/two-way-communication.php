@@ -462,6 +462,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 </div>
                             </div>
                             <div class="conversations-list" id="scrollableList">
+                                <div id="incomingEmergencyCallRow" style="display:none;"></div>
                                 <div id="conversationsList">
                                     <!-- Conversations will be loaded here -->
                                 </div>
@@ -1060,10 +1061,28 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         
     </script>
 
+    <div id="incomingCallModal" style="display:none; position:fixed; right:18px; top:18px; z-index:100001; width:min(420px, 92vw); background:#0f172a; border:1px solid rgba(220,38,38,0.55); border-radius:16px; padding:16px; color:#fff; box-shadow:0 20px 60px rgba(0,0,0,0.55);">
+        <div style="display:flex; align-items:flex-start; gap:12px;">
+            <div style="width:44px; height:44px; border-radius:12px; background:rgba(220,38,38,0.18); border:1px solid rgba(220,38,38,0.45); display:flex; align-items:center; justify-content:center; flex:0 0 auto;">
+                <i class="fas fa-phone-alt" style="color:#fecaca;"></i>
+            </div>
+            <div style="flex:1; min-width:0;">
+                <div style="font-weight:900; letter-spacing:0.6px; text-transform:uppercase; color:#fecaca;">Incoming Emergency Call</div>
+                <div id="incomingCallText" style="opacity:0.9; font-size:13px; margin-top:4px;">Someone is calling for emergency assistance.</div>
+            </div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:12px;">
+            <button id="incomingDeclineBtn" class="btn btn-secondary">Decline</button>
+            <button id="incomingAnswerBtn" class="btn btn-primary">Answer</button>
+        </div>
+    </div>
+
     <div id="callOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100000;">
-        <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px, 92vw); background:#0f172a; border:1px solid rgba(255,255,255,0.12); border-radius:16px; padding:22px; color:#fff; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+        <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px, 92vw); height:min(600px, 85vh); background:#0f172a; border:1px solid rgba(255,255,255,0.12); border-radius:16px; padding:22px; color:#fff; box-shadow:0 20px 60px rgba(0,0,0,0.5); display:flex; flex-direction:column;">
             <div id="callActiveBanner" style="display:none; margin:-6px 0 12px; padding:8px 12px; border-radius:12px; background:rgba(220,38,38,0.18); border:1px solid rgba(220,38,38,0.45); color:#fecaca; font-weight:800; letter-spacing:0.6px; text-transform:uppercase; text-align:center;">CALL ON ACTIVE</div>
-            <div style="display:flex; align-items:center; gap:12px;">
+            
+            <!-- Call Header -->
+            <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
                 <div style="width:44px; height:44px; border-radius:12px; background:rgba(76,138,137,0.2); display:flex; align-items:center; justify-content:center;">
                     <i class="fas fa-headset" style="color:#4c8a89;"></i>
                 </div>
@@ -1073,14 +1092,27 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 </div>
                 <div id="callTimer" style="font-variant-numeric:tabular-nums; font-weight:700;">00:00</div>
             </div>
-            <div style="margin-top:18px; display:flex; gap:10px; justify-content:flex-end;">
+            
+            <!-- Messages Area -->
+            <div id="callMessages" style="flex:1; margin-top:16px; overflow-y:auto; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:12px; background:rgba(0,0,0,0.2); min-height:200px;">
+                <div style="text-align:center; opacity:0.6; font-size:12px;">Messages will appear here</div>
+            </div>
+            
+            <!-- Message Input -->
+            <div style="margin-top:12px; display:flex; gap:8px; flex-shrink:0;">
+                <input type="text" id="messageInput" placeholder="Type a message..." style="flex:1; padding:8px 12px; border:1px solid rgba(255,255,255,0.2); border-radius:6px; background:rgba(255,255,255,0.1); color:#fff; outline:none;">
+                <button id="sendMessageBtn" class="btn btn-primary" style="padding:8px 16px;">Send</button>
+            </div>
+            
+            <!-- Call Controls -->
+            <div style="margin-top:16px; display:flex; gap:10px; justify-content:flex-end; flex-shrink:0;">
                 <button id="endCallBtn" class="btn btn-secondary" disabled style="opacity:0.6; pointer-events:none;">End Call</button>
             </div>
         </div>
     </div>
     <audio id="remote" autoplay></audio>
 
-    <script src="<?php echo (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['SERVER_NAME'] ?? 'localhost') . ':3000'; ?>/socket.io/socket.io.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
     const SIGNALING_URL = `${window.location.protocol}//${window.location.hostname}:3000`;
     const room = "emergency-room";
@@ -1128,6 +1160,16 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         socket.on('connect', () => {
             socket.emit('join', room);
         });
+
+        (async function initNotificationSoundPref() {
+            try {
+                const res = await fetch('../api/profile.php?action=notification_sound_get');
+                const data = await res.json();
+                if (data && data.success && data.notification_sound) {
+                    notificationSound = data.notification_sound;
+                }
+            } catch (e) {}
+        })();
 
         socket.on('connect_error', () => {
             if (callId) {
@@ -1210,9 +1252,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 high = !high;
                 osc.frequency.value = high ? 1100 : 700;
                 setOn(true);
-            }, 360);
-            setOn(true);
-        }
     }
 
     let pc = null;
@@ -1221,6 +1260,98 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let callConnectedAt = null;
     let timerInterval = null;
     let locationData = null;
+    let messages = [];
+
+    let pendingOffer = null;
+    let pendingCallId = null;
+    let pendingCandidates = [];
+
+    // Messaging functions for admin
+    function addMessage(text, sender = 'admin', timestamp = Date.now()) {
+        const messagesContainer = document.getElementById('callMessages');
+        if (!messagesContainer) return;
+        
+        // Clear placeholder text if this is the first message
+        if (messages.length === 0) {
+            messagesContainer.innerHTML = '';
+        }
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.style.cssText = `
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: ${sender === 'admin' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(59, 130, 246, 0.2)'};
+            border-left: 3px solid ${sender === 'admin' ? '#22c55e' : '#3b82f6'};
+            font-size: 13px;
+            line-height: 1.4;
+        `;
+        
+        const time = new Date(timestamp).toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit', 
+            hour12: true 
+        });
+        
+        const senderName = sender === 'admin' ? 
+            'Emergency Services' : 
+            'User';
+        
+        messageDiv.innerHTML = `
+            <div style="font-weight: 600; margin-bottom: 2px; font-size: 11px; opacity: 0.8;">
+                ${senderName} • ${time}
+            </div>
+            <div>${text}</div>
+        `;
+        
+        messagesContainer.appendChild(messageDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        
+        messages.push({ text, sender, timestamp, callId });
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById('messageInput');
+        const text = input.value.trim();
+        if (!text || !callId) return;
+        
+        input.value = '';
+        
+        // Add to local UI immediately
+        addMessage(text, 'admin');
+        
+        // Send via socket
+        const s = ensureSocket();
+        if (s) {
+            s.emit('call-message', {
+                text,
+                callId,
+                sender: 'admin',
+                senderName: 'Emergency Services',
+                timestamp: Date.now()
+            }, room);
+        }
+        
+        // Log to database using existing chat-send structure
+        try {
+            const formData = new FormData();
+            formData.append('text', text);
+            formData.append('userId', 'admin');
+            formData.append('userName', 'Emergency Services');
+            formData.append('conversationId', `call_${callId}`);
+            
+            const response = await fetch('../api/chat-send.php', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                console.error('Failed to log message to database');
+            }
+        } catch (e) {
+            console.error('Failed to log message:', e);
+        }
+    }
 
     function formatTime(totalSeconds) {
         const m = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
@@ -1236,6 +1367,64 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const el = document.getElementById('callActiveBanner');
         if (!el) return;
         el.style.display = visible ? 'block' : 'none';
+    }
+
+    function setIncomingCallModalVisible(visible) {
+        const el = document.getElementById('incomingCallModal');
+        if (!el) return;
+        el.style.display = visible ? 'block' : 'none';
+    }
+
+    function setIncomingCallModalText(text) {
+        const el = document.getElementById('incomingCallText');
+        if (el) el.textContent = text;
+    }
+
+    function setIncomingEmergencyCallRowVisible(visible) {
+        const el = document.getElementById('incomingEmergencyCallRow');
+        if (!el) return;
+        el.style.display = visible ? 'block' : 'none';
+    }
+
+    function renderIncomingEmergencyCallRow() {
+        const host = document.getElementById('incomingEmergencyCallRow');
+        if (!host) return;
+
+        if (!pendingOffer || !pendingCallId) {
+            host.innerHTML = '';
+            setIncomingEmergencyCallRowVisible(false);
+            return;
+        }
+
+        host.innerHTML = `
+            <div class="conversation-item" data-conversation-id="emergency-call" style="border:1px solid rgba(220,38,38,0.45); background: rgba(220,38,38,0.06);">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:36px; height:36px; border-radius:10px; background:rgba(220,38,38,0.18); border:1px solid rgba(220,38,38,0.35); display:flex; align-items:center; justify-content:center; flex:0 0 auto;">
+                        <i class="fas fa-phone-alt" style="color:#dc2626;"></i>
+                    </div>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:900; letter-spacing:0.4px;">Emergency Call</div>
+                        <div style="font-size:12px; opacity:0.9;">Incoming call request</div>
+                    </div>
+                    <div style="display:flex; gap:8px; flex:0 0 auto;">
+                        <button id="emergencyCallDeclineBtn" class="btn btn-sm btn-secondary" style="padding:0.4rem 0.65rem;">Decline</button>
+                        <button id="emergencyCallAcceptBtn" class="btn btn-sm btn-primary" style="padding:0.4rem 0.65rem;">Accept</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        setIncomingEmergencyCallRowVisible(true);
+
+        const acceptBtn = document.getElementById('emergencyCallAcceptBtn');
+        if (acceptBtn) acceptBtn.onclick = () => {
+            if (typeof window.acceptIncomingEmergencyCall === 'function') window.acceptIncomingEmergencyCall();
+        };
+
+        const declineBtn = document.getElementById('emergencyCallDeclineBtn');
+        if (declineBtn) declineBtn.onclick = () => {
+            if (typeof window.declineIncomingEmergencyCall === 'function') window.declineIncomingEmergencyCall();
+        };
     }
 
     function setStatus(text) {
@@ -1254,6 +1443,20 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         btn.disabled = !enabled;
         btn.style.opacity = enabled ? '1' : '0.6';
         btn.style.pointerEvents = enabled ? 'auto' : 'none';
+    }
+
+    function startTimer() {
+        if (!callConnectedAt) return;
+        stopTimer();
+        timerInterval = setInterval(() => {
+            const seconds = Math.max(0, Math.floor((Date.now() - callConnectedAt) / 1000));
+            setTimer(seconds);
+        }, 1000);
+    }
+
+    function stopTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = null;
     }
 
     async function tryGetLocation() {
@@ -1289,24 +1492,30 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         } catch (e) {}
     }
 
-    function startTimer() {
-        if (!callConnectedAt) return;
-        if (timerInterval) clearInterval(timerInterval);
-        timerInterval = setInterval(() => {
-            const seconds = Math.max(0, Math.floor((Date.now() - callConnectedAt) / 1000));
-            setTimer(seconds);
-        }, 1000);
-    }
-
-    function stopTimer() {
-        if (timerInterval) clearInterval(timerInterval);
-        timerInterval = null;
-    }
-
     function cleanupCall() {
         stopTimer();
         setEndEnabled(false);
         setCallActiveBannerVisible(false);
+        setIncomingCallModalVisible(false);
+
+        // Clear messages
+        messages = [];
+        const messagesContainer = document.getElementById('callMessages');
+        if (messagesContainer) {
+            messagesContainer.innerHTML = '<div style="text-align:center; opacity:0.6; font-size:12px;">Messages will appear here</div>';
+        }
+        
+        // Clear message input
+        const messageInput = document.getElementById('messageInput');
+        if (messageInput) {
+            messageInput.value = '';
+        }
+
+        pendingOffer = null;
+        pendingCallId = null;
+        pendingCandidates = [];
+        renderIncomingEmergencyCallRow();
+
         _stopAlertSound();
         if (localStream) {
             localStream.getTracks().forEach(t => t.stop());
@@ -1317,121 +1526,142 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             pc = null;
         }
         callConnectedAt = null;
-        callId = null;
-        locationData = null;
-        setTimer(0);
-    }
 
-    async function endCall(notifyPeer = true) {
-        const durationSec = callConnectedAt ? Math.floor((Date.now() - callConnectedAt) / 1000) : null;
-        await logCall('ended', { durationSec });
-        if (notifyPeer && callId) {
-            const s = ensureSocket();
-            if (s) s.emit('hangup', { callId }, room);
+        function setTimer(seconds) {
+            const el = document.getElementById('callTimer');
+            if (el) el.textContent = formatTime(seconds);
         }
-        setStatus('Call ended');
-        setTimeout(() => {
-            setOverlayVisible(false);
-            cleanupCall();
-        }, 800);
-    }
 
-    document.getElementById('endCallBtn').onclick = () => endCall(true);
+        function setEndEnabled(enabled) {
+            const btn = document.getElementById('endCallBtn');
+            if (!btn) return;
+            btn.disabled = !enabled;
+            btn.style.opacity = enabled ? '1' : '0.6';
+            btn.style.pointerEvents = enabled ? 'auto' : 'none';
+        }
 
-    function initPeer() {
-        pc = new RTCPeerConnection({
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:global.stun.twilio.com:3478?transport=udp' }
-            ]
-        });
-        pc.ontrack = e => {
-            document.getElementById("remote").srcObject = e.streams[0];
-        };
-        pc.onicecandidate = e => {
-            if (!e.candidate) return;
-            const s = ensureSocket();
-            if (s) s.emit('candidate', { candidate: e.candidate, callId }, room);
-        };
-        pc.onconnectionstatechange = () => {
-            if (!pc) return;
-            if (pc.connectionState === 'connected' && !callConnectedAt) {
-                callConnectedAt = Date.now();
-                setStatus('Connected');
-                setEndEnabled(true);
-                startTimer();
-                logCall('connected');
-                _stopAlertSound();
-            }
-            if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
-                if (callId) endCall(false);
-            }
-        };
-    }
+        async function acceptIncomingEmergencyCall() {
+            if (!pendingOffer || !pendingCallId) return;
+            if (callId && pendingCallId !== callId) return;
 
-    (async function initNotificationSoundPref() {
-        try {
-            const res = await fetch('../api/profile.php?action=notification_sound_get');
-            const data = await res.json();
-            if (data && data.success && data.notification_sound) {
-                notificationSound = data.notification_sound;
-            }
-        } catch (e) {}
-    })();
-
-    (function initCallReceiver() {
-        const s = ensureSocket();
-        if (!s) return;
-        s.emit('join', room);
-
-        s.on("offer", async payload => {
-            const sdp = payload && payload.sdp ? payload.sdp : payload;
-            const incomingCallId = payload && payload.callId ? payload.callId : null;
-            if (!incomingCallId) return;
-            if (callId && incomingCallId !== callId) return;
-
-            callId = incomingCallId;
+            callId = pendingCallId;
+            setIncomingEmergencyCallRowVisible(false);
             setOverlayVisible(true);
             setCallActiveBannerVisible(true);
             setStatus('Connecting…');
             setTimer(0);
             setEndEnabled(false);
-            _startAlertSound(notificationSound);
-            locationData = await tryGetLocation();
-            await logCall('incoming');
-
-            if (!pc) initPeer();
-            await pc.setRemoteDescription(sdp);
 
             try {
+                if (!pc) initPeer();
+                await pc.setRemoteDescription(pendingOffer);
+
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                s.emit('answer', { sdp: answer, callId }, room);
+
+                if (Array.isArray(pendingCandidates) && pendingCandidates.length) {
+                    for (const cand of pendingCandidates) {
+                        try { if (pc && cand) await pc.addIceCandidate(cand); } catch (e) {}
+                    }
+                }
             } catch (e) {
-                setStatus('Microphone permission denied');
+                setStatus('Call failed');
                 setEndEnabled(true);
+                endCall(true);
+            } finally {
+                pendingOffer = null;
+                pendingCandidates = [];
+                renderIncomingEmergencyCallRow();
+            }
+        }
+
+        async function declineIncomingEmergencyCall() {
+            if (!pendingCallId) {
+                setIncomingEmergencyCallRowVisible(false);
                 _stopAlertSound();
                 return;
             }
 
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            s.emit("answer", { sdp: answer, callId }, room);
+            try {
+                await logCall('declined', { callId: pendingCallId });
+            } catch (e) {}
+
+            s.emit('hangup', { callId: pendingCallId }, room);
+            pendingOffer = null;
+            pendingCallId = null;
+            pendingCandidates = [];
+            renderIncomingEmergencyCallRow();
+            _stopAlertSound();
+        }
+
+        window.acceptIncomingEmergencyCall = acceptIncomingEmergencyCall;
+        window.declineIncomingEmergencyCall = declineIncomingEmergencyCall;
+
+        s.on('offer', async payload => {
+            const sdp = payload && payload.sdp ? payload.sdp : payload;
+            const incomingCallId = payload && payload.callId ? payload.callId : null;
+            if (!incomingCallId) return;
+            if (callId && incomingCallId !== callId) return;
+
+            pendingCallId = incomingCallId;
+            pendingOffer = sdp;
+            pendingCandidates = [];
+
+            try {
+                if (typeof switchTab === 'function') switchTab('active');
+            } catch (e) {}
+
+            _startAlertSound(notificationSound);
+            locationData = await tryGetLocation();
+            await logCall('incoming');
+            renderIncomingEmergencyCallRow();
         });
 
-        s.on("candidate", payload => {
+        s.on('candidate', payload => {
             const cand = payload && payload.candidate ? payload.candidate : payload;
             const incomingCallId = payload && payload.callId ? payload.callId : null;
-            if (incomingCallId && incomingCallId !== callId) return;
+            if (incomingCallId && callId && incomingCallId !== callId) return;
+            if (incomingCallId && pendingCallId && incomingCallId !== pendingCallId) return;
+
+            if (!pc || !callId) {
+                if (cand) pendingCandidates.push(cand);
+                return;
+            }
+
             if (pc && cand) pc.addIceCandidate(cand);
         });
 
         s.on('hangup', payload => {
             const incomingCallId = payload && payload.callId ? payload.callId : null;
-            if (incomingCallId && incomingCallId !== callId) return;
+            if (incomingCallId && callId && incomingCallId !== callId) return;
+            if (incomingCallId && pendingCallId && incomingCallId !== pendingCallId) return;
+
+            if (pendingCallId && incomingCallId === pendingCallId && !callId) {
+                pendingOffer = null;
+                pendingCallId = null;
+                pendingCandidates = [];
+                renderIncomingEmergencyCallRow();
+                _stopAlertSound();
+                return;
+            }
+
             if (callId) endCall(false);
         });
+
+        s.on('call-message', payload => {
+            const incomingCallId = payload && payload.callId ? payload.callId : null;
+            if (incomingCallId && callId && incomingCallId !== callId) return;
+            if (incomingCallId && pendingCallId && incomingCallId !== pendingCallId) return;
+            if (payload.text && payload.sender !== 'admin') {
+                addMessage(payload.text, payload.sender || 'user', payload.timestamp);
+            }
+        });
     })();
-    </script>
+</script>
 
 </body>
 </html>

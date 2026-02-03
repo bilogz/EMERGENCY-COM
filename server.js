@@ -60,6 +60,13 @@ io.on('connection', (socket) => {
     socket.to(room).emit('hangup', payload);
   });
 
+  socket.on('call-message', (payload, room) => {
+    if (typeof room === 'string' && room.length > 0) {
+      console.log(`[message] room=${room} callId=${payload?.callId || ''} sender=${payload?.sender || 'unknown'}`);
+      socket.to(room).emit('call-message', payload);
+    }
+  });
+
   socket.on('disconnect', (reason) => {
     console.log(`[socket] disconnected ${socket.id} reason=${reason}`);
   });

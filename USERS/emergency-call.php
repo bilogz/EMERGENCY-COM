@@ -99,8 +99,9 @@ $assetBase = '../ADMIN/header/';
     <!-- Emergency Call Button and Audio -->
     <button id="call" style="display: none;">Emergency Call</button>
     <div id="callOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100000;">
-        <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px, 92vw); background:#0f172a; border:1px solid rgba(255,255,255,0.12); border-radius:16px; padding:22px; color:#fff; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
-            <div style="display:flex; align-items:center; gap:12px;">
+        <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px, 92vw); height:min(600px, 85vh); background:#0f172a; border:1px solid rgba(255,255,255,0.12); border-radius:16px; padding:22px; color:#fff; box-shadow:0 20px 60px rgba(0,0,0,0.5); display:flex; flex-direction:column;">
+            <!-- Call Header -->
+            <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
                 <div style="width:44px; height:44px; border-radius:12px; background:rgba(76,138,137,0.2); display:flex; align-items:center; justify-content:center;">
                     <i class="fas fa-headset" style="color:#4c8a89;"></i>
                 </div>
@@ -110,26 +111,71 @@ $assetBase = '../ADMIN/header/';
                 </div>
                 <div id="callTimer" style="font-variant-numeric:tabular-nums; font-weight:700;">00:00</div>
             </div>
-            <div style="margin-top:18px; display:flex; gap:10px; justify-content:flex-end;">
+            
+            <!-- Messages Area -->
+            <div id="callMessages" style="flex:1; margin-top:16px; overflow-y:auto; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:12px; background:rgba(0,0,0,0.2); min-height:200px;">
+                <div style="text-align:center; opacity:0.6; font-size:12px;">Messages will appear here</div>
+            </div>
+            
+            <!-- Message Input -->
+            <div style="margin-top:12px; display:flex; gap:8px; flex-shrink:0;">
+                <input type="text" id="messageInput" placeholder="Type a message..." style="flex:1; padding:8px 12px; border:1px solid rgba(255,255,255,0.2); border-radius:6px; background:rgba(255,255,255,0.1); color:#fff; outline:none;">
+                <button id="sendMessageBtn" class="btn btn-primary" style="padding:8px 16px;">Send</button>
+            </div>
+            
+            <!-- Call Controls -->
+            <div style="margin-top:16px; display:flex; gap:10px; justify-content:flex-end; flex-shrink:0;">
+                <button id="cancelCallBtn" class="btn btn-secondary">Cancel</button>
                 <button id="endCallBtn" class="btn btn-secondary" disabled style="opacity:0.6; pointer-events:none;">End Call</button>
             </div>
         </div>
     </div>
     <audio id="remote" autoplay></audio>
 
-    <script src="<?php echo (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['SERVER_NAME'] ?? 'localhost') . ':3000'; ?>/socket.io/socket.io.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
         const SIGNALING_URL = `${window.location.protocol}//${window.location.hostname}:3000`;
         let socket = null;
         let socketBound = false;
         const room = "emergency-room";
 
+        function waitForSocketConnected(s, timeoutMs = 8000) {
+            return new Promise((resolve, reject) => {
+                if (!s) return reject(new Error('No socket'));
+                if (s.connected) return resolve(true);
+                const t = setTimeout(() => {
+                    cleanup();
+                    reject(new Error('Socket connect timeout'));
+                }, timeoutMs);
+                const onConnect = () => {
+                    cleanup();
+                    resolve(true);
+                };
+                const onErr = (err) => {
+                    cleanup();
+                    reject(err || new Error('Socket connect error'));
+                };
+                const cleanup = () => {
+                    clearTimeout(t);
+                    s.off('connect', onConnect);
+                    s.off('connect_error', onErr);
+                };
+                s.on('connect', onConnect);
+                s.on('connect_error', onErr);
+            });
+        }
+
         function ensureSocket() {
             if (socket) return socket;
             if (typeof window.io !== 'function') {
                 return null;
             }
-            socket = window.io(SIGNALING_URL);
+            socket = window.io(SIGNALING_URL, {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionAttempts: 10,
+                reconnectionDelayMax: 2000,
+            });
             bindSocketHandlers();
             return socket;
         }
@@ -137,6 +183,15 @@ $assetBase = '../ADMIN/header/';
         function bindSocketHandlers() {
             if (!socket || socketBound) return;
             socketBound = true;
+
+            socket.on('connect', () => {
+                console.log('[call][user] socket connected', socket.id);
+                socket.emit('join', room);
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.log('[call][user] socket disconnected', reason);
+            });
 
             socket.on("answer", payload => {
                 const sdp = payload && payload.sdp ? payload.sdp : payload;
@@ -158,6 +213,14 @@ $assetBase = '../ADMIN/header/';
                 if (callId) endCall(false);
             });
 
+            socket.on('call-message', payload => {
+                const incomingCallId = payload && payload.callId ? payload.callId : null;
+                if (incomingCallId && incomingCallId !== callId) return;
+                if (payload.text && payload.sender !== 'user') {
+                    addMessage(payload.text, payload.sender || 'admin', payload.timestamp);
+                }
+            });
+
             socket.on('connect_error', () => {
                 if (callId) {
                     setStatus('Connecting failed. Signaling server offline.');
@@ -173,6 +236,115 @@ $assetBase = '../ADMIN/header/';
         let callConnectedAt = null;
         let timerInterval = null;
         let locationData = null;
+        let userProfile = null;
+        let messages = [];
+
+        // Messaging functions
+        function addMessage(text, sender = 'user', timestamp = Date.now()) {
+            const messagesContainer = document.getElementById('callMessages');
+            if (!messagesContainer) return;
+            
+            // Clear placeholder text if this is the first message
+            if (messages.length === 0) {
+                messagesContainer.innerHTML = '';
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.style.cssText = `
+                margin-bottom: 8px;
+                padding: 8px 12px;
+                border-radius: 8px;
+                background: ${sender === 'user' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(34, 197, 94, 0.2)'};
+                border-left: 3px solid ${sender === 'user' ? '#3b82f6' : '#22c55e'};
+                font-size: 13px;
+                line-height: 1.4;
+            `;
+            
+            const time = new Date(timestamp).toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit', 
+                hour12: true 
+            });
+            
+            const senderName = sender === 'user' ? 
+                (userProfile?.name || 'You') : 
+                'Emergency Services';
+            
+            messageDiv.innerHTML = `
+                <div style="font-weight: 600; margin-bottom: 2px; font-size: 11px; opacity: 0.8;">
+                    ${senderName} • ${time}
+                </div>
+                <div>${text}</div>
+            `;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            messages.push({ text, sender, timestamp, callId });
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            if (!text || !callId) return;
+            
+            input.value = '';
+            
+            // Add to local UI immediately
+            addMessage(text, 'user');
+            
+            // Send via socket
+            const s = ensureSocket();
+            if (s) {
+                s.emit('call-message', {
+                    text,
+                    callId,
+                    sender: 'user',
+                    senderName: userProfile?.name || 'User',
+                    timestamp: Date.now()
+                }, room);
+            }
+            
+            // Log to database using existing chat-send structure
+            try {
+                const formData = new FormData();
+                formData.append('text', text);
+                formData.append('userId', userProfile?.id || 'guest');
+                formData.append('userName', userProfile?.name || 'Guest User');
+                formData.append('userEmail', userProfile?.email || '');
+                formData.append('userPhone', userProfile?.phone || '');
+                formData.append('conversationId', `call_${callId}`); // Use callId as conversation identifier
+                
+                const response = await fetch('api/chat-send.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    console.error('Failed to log message to database');
+                }
+            } catch (e) {
+                console.error('Failed to log message:', e);
+            }
+        }
+
+        async function loadUserProfile() {
+            try {
+                const response = await fetch('api/get-user-profile.php');
+                const data = await response.json();
+                if (data.success) {
+                    userProfile = {
+                        id: data.user.id,
+                        name: data.user.name || data.user.username,
+                        username: data.user.username,
+                        email: data.user.email,
+                        phone: data.user.phone
+                    };
+                }
+            } catch (e) {
+                console.error('Failed to load user profile:', e);
+            }
+        }
 
         function formatTime(totalSeconds) {
             const m = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
@@ -202,6 +374,27 @@ $assetBase = '../ADMIN/header/';
             btn.style.pointerEvents = enabled ? 'auto' : 'none';
         }
 
+        function setCancelVisible(visible) {
+            const btn = document.getElementById('cancelCallBtn');
+            if (!btn) return;
+            btn.style.display = visible ? 'inline-block' : 'none';
+        }
+
+        async function cancelCall() {
+            if (!callId) return;
+            
+            await logCall('cancelled');
+            const s = ensureSocket();
+            if (s && callId) {
+                s.emit('hangup', { callId }, room);
+            }
+            setStatus('Call cancelled');
+            setTimeout(() => {
+                setOverlayVisible(false);
+                cleanupCall();
+            }, 800);
+        }
+
         function setStartButtonsDisabled(disabled) {
             document.querySelectorAll('button[onclick="startInternetCall()"]')
                 .forEach(b => { b.disabled = disabled; });
@@ -226,6 +419,7 @@ $assetBase = '../ADMIN/header/';
             try {
                 const payload = {
                     callId,
+                    userId: userProfile?.id || null,
                     room,
                     role: 'user',
                     event,
@@ -257,6 +451,21 @@ $assetBase = '../ADMIN/header/';
         function cleanupCall() {
             stopTimer();
             setEndEnabled(false);
+            setCancelVisible(false);
+            
+            // Clear messages
+            messages = [];
+            const messagesContainer = document.getElementById('callMessages');
+            if (messagesContainer) {
+                messagesContainer.innerHTML = '<div style="text-align:center; opacity:0.6; font-size:12px;">Messages will appear here</div>';
+            }
+            
+            // Clear message input
+            const messageInput = document.getElementById('messageInput');
+            if (messageInput) {
+                messageInput.value = '';
+            }
+            
             if (localStream) {
                 localStream.getTracks().forEach(t => t.stop());
                 localStream = null;
@@ -289,13 +498,26 @@ $assetBase = '../ADMIN/header/';
             }, 800);
         }
 
-        document.getElementById('endCallBtn').onclick = endCall;
+        document.getElementById('endCallBtn').onclick = () => endCall(true);
+        document.getElementById('cancelCallBtn').onclick = () => cancelCall();
+        document.getElementById('sendMessageBtn').onclick = () => sendMessage();
+        document.getElementById('messageInput').onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendMessage();
+            }
+        };
+
+        // Load user profile when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            loadUserProfile();
+        });
 
         function initPeer() {
             pc = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478?transport=udp' }
+                    { urls: 'stun:global.stun.twilio.com:3478' }
                 ]
             });
             pc.ontrack = e => {
@@ -314,6 +536,7 @@ $assetBase = '../ADMIN/header/';
                     callConnectedAt = Date.now();
                     setStatus('Connected');
                     setEndEnabled(true);
+                    setCancelVisible(false);
                     startTimer();
                     logCall('connected');
                 }
@@ -330,19 +553,20 @@ $assetBase = '../ADMIN/header/';
             setStatus('Connecting…');
             setTimer(0);
             setEndEnabled(false);
+            setCancelVisible(true);
 
             const s = ensureSocket();
             if (!s) {
                 setStatus('Call service unavailable. Start the signaling server on port 3000.');
                 setEndEnabled(true);
+                setCancelVisible(false);
                 return;
             }
 
-            if (s && s.connected === false) {
-                setStatus('Connecting to call service…');
-            }
+            if (s && s.connected === false) setStatus('Connecting to call service…');
 
             try {
+                await waitForSocketConnected(s);
                 callId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `call_${Date.now()}_${Math.random().toString(16).slice(2)}`;
                 callStartedAt = Date.now();
                 setStartButtonsDisabled(true);
@@ -357,10 +581,13 @@ $assetBase = '../ADMIN/header/';
 
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
+                console.log('[call][user] emitting offer', { callId, room });
                 s.emit("offer", { sdp: offer, callId }, room);
             } catch (e) {
+                console.error('[call][user] call failed', e);
                 setStatus('Call failed');
                 setEndEnabled(true);
+                setCancelVisible(false);
                 cleanupCall();
             }
         };
