@@ -41,6 +41,16 @@ if (file_exists(__DIR__ . '/db_connect.php')) {
     require_once '../../ADMIN/api/db_connect.php';
 }
 
+// Ensure database connection is available
+if (!isset($pdo) || $pdo === null) {
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Database connection failed. Please check your database configuration.'
+    ]);
+    exit();
+}
+
 // Get POST data
 $input = file_get_contents('php://input');
 $data = json_decode($input, true);
@@ -115,12 +125,44 @@ try {
         }
     }
     
+    // Discover available columns once (more reliable than INFORMATION_SCHEMA on shared hosting)
+    $existingCols = [];
+    try {
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM users");
+        $existingCols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0) : [];
+    } catch (PDOException $e) {
+        $existingCols = [];
+        error_log('SHOW COLUMNS failed (users): ' . $e->getMessage());
+    }
+
+    $colExistsCache = [];
+    $columnExists = function ($col) use ($pdo, &$colExistsCache, $existingCols) {
+        if (!empty($existingCols)) {
+            return in_array($col, $existingCols, true);
+        }
+
+        if (array_key_exists($col, $colExistsCache)) {
+            return $colExistsCache[$col];
+        }
+
+        try {
+            $stmt = $pdo->prepare("SHOW COLUMNS FROM users LIKE ?");
+            $stmt->execute([$col]);
+            $exists = $stmt->rowCount() > 0;
+            $colExistsCache[$col] = $exists;
+            return $exists;
+        } catch (PDOException $e) {
+            $colExistsCache[$col] = false;
+            error_log('SHOW COLUMNS LIKE failed (users.' . $col . '): ' . $e->getMessage());
+            return false;
+        }
+    };
+
     // Build update query dynamically based on available columns
     $updateFields = ['name = ?'];
     $updateValues = [$name];
-    
-    // Check which columns exist and add them to update
-    $columnsToCheck = [
+
+    $columnsToSet = [
         'email' => $email,
         'phone' => $phoneNormalized,
         'barangay' => $barangay,
@@ -131,23 +173,13 @@ try {
         'address' => $address,
         'notification_sound' => $data['notification_sound'] ?? null
     ];
-    
-    foreach ($columnsToCheck as $column => $value) {
-        try {
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
-                                   WHERE TABLE_SCHEMA = DATABASE() 
-                                   AND TABLE_NAME = 'users' 
-                                   AND COLUMN_NAME = ?");
-            $stmt->execute([$column]);
-            $columnExists = $stmt->fetchColumn() > 0;
-            
-            if ($columnExists) {
-                $updateFields[] = "$column = ?";
-                $updateValues[] = $value ?: null;
-            }
-        } catch (PDOException $e) {
-            error_log("Error checking column $column: " . $e->getMessage());
+
+    foreach ($columnsToSet as $column => $value) {
+        if (!$columnExists($column)) {
+            continue;
         }
+        $updateFields[] = "$column = ?";
+        $updateValues[] = ($value === '' ? null : $value);
     }
     
     // Add updated_at

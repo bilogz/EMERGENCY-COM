@@ -41,27 +41,34 @@ if (file_exists(__DIR__ . '/db_connect.php')) {
     require_once '../../ADMIN/api/db_connect.php';
 }
 
+// Ensure database connection is available
+if (!isset($pdo) || $pdo === null) {
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Database connection failed. Please check your database configuration.'
+    ]);
+    exit();
+}
+
 try {
     // Build query to get all available user fields
     $query = "SELECT id, name, email, phone, status, user_type, created_at, updated_at";
-    
-    // Check which optional columns exist
+
+    // Include optional columns if present (use SHOW COLUMNS for broader hosting compatibility)
     $optionalColumns = ['nationality', 'district', 'barangay', 'house_number', 'street', 'address', 'notification_sound'];
-    $availableColumns = [];
-    
+    $existingCols = [];
+    try {
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM users");
+        $existingCols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0) : [];
+    } catch (PDOException $e) {
+        $existingCols = [];
+        error_log('SHOW COLUMNS failed (users): ' . $e->getMessage());
+    }
+
     foreach ($optionalColumns as $column) {
-        try {
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
-                                   WHERE TABLE_SCHEMA = DATABASE() 
-                                   AND TABLE_NAME = 'users' 
-                                   AND COLUMN_NAME = ?");
-            $stmt->execute([$column]);
-            if ($stmt->fetchColumn() > 0) {
-                $availableColumns[] = $column;
-                $query .= ", $column";
-            }
-        } catch (PDOException $e) {
-            error_log("Error checking column $column: " . $e->getMessage());
+        if (!empty($existingCols) && in_array($column, $existingCols, true)) {
+            $query .= ", $column";
         }
     }
     

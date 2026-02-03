@@ -1,4 +1,3 @@
-php
 <?php
 header('Content-Type: application/json; charset=utf-8');
 
@@ -22,4 +21,7 @@ $alerts = [
   ]
 ];
 
-echo json_encode($alerts);
+echo json_encode([
+  'success' => true,
+  'alerts' => $alerts
+]);

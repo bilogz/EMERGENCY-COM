@@ -72,12 +72,28 @@ function getSecureConfig($key, $default = null) {
     
     // Second, try local config file (not committed to Git)
     if ($localConfig === null) {
+        $userLocal = [];
+        $adminLocal = [];
+
         $localConfigPath = __DIR__ . '/config.local.php';
         if (file_exists($localConfigPath)) {
-            $localConfig = require $localConfigPath;
-        } else {
-            $localConfig = [];
+            $loaded = require $localConfigPath;
+            if (is_array($loaded)) {
+                $userLocal = $loaded;
+            }
         }
+
+        $adminLocalConfigPath = dirname(__DIR__, 2) . '/ADMIN/api/config.local.php';
+        if (file_exists($adminLocalConfigPath)) {
+            $loaded = require $adminLocalConfigPath;
+            if (is_array($loaded)) {
+                $adminLocal = $loaded;
+            }
+        }
+
+        // Merge so USERS overrides ADMIN when keys overlap.
+        // This ensures missing DB_* keys in USERS config still come from ADMIN config.
+        $localConfig = array_merge($adminLocal, $userLocal);
     }
     
     if (isset($localConfig[$key])) {

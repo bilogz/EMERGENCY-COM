@@ -3,8 +3,14 @@
  * Guest Monitoring Notice
  * Displays a persistent notice for guest users about monitoring
  */
+// Safely start session only if not already started and headers not sent
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    if (!headers_sent()) {
+        session_start();
+    } else {
+        // Headers already sent, try to start session silently
+        @session_start();
+    }
 }
 
 // Check if user is a guest

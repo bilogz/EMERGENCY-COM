@@ -3,7 +3,8 @@
  * User-friendly searchable language selector
  */
 
-class LanguageSelectorModal {
+if (typeof window.LanguageSelectorModal === 'undefined') {
+window.LanguageSelectorModal = class LanguageSelectorModal {
     constructor() {
         this.modal = null;
         this.languages = [];
@@ -856,14 +857,15 @@ class LanguageSelectorModal {
         document.head.appendChild(style);
     }
 }
+}
 
 // Initialize global instance
 if (typeof window.languageSelectorModal === 'undefined') {
-    window.languageSelectorModal = new LanguageSelectorModal();
+    window.languageSelectorModal = new window.LanguageSelectorModal();
 }
 
 // Export for use in other scripts
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = LanguageSelectorModal;
+    module.exports = window.LanguageSelectorModal;
 }
 

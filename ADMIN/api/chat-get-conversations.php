@@ -53,7 +53,12 @@ try {
             c.created_at,
             c.updated_at,
             COALESCE(m.message_text, c.last_message) as last_message,
-            COALESCE(m.created_at, c.last_message_time) as last_message_time
+            COALESCE(m.created_at, c.last_message_time) as last_message_time,
+            CASE WHEN EXISTS(
+                SELECT 1 FROM chat_messages cm 
+                WHERE cm.conversation_id = c.conversation_id 
+                AND cm.message_text LIKE '[CALL_ENDED]%'
+            ) THEN 1 ELSE 0 END as has_call
         FROM conversations c
         LEFT JOIN (
             SELECT m1.conversation_id, m1.message_text, m1.created_at
@@ -96,7 +101,8 @@ try {
             'lastMessageTime' => $conv['last_message_time'] ? strtotime($conv['last_message_time']) * 1000 : null,
             'assignedTo' => $conv['assigned_to'],
             'createdAt' => strtotime($conv['created_at']) * 1000,
-            'updatedAt' => strtotime($conv['updated_at']) * 1000
+            'updatedAt' => strtotime($conv['updated_at']) * 1000,
+            'hasCall' => (bool)($conv['has_call'] ?? false)
         ];
     }, $conversations);
     
@@ -113,7 +119,20 @@ try {
     
 } catch (PDOException $e) {
     error_log('Admin chat get conversations error: ' . $e->getMessage());
+    error_log('SQL Error Info: ' . print_r($e->errorInfo, true));
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Failed to retrieve conversations']);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'Failed to retrieve conversations',
+        'error' => $e->getMessage() // Include error in response for debugging
+    ]);
+} catch (Exception $e) {
+    error_log('Admin chat get conversations general error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'Failed to retrieve conversations',
+        'error' => $e->getMessage()
+    ]);
 }
 

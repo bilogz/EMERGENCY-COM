@@ -18,51 +18,6 @@ if (!isset($assetBase)) {
     <div class="main-container">
         <div class="sub-container">
             <div class="footer-container">
-                <div class="footer-main">
-                    <div class="footer-brand">
-                        <a href="<?= $basePath ?>index.php" class="footer-logo">
-                            <img src="<?= $assetBase ?>images/logo.svg" alt="" class="logo-img">
-                        </a>
-                        <p class="footer-description">
-                            Building modern web applications with clean code, responsive design, and user-friendly interfaces.
-                        </p>
-                        <div class="footer-social">
-                            <a href="#" class="social-link" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
-                            <a href="#" class="social-link" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
-                            <a href="#" class="social-link" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
-                            <a href="#" class="social-link" aria-label="GitHub"><i class="fab fa-github"></i></a>
-                        </div>
-                    </div>
-
-                    <div class="footer-column">
-                        <h4>Navigation</h4>
-                        <ul class="footer-links">
-                            <li><a href="<?= $isRootContext ? 'index.php' : '../index.php' ?>" class="footer-link">Home</a></li>
-                            <li><a href="<?= $basePath ?><?= $linkPrefix ?>alerts.php" class="footer-link">Alerts</a></li>
-                            <li><a href="<?= $basePath ?><?= $linkPrefix ?>profile.php" class="footer-link">Profile</a></li>
-                            <li><a href="<?= $basePath ?><?= $linkPrefix ?>support.php" class="footer-link">Support</a></li>
-                            <li><a href="<?= $basePath ?><?= $linkPrefix ?>emergency-call.php" class="footer-link">Emergency Call</a></li>
-                        </ul>
-                    </div>
-
-                    <div class="footer-column">
-                        <h4>Resources</h4>
-                        <ul class="footer-links">
-                            <li><a href="#" class="footer-link">Documentation</a></li>
-                            <li><a href="#" class="footer-link">FAQ</a></li>
-                        </ul>
-                    </div>
-
-                    <div class="footer-column">
-                        <h4>Company</h4>
-                        <ul class="footer-links">
-                            <li><a href="#" class="footer-link">About Us</a></li>
-                            <li><a href="#" class="footer-link">Privacy Policy</a></li>
-                            <li><a href="#" class="footer-link">Terms of Service</a></li>
-                        </ul>
-                    </div>
-                </div>
-
                 <div class="footer-bottom">
                     <div class="footer-copyright">
                         <p>&copy; <?= date('Y'); ?> LGU #4. All rights reserved.</p>
@@ -89,6 +44,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const userDropdownBtn = document.getElementById('userDropdownBtn');
     const userDropdownMenu = document.getElementById('userDropdownMenu');
     const userLogoutBtn = document.getElementById('userLogoutBtn');
+
+    if (userDropdownMenu) {
+        const seen = new Set();
+        const items = Array.from(userDropdownMenu.querySelectorAll('.user-dropdown-actions .user-dropdown-link'));
+        items.forEach((el) => {
+            const href = (el.getAttribute('href') || '').trim();
+            const txt = (el.textContent || '').replace(/\s+/g, ' ').trim();
+            const key = `${href}::${txt}`;
+            if (seen.has(key)) {
+                el.remove();
+            } else {
+                seen.add(key);
+            }
+        });
+    }
     
     // Toggle dropdown
     if (userDropdownBtn && userDropdownMenu) {

@@ -31,6 +31,37 @@ $assetBase = '../ADMIN/header/';
     <script src="js/language-selector-modal.js"></script>
     <script src="js/language-sync.js"></script>
     <script>
+        // Ensure sidebar functions are available before translation scripts interfere
+        // This runs immediately, before DOMContentLoaded
+        (function() {
+            if (typeof window.sidebarToggle !== 'function') {
+                window.sidebarToggle = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                };
+            }
+            if (typeof window.sidebarClose !== 'function') {
+                window.sidebarClose = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.remove('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.remove('sidebar-overlay-open');
+                        }
+                        document.body.classList.remove('sidebar-open');
+                    }
+                };
+            }
+        })();
+        
         document.addEventListener('DOMContentLoaded', function() {
             const langBtn = document.getElementById('languageSelectorBtn');
             if (langBtn && window.languageSelectorModal) {
@@ -38,6 +69,36 @@ $assetBase = '../ADMIN/header/';
                     window.languageSelectorModal.open();
                 });
             }
+            
+            // Verify sidebar functions are still available after translation scripts run
+            if (typeof window.sidebarToggle !== 'function') {
+                console.error('CRITICAL: window.sidebarToggle was removed or overwritten!');
+                // Restore it
+                window.sidebarToggle = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                };
+            }
+            
+            // Protect sidebar toggle buttons from translation interference
+            const toggleButtons = document.querySelectorAll('.sidebar-toggle-btn');
+            toggleButtons.forEach(function(btn) {
+                // Ensure onclick is set correctly
+                if (!btn.getAttribute('onclick') || !btn.getAttribute('onclick').includes('sidebarToggle')) {
+                    btn.setAttribute('onclick', 'window.sidebarToggle()');
+                }
+                // Ensure data-no-translate is set
+                if (!btn.hasAttribute('data-no-translate')) {
+                    btn.setAttribute('data-no-translate', '');
+                }
+            });
         });
     </script>
 </head>
@@ -100,6 +161,7 @@ $assetBase = '../ADMIN/header/';
     <button id="call" style="display: none;">Emergency Call</button>
     <div id="callOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100000;">
         <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px, 92vw); height:min(600px, 85vh); background:#0f172a; border:1px solid rgba(255,255,255,0.12); border-radius:16px; padding:22px; color:#fff; box-shadow:0 20px 60px rgba(0,0,0,0.5); display:flex; flex-direction:column;">
+            <div id="callActiveBanner" style="display:none; margin:-6px 0 12px; padding:8px 12px; border-radius:12px; background:rgba(220,38,38,0.18); border:1px solid rgba(220,38,38,0.45); color:#fecaca; font-weight:800; letter-spacing:0.6px; text-transform:uppercase; text-align:center;">CALL ON ACTIVE</div>
             <!-- Call Header -->
             <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
                 <div style="width:44px; height:44px; border-radius:12px; background:rgba(76,138,137,0.2); display:flex; align-items:center; justify-content:center;">
@@ -118,15 +180,12 @@ $assetBase = '../ADMIN/header/';
             </div>
             
             <!-- Message Input -->
-            <div style="margin-top:12px; display:flex; gap:8px; flex-shrink:0;">
-                <input type="text" id="messageInput" placeholder="Type a message..." style="flex:1; padding:8px 12px; border:1px solid rgba(255,255,255,0.2); border-radius:6px; background:rgba(255,255,255,0.1); color:#fff; outline:none;">
-                <button id="sendMessageBtn" class="btn btn-primary" style="padding:8px 16px;">Send</button>
-            </div>
+            <div id="callInputRow" style="margin-top:12px; display:flex; gap:10px; flex-shrink:0; align-items:center;"></div>
             
             <!-- Call Controls -->
-            <div style="margin-top:16px; display:flex; gap:10px; justify-content:flex-end; flex-shrink:0;">
-                <button id="cancelCallBtn" class="btn btn-secondary">Cancel</button>
-                <button id="endCallBtn" class="btn btn-secondary" disabled style="opacity:0.6; pointer-events:none;">End Call</button>
+            <div style="margin-top:14px; display:flex; gap:10px; justify-content:flex-end; flex-shrink:0;">
+                <button id="cancelCallBtn" class="btn btn-secondary" style="min-height:44px; padding:10px 16px;">Cancel</button>
+                <button id="endCallBtn" class="btn btn-secondary" disabled style="opacity:0.6; pointer-events:none; min-height:44px; padding:10px 16px;">End Call</button>
             </div>
         </div>
     </div>
@@ -134,7 +193,8 @@ $assetBase = '../ADMIN/header/';
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        const SIGNALING_URL = `${window.location.protocol}//${window.location.hostname}:3000`;
+        const SIGNALING_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
+        const SIGNALING_URL = `${window.location.protocol}//${SIGNALING_HOST}:3000`;
         let socket = null;
         let socketBound = false;
         const room = "emergency-room";
@@ -232,12 +292,38 @@ $assetBase = '../ADMIN/header/';
         let pc = null;
         let localStream = null;
         let callId = null;
+        let callConversationId = null;
         let callStartedAt = null;
         let callConnectedAt = null;
         let timerInterval = null;
         let locationData = null;
         let userProfile = null;
         let messages = [];
+
+        async function ensureCallConversationId() {
+            if (callConversationId) return callConversationId;
+            if (!userProfile || !userProfile.id) return null;
+
+            try {
+                const params = new URLSearchParams({
+                    userId: String(userProfile.id),
+                    userName: userProfile.name || userProfile.username || 'User',
+                    userEmail: userProfile.email || '',
+                    userPhone: userProfile.phone || '',
+                    userLocation: '',
+                    userConcern: 'emergency',
+                    isGuest: '0'
+                });
+                const res = await fetch(`api/chat-get-conversation.php?${params.toString()}`);
+                const data = await res.json();
+                if (data && data.success && data.conversationId) {
+                    callConversationId = data.conversationId;
+                    return callConversationId;
+                }
+            } catch (e) {}
+
+            return null;
+        }
 
         // Messaging functions
         function addMessage(text, sender = 'user', timestamp = Date.now()) {
@@ -283,8 +369,9 @@ $assetBase = '../ADMIN/header/';
             messages.push({ text, sender, timestamp, callId });
         }
 
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
+        async function sendCallMessage() {
+            const input = document.getElementById('callMessageInput');
+            if (!input) return;
             const text = input.value.trim();
             if (!text || !callId) return;
             
@@ -307,13 +394,14 @@ $assetBase = '../ADMIN/header/';
             
             // Log to database using existing chat-send structure
             try {
+                const convId = await ensureCallConversationId();
                 const formData = new FormData();
                 formData.append('text', text);
                 formData.append('userId', userProfile?.id || 'guest');
                 formData.append('userName', userProfile?.name || 'Guest User');
                 formData.append('userEmail', userProfile?.email || '');
                 formData.append('userPhone', userProfile?.phone || '');
-                formData.append('conversationId', `call_${callId}`); // Use callId as conversation identifier
+                if (convId) formData.append('conversationId', convId);
                 
                 const response = await fetch('api/chat-send.php', {
                     method: 'POST',
@@ -354,6 +442,15 @@ $assetBase = '../ADMIN/header/';
 
         function setOverlayVisible(visible) {
             document.getElementById('callOverlay').style.display = visible ? 'block' : 'none';
+            if (visible) {
+                try { bindCallOverlayUi(); } catch (e) {}
+            }
+        }
+
+        function setCallActiveBannerVisible(visible) {
+            const el = document.getElementById('callActiveBanner');
+            if (!el) return;
+            el.style.display = visible ? 'block' : 'none';
         }
 
         function setStatus(text) {
@@ -452,6 +549,7 @@ $assetBase = '../ADMIN/header/';
             stopTimer();
             setEndEnabled(false);
             setCancelVisible(false);
+            setCallActiveBannerVisible(false);
             
             // Clear messages
             messages = [];
@@ -461,9 +559,9 @@ $assetBase = '../ADMIN/header/';
             }
             
             // Clear message input
-            const messageInput = document.getElementById('messageInput');
-            if (messageInput) {
-                messageInput.value = '';
+            const callMessageInput = document.getElementById('callMessageInput');
+            if (callMessageInput) {
+                callMessageInput.value = '';
             }
             
             if (localStream) {
@@ -498,19 +596,44 @@ $assetBase = '../ADMIN/header/';
             }, 800);
         }
 
-        document.getElementById('endCallBtn').onclick = () => endCall(true);
-        document.getElementById('cancelCallBtn').onclick = () => cancelCall();
-        document.getElementById('sendMessageBtn').onclick = () => sendMessage();
-        document.getElementById('messageInput').onkeypress = (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                sendMessage();
-            }
-        };
+        function renderCallInputRow() {
+            const row = document.getElementById('callInputRow');
+            if (!row) return;
 
-        // Load user profile when page loads
+            row.innerHTML = `
+                <input type="text" id="callMessageInput" placeholder="Type a message..." style="flex:1; width:100%; padding:10px 12px; border:1px solid rgba(255,255,255,0.18); border-radius:10px; background:rgba(255,255,255,0.08); color:#fff; outline:none;">
+                <button id="callSendMessageBtn" class="btn btn-primary" type="button" style="padding:10px 16px; background:#4c8a89; border:1px solid rgba(255,255,255,0.12); color:#fff; border-radius:10px; font-weight:800; min-height:44px;">Send</button>
+            `;
+        }
+
+        function bindCallOverlayUi() {
+            renderCallInputRow();
+
+            const endBtn = document.getElementById('endCallBtn');
+            if (endBtn) endBtn.onclick = () => endCall(true);
+
+            const cancelBtn = document.getElementById('cancelCallBtn');
+            if (cancelBtn) cancelBtn.onclick = () => cancelCall();
+
+            const sendBtn = document.getElementById('callSendMessageBtn');
+            if (sendBtn) sendBtn.onclick = () => sendCallMessage();
+
+            const input = document.getElementById('callMessageInput');
+            if (input) {
+                input.onkeypress = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        sendCallMessage();
+                    }
+                };
+            }
+        }
+
+        // Load user profile and bind UI when page loads
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('[call][user] emergency-call overlay script loaded v2');
             loadUserProfile();
+            bindCallOverlayUi();
         });
 
         function initPeer() {
@@ -537,6 +660,7 @@ $assetBase = '../ADMIN/header/';
                     setStatus('Connected');
                     setEndEnabled(true);
                     setCancelVisible(false);
+                    setCallActiveBannerVisible(true);
                     startTimer();
                     logCall('connected');
                 }
@@ -554,6 +678,7 @@ $assetBase = '../ADMIN/header/';
             setTimer(0);
             setEndEnabled(false);
             setCancelVisible(true);
+            setCallActiveBannerVisible(false);
 
             const s = ensureSocket();
             if (!s) {
@@ -573,6 +698,8 @@ $assetBase = '../ADMIN/header/';
                 locationData = await tryGetLocation();
                 await logCall('started');
 
+                await ensureCallConversationId();
+
                 initPeer();
                 s.emit("join", room);
 
@@ -582,7 +709,28 @@ $assetBase = '../ADMIN/header/';
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 console.log('[call][user] emitting offer', { callId, room });
-                s.emit("offer", { sdp: offer, callId }, room);
+                const caller = userProfile ? {
+                    id: userProfile.id ?? null,
+                    name: userProfile.name ?? null,
+                    email: userProfile.email ?? null,
+                    phone: userProfile.phone ?? null,
+                    nationality: userProfile.nationality ?? null,
+                    district: userProfile.district ?? null,
+                    barangay: userProfile.barangay ?? null,
+                    house_number: userProfile.house_number ?? null,
+                    street: userProfile.street ?? null,
+                    address: userProfile.address ?? null
+                } : null;
+
+                s.emit("offer", {
+                    sdp: offer,
+                    callId,
+                    conversationId: callConversationId,
+                    userId: userProfile?.id || null,
+                    userName: userProfile?.name || null,
+                    caller,
+                    location: locationData || null
+                }, room);
             } catch (e) {
                 console.error('[call][user] call failed', e);
                 setStatus('Call failed');

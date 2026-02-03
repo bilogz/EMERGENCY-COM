@@ -3,15 +3,19 @@
  * Automatically translates all UI text, including elements without data-translate attributes
  */
 
-class GlobalTranslator {
+if (typeof window.GlobalTranslator === 'undefined') {
+window.GlobalTranslator = class GlobalTranslator {
     constructor() {
         this.translationCache = new Map();
-        this.autoTranslateEnabled = true;
+        // CONSERVATIVE MODE: Only translate elements with explicit data-translate attributes
+        // This prevents interference with functionality, styles, and DOM structure
+        this.autoTranslateEnabled = false; // Disable aggressive auto-translation
         this.excludedSelectors = [
             'script', 'style', 'noscript', '[data-no-translate]', 
             '.no-translate', 'input[type="hidden"]', '.translation-ignore',
             '.sidebar-toggle-btn', 'button[onclick]',
-            '.sidebar-link', 'a.sidebar-link', '.sidebar-menu-item a'
+            '.sidebar-link', 'a.sidebar-link', '.sidebar-menu-item a',
+            'button', 'a', 'input', 'select', 'textarea', 'form'
         ];
         this.init();
     }
@@ -42,31 +46,70 @@ class GlobalTranslator {
      * Observe DOM changes to translate new content
      */
     observeDOM() {
+        // CONSERVATIVE MODE: Only watch for NEW elements with data-translate attributes
+        // Do NOT auto-translate everything - this prevents interference
         const observer = new MutationObserver((mutations) => {
-            let shouldTranslate = false;
+            let hasNewTranslateElements = false;
             
             mutations.forEach((mutation) => {
+                // Skip all mutations on interactive elements
+                if (mutation.target && (
+                    mutation.target.classList.contains('sidebar-toggle-btn') ||
+                    mutation.target.closest('.sidebar-toggle-btn') ||
+                    mutation.target.tagName === 'BUTTON' ||
+                    mutation.target.tagName === 'A' ||
+                    mutation.target.hasAttribute('onclick')
+                )) {
+                    return; // Never interfere with interactive elements
+                }
+                
+                // Only check for NEW elements with data-translate attributes
                 if (mutation.addedNodes.length > 0) {
                     mutation.addedNodes.forEach((node) => {
-                        if (node.nodeType === 1 && !this.isExcluded(node)) {
-                            shouldTranslate = true;
+                        if (node.nodeType === 1) {
+                            // Only translate if element has explicit data-translate attribute
+                            if (node.hasAttribute && node.hasAttribute('data-translate')) {
+                                hasNewTranslateElements = true;
+                            }
+                            // Check children for data-translate
+                            if (node.querySelectorAll && node.querySelectorAll('[data-translate]').length > 0) {
+                                hasNewTranslateElements = true;
+                            }
                         }
                     });
                 }
+                
+                // Protect all onclick attributes from being modified
+                if (mutation.type === 'attributes' && mutation.attributeName === 'onclick') {
+                    const target = mutation.target;
+                    if (target && target.classList && target.classList.contains('sidebar-toggle-btn')) {
+                        // Restore the onclick if it was removed or modified
+                        if (!target.getAttribute('onclick') || !target.getAttribute('onclick').includes('sidebarToggle')) {
+                            target.setAttribute('onclick', 'window.sidebarToggle()');
+                        }
+                    }
+                }
             });
             
-            if (shouldTranslate) {
+            // Only translate if new elements with data-translate were added
+            if (hasNewTranslateElements && this.autoTranslateEnabled) {
                 // Debounce translation
                 clearTimeout(this.translateTimeout);
                 this.translateTimeout = setTimeout(() => {
-                    this.translateAll();
+                    // Only translate elements with data-translate
+                    const lang = getCurrentLanguage();
+                    const translation = translations[lang] || translations.en || {};
+                    this.translateWithAttributes(translation);
                 }, 300);
             }
         });
         
+        // Only observe for new elements, not all DOM changes
         observer.observe(document.body, {
             childList: true,
-            subtree: true
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['onclick', 'data-translate']  // Only watch for onclick and data-translate changes
         });
     }
     
@@ -145,27 +188,25 @@ class GlobalTranslator {
             }
         }
         
-        // Translate elements with data-translate attributes FIRST (existing system)
+        // CONSERVATIVE MODE: Only translate elements with explicit data-translate attributes
+        // This prevents interference with functionality, styles, and DOM structure
         console.log(`🌍 GlobalTranslator: Translating ${document.querySelectorAll('[data-translate]').length} elements with data-translate`);
         this.translateWithAttributes(translation);
         
-        // Translate button text ONLY (preserve functionality)
-        this.translateButtonText(translation);
-        
-        // Translate buttons, labels, and other common elements
-        this.translateCommonElements(translation);
-        
-        // Translate ALL text nodes (comprehensive translation) - but exclude interactive elements
-        this.translateAllTextNodes(translation);
-        
-        console.log(`✓ GlobalTranslator: Translation complete for ${lang}`);
+        // Only translate placeholders and labels that have explicit data-translate attributes
+        // Do NOT auto-translate buttons, links, or other interactive elements
+        console.log(`✓ GlobalTranslator: Translation complete for ${lang} (conservative mode - only explicit data-translate elements)`);
     }
     
     /**
      * Translate all text nodes in the document
-     * This is the comprehensive translation that catches everything
+     * DISABLED: This was too aggressive and caused conflicts with functionality
+     * Only elements with explicit data-translate attributes are now translated
      */
     translateAllTextNodes(translation) {
+        // CONSERVATIVE MODE: This method is disabled to prevent interference
+        // Only translateWithAttributes() is used now
+        return;
         if (!translation) return;
         
         // Create a comprehensive map of all known text patterns
@@ -401,9 +442,31 @@ class GlobalTranslator {
         console.log(`Found ${elementsToTranslate.length} elements with data-translate attribute`);
         
         elementsToTranslate.forEach(element => {
+            // Safety check: Never translate interactive elements, even if they have data-translate
             if (this.isExcluded(element)) {
                 console.debug(`Element excluded:`, element);
                 return;
+            }
+            
+            // Additional safety: Never translate buttons with onclick handlers
+            if (element.tagName === 'BUTTON' && element.hasAttribute('onclick') && !element.hasAttribute('data-translate')) {
+                console.debug(`Button with onclick excluded:`, element);
+                return;
+            }
+            
+            // Additional safety: Never translate sidebar toggle buttons
+            if (element.classList.contains('sidebar-toggle-btn')) {
+                console.debug(`Sidebar toggle button excluded:`, element);
+                return;
+            }
+            
+            // Additional safety: Never translate sidebar links (they use spans with data-translate inside)
+            if (element.classList.contains('sidebar-link') || element.closest('.sidebar-link')) {
+                // Only allow if it's a span inside a sidebar link
+                if (!(element.tagName === 'SPAN' && element.closest('.sidebar-link'))) {
+                    console.debug(`Sidebar link excluded:`, element);
+                    return;
+                }
             }
             
             const key = element.getAttribute('data-translate');
@@ -530,9 +593,13 @@ class GlobalTranslator {
     
     /**
      * Translate button text only (preserve functionality)
-     * Now handles ALL button text, including buttons with data-translate and buttons with child elements
+     * DISABLED: This was too aggressive and caused conflicts with button functionality
+     * Only buttons with explicit data-translate attributes are now translated
      */
     translateButtonText(translation) {
+        // CONSERVATIVE MODE: This method is disabled to prevent interference
+        // Only translateWithAttributes() is used now
+        return;
         if (!translation) return;
         
         // Common button texts mapping
@@ -721,8 +788,13 @@ class GlobalTranslator {
     
     /**
      * Translate common form elements and UI components
+     * DISABLED: This was too aggressive and caused conflicts
+     * Only elements with explicit data-translate attributes are now translated
      */
     translateCommonElements(translation) {
+        // CONSERVATIVE MODE: This method is disabled to prevent interference
+        // Only translateWithAttributes() is used now
+        return;
         if (!translation) return;
         
         // Common form labels and placeholders
@@ -851,22 +923,23 @@ class GlobalTranslator {
         }
     }
 }
+}
 
 // Initialize global translator when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         if (typeof window.globalTranslator === 'undefined') {
-            window.globalTranslator = new GlobalTranslator();
+            window.globalTranslator = new window.GlobalTranslator();
         }
     });
 } else {
     if (typeof window.globalTranslator === 'undefined') {
-        window.globalTranslator = new GlobalTranslator();
+        window.globalTranslator = new window.GlobalTranslator();
     }
 }
 
 // Export for use in other scripts
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = GlobalTranslator;
+    module.exports = window.GlobalTranslator;
 }
 

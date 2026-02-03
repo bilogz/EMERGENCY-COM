@@ -3,7 +3,8 @@
  * Handles language detection, selection, and real-time updates
  */
 
-class LanguageManager {
+if (typeof window.LanguageManager === 'undefined') {
+window.LanguageManager = class LanguageManager {
     constructor() {
         this.currentLanguage = 'en';
         this.supportedLanguages = [];
@@ -372,14 +373,15 @@ class LanguageManager {
         return relativePath;
     }
 }
+}
 
 // Initialize global language manager
 if (typeof window.languageManager === 'undefined') {
-    window.languageManager = new LanguageManager();
+    window.languageManager = new window.LanguageManager();
 }
 
 // Export for use in other scripts
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = LanguageManager;
+    module.exports = window.LanguageManager;
 }
 

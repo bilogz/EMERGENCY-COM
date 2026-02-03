@@ -1,5 +1,5 @@
 // Translation system for the Emergency Communication Portal
-const translations = {
+window.translations = window.translations || {
     en: {
         // Navigation
         'nav.home': 'Home',

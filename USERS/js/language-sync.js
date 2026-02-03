@@ -3,7 +3,8 @@
  * This script ensures that when admins add/update languages, users see them immediately
  */
 
-class LanguageSync {
+if (typeof window.LanguageSync === 'undefined') {
+window.LanguageSync = class LanguageSync {
     constructor() {
         this.lastSyncTime = null;
         this.syncInterval = null;
@@ -170,14 +171,15 @@ class LanguageSync {
         return relativePath;
     }
 }
+}
 
 // Initialize language sync
 if (typeof window.languageSync === 'undefined') {
-    window.languageSync = new LanguageSync();
+    window.languageSync = new window.LanguageSync();
 }
 
 // Export for use in other scripts
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = LanguageSync;
+    module.exports = window.LanguageSync;
 }
 

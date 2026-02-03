@@ -24,6 +24,37 @@ $assetBase = '../ADMIN/header/';
     <script src="js/language-selector-modal.js?v=<?= @filemtime(__DIR__ . '/js/language-selector-modal.js') ?>"></script>
     <script src="js/language-sync.js?v=<?= @filemtime(__DIR__ . '/js/language-sync.js') ?>"></script>
     <script>
+        // Ensure sidebar functions are available before translation scripts interfere
+        // This runs immediately, before DOMContentLoaded
+        (function() {
+            if (typeof window.sidebarToggle !== 'function') {
+                window.sidebarToggle = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                };
+            }
+            if (typeof window.sidebarClose !== 'function') {
+                window.sidebarClose = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.remove('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.remove('sidebar-overlay-open');
+                        }
+                        document.body.classList.remove('sidebar-open');
+                    }
+                };
+            }
+        })();
+        
         document.addEventListener('DOMContentLoaded', function() {
             const langBtn = document.getElementById('languageSelectorBtn');
             if (langBtn && window.languageSelectorModal) {
@@ -31,6 +62,36 @@ $assetBase = '../ADMIN/header/';
                     window.languageSelectorModal.open();
                 });
             }
+            
+            // Verify sidebar functions are still available after translation scripts run
+            if (typeof window.sidebarToggle !== 'function') {
+                console.error('CRITICAL: window.sidebarToggle was removed or overwritten!');
+                // Restore it
+                window.sidebarToggle = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                };
+            }
+            
+            // Protect sidebar toggle buttons from translation interference
+            const toggleButtons = document.querySelectorAll('.sidebar-toggle-btn');
+            toggleButtons.forEach(function(btn) {
+                // Ensure onclick is set correctly
+                if (!btn.getAttribute('onclick') || !btn.getAttribute('onclick').includes('sidebarToggle')) {
+                    btn.setAttribute('onclick', 'window.sidebarToggle()');
+                }
+                // Ensure data-no-translate is set
+                if (!btn.hasAttribute('data-no-translate')) {
+                    btn.setAttribute('data-no-translate', '');
+                }
+            });
         });
     </script>
 </head>

@@ -33,6 +33,37 @@ $current = 'alerts.php';
     <script src="js/language-sync.js"></script>
     <script src="js/global-translator.js"></script>
     <script>
+        // Ensure sidebar functions are available before translation scripts interfere
+        // This runs immediately, before DOMContentLoaded
+        (function() {
+            if (typeof window.sidebarToggle !== 'function') {
+                window.sidebarToggle = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                };
+            }
+            if (typeof window.sidebarClose !== 'function') {
+                window.sidebarClose = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.remove('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.remove('sidebar-overlay-open');
+                        }
+                        document.body.classList.remove('sidebar-open');
+                    }
+                };
+            }
+        })();
+        
         document.addEventListener('DOMContentLoaded', function() {
             const langBtn = document.getElementById('languageSelectorBtn');
             if (langBtn && window.languageSelectorModal) {
@@ -40,6 +71,36 @@ $current = 'alerts.php';
                     window.languageSelectorModal.open();
                 });
             }
+            
+            // Verify sidebar functions are still available after translation scripts run
+            if (typeof window.sidebarToggle !== 'function') {
+                console.error('CRITICAL: window.sidebarToggle was removed or overwritten!');
+                // Restore it
+                window.sidebarToggle = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                };
+            }
+            
+            // Protect sidebar toggle buttons from translation interference
+            const toggleButtons = document.querySelectorAll('.sidebar-toggle-btn');
+            toggleButtons.forEach(function(btn) {
+                // Ensure onclick is set correctly
+                if (!btn.getAttribute('onclick') || !btn.getAttribute('onclick').includes('sidebarToggle')) {
+                    btn.setAttribute('onclick', 'window.sidebarToggle()');
+                }
+                // Ensure data-no-translate is set
+                if (!btn.hasAttribute('data-no-translate')) {
+                    btn.setAttribute('data-no-translate', '');
+                }
+            });
         });
     </script>
 </head>
@@ -65,43 +126,43 @@ $current = 'alerts.php';
                 <!-- Time & Severity Filters -->
                 <div class="alert-filters" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                     <span style="font-weight: 600; color: var(--text-color, #1f2937); margin-right: 0.5rem;">Time:</span>
-                    <button class="filter-btn time-filter active" data-time-filter="recent">
-                        <i class="fas fa-clock"></i> Recent (24h)
+                    <button class="filter-btn time-filter active" data-time-filter="recent" data-no-translate>
+                        <i class="fas fa-clock"></i> <span>Recent (24h)</span>
                     </button>
-                    <button class="filter-btn time-filter" data-time-filter="older">
-                        <i class="fas fa-history"></i> Older
+                    <button class="filter-btn time-filter" data-time-filter="older" data-no-translate>
+                        <i class="fas fa-history"></i> <span>Older</span>
                     </button>
                     <span style="font-weight: 600; color: var(--text-color, #1f2937); margin-left: 1rem; margin-right: 0.5rem;">Type:</span>
-                    <button class="filter-btn severity-filter" data-severity-filter="emergency_only">
-                        <i class="fas fa-exclamation-circle"></i> Emergency Only
+                    <button class="filter-btn severity-filter" data-severity-filter="emergency_only" data-no-translate>
+                        <i class="fas fa-exclamation-circle"></i> <span>Emergency Only</span>
                     </button>
-                    <button class="filter-btn severity-filter" data-severity-filter="warnings_only">
-                        <i class="fas fa-exclamation-triangle"></i> Warnings Only
+                    <button class="filter-btn severity-filter" data-severity-filter="warnings_only" data-no-translate>
+                        <i class="fas fa-exclamation-triangle"></i> <span>Warnings Only</span>
                     </button>
-                    <button class="filter-btn severity-filter active" data-severity-filter="all">
-                        <i class="fas fa-list"></i> All Types
+                    <button class="filter-btn severity-filter active" data-severity-filter="all" data-no-translate>
+                        <i class="fas fa-list"></i> <span>All Types</span>
                     </button>
                 </div>
                 
                 <!-- Category Filters -->
                 <div class="alert-filters" style="margin-bottom: 2rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button class="filter-btn category-filter active" data-category="all">
-                        <i class="fas fa-list"></i> All Categories
+                    <button class="filter-btn category-filter active" data-category="all" data-no-translate>
+                        <i class="fas fa-list"></i> <span>All Categories</span>
                     </button>
-                    <button class="filter-btn category-filter" data-category="Weather">
-                        <i class="fas fa-cloud-rain"></i> Weather
+                    <button class="filter-btn category-filter" data-category="Weather" data-no-translate>
+                        <i class="fas fa-cloud-rain"></i> <span>Weather</span>
                     </button>
-                    <button class="filter-btn category-filter" data-category="Earthquake">
-                        <i class="fas fa-mountain"></i> Earthquake
+                    <button class="filter-btn category-filter" data-category="Earthquake" data-no-translate>
+                        <i class="fas fa-mountain"></i> <span>Earthquake</span>
                     </button>
-                    <button class="filter-btn category-filter" data-category="Bomb Threat">
-                        <i class="fas fa-bomb"></i> Bomb Threat
+                    <button class="filter-btn category-filter" data-category="Bomb Threat" data-no-translate>
+                        <i class="fas fa-bomb"></i> <span>Bomb Threat</span>
                     </button>
-                    <button class="filter-btn category-filter" data-category="Fire">
-                        <i class="fas fa-fire"></i> Fire
+                    <button class="filter-btn category-filter" data-category="Fire" data-no-translate>
+                        <i class="fas fa-fire"></i> <span>Fire</span>
                     </button>
-                    <button class="filter-btn category-filter" data-category="General">
-                        <i class="fas fa-exclamation-triangle"></i> General
+                    <button class="filter-btn category-filter" data-category="General" data-no-translate>
+                        <i class="fas fa-exclamation-triangle"></i> <span>General</span>
                     </button>
                 </div>
 
@@ -498,10 +559,10 @@ $current = 'alerts.php';
                 <p style="margin: 0 0 1rem 0; color: #4b5563; line-height: 1.6;">${escapeHtml(alert.message)}</p>
                 ${alert.content ? `<div class="alert-content" style="margin-bottom: 1rem; padding: 1rem; background: ${severityBgColor}; border-radius: 8px; color: #374151; border-left: 3px solid ${severityColor};">${formatAlertContent(alert.content)}</div>` : ''}
                 <div class="alert-actions" style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-primary btn-sm" onclick="viewAlertDetails(${alert.id})">
-                        <i class="fas fa-info-circle"></i> View Details
+                    <button class="btn btn-primary btn-sm" onclick="viewAlertDetails(${alert.id})" data-no-translate>
+                        <i class="fas fa-info-circle"></i> <span>View Details</span>
                     </button>
-                    ${isUrgent ? '<button class="btn btn-secondary btn-sm" onclick="shareAlert(' + alert.id + ')"><i class="fas fa-share"></i> Share</button>' : ''}
+                    ${isUrgent ? '<button class="btn btn-secondary btn-sm" onclick="shareAlert(' + alert.id + ')" data-no-translate><i class="fas fa-share"></i> <span>Share</span></button>' : ''}
                 </div>
             `;
             

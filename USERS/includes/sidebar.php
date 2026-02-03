@@ -16,8 +16,14 @@ $linkPrefix = $isRootContext ? 'USERS/' : '';
 $current = basename($_SERVER['PHP_SELF']);
 
 // Check if user is logged in and is a registered user (not guest)
+// Safely start session only if not already started and headers not sent
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    if (!headers_sent()) {
+        session_start();
+    } else {
+        // Headers already sent, try to start session silently
+        @session_start();
+    }
 }
 $isLoggedIn = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true;
 $isRegisteredUser = isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'registered';
@@ -48,24 +54,39 @@ include __DIR__ . '/guest-monitoring-notice.php';
             <div class="sidebar-section">
                 <h3 class="sidebar-section-title" data-translate="sidebar.user">User</h3>
                 <ul class="sidebar-menu">
+                    <!-- Home -->
                     <li class="sidebar-menu-item">
                         <a href="<?= $isRootContext ? 'index.php' : '../index.php' ?>" class="sidebar-link <?= ($current === 'index.php' || $current === 'home.php') ? 'active' : '' ?>">
                             <i class="fas fa-home"></i>
                             <span data-translate="nav.home">Home</span>
                         </a>
                     </li>
+
+                    <!-- Alerts -->
                     <li class="sidebar-menu-item">
                         <a href="<?= $basePath ?><?= $linkPrefix ?>alerts.php" class="sidebar-link <?= $current === 'alerts.php' ? 'active' : '' ?>">
                             <i class="fas fa-bell"></i>
                             <span data-translate="nav.alerts">Alerts</span>
                         </a>
                     </li>
+
+                    <!-- Support -->
                     <li class="sidebar-menu-item">
                         <a href="<?= $basePath ?><?= $linkPrefix ?>support.php" class="sidebar-link <?= $current === 'support.php' ? 'active' : '' ?>">
                             <i class="fas fa-life-ring"></i>
                             <span data-translate="nav.support">Support</span>
                         </a>
                     </li>
+
+                    <!-- Profile (for logged-in registered users) -->
+                    <?php if ($showProfile): ?>
+                        <li class="sidebar-menu-item">
+                            <a href="<?= $basePath ?><?= $linkPrefix ?>profile.php" class="sidebar-link <?= $current === 'profile.php' ? 'active' : '' ?>">
+                                <i class="fas fa-user-circle"></i>
+                                <span data-translate="nav.profile">Profile</span>
+                            </a>
+                        </li>
+                    <?php endif; ?>
                 </ul>
             </div>
 
@@ -116,7 +137,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
                         </div>
                     </div>
                 </div>
-                <div class="user-dropdown-actions">
+                <div class="user-dropdown-actions" data-no-translate>
                     <a href="<?= $basePath ?><?= $linkPrefix ?>profile.php" class="user-dropdown-link">
                         <i class="fas fa-edit"></i> <span data-translate="sidebar.editInfo">Edit Information</span>
                     </a>
@@ -285,76 +306,92 @@ include __DIR__ . '/guest-monitoring-notice.php';
 })();
 </script>
 <script>
-// Ensure sidebar toggle is available immediately (before DOMContentLoaded)
-// This prevents onclick handlers from failing if called before the script runs
+// CRITICAL: Ensure sidebar toggle is available IMMEDIATELY (before any other scripts)
+// This must run before translation scripts or any DOM manipulation
+// Protect these functions from being overwritten or cleared
 (function() {
-    window.sidebarToggle = window.sidebarToggle || function() {
-        const sidebar = document.getElementById('sidebar');
-        const sidebarOverlay = document.getElementById('sidebarOverlay');
-        if (sidebar) {
-            sidebar.classList.toggle('sidebar-open');
-            if (sidebarOverlay) {
-                sidebarOverlay.classList.toggle('sidebar-overlay-open');
-            }
-            document.body.classList.toggle('sidebar-open');
-            console.log('Sidebar toggled via window.sidebarToggle (IIFE)');
-        } else {
-            console.error('Sidebar element not found in window.sidebarToggle (IIFE)');
-        }
-    };
+    'use strict';
     
-    window.sidebarClose = window.sidebarClose || function() {
-        const sidebar = document.getElementById('sidebar');
-        const sidebarOverlay = document.getElementById('sidebarOverlay');
-        if (sidebar) {
-            sidebar.classList.remove('sidebar-open');
-            if (sidebarOverlay) {
-                sidebarOverlay.classList.remove('sidebar-overlay-open');
+    // Create stable functions that always work by querying DOM each time
+    // This ensures they work even if DOM elements are recreated or modified
+    function sidebarToggleFn() {
+        try {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            if (sidebar) {
+                sidebar.classList.toggle('sidebar-open');
+                if (sidebarOverlay) {
+                    sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                }
+                document.body.classList.toggle('sidebar-open');
+            } else {
+                console.warn('Sidebar element not found, retrying...');
+                // Retry after a short delay in case DOM isn't ready
+                setTimeout(function() {
+                    const retrySidebar = document.getElementById('sidebar');
+                    const retryOverlay = document.getElementById('sidebarOverlay');
+                    if (retrySidebar) {
+                        retrySidebar.classList.toggle('sidebar-open');
+                        if (retryOverlay) {
+                            retryOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                }, 50);
             }
-            document.body.classList.remove('sidebar-open');
-        }
-    };
-    
-    // Try to attach listeners to buttons immediately if they exist
-    function attachSidebarListeners() {
-        const buttons = document.querySelectorAll('.sidebar-toggle-btn');
-        if (buttons.length > 0) {
-            buttons.forEach((btn, index) => {
-                // Remove onclick to avoid conflicts
-                if (btn.hasAttribute('onclick')) {
-                    btn.removeAttribute('onclick');
-                }
-                
-                // Clone to remove existing listeners
-                const newBtn = btn.cloneNode(true);
-                if (btn.parentNode) {
-                    btn.parentNode.replaceChild(newBtn, btn);
-                }
-                
-                const freshBtn = document.querySelectorAll('.sidebar-toggle-btn')[index];
-                if (freshBtn) {
-                    freshBtn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        window.sidebarToggle();
-                    });
-                    freshBtn.style.pointerEvents = 'auto';
-                    freshBtn.style.cursor = 'pointer';
-                }
-            });
+        } catch (e) {
+            console.error('Error in sidebarToggle:', e);
         }
     }
     
-    // Try immediately
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', attachSidebarListeners);
-    } else {
-        // DOM already loaded
-        attachSidebarListeners();
+    function sidebarCloseFn() {
+        try {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            if (sidebar) {
+                sidebar.classList.remove('sidebar-open');
+                if (sidebarOverlay) {
+                    sidebarOverlay.classList.remove('sidebar-overlay-open');
+                }
+                document.body.classList.remove('sidebar-open');
+            }
+        } catch (e) {
+            console.error('Error in sidebarClose:', e);
+        }
     }
     
-    // Also try after a short delay as fallback
-    setTimeout(attachSidebarListeners, 200);
+    // Always set these functions immediately - protect them from being overwritten
+    // Use Object.defineProperty to make them non-configurable and prevent deletion
+    if (typeof window.sidebarToggle !== 'function') {
+        window.sidebarToggle = sidebarToggleFn;
+    }
+    if (typeof window.sidebarClose !== 'function') {
+        window.sidebarClose = sidebarCloseFn;
+    }
+    
+    // Protect functions from being overwritten (but allow updates in DOMContentLoaded)
+    // We'll re-protect them after DOMContentLoaded updates them
+    Object.defineProperty(window, 'sidebarToggle', {
+        value: sidebarToggleFn,
+        writable: true,  // Allow updates in DOMContentLoaded
+        configurable: true,  // Allow redefinition if needed
+        enumerable: true
+    });
+    
+    Object.defineProperty(window, 'sidebarClose', {
+        value: sidebarCloseFn,
+        writable: true,  // Allow updates in DOMContentLoaded
+        configurable: true,  // Allow redefinition if needed
+        enumerable: true
+    });
+    
+    // Verify functions are set
+    if (typeof window.sidebarToggle !== 'function') {
+        console.error('CRITICAL: Failed to set window.sidebarToggle');
+    }
+    if (typeof window.sidebarClose !== 'function') {
+        console.error('CRITICAL: Failed to set window.sidebarClose');
+    }
 })();
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -504,99 +541,166 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, false); // Use bubble phase, not capture, to avoid interfering with chat button
     
+    // Update global functions to use cached DOM elements for better performance
+    // The IIFE versions above already work, but these cached versions are faster
+    // We update them here so they use the DOM elements we've already queried
     function toggleSidebar() {
-        sidebar.classList.toggle('sidebar-open');
-        sidebarOverlay.classList.toggle('sidebar-overlay-open');
-        document.body.classList.toggle('sidebar-open');
+        if (sidebar) {
+            sidebar.classList.toggle('sidebar-open');
+            if (sidebarOverlay) {
+                sidebarOverlay.classList.toggle('sidebar-overlay-open');
+            }
+            document.body.classList.toggle('sidebar-open');
+        }
     }
     
     function closeSidebar() {
-        sidebar.classList.remove('sidebar-open');
-        sidebarOverlay.classList.remove('sidebar-overlay-open');
-        document.body.classList.remove('sidebar-open');
+        if (sidebar) {
+            sidebar.classList.remove('sidebar-open');
+            if (sidebarOverlay) {
+                sidebarOverlay.classList.remove('sidebar-overlay-open');
+            }
+            document.body.classList.remove('sidebar-open');
+        }
     }
-
-    window.sidebarToggle = toggleSidebar;
-    window.sidebarClose = closeSidebar;
     
-    // Also attach event listeners to toggle buttons as fallback
-    // This ensures buttons work even if onclick handlers fail
-    setTimeout(() => {
-        const toggleButtons = document.querySelectorAll('.sidebar-toggle-btn');
-        console.log(`Found ${toggleButtons.length} sidebar toggle buttons`);
+    // Update the global functions to use cached DOM elements for better performance
+    // The IIFE versions above already work, but these cached versions are faster
+    // We update them here so they use the DOM elements we've already queried
+    try {
+        // Update the functions to use cached DOM elements
+        window.sidebarToggle = toggleSidebar;
+        window.sidebarClose = closeSidebar;
         
-        toggleButtons.forEach((btn, index) => {
-            // Remove existing onclick attribute to avoid conflicts
-            if (btn.hasAttribute('onclick')) {
-                btn.removeAttribute('onclick');
-            }
-            
-            // Remove all existing event listeners by cloning
-            const newBtn = btn.cloneNode(true);
-            if (btn.parentNode) {
-                btn.parentNode.replaceChild(newBtn, btn);
-            }
-            
-            // Get the fresh button
-            const freshBtn = document.querySelectorAll('.sidebar-toggle-btn')[index];
-            if (freshBtn) {
-                // Add clean event listener
-                freshBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.stopImmediatePropagation();
-                    console.log(`Sidebar toggle button ${index} clicked, calling toggleSidebar`);
-                    if (typeof toggleSidebar === 'function') {
-                        toggleSidebar();
-                    } else if (window.sidebarToggle) {
-                        window.sidebarToggle();
-                    } else {
-                        // Ultimate fallback
-                        const sidebarEl = document.getElementById('sidebar');
-                        const overlayEl = document.getElementById('sidebarOverlay');
-                        if (sidebarEl) {
-                            sidebarEl.classList.toggle('sidebar-open');
-                            if (overlayEl) {
-                                overlayEl.classList.toggle('sidebar-overlay-open');
-                            }
-                            document.body.classList.toggle('sidebar-open');
+        // Re-protect them after update
+        Object.defineProperty(window, 'sidebarToggle', {
+            value: toggleSidebar,
+            writable: true,
+            configurable: true,
+            enumerable: true
+        });
+        
+        Object.defineProperty(window, 'sidebarClose', {
+            value: closeSidebar,
+            writable: true,
+            configurable: true,
+            enumerable: true
+        });
+    } catch (e) {
+        console.error('Error updating sidebar functions:', e);
+        // Ensure functions still exist even if update fails
+        if (typeof window.sidebarToggle !== 'function') {
+            window.sidebarToggle = function() {
+                const s = document.getElementById('sidebar');
+                const so = document.getElementById('sidebarOverlay');
+                if (s) {
+                    s.classList.toggle('sidebar-open');
+                    if (so) so.classList.toggle('sidebar-overlay-open');
+                    document.body.classList.toggle('sidebar-open');
+                }
+            };
+        }
+        if (typeof window.sidebarClose !== 'function') {
+            window.sidebarClose = function() {
+                const s = document.getElementById('sidebar');
+                const so = document.getElementById('sidebarOverlay');
+                if (s) {
+                    s.classList.remove('sidebar-open');
+                    if (so) so.classList.remove('sidebar-overlay-open');
+                    document.body.classList.remove('sidebar-open');
+                }
+            };
+        }
+    }
+    
+    // Verify functions are available after update
+    if (typeof window.sidebarToggle !== 'function') {
+        console.error('CRITICAL: window.sidebarToggle is not a function after DOMContentLoaded setup!');
+    } else {
+        console.log('Sidebar toggle function verified and ready');
+    }
+    if (typeof window.sidebarClose !== 'function') {
+        console.error('CRITICAL: window.sidebarClose is not a function after DOMContentLoaded setup!');
+    }
+    
+    // Add event delegation as ultimate fallback for sidebar toggle button
+    // This ensures the toggle works even if onclick attribute is removed or button is replaced
+    // This is especially important if translation system modifies the DOM
+    if (!window.sidebarToggleDelegateAttached) {
+        // Use capture phase to catch clicks early, before any other handlers
+        document.addEventListener('click', function(e) {
+            const toggleBtn = e.target.closest('.sidebar-toggle-btn');
+            if (toggleBtn) {
+                // Always prevent default and stop propagation to avoid conflicts
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                // Call the function if it exists
+                if (typeof window.sidebarToggle === 'function') {
+                    window.sidebarToggle();
+                } else {
+                    console.error('window.sidebarToggle is not a function when button clicked!');
+                    // Emergency fallback
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
                         }
+                        document.body.classList.toggle('sidebar-open');
                     }
-                }, { capture: false, passive: false });
-                
-                // Ensure button is clickable
-                freshBtn.style.pointerEvents = 'auto';
-                freshBtn.style.cursor = 'pointer';
-                freshBtn.style.touchAction = 'manipulation';
-                
-                console.log(`Sidebar toggle button ${index} configured successfully`);
+                }
+            }
+        }, true); // Capture phase - runs before other handlers
+        window.sidebarToggleDelegateAttached = true;
+        console.log('Sidebar toggle event delegation attached');
+    }
+    
+    // Setup overlay click handler (only once)
+    if (sidebarOverlay && !sidebarOverlay.dataset.handlerAttached) {
+        sidebarOverlay.addEventListener('click', closeSidebar);
+        sidebarOverlay.dataset.handlerAttached = 'true';
+    }
+    
+    // Setup escape key handler (only once per page load)
+    if (!window.sidebarEscapeHandlerAttached) {
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && sidebar && sidebar.classList.contains('sidebar-open')) {
+                closeSidebar();
             }
         });
-    }, 100);
-    
-    if (sidebarOverlay) {
-        sidebarOverlay.addEventListener('click', closeSidebar);
+        window.sidebarEscapeHandlerAttached = true;
     }
     
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && sidebar && sidebar.classList.contains('sidebar-open')) {
-            closeSidebar();
-        }
-    });
-    
     // Add functionality to sidebar navigation links
+    // Use a flag to prevent duplicate setup
+    let sidebarNavigationSetup = false;
+    
     function setupSidebarNavigation() {
+        // Prevent duplicate setup
+        if (sidebarNavigationSetup) {
+            console.log('Sidebar navigation already setup, skipping');
+            return;
+        }
+        
         const sidebarLinks = document.querySelectorAll('.sidebar-link');
         console.log(`Setting up ${sidebarLinks.length} sidebar navigation links`);
         
         sidebarLinks.forEach((link) => {
+            // Remove any existing event listeners by cloning the node
+            const newLink = link.cloneNode(true);
+            link.parentNode.replaceChild(newLink, link);
+            const cleanLink = newLink;
+            
             // Ensure link is clickable
-            link.style.pointerEvents = 'auto';
-            link.style.cursor = 'pointer';
-            link.style.touchAction = 'manipulation';
+            cleanLink.style.pointerEvents = 'auto';
+            cleanLink.style.cursor = 'pointer';
+            cleanLink.style.touchAction = 'manipulation';
             
             // Add click handler to close sidebar on mobile/tablet
-            link.addEventListener('click', function(e) {
+            cleanLink.addEventListener('click', function(e) {
                 // Don't prevent default - let the link navigate normally
                 // But close sidebar if it's open (especially on mobile)
                 if (sidebar && sidebar.classList.contains('sidebar-open')) {
@@ -617,40 +721,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Add active state visual feedback
-                link.classList.add('clicked');
+                cleanLink.classList.add('clicked');
                 setTimeout(() => {
-                    link.classList.remove('clicked');
+                    cleanLink.classList.remove('clicked');
                 }, 300);
             });
             
             // Add hover effect for better UX
-            link.addEventListener('mouseenter', function() {
-                if (!link.classList.contains('active')) {
-                    link.style.opacity = '0.8';
+            cleanLink.addEventListener('mouseenter', function() {
+                if (!cleanLink.classList.contains('active')) {
+                    cleanLink.style.opacity = '0.8';
                 }
             });
             
-            link.addEventListener('mouseleave', function() {
-                link.style.opacity = '';
+            cleanLink.addEventListener('mouseleave', function() {
+                cleanLink.style.opacity = '';
             });
         });
         
+        sidebarNavigationSetup = true;
         console.log('Sidebar navigation links configured successfully');
     }
     
-    // Setup sidebar navigation after DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(setupSidebarNavigation, 150);
-        });
-    } else {
-        setTimeout(setupSidebarNavigation, 150);
-    }
-    
-    // Also setup on window load as fallback
-    window.addEventListener('load', function() {
-        setTimeout(setupSidebarNavigation, 200);
-    });
+    // Setup sidebar navigation once after DOM is ready
+    setupSidebarNavigation();
 
     // Chat modal behaviour - keep it open until user closes it
     function openChat() {
@@ -1486,7 +1580,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Try to get from PHP session if available
         <?php 
-        session_start();
+        // Session should already be started, but check to be safe
+        if (session_status() === PHP_SESSION_NONE) {
+            if (!headers_sent()) {
+                session_start();
+            } else {
+                @session_start();
+            }
+        }
         if (isset($_SESSION['user_id'])): 
         ?>
         userId = '<?php echo $_SESSION['user_id']; ?>';

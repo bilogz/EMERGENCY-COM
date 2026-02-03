@@ -3116,6 +3116,123 @@ textarea:focus {
 }
 
 /* ===================================
+   USER PORTAL SIDEBAR OVERRIDES
+   Make user sidebar light (white) even in dark mode
+   =================================== */
+
+/* Force light sidebar colors for USERS pages when dark theme is active */
+body[data-theme="dark"] .sidebar,
+body[data-theme="dark"] .sidebar-header,
+body[data-theme="dark"] .sidebar-content {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+}
+
+body[data-theme="dark"] .sidebar-section-title {
+    color: #6b7280 !important;
+}
+
+/* Force correct colors for sidebar links - prevent purple/violet from translation conflicts */
+body[data-theme="dark"] .sidebar-link,
+body[data-theme="dark"] .sidebar-link:link,
+body[data-theme="dark"] .sidebar-link:visited {
+    color: #111827 !important;
+}
+
+body[data-theme="dark"] .sidebar-link:hover,
+body[data-theme="dark"] .sidebar-link:focus {
+    color: #4c8a89 !important;
+    background-color: rgba(76, 138, 137, 0.1) !important;
+}
+
+body[data-theme="dark"] .sidebar-link i,
+body[data-theme="dark"] .sidebar-link i:before {
+    color: #4c8a89 !important;
+}
+
+body[data-theme="dark"] .sidebar-link:hover i,
+body[data-theme="dark"] .sidebar-link:hover i:before {
+    color: #4c8a89 !important;
+}
+
+body[data-theme="dark"] .sidebar-link.active {
+    background-color: #4c8a89 !important;
+    color: #ffffff !important;
+}
+
+body[data-theme="dark"] .sidebar-link.active i,
+body[data-theme="dark"] .sidebar-link.active i:before {
+    color: #ffffff !important;
+}
+
+/* Also override for light mode to ensure consistency */
+/* Prevent any purple/violet colors from CSS variables or other sources */
+.sidebar-link,
+.sidebar-link:link,
+.sidebar-link:visited,
+.sidebar-nav .sidebar-link,
+.sidebar-nav .sidebar-link:link,
+.sidebar-nav .sidebar-link:visited {
+    color: #111827 !important;
+    /* Override any CSS variable that might set purple */
+    --primary-color: #4c8a89 !important;
+}
+
+.sidebar-link:hover,
+.sidebar-link:focus,
+.sidebar-nav .sidebar-link:hover,
+.sidebar-nav .sidebar-link:focus {
+    color: #4c8a89 !important;
+    background-color: rgba(76, 138, 137, 0.1) !important;
+    /* Ensure hover doesn't use purple */
+    --primary-color: #4c8a89 !important;
+}
+
+.sidebar-link i,
+.sidebar-link i:before,
+.sidebar-nav .sidebar-link i,
+.sidebar-nav .sidebar-link i:before {
+    color: #4c8a89 !important;
+    /* Prevent icon color from being purple */
+}
+
+.sidebar-link:hover i,
+.sidebar-link:hover i:before,
+.sidebar-nav .sidebar-link:hover i,
+.sidebar-nav .sidebar-link:hover i:before {
+    color: #4c8a89 !important;
+}
+
+.sidebar-link.active,
+.sidebar-nav .sidebar-link.active {
+    background-color: #4c8a89 !important;
+    color: #ffffff !important;
+    /* Ensure active state uses teal, not purple */
+    --primary-color: #4c8a89 !important;
+}
+
+.sidebar-link.active i,
+.sidebar-link.active i:before,
+.sidebar-nav .sidebar-link.active i,
+.sidebar-nav .sidebar-link.active i:before {
+    color: #ffffff !important;
+}
+
+/* Additional protection: override any inline styles or computed styles */
+.sidebar-menu-item .sidebar-link,
+.sidebar-menu-item .sidebar-link * {
+    color: inherit !important;
+}
+
+.sidebar-menu-item .sidebar-link i {
+    color: #4c8a89 !important;
+}
+
+.sidebar-menu-item .sidebar-link.active i {
+    color: #ffffff !important;
+}
+
+/* ===================================
    RESPONSIVE DESIGN - Mobile and Tablet
    Optimized for Mobile Web Browsers
    =================================== */

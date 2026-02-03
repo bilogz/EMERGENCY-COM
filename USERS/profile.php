@@ -20,12 +20,90 @@ $current = 'profile.php';
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <script src="js/translations.js"></script>
-    <script src="js/language-manager.js"></script>
-    <script src="js/language-selector-modal.js"></script>
-    <script src="js/language-sync.js"></script>
-    <script src="js/global-translator.js"></script>
+    <style>
+        .profile-skeleton {
+            width: 100%;
+            max-width: 520px;
+        }
+        .profile-skeleton .sk {
+            border-radius: 12px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.12) 45%, rgba(255,255,255,0.06) 100%);
+            background-size: 240% 100%;
+            animation: profileShimmer 1.2s ease-in-out infinite;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .profile-skeleton .sk-label { height: 14px; width: 42%; margin: 10px 0 10px; }
+        .profile-skeleton .sk-input { height: 46px; width: 100%; margin-bottom: 18px; }
+        .profile-skeleton .sk-button { height: 46px; width: 58%; margin: 10px auto 0; }
+        @keyframes profileShimmer {
+            0% { background-position: 100% 0; }
+            100% { background-position: 0% 0; }
+        }
+
+        #edit_name {
+            display: block !important;
+            width: 100% !important;
+            padding: 1.25rem 1.5rem !important;
+            font-size: 1.2rem !important;
+            border: 3px solid var(--card-border, #d1d5db) !important;
+            border-radius: 12px !important;
+            background: var(--card-bg, #ffffff) !important;
+            color: var(--text-color, #171717) !important;
+            box-sizing: border-box !important;
+            min-height: 60px !important;
+        }
+
+        label[for="edit_name"] {
+            justify-content: flex-start;
+            text-align: left;
+        }
+
+        #profileEditForm > .form-group:first-of-type {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+        }
+    </style>
+    <script src="js/translations.js?v=<?= @filemtime(__DIR__ . '/js/translations.js') ?>"></script>
+    <script src="js/language-manager.js?v=<?= @filemtime(__DIR__ . '/js/language-manager.js') ?>"></script>
+    <script src="js/language-selector-modal.js?v=<?= @filemtime(__DIR__ . '/js/language-selector-modal.js') ?>"></script>
+    <script src="js/language-sync.js?v=<?= @filemtime(__DIR__ . '/js/language-sync.js') ?>"></script>
+    <script src="js/global-translator.js?v=<?= @filemtime(__DIR__ . '/js/global-translator.js') ?>"></script>
     <script>
+        // Ensure sidebar functions are available before translation scripts interfere
+        // This runs immediately, before DOMContentLoaded
+        (function() {
+            if (typeof window.sidebarToggle !== 'function') {
+                window.sidebarToggle = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                };
+            }
+            if (typeof window.sidebarClose !== 'function') {
+                window.sidebarClose = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.remove('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.remove('sidebar-overlay-open');
+                        }
+                        document.body.classList.remove('sidebar-open');
+                    }
+                };
+            }
+        })();
+        
         document.addEventListener('DOMContentLoaded', function() {
             const langBtn = document.getElementById('languageSelectorBtn');
             if (langBtn && window.languageSelectorModal) {
@@ -33,6 +111,36 @@ $current = 'profile.php';
                     window.languageSelectorModal.open();
                 });
             }
+            
+            // Verify sidebar functions are still available after translation scripts run
+            if (typeof window.sidebarToggle !== 'function') {
+                console.error('CRITICAL: window.sidebarToggle was removed or overwritten!');
+                // Restore it
+                window.sidebarToggle = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                };
+            }
+            
+            // Protect sidebar toggle buttons from translation interference
+            const toggleButtons = document.querySelectorAll('.sidebar-toggle-btn');
+            toggleButtons.forEach(function(btn) {
+                // Ensure onclick is set correctly
+                if (!btn.getAttribute('onclick') || !btn.getAttribute('onclick').includes('sidebarToggle')) {
+                    btn.setAttribute('onclick', 'window.sidebarToggle()');
+                }
+                // Ensure data-no-translate is set
+                if (!btn.hasAttribute('data-no-translate')) {
+                    btn.setAttribute('data-no-translate', '');
+                }
+            });
         });
     </script>
 </head>
@@ -58,13 +166,31 @@ $current = 'profile.php';
                 <section class="page-content">
                     <h2>Edit Your Information</h2>
                     <p>Update your personal information and contact details.</p>
+
+                    <div id="profileSkeleton" class="profile-skeleton">
+                        <div class="sk sk-label"></div>
+                        <div class="sk sk-input"></div>
+                        <div class="sk sk-label"></div>
+                        <div class="sk sk-input"></div>
+                        <div class="sk sk-label"></div>
+                        <div class="sk sk-input"></div>
+                        <div class="sk sk-label"></div>
+                        <div class="sk sk-input"></div>
+                        <div class="sk sk-label"></div>
+                        <div class="sk sk-input"></div>
+                        <div class="sk sk-label"></div>
+                        <div class="sk sk-input"></div>
+                        <div class="sk sk-label"></div>
+                        <div class="sk sk-input"></div>
+                        <div class="sk sk-button"></div>
+                    </div>
                     
-                    <form class="auth-form" id="profileEditForm">
-                        <div class="form-group">
+                    <form class="auth-form" id="profileEditForm" style="display:none;">
+                        <div class="form-group" data-no-translate>
                             <label for="edit_name">
-                                <i class="fas fa-user"></i> Full Name
+                                <i class="fas fa-user"></i> <span data-translate="form.fullName">Full Name</span>
                             </label>
-                            <input type="text" id="edit_name" name="name" placeholder="Juan Dela Cruz" required>
+                            <input type="text" id="edit_name" name="name" placeholder="Juan Dela Cruz" required autocomplete="name" data-translate-placeholder="form.enterName">
                         </div>
                         
                         <div class="form-group">
@@ -89,7 +215,7 @@ $current = 'profile.php';
                             <label for="edit_nationality">
                                 <i class="fas fa-flag"></i> Nationality
                             </label>
-                            <input list="editNationalityList" id="edit_nationality" name="nationality" placeholder="Select nationality">
+                            <input type="text" list="editNationalityList" id="edit_nationality" name="nationality" placeholder="Select nationality">
                             <datalist id="editNationalityList">
                                 <option value="Filipino"></option>
                                 <option value="American"></option>
@@ -123,9 +249,8 @@ $current = 'profile.php';
                             <label for="edit_barangay">
                                 <i class="fas fa-map-marker-alt"></i> Barangay (Quezon City)
                             </label>
-                            <input type="text" id="edit_barangay" name="barangay" placeholder="Type to search barangay..." autocomplete="off">
-                            <div id="editBarangaySuggestions" class="suggestions-dropdown" style="display: none;"></div>
-                            <small class="form-hint">Start typing to search for your barangay</small>
+                            <input type="text" list="editBarangayList" id="edit_barangay" name="barangay" placeholder="Select or type barangay..." autocomplete="off">
+                            <datalist id="editBarangayList"></datalist>
                         </div>
                         
                         <div class="form-group">
@@ -161,69 +286,193 @@ $current = 'profile.php';
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
-    <script src="js/translations.js"></script>
-    <script src="js/language-manager.js"></script>
-    <script src="js/language-selector-modal.js"></script>
-    <script src="js/language-sync.js"></script>
-    <script src="js/global-translator.js"></script>
-    <script>
-        // Connect language selector button to modal
-        document.addEventListener('DOMContentLoaded', function() {
-            const langBtn = document.getElementById('languageSelectorBtn');
-            if (langBtn && window.languageSelectorModal) {
-                langBtn.addEventListener('click', function() {
-                    window.languageSelectorModal.open();
-                });
-            }
-        });
-    </script>
     <script>
         document.addEventListener('DOMContentLoaded', async function () {
             const profileForm = document.getElementById('profileEditForm');
             const saveBtn = document.getElementById('saveProfileBtn');
             const errorMessage = document.getElementById('profileErrorMessage');
             const errorText = document.getElementById('profileErrorText');
+            const profileSkeleton = document.getElementById('profileSkeleton');
+
+            function ensureFullNameField() {
+                if (!profileForm) return;
+
+                // Check for existing full name fields - remove duplicates
+                const existingNameInputs = document.querySelectorAll('#edit_name');
+                if (existingNameInputs.length > 1) {
+                    // Keep only the first one, remove the rest
+                    for (let i = 1; i < existingNameInputs.length; i++) {
+                        const duplicate = existingNameInputs[i];
+                        const duplicateGroup = duplicate.closest('.form-group');
+                        if (duplicateGroup && duplicateGroup !== existingNameInputs[0].closest('.form-group')) {
+                            duplicateGroup.remove();
+                        } else {
+                            duplicate.remove();
+                        }
+                    }
+                }
+
+                let nameInput = document.getElementById('edit_name');
+                if (!nameInput) {
+                    console.warn('Full Name input missing; re-inserting it.');
+                    const emailGroup = document.getElementById('edit_email')?.closest('.form-group') || null;
+                    const group = document.createElement('div');
+                    group.className = 'form-group';
+                    group.innerHTML = `
+                        <label for="edit_name">
+                            <i class="fas fa-user"></i> <span data-translate="form.fullName">Full Name</span>
+                        </label>
+                        <input type="text" id="edit_name" name="name" placeholder="Juan Dela Cruz" required autocomplete="name" data-translate-placeholder="form.enterName">
+                    `.trim();
+                    profileForm.insertBefore(group, emailGroup || profileForm.firstChild);
+                    nameInput = group.querySelector('#edit_name');
+                }
+
+                // Ensure the field value is not "Full Name" (should be empty or actual name)
+                if (nameInput && (nameInput.value === 'Full Name' || nameInput.value === 'form.fullName')) {
+                    nameInput.value = '';
+                }
+
+                const group = nameInput.closest('.form-group');
+                if (group) {
+                    group.style.display = 'block';
+                    group.style.visibility = 'visible';
+                    group.style.opacity = '1';
+                    group.style.height = 'auto';
+                    group.style.maxHeight = 'none';
+                    group.style.overflow = 'visible';
+                }
+                nameInput.style.display = 'block';
+                nameInput.style.visibility = 'visible';
+                nameInput.style.opacity = '1';
+            }
+
+            function getApiPath(relativePath) {
+                if (window.API_BASE_PATH && window.IS_ROOT_CONTEXT) {
+                    if (relativePath.startsWith('api/')) {
+                        return window.API_BASE_PATH + relativePath.substring(4);
+                    }
+                    return window.API_BASE_PATH + relativePath;
+                }
+
+                const currentPath = window.location.pathname;
+                const isInUsersFolder = currentPath.includes('/USERS/');
+                if (relativePath.startsWith('api/') && !isInUsersFolder) {
+                    return 'USERS/' + relativePath;
+                }
+                return relativePath;
+            }
+
+            function setProfileLoading(isLoading) {
+                if (profileSkeleton) {
+                    profileSkeleton.style.display = isLoading ? 'block' : 'none';
+                }
+                if (profileForm) {
+                    profileForm.style.display = isLoading ? 'none' : 'block';
+                }
+
+                if (!isLoading) {
+                    ensureFullNameField();
+                    // Remove duplicates after ensuring field exists
+                    const nameInputs = document.querySelectorAll('#edit_name');
+                    if (nameInputs.length > 1) {
+                        // Keep the first one (original in HTML), remove others
+                        const firstInput = nameInputs[0];
+                        const firstGroup = firstInput.closest('.form-group');
+                        for (let i = 1; i < nameInputs.length; i++) {
+                            const duplicate = nameInputs[i];
+                            const duplicateGroup = duplicate.closest('.form-group');
+                            if (duplicateGroup && duplicateGroup !== firstGroup) {
+                                duplicateGroup.remove();
+                            } else {
+                                duplicate.remove();
+                            }
+                        }
+                    }
+                }
+            }
+
+            async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 15000) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+                try {
+                    const res = await fetch(url, { ...options, signal: controller.signal });
+                    const text = await res.text();
+                    let json = null;
+                    try {
+                        json = text ? JSON.parse(text) : null;
+                    } catch (e) {
+                        json = null;
+                    }
+                    if (!res.ok) {
+                        const msg = (json && (json.message || json.error)) ? (json.message || json.error) : (text || `Request failed (${res.status})`);
+                        throw new Error(msg);
+                    }
+                    if (!json) {
+                        throw new Error(text || 'Invalid server response.');
+                    }
+                    return json;
+                } catch (err) {
+                    if (err && err.name === 'AbortError') {
+                        throw new Error('Request timed out. Please try again.');
+                    }
+                    throw err;
+                } finally {
+                    clearTimeout(timeoutId);
+                }
+            }
             
             // Load current user data
             async function loadUserData() {
+                setProfileLoading(true);
                 try {
-                    const response = await fetch('api/get-user-profile.php');
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.success && data.user) {
-                            const user = data.user;
+                    const data = await fetchJsonWithTimeout(getApiPath('api/get-user-profile.php'), { method: 'GET' }, 15000);
+                    if (data.success && data.user) {
+                        const user = data.user;
                             
-                            // Populate form fields
-                            if (document.getElementById('edit_name')) {
-                                document.getElementById('edit_name').value = user.name || '';
+                        // Populate form fields
+                        if (document.getElementById('edit_name')) {
+                            const nameValue = user.name || '';
+                            // Don't set "Full Name" as the value - it's a label, not a value
+                            if (nameValue && nameValue !== 'Full Name' && nameValue !== 'form.fullName') {
+                                document.getElementById('edit_name').value = nameValue;
+                            } else {
+                                document.getElementById('edit_name').value = '';
                             }
-                            if (document.getElementById('edit_email')) {
-                                document.getElementById('edit_email').value = user.email || '';
-                            }
-                            if (document.getElementById('edit_phone')) {
-                                const phone = user.phone || '';
-                                // Remove +63 prefix if present
-                                document.getElementById('edit_phone').value = phone.replace(/^\+63/, '');
-                            }
-                            if (document.getElementById('edit_nationality')) {
-                                document.getElementById('edit_nationality').value = user.nationality || '';
-                            }
-                            if (document.getElementById('edit_district')) {
-                                document.getElementById('edit_district').value = user.district || '';
-                            }
-                            if (document.getElementById('edit_barangay')) {
-                                document.getElementById('edit_barangay').value = user.barangay || '';
-                            }
-                            if (document.getElementById('edit_house_number')) {
-                                document.getElementById('edit_house_number').value = user.house_number || '';
-                            }
-                            if (document.getElementById('edit_street')) {
-                                document.getElementById('edit_street').value = user.street || '';
-                            }
+                        }
+                        if (document.getElementById('edit_email')) {
+                            document.getElementById('edit_email').value = user.email || '';
+                        }
+                        if (document.getElementById('edit_phone')) {
+                            const phone = user.phone || '';
+                            document.getElementById('edit_phone').value = phone.replace(/^\+63/, '');
+                        }
+                        if (document.getElementById('edit_nationality')) {
+                            document.getElementById('edit_nationality').value = user.nationality || '';
+                        }
+                        if (document.getElementById('edit_district')) {
+                            const districtEl = document.getElementById('edit_district');
+                            const rawDistrict = (user.district || '').toString().trim();
+                            let districtValue = rawDistrict;
+                            const m = rawDistrict.match(/district\s*(\d+)/i);
+                            if (m && m[1]) districtValue = m[1];
+                            districtEl.value = districtValue;
+                        }
+                        if (document.getElementById('edit_barangay')) {
+                            document.getElementById('edit_barangay').value = user.barangay || '';
+                        }
+                        if (document.getElementById('edit_house_number')) {
+                            document.getElementById('edit_house_number').value = user.house_number || '';
+                        }
+                        if (document.getElementById('edit_street')) {
+                            document.getElementById('edit_street').value = user.street || '';
                         }
                     }
                 } catch (error) {
                     console.error('Error loading user data:', error);
+                    showError(error && error.message ? error.message : 'Failed to load your profile. Please refresh.');
+                } finally {
+                    setProfileLoading(false);
                 }
             }
             
@@ -231,66 +480,69 @@ $current = 'profile.php';
             function setupBarangaySuggestions() {
                 const districtSelect = document.getElementById('edit_district');
                 const barangayInput = document.getElementById('edit_barangay');
-                const suggestionsDiv = document.getElementById('editBarangaySuggestions');
+                const barangayList = document.getElementById('editBarangayList');
                 
-                if (!districtSelect || !barangayInput || !suggestionsDiv) return;
+                if (!districtSelect || !barangayInput || !barangayList) return;
+
+                const barangaysByDistrict = {
+                    '1': [
+                        'Vasra','Bagong Pag-asa','Sto. Cristo','Project 6','Ramon Magsaysay','Alicia','Bahay Toro','Katipunan','San Antonio','Veterans Village','Bungad','Phil-Am','West Triangle','Sta. Cruz','Nayong Kanluran','Paltok','Paraiso','Mariblo','Damayan','Del Monte','Masambong','Talayan','Sto. Domingo','Siena','St. Peter','San Jose','Manresa','Damar','Pag-ibig sa Nayon','Balingasa','Sta. Teresita','San Isidro Labrador','Paang Bundok','Salvacion','N.S Amoranto','Maharlika','Lourdes'
+                    ],
+                    '2': [
+                        'Bagong Silangan','Batasan Hills','Commonwealth','Holy Spirit','Payatas'
+                    ],
+                    '3': [
+                        'Silangan','Socorro','E. Rodriguez','West Kamias','East Kamias','Quirino 2-A','Quirino 2-B','Quirino 2-C','Quirino 3-A','Claro (Quirino 3-B)','Duyan-Duyan','Amihan','Matandang Balara','Pansol','Loyola Heights','San Roque','Mangga','Masagana','Villa Maria Clara','Bayanihan','Camp Aguinaldo','White Plains','Libis','Ugong Norte','Bagumbayan','Blue Ridge A','Blue Ridge B','St. Ignatius','Milagrosa','Escopa I','Escopa II','Escopa III','Escopa IV','Marilag','Bagumbuhay','Tagumpay','Dioquino Zobel'
+                    ],
+                    '4': [
+                        'Sacred Heart','Laging Handa','Obrero','Paligsahan','Roxas','Kamuning','South Triangle','Pinagkaisahan','Immaculate Concepcion','San Martin De Porres','Kaunlaran','Bagong Lipunan ng Crame','Horseshoe','Valencia','Tatalon','Kalusugan','Kristong Hari','Damayang Lagi','Mariana','Doña Imelda','Santol','Sto. Niño','San Isidro Galas','Doña Aurora','Don Manuel','Doña Josefa','UP Village','Old Capitol Site','UP Campus','San Vicente','Teachers Village East','Teachers Village West','Central','Pinyahan','Malaya','Sikatuna Village','Botocan','Krus Na Ligas'
+                    ],
+                    '5': [
+                        'Bagbag','Capri','Greater Lagro','Gulod','Kaligayahan','Nagkaisang Nayon','North Fairview','Novaliches Proper','Pasong Putik Proper','San Agustin','San Bartolome','Sta. Lucia','Sta. Monica','Fairview'
+                    ],
+                    '6': [
+                        'Apolonio Samson','Baesa','Balon Bato','Culiat','New Era','Pasong Tamo','Sangandaan','Tandang Sora','Unang Sigaw','Sauyo','Talipapa'
+                    ]
+                };
+
+                const escapeHtml = (str) => {
+                    return String(str)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+                };
+
+                const populateBarangays = (districtVal) => {
+                    const list = barangaysByDistrict[districtVal] || [];
+                    barangayList.innerHTML = list
+                        .map(b => `<option value="${escapeHtml(b)}"></option>`)
+                        .join('');
+                };
                 
                 districtSelect.addEventListener('change', function() {
                     if (this.value) {
                         barangayInput.disabled = false;
-                        barangayInput.placeholder = 'Type to search barangay...';
+                        barangayInput.placeholder = 'Select or type barangay...';
+                        populateBarangays(this.value);
                     } else {
                         barangayInput.disabled = true;
                         barangayInput.value = '';
-                        barangayInput.placeholder = 'Select district first, then type to search barangay...';
+                        barangayInput.placeholder = 'Select district first, then choose barangay...';
+                        barangayList.innerHTML = '';
                     }
                 });
-                
-                barangayInput.addEventListener('input', async function() {
-                    const query = this.value.trim();
-                    if (query.length < 2) {
-                        suggestionsDiv.style.display = 'none';
-                        return;
-                    }
-                    
-                    try {
-                        const response = await fetch('api/get-barangays.php');
-                        if (response.ok) {
-                            const data = await response.json();
-                            if (data.barangays) {
-                                const filtered = data.barangays.filter(b => 
-                                    b.toLowerCase().includes(query.toLowerCase())
-                                ).slice(0, 10);
-                                
-                                if (filtered.length > 0) {
-                                    suggestionsDiv.innerHTML = filtered.map(b => 
-                                        `<div class="suggestion-item">${b}</div>`
-                                    ).join('');
-                                    suggestionsDiv.style.display = 'block';
-                                    
-                                    // Add click handlers
-                                    suggestionsDiv.querySelectorAll('.suggestion-item').forEach(item => {
-                                        item.addEventListener('click', function() {
-                                            barangayInput.value = this.textContent;
-                                            suggestionsDiv.style.display = 'none';
-                                        });
-                                    });
-                                } else {
-                                    suggestionsDiv.style.display = 'none';
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Error loading barangays:', error);
-                    }
-                });
-                
-                // Hide suggestions when clicking outside
-                document.addEventListener('click', function(e) {
-                    if (!barangayInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
-                        suggestionsDiv.style.display = 'none';
-                    }
-                });
+
+                if (districtSelect.value) {
+                    barangayInput.disabled = false;
+                    barangayInput.placeholder = 'Select or type barangay...';
+                    populateBarangays(districtSelect.value);
+                } else {
+                    barangayInput.disabled = true;
+                    barangayInput.placeholder = 'Select district first, then choose barangay...';
+                    barangayList.innerHTML = '';
+                }
             }
             
             // Handle form submission
@@ -311,14 +563,14 @@ $current = 'profile.php';
                     
                     // Get form data
                     const formData = {
-                        name: document.getElementById('edit_name').value.trim(),
-                        email: document.getElementById('edit_email').value.trim(),
-                        phone: document.getElementById('edit_phone').value.trim(),
-                        nationality: document.getElementById('edit_nationality').value.trim(),
-                        district: document.getElementById('edit_district').value,
-                        barangay: document.getElementById('edit_barangay').value.trim(),
-                        house_number: document.getElementById('edit_house_number').value.trim(),
-                        street: document.getElementById('edit_street').value.trim()
+                        name: (document.getElementById('edit_name')?.value || '').trim(),
+                        email: (document.getElementById('edit_email')?.value || '').trim(),
+                        phone: (document.getElementById('edit_phone')?.value || '').trim(),
+                        nationality: (document.getElementById('edit_nationality')?.value || '').trim(),
+                        district: (document.getElementById('edit_district')?.value || ''),
+                        barangay: (document.getElementById('edit_barangay')?.value || '').trim(),
+                        house_number: (document.getElementById('edit_house_number')?.value || '').trim(),
+                        street: (document.getElementById('edit_street')?.value || '').trim()
                     };
                     
                     // Validate
@@ -329,13 +581,11 @@ $current = 'profile.php';
                     }
                     
                     try {
-                        const response = await fetch('api/update-user-profile.php', {
+                        const data = await fetchJsonWithTimeout(getApiPath('api/update-user-profile.php'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(formData)
-                        });
-                        
-                        const data = await response.json();
+                        }, 20000);
                         
                         if (data.success) {
                             Swal.fire({
@@ -356,7 +606,7 @@ $current = 'profile.php';
                         }
                     } catch (error) {
                         console.error('Error updating profile:', error);
-                        showError('An error occurred. Please try again.');
+                        showError(error && error.message ? error.message : 'An error occurred. Please try again.');
                         enableSaveButton();
                     }
                 });
@@ -376,7 +626,24 @@ $current = 'profile.php';
                 }
             }
             
-            // Initialize
+            // Initialize - ensure full name field exists and remove duplicates
+            ensureFullNameField();
+            
+            // Remove any duplicate full name fields that might exist
+            const nameInputs = document.querySelectorAll('#edit_name');
+            if (nameInputs.length > 1) {
+                // Keep the first one, remove duplicates
+                for (let i = 1; i < nameInputs.length; i++) {
+                    const duplicate = nameInputs[i];
+                    const duplicateGroup = duplicate.closest('.form-group');
+                    if (duplicateGroup && duplicateGroup !== nameInputs[0].closest('.form-group')) {
+                        duplicateGroup.remove();
+                    } else {
+                        duplicate.remove();
+                    }
+                }
+            }
+            
             await loadUserData();
             setupBarangaySuggestions();
         });
