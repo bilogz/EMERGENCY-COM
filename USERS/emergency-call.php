@@ -195,7 +195,7 @@ $assetBase = '../ADMIN/header/';
     <script>
         // Enhanced Socket.IO configuration for live environment
         const SIGNALING_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
-        const SIGNALING_URL = `${window.location.protocol}//${SIGNALING_HOST}:3000`;
+        const SIGNALING_URL = `http://${SIGNALING_HOST}:3000`;
         let socket = null;
         let socketBound = false;
         const room = "emergency-room";

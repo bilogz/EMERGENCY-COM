@@ -1277,7 +1277,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <script>
     // Enhanced Socket.IO configuration for live environment
     const SIGNALING_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
-    const SIGNALING_URL = `${window.location.protocol}//${SIGNALING_HOST}:3000`;
+    const SIGNALING_URL = `http://${SIGNALING_HOST}:3000`;
     const room = "emergency-room";
 
     let socket = null;
