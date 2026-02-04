@@ -193,9 +193,11 @@ $assetBase = '../ADMIN/header/';
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        // Enhanced Socket.IO configuration for live environment
+        const IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+        const SOCKET_IO_PATH = '/socket.io';
+        const LOCAL_SOCKET_PORT = 3000;
         const SIGNALING_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
-        const SIGNALING_URL = `${window.location.protocol}//${SIGNALING_HOST}:3000`;
+        const SIGNALING_URL = IS_LOCAL ? `${window.location.protocol}//${SIGNALING_HOST}` + ':' + LOCAL_SOCKET_PORT : null;
         let socket = null;
         let socketBound = false;
         const room = "emergency-room";
@@ -241,14 +243,20 @@ $assetBase = '../ADMIN/header/';
                 socket = null;
                 socketBound = false;
             }
-            
-            socket = window.io(SIGNALING_URL, {
+
+            const socketOptions = {
+                path: SOCKET_IO_PATH,
                 transports: ['websocket', 'polling'],
                 reconnection: true,
                 reconnectionAttempts: MAX_SOCKET_RETRIES,
                 reconnectionDelayMax: 2000,
                 timeout: 8000
-            });
+
+            };
+
+            socket = IS_LOCAL
+                ? window.io(SIGNALING_URL, socketOptions)
+                : window.io(socketOptions);
             bindSocketHandlers();
             return socket;
         }

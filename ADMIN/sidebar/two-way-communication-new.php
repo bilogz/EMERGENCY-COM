@@ -453,7 +453,11 @@ $admin_username = $admin['username'] ?? 'Admin';
     <script>
         // Configuration
         const API_BASE = './api/';
-        const SIGNALING_URL = `${window.location.protocol}//${window.location.hostname}:3000`;
+        const IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+        const SOCKET_IO_PATH = '/socket.io';
+        const LOCAL_SOCKET_PORT = 3000;
+        const SIGNALING_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
+        const SIGNALING_URL = IS_LOCAL ? `${window.location.protocol}//${SIGNALING_HOST}` + ':' + LOCAL_SOCKET_PORT : null;
         const room = "emergency-room";
         const ADMIN_USERNAME = "<?php echo htmlspecialchars($admin_username); ?>";
         const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=3b82f6&color=fff&size=64`;
@@ -673,7 +677,17 @@ $admin_username = $admin['username'] ?? 'Admin';
         
         // Call System
         function initCallSystem() {
-            socket = io(SIGNALING_URL);
+            const socketOptions = {
+                path: SOCKET_IO_PATH,
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                timeout: 8000
+
+            };
+
+            socket = IS_LOCAL
+                ? io(SIGNALING_URL, socketOptions)
+                : io(socketOptions);
             socket.emit('join', room);
             
             socket.on('offer', handleIncomingCall);

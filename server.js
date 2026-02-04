@@ -1,4 +1,4 @@
- const express = require('express');
+const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 
@@ -73,6 +73,6 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.SOCKET_PORT ? Number(process.env.SOCKET_PORT) : 3000;
-server.listen(PORT, () => {
-  console.log(`Socket.IO signaling server listening on port ${PORT}`);
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`Socket.IO signaling server listening on 127.0.0.1:${PORT}`);
 });

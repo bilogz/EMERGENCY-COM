@@ -1,3 +1,296 @@
+/* ===================================
+   GLOBAL DARK MODE SYSTEM - Responsive Design
+   =================================== */
+
+/* CSS Custom Properties for Light/Dark Mode */
+:root {
+    /* Light Mode Colors */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --bg-tertiary: #f1f5f9;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #6b7280;
+    --text-inverse: #ffffff;
+    --border-primary: #e5e7eb;
+    --border-secondary: #d1d5db;
+    --border-tertiary: #9ca3af;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1);
+    --card-bg: var(--bg-primary);
+    --card-border: var(--border-primary);
+    --card-shadow: var(--shadow-md);
+    --surface-1: var(--bg-primary);
+    --surface-2: var(--bg-secondary);
+    --surface-3: var(--bg-tertiary);
+    --primary-color: #8e44ad;
+    --primary-hover: #7d3d9a;
+    --primary-light: rgba(142, 68, 173, 0.1);
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
+    --info-color: #3b82f6;
+}
+
+/* Dark Mode Colors */
+[data-theme="dark"] {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --text-inverse: #0f172a;
+    --border-primary: #334155;
+    --border-secondary: #475569;
+    --border-tertiary: #64748b;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+    --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.6);
+    --card-bg: var(--bg-secondary);
+    --card-border: var(--border-primary);
+    --card-shadow: var(--shadow-lg);
+    --surface-1: var(--bg-secondary);
+    --surface-2: var(--bg-tertiary);
+    --surface-3: #475569;
+    --primary-color: #9333ea;
+    --primary-hover: #a855f7;
+    --primary-light: rgba(147, 51, 234, 0.2);
+    --success-color: #22c55e;
+    --warning-color: #fbbf24;
+    --danger-color: #f87171;
+    --info-color: #60a5fa;
+}
+
+/* Global Dark Mode Base Styles */
+[data-theme="dark"] body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] * {
+    border-color: var(--border-primary) !important;
+}
+
+/* Responsive Dark Mode - Mobile First Approach */
+
+/* Extra Small Devices (320px and below) */
+@media (max-width: 320px) {
+    [data-theme="dark"] {
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.5);
+        --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.6);
+        --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.7);
+    }
+    
+    [data-theme="dark"] .card {
+        box-shadow: var(--shadow-md) !important;
+    }
+    
+    [data-theme="dark"] .btn {
+        box-shadow: var(--shadow-sm) !important;
+    }
+    
+    [data-theme="dark"] .modal-content {
+        box-shadow: var(--shadow-lg) !important;
+    }
+}
+
+/* Small Devices (480px and below) */
+@media (max-width: 480px) {
+    [data-theme="dark"] {
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+        --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.45);
+        --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.55);
+        --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.65);
+    }
+    
+    [data-theme="dark"] .page-content {
+        background: var(--bg-secondary) !important;
+        border: 1px solid var(--border-secondary) !important;
+        box-shadow: var(--shadow-lg) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    [data-theme="dark"] .auth-form {
+        background: var(--bg-secondary) !important;
+        border-color: var(--border-secondary) !important;
+        box-shadow: var(--shadow-lg) !important;
+    }
+    
+    [data-theme="dark"] .btn {
+        box-shadow: var(--shadow-sm) !important;
+    }
+    
+    [data-theme="dark"] .btn:hover {
+        box-shadow: var(--shadow-md) !important;
+    }
+    
+    [data-theme="dark"] .card {
+        background: var(--bg-secondary) !important;
+        border-color: var(--border-secondary) !important;
+        box-shadow: var(--shadow-md) !important;
+    }
+    
+    [data-theme="dark"] .form-group input,
+    [data-theme="dark"] .form-group select,
+    [data-theme="dark"] .form-group textarea {
+        background: var(--bg-tertiary) !important;
+        border-color: var(--border-secondary) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    [data-theme="dark"] .form-group input:focus,
+    [data-theme="dark"] .form-group select:focus,
+    [data-theme="dark"] .form-group textarea:focus {
+        background: var(--bg-primary) !important;
+        border-color: var(--primary-color) !important;
+        box-shadow: 0 0 0 3px var(--primary-light) !important;
+    }
+}
+
+/* Medium Devices (768px and below) */
+@media (max-width: 768px) {
+    [data-theme="dark"] {
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+        --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+        --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.6);
+    }
+    
+    [data-theme="dark"] .main-content {
+        background: var(--bg-primary);
+    }
+    
+    [data-theme="dark"] .hero-section {
+        background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+    }
+    
+    [data-theme="dark"] .language-modal {
+        background: var(--bg-secondary) !important;
+        border-color: var(--border-secondary) !important;
+        box-shadow: var(--shadow-xl) !important;
+    }
+    
+    [data-theme="dark"] .user-dropdown-menu {
+        background: var(--bg-secondary) !important;
+        border-color: var(--border-secondary) !important;
+        box-shadow: var(--shadow-xl) !important;
+    }
+    
+    [data-theme="dark"] .app-download-btn {
+        background: var(--bg-secondary) !important;
+        border-color: var(--border-secondary) !important;
+        color: var(--text-primary) !important;
+        box-shadow: var(--shadow-md) !important;
+    }
+    
+    [data-theme="dark"] .app-download-btn:hover {
+        background: var(--primary-color) !important;
+        border-color: var(--primary-color) !important;
+        box-shadow: var(--shadow-lg) !important;
+        color: var(--text-inverse) !important;
+    }
+}
+
+/* Large Devices (1024px and below) */
+@media (max-width: 1024px) {
+    [data-theme="dark"] {
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+        --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.35);
+        --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.45);
+        --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.55);
+    }
+    
+    [data-theme="dark"] .emergency-card {
+        background: var(--bg-secondary) !important;
+        border-color: var(--border-secondary) !important;
+        box-shadow: var(--shadow-md) !important;
+    }
+    
+    [data-theme="dark"] .emergency-number-large {
+        color: var(--danger-color);
+        text-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+    }
+    
+    [data-theme="dark"] .btn-google {
+        border-color: var(--border-secondary) !important;
+        box-shadow: var(--shadow-md) !important;
+    }
+    
+    [data-theme="dark"] .btn-google:hover {
+        box-shadow: var(--shadow-lg) !important;
+    }
+    
+    [data-theme="dark"] .btn-phone-otp {
+        box-shadow: var(--shadow-md) !important;
+    }
+    
+    [data-theme="dark"] .btn-phone-otp:hover {
+        box-shadow: var(--shadow-lg) !important;
+    }
+}
+
+/* Extra Large Devices (1200px and above) */
+@media (min-width: 1200px) {
+    [data-theme="dark"] {
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+        --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+        --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+        --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.5);
+    }
+    
+    [data-theme="dark"] .page-content {
+        box-shadow: var(--shadow-lg) !important;
+    }
+    
+    [data-theme="dark"] .hero-section {
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+    [data-theme="dark"] {
+        --text-primary: #ffffff;
+        --text-secondary: #e2e8f0;
+        --border-primary: #64748b;
+        --border-secondary: #94a3b8;
+        --bg-primary: #000000;
+        --bg-secondary: #0f172a;
+        --bg-tertiary: #1e293b;
+    }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+    [data-theme="dark"] * {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+
+/* Print Styles for Dark Mode */
+@media print {
+    [data-theme="dark"] {
+        --bg-primary: #ffffff !important;
+        --bg-secondary: #ffffff !important;
+        --bg-tertiary: #f8fafc !important;
+        --text-primary: #000000 !important;
+        --text-secondary: #374151 !important;
+        --border-primary: #d1d5db !important;
+        --border-secondary: #e5e7eb !important;
+    }
+    
+    [data-theme="dark"] * {
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+}
+
 /* Modern, Accessible Auth Form - Senior-Friendly Design */
 .auth-form {
     background: var(--card-bg, #ffffff);
@@ -3607,6 +3900,16 @@ body[data-theme="dark"] .sidebar-link.active i:before {
         font-size: 0.95rem;
     }
     
+    .btn-phone-otp {
+        font-size: 0.95rem;
+        padding: 0.875rem 1.25rem;
+        min-height: 50px;
+    }
+    
+    .btn-phone-otp i {
+        font-size: 1.2rem;
+    }
+    
     .error-message,
     .otp-info,
     .success-message {
@@ -4012,9 +4315,15 @@ body[data-theme="dark"] .sidebar-link.active i:before {
     .btn i {
         font-size: 0.9rem;
     }
-
-    .card {
-        padding: 0.75rem;
+    
+    .btn-phone-otp {
+        font-size: 0.85rem;
+        padding: 0.625rem 0.875rem;
+        min-height: 42px;
+    }
+    
+    .btn-phone-otp i {
+        font-size: 1rem;
     }
 
     .card h3,
@@ -4188,19 +4497,22 @@ body[data-theme="dark"] .sidebar-link.active i:before {
 .btn-google .google-text {
     background: #4285f4;
     color: #ffffff;
-    padding: 0 24px;
+    padding: 0 20px;
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     height: 100%;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     font-weight: 700;
     font-family: 'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     border-top-right-radius: 10px;
     border-bottom-right-radius: 10px;
     pointer-events: none;
     letter-spacing: 0.02em;
+    white-space: normal;
+    line-height: 1.3;
+    text-align: center;
 }
 
 .btn-google:hover {
@@ -4247,14 +4559,18 @@ body[data-theme="dark"] .sidebar-link.active i:before {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 1rem;
+    gap: 0.75rem;
     font-weight: 700;
     transition: all 0.3s ease;
     box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
     min-height: 64px;
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     border-radius: 14px;
-    padding: 1.25rem 2.5rem;
+    padding: 1rem 1.5rem;
+    flex-wrap: wrap;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.3;
 }
 
 .btn-phone-otp:hover {
