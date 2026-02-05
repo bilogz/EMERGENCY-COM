@@ -9,6 +9,7 @@ const activeOffersByRoom = new Map();
 const OFFER_TTL_MS = 60 * 1000;
 
 const io = new Server(server, {
+  allowEIO3: true,
   cors: {
     origin: '*',
     methods: ['GET', 'POST'],
