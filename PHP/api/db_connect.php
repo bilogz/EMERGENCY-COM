@@ -1,8 +1,5 @@
 // db_connect.php
-// Creates a PDO instance in $pdo.
-// Tries to connect to Online (Hostinger) DB first, falls back to Local (XAMPP) DB.
 
-// Start output buffering to prevent random text/warnings from breaking JSON
 ob_start();
 
 // Report all errors to the log, but do NOT display them to the client
@@ -23,7 +20,7 @@ if (!defined('DEBUG_MODE')) {
 // vvv  REPLACE THESE WITH YOUR ACTUAL HOSTINGER CREDENTIALS vvv
 $online_creds = [
     'host' => 'localhost',
-    'db'   => 'LGU',
+    'db'   => 'emer_comm_test',
     'user' => 'root',
     'pass' => 'YsqnXk6q#145'
 ];
