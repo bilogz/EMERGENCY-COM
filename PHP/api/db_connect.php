@@ -13,7 +13,7 @@ ini_set('display_errors', 0);
 // vvv  REPLACE THESE WITH YOUR ACTUAL HOSTINGER CREDENTIALS vvv
 $online_creds = [
     'host' => 'localhost',
-    'db'   => 'emer_comm_test_app',
+    'db'   => 'emer_comm_test',
     'user' => 'root',
     'pass' => 'YsqnXk6q#145'
 ];
