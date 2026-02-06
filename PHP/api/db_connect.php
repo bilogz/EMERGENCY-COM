@@ -7,13 +7,14 @@ ob_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
-require_once 'apiResponse.php';
-
 // Define if we are in debug mode (show detailed errors in JSON)
-// Set to false in production!
+// Set to false in production! Define before loading ApiResponse so it can
+// include debug details when needed.
 if (!defined('DEBUG_MODE')) {
     define('DEBUG_MODE', true);
 }
+
+require_once 'apiResponse.php';
 
 // --- Define Credentials ---
 
