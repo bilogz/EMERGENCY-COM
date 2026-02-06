@@ -7,6 +7,11 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
+// Try to include apiResponse helper if present (case-insensitive filesystems differ)
+if (file_exists(__DIR__ . '/apiResponse.php')) {
+    require_once __DIR__ . '/apiResponse.php';
+}
+
 // --- Define Credentials ---
 
 // 1. Online (Hostinger) Credentials
@@ -36,6 +41,35 @@ $options = [
 
 $pdo = null;
 
+// helper to send error consistently
+function send_db_error($msg, $ex = null) {
+    $debug = null;
+    if ($ex instanceof Exception) {
+        $debug = $ex->getMessage();
+    } elseif (is_string($ex)) {
+        $debug = $ex;
+    }
+    // Log always
+    error_log('DB CONNECT ERROR: ' . $msg . ($debug ? ' | ' . $debug : ''));
+
+    // Use apiResponse if available
+    if (class_exists('apiResponse')) {
+        if (defined('DEBUG_MODE') && DEBUG_MODE === true) {
+            apiResponse::error($msg, 500, $debug);
+        } else {
+            apiResponse::error($msg, 500);
+        }
+    } else {
+        // Fallback JSON response
+        http_response_code(500);
+        $out = ['success' => false, 'message' => $msg];
+        if (defined('DEBUG_MODE') && DEBUG_MODE === true && $debug) $out['debug'] = $debug;
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($out);
+        exit();
+    }
+}
+
 try {
     // Attempt 1: Connect to Online Database
     $dsn = "mysql:host={$online_creds['host']};dbname={$online_creds['db']};charset=$charset";
@@ -54,12 +88,18 @@ try {
         // Both connections failed
         error_log('Local DB Fallback failed: ' . $e_local->getMessage());
 
-        // Send a generic, safe error message to the client
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'A server error occurred during database connection.']);
-        exit();
+        // Send a consistent error response (with debug when enabled)
+        send_db_error('A server error occurred during database connection.', $e_local->getMessage());
     }
 }
 
 ?>
     } catch (PDOException $e_local) {
+        // Both connections failed
+        error_log('Local DB Fallback failed: ' . $e_local->getMessage());
+
+        // Send a generic, safe error message to the client
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'A server error occurred during database connection.']);
+        exit();
+    ?>
