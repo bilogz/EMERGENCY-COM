@@ -7,6 +7,9 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
+// Enable Debug Mode to see specific database errors in the JSON response
+define('DEBUG_MODE', true);
+
 // Try to include apiResponse helper if present (case-insensitive filesystems differ)
 if (file_exists(__DIR__ . '/apiResponse.php')) {
     require_once __DIR__ . '/apiResponse.php';
