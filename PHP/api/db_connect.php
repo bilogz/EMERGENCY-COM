@@ -55,24 +55,17 @@ function send_db_error($msg, $ex = null) {
     // Log always
     error_log('DB CONNECT ERROR: ' . $msg . ($debug ? ' | ' . $debug : ''));
 
-    // Use apiResponse if available
-    if (class_exists('apiResponse')) {
-        if (defined('DEBUG_MODE') && DEBUG_MODE === true) {
-            apiResponse::error($msg, 500, $debug);
-        } else {
-            apiResponse::error($msg, 500);
-        }
-    } else {
-        // Fallback JSON response
-        http_response_code(500);
-        $out = ['success' => false, 'message' => $msg];
-        if (defined('DEBUG_MODE') && DEBUG_MODE === true && $debug) {
-            $out['debug'] = $debug;
-        }
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($out);
-        exit();
+    // Force JSON response with debug info to diagnose connection issues
+    // We bypass apiResponse class here to ensure the debug message is not suppressed by configuration
+    if (ob_get_length()) ob_clean();
+    http_response_code(500);
+    $out = ['success' => false, 'message' => $msg];
+    if ($debug) {
+        $out['debug'] = $debug;
     }
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($out);
+    exit();
 }
 
 try {
