@@ -1,94 +1,57 @@
 <?php
 header("Content-Type: application/json; charset=UTF-8");
-include_once "db_connect.php";
+require_once "../db_connect.php";
+/** @var PDO $pdo */
 
-$response = [];
-
-// Allow POST only
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo json_encode([
-        "success" => false,
-        "message" => "Invalid request method."
-    ]);
-    exit;
+    apiResponse::error("Invalid request method.", 405);
 }
 
-// Read JSON input
 $data = json_decode(file_get_contents("php://input"), true);
 
-// Validate required fields
 if (
     empty($data['user_id']) ||
     empty($data['current_password']) ||
     empty($data['new_password'])
 ) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Missing required fields."
-    ]);
-    exit;
+    apiResponse::error("Missing required fields.", 400);
 }
 
 $user_id          = $data['user_id'];
 $current_password = $data['current_password'];
 $new_password     = $data['new_password'];
 
-// Optional: enforce minimum password length
 if (strlen($new_password) < 8) {
-    echo json_encode([
-        "success" => false,
-        "message" => "New password must be at least 8 characters long."
-    ]);
-    exit;
+    apiResponse::error("New password must be at least 8 characters long.", 400);
 }
 
-// ================= FETCH CURRENT PASSWORD =================
-$sql = "SELECT password FROM users WHERE id = ? LIMIT 1";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $user_id);
-$stmt->execute();
-$result = $stmt->get_result();
+try {
+    $stmt = $pdo->prepare("SELECT password FROM users WHERE id = ? LIMIT 1");
+    $stmt->execute([$user_id]);
+    $user = $stmt->fetch();
 
-if ($result->num_rows === 0) {
-    echo json_encode([
-        "success" => false,
-        "message" => "User not found."
-    ]);
-    exit;
+    if (!$user) {
+        apiResponse::error("User not found.", 404);
+    }
+
+    if (!password_verify($current_password, $user['password'])) {
+        apiResponse::error("Incorrect current password.", 401);
+    }
+
+    $new_hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+
+    $update_stmt = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
+    if ($update_stmt->execute([$new_hashed_password, $user_id])) {
+        apiResponse::success(null, "Password changed successfully.");
+    } else {
+        apiResponse::error("Failed to update password.", 500);
+    }
+
+} catch (PDOException $e) {
+    error_log("Change Password DB Error: " . $e->getMessage());
+    apiResponse::error("Database error occurred.", 500, $e->getMessage());
+} catch (Exception $e) {
+    error_log("Change Password Error: " . $e->getMessage());
+    apiResponse::error("An unexpected error occurred.", 500, $e->getMessage());
 }
-
-$row = $result->fetch_assoc();
-$hashed_password = $row['password'];
-
-// ================= VERIFY CURRENT PASSWORD =================
-if (!password_verify($current_password, $hashed_password)) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Incorrect current password."
-    ]);
-    exit;
-}
-
-// ================= UPDATE PASSWORD =================
-$new_hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-
-$update_sql = "UPDATE users SET password = ? WHERE id = ?";
-$update_stmt = $conn->prepare($update_sql);
-$update_stmt->bind_param("si", $new_hashed_password, $user_id);
-
-if ($update_stmt->execute()) {
-    echo json_encode([
-        "success" => true,
-        "message" => "Password changed successfully."
-    ]);
-} else {
-    echo json_encode([
-        "success" => false,
-        "message" => "Database error."
-    ]);
-}
-
-$stmt->close();
-$update_stmt->close();
-$conn->close();
 ?>

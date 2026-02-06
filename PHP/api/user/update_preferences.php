@@ -7,12 +7,9 @@ $input = json_decode(file_get_contents('php://input'), true);
 
 $userId = isset($input['user_id']) ? (int)$input['user_id'] : 0;
 if ($userId <= 0) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Valid User ID is required.']);
-    exit();
+    apiResponse::error('Valid User ID is required.', 400);
 }
 
-// Prepare data with defaults matching the schema
 $shareLocation = isset($input['share_location']) ? (int)(bool)$input['share_location'] : 0;
 $smsNotifications = isset($input['sms_notifications']) ? (int)(bool)$input['sms_notifications'] : 1;
 $emailNotifications = isset($input['email_notifications']) ? (int)(bool)$input['email_notifications'] : 1;
@@ -25,8 +22,6 @@ $profileVisibility = isset($input['profile_visibility']) ? trim($input['profile_
 $alertCategories = isset($input['alert_categories']) ? trim($input['alert_categories']) : null;
 
 try {
-    // This query will INSERT a new row if the user_id doesn't exist,
-    // or UPDATE the existing row if it does. This is very robust.
     $sql = "
         INSERT INTO user_preferences (user_id, share_location, sms_notifications, email_notifications, push_notifications, preferred_language, alert_priority, theme, timezone, profile_visibility, alert_categories)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -47,11 +42,13 @@ try {
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$userId, $shareLocation, $smsNotifications, $emailNotifications, $pushNotifications, $preferredLanguage, $alertPriority, $theme, $timezone, $profileVisibility, $alertCategories]);
 
-    echo json_encode(['success' => true, 'message' => 'Preferences updated successfully.']);
+    apiResponse::success(null, 'Preferences updated successfully.');
 
 } catch (PDOException $e) {
-    http_response_code(500);
+    error_log("Update Prefs DB Error: " . $e->getMessage());
+    apiResponse::error('Database update failed.', 500, $e->getMessage());
+} catch (Exception $e) {
     error_log("Update Prefs Error: " . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => 'Database update failed.']);
+    apiResponse::error('An unexpected error occurred.', 500, $e->getMessage());
 }
 ?>

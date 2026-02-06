@@ -3,11 +3,8 @@ header('Content-Type: application/json');
 require_once '../db_connect.php';
 /** @var PDO $pdo */
 
-// User ID must be provided to know whose preferences to fetch
 if (!isset($_GET['user_id'])) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'User ID is required.']);
-    exit();
+    apiResponse::error('User ID is required.', 400);
 }
 
 $userId = (int)$_GET['user_id'];
@@ -18,14 +15,12 @@ try {
     $prefs = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($prefs) {
-        // Coerce boolean values for JSON consistency
         $prefs['share_location'] = (bool)$prefs['share_location'];
         $prefs['sms_notifications'] = (bool)$prefs['sms_notifications'];
         $prefs['email_notifications'] = (bool)$prefs['email_notifications'];
         $prefs['push_notifications'] = (bool)$prefs['push_notifications'];
-        echo json_encode(['success' => true, 'preferences' => $prefs]);
+        apiResponse::success(['preferences' => $prefs]);
     } else {
-        // If no preferences found, return a default set matching the schema
         $defaults = [
             'user_id' => $userId, 
             'share_location' => false, 
@@ -38,10 +33,13 @@ try {
             'timezone' => 'Asia/Manila',
             'profile_visibility' => 'private'
         ];
-        echo json_encode(['success' => true, 'preferences' => $defaults]);
+        apiResponse::success(['preferences' => $defaults]);
     }
 } catch (PDOException $e) {
-    http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Database query failed.']);
+    error_log("Get Preferences DB Error: " . $e->getMessage());
+    apiResponse::error('Database query failed.', 500, $e->getMessage());
+} catch (Exception $e) {
+    error_log("Get Preferences Error: " . $e->getMessage());
+    apiResponse::error('An unexpected error occurred.', 500, $e->getMessage());
 }
 ?>

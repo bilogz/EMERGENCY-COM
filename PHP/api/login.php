@@ -1,18 +1,13 @@
 <?php
 // login.php
 
-// --- Production Error Handling ---
-error_reporting(0);
-ini_set('display_errors', 0);
-// ---------------------------------
-
 // Return JSON response
 header('Content-Type: application/json');
 
-// Include DB connection (contains $pdo)
+// Include DB connection (contains $pdo and apiResponse)
 require_once 'db_connect.php';
 
-/** @var PDO $pdo */ // This line tells your IDE that $pdo is a PDO object
+/** @var PDO $pdo */
 
 // Get raw JSON input from the app
 $input = file_get_contents('php://input');
@@ -22,12 +17,8 @@ $data = json_decode($input, true);
 $isGoogleLogin = isset($data['google_token']) && !empty($data['google_token']);
 
 // Validate required fields
-// For standard login: email/phone AND password are required.
-// For Google login: email is required, password is NOT.
 if (!$isGoogleLogin && ((!isset($data['email']) && !isset($data['phone'])) || !isset($data['password']))) {
-    http_response_code(400);
-    echo json_encode(["success" => false, "message" => "Email/Phone and password are required for standard login."]);
-    exit();
+    apiResponse::error("Email/Phone and password are required for standard login.", 400);
 }
 
 // Determine the identifier
@@ -42,7 +33,6 @@ try {
 
     if ($isGoogleLogin) {
         // --- Google Login Flow ---
-        // Find user by email (Google login provides email)
         $stmt = $pdo->prepare("SELECT id, name, email, phone FROM users WHERE email = ?");
         $stmt->execute([$email]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -63,7 +53,7 @@ try {
                 'phone' => ''
             ];
         }
-        $authenticated = true; // In production, verify the google_token with Google's API here
+        $authenticated = true; 
         
     } else {
         // --- Standard Login Flow ---
@@ -83,7 +73,7 @@ try {
         $deviceName = isset($data['device_name']) ? trim($data['device_name']) : null;
         $pushToken  = isset($data['push_token'])  ? trim($data['push_token'])  : null;
 
-        if (!empty($deviceId) && isset($pdo)) {
+        if (!empty($deviceId)) {
             $deviceStmt = $pdo->prepare("
                 INSERT INTO user_devices (user_id, device_id, device_type, device_name, push_token, is_active, last_active) 
                 VALUES (?, ?, ?, ?, ?, 1, NOW()) 
@@ -95,24 +85,23 @@ try {
         // Generate session token
         $token = bin2hex(random_bytes(16));
 
-        http_response_code(200);
-        echo json_encode([
-            "success" => true,
-            "message" => "Login successful!",
+        apiResponse::success([
             "user_id" => (int)$user['id'],
             "username" => $user['name'],
             "email" => $user['email'],
             "phone" => $user['phone'] ?? '',
             "token" => $token
-        ]);
+        ], "Login successful!");
+        
     } else {
-        http_response_code(401);
-        echo json_encode(["success" => false, "message" => "Invalid credentials."]);
+        apiResponse::error("Invalid credentials.", 401);
     }
 
 } catch (PDOException $e) {
-    http_response_code(500);
+    error_log("Login DB Error: " . $e->getMessage());
+    apiResponse::error("A database error occurred during login.", 500, $e->getMessage());
+} catch (Exception $e) {
     error_log("Login Error: " . $e->getMessage());
-    echo json_encode(["success" => false, "message" => "An error occurred during login."]);
+    apiResponse::error("An unexpected error occurred.", 500, $e->getMessage());
 }
 ?>

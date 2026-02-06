@@ -13,20 +13,20 @@ try {
         $stmt->execute();
     } else {
         if ($user_id <= 0) {
-            http_response_code(400);
-            echo json_encode(['success' => false, 'message' => 'user_id is required for non-admin users']);
-            exit();
+            apiResponse::error('user_id is required for non-admin users', 400);
         }
         $stmt = $pdo->prepare('SELECT id, user_id, created_at FROM conversations WHERE user_id = ? ORDER BY created_at DESC');
         $stmt->execute([$user_id]);
     }
 
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    echo json_encode(['success' => true, 'message' => 'OK', 'conversations' => $rows]);
+    apiResponse::success(['conversations' => $rows], 'OK');
 } catch (PDOException $e) {
-    http_response_code(500);
+    error_log('Conversations list DB error: ' . $e->getMessage());
+    apiResponse::error('A database error occurred.', 500, $e->getMessage());
+} catch (Exception $e) {
     error_log('Conversations list error: ' . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => 'DB error: ' . $e->getMessage()]);
+    apiResponse::error('An unexpected error occurred.', 500, $e->getMessage());
 }
 ?>
 

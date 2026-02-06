@@ -5,18 +5,14 @@ require_once __DIR__ . '/../db_connect.php';
 /** @var PDO $pdo */
 
 if (!isset($_GET['conversation_id'])) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'messages' => [], 'error' => 'Missing conversation_id.']);
-    exit();
+    apiResponse::error('Missing conversation_id.', 400);
 }
 
 $conversation_id = (int)$_GET['conversation_id'];
 $last_message_id = isset($_GET['last_message_id']) ? (int)$_GET['last_message_id'] : 0;
 
 if ($conversation_id <= 0) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'messages' => [], 'error' => 'Invalid conversation_id.']);
-    exit();
+    apiResponse::error('Invalid conversation_id.', 400);
 }
 
 try {
@@ -38,15 +34,13 @@ try {
     $stmt->execute([$conversation_id, $last_message_id]);
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode(['success' => true, 'messages' => $messages]);
+    apiResponse::success(['messages' => $messages], 'OK');
 
 } catch (PDOException $e) {
-    http_response_code(500);
+    error_log('Messages list DB error: ' . $e->getMessage());
+    apiResponse::error('A database error occurred.', 500, $e->getMessage());
+} catch (Exception $e) {
     error_log('Messages list error: ' . $e->getMessage());
-    echo json_encode([
-        'success' => false,
-        'messages' => [],
-        'error' => 'Database error: ' . $e->getMessage()
-    ]);
+    apiResponse::error('An unexpected error occurred.', 500, $e->getMessage());
 }
 ?>

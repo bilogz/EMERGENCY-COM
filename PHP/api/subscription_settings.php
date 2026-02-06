@@ -1,6 +1,5 @@
 <?php
 // subscription_settings.php
-// Handles fetching and updating notification category subscriptions
 header('Content-Type: application/json');
 
 require_once 'db_connect.php';
@@ -8,19 +7,14 @@ require_once 'db_connect.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// 1. GET: Fetch all categories and their status for the user
-if ($method === 'GET') {
-    if (!isset($_GET['user_id'])) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'User ID is required.']);
-        exit();
-    }
+try {
+    if ($method === 'GET') {
+        if (!isset($_GET['user_id'])) {
+            apiResponse::error('User ID is required.', 400);
+        }
 
-    $userId = $_GET['user_id'];
+        $userId = $_GET['user_id'];
 
-    try {
-        // We select ALL categories, and LEFT JOIN with subscriptions to see if the user has turned them off.
-        // We assume '1' (Active) if no record exists yet.
         $sql = "
             SELECT 
                 ac.id AS category_id,
@@ -38,30 +32,20 @@ if ($method === 'GET') {
         $stmt->execute([$userId]);
         $categories = $stmt->fetchAll();
 
-        echo json_encode(['success' => true, 'data' => $categories]);
-
-    } catch (PDOException $e) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Failed to fetch subscriptions.']);
-    }
-}
-
-// 2. POST: Update a specific subscription (Toggle On/Off)
-elseif ($method === 'POST') {
-    $data = json_decode(file_get_contents('php://input'), true);
-
-    if (!isset($data['user_id']) || !isset($data['category_id']) || !isset($data['is_active'])) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'Missing required fields.']);
-        exit();
+        apiResponse::success(['data' => $categories]);
     }
 
-    $userId = $data['user_id'];
-    $categoryId = $data['category_id'];
-    $isActive = (int)$data['is_active']; // 1 for On, 0 for Off
+    elseif ($method === 'POST') {
+        $data = json_decode(file_get_contents('php://input'), true);
 
-    try {
-        // Upsert: Insert if new, Update if exists
+        if (!isset($data['user_id']) || !isset($data['category_id']) || !isset($data['is_active'])) {
+            apiResponse::error('Missing required fields.', 400);
+        }
+
+        $userId = $data['user_id'];
+        $categoryId = $data['category_id'];
+        $isActive = (int)$data['is_active'];
+
         $sql = "
             INSERT INTO user_subscriptions (user_id, category_id, is_active, updated_at)
             VALUES (?, ?, ?, NOW())
@@ -71,12 +55,18 @@ elseif ($method === 'POST') {
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$userId, $categoryId, $isActive]);
 
-        echo json_encode(['success' => true, 'message' => 'Subscription updated.']);
-
-    } catch (PDOException $e) {
-        http_response_code(500);
-        error_log("Subscription update error: " . $e->getMessage());
-        echo json_encode(['success' => false, 'message' => 'Failed to update subscription.']);
+        apiResponse::success(null, 'Subscription updated.');
     }
+    
+    else {
+        apiResponse::error('Method not allowed.', 405);
+    }
+
+} catch (PDOException $e) {
+    error_log("Subscription Error: " . $e->getMessage());
+    apiResponse::error('A database error occurred.', 500, $e->getMessage());
+} catch (Exception $e) {
+    error_log("Subscription General Error: " . $e->getMessage());
+    apiResponse::error('An unexpected error occurred.', 500, $e->getMessage());
 }
 ?>

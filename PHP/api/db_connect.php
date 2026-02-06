@@ -1,11 +1,21 @@
-<?php
 // db_connect.php
 // Creates a PDO instance in $pdo.
 // Tries to connect to Online (Hostinger) DB first, falls back to Local (XAMPP) DB.
 
+// Start output buffering to prevent random text/warnings from breaking JSON
+ob_start();
+
 // Report all errors to the log, but do NOT display them to the client
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
+
+require_once 'apiResponse.php';
+
+// Define if we are in debug mode (show detailed errors in JSON)
+// Set to false in production!
+if (!defined('DEBUG_MODE')) {
+    define('DEBUG_MODE', true);
+}
 
 // --- Define Credentials ---
 
@@ -55,9 +65,7 @@ try {
         error_log('Local DB Fallback failed: ' . $e_local->getMessage());
 
         // Send a generic, safe error message to the client
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'A server error occurred during database connection.']);
-        exit();
+        apiResponse::error('A server error occurred during database connection.', 500, $e_local->getMessage());
     }
 }
 

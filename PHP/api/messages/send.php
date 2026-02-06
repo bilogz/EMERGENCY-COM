@@ -4,43 +4,34 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../db_connect.php';
 /** @var PDO $pdo */
 
-// Get the JSON input from the app
 $input = json_decode(file_get_contents('php://input'), true);
 if (!$input) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Invalid or missing JSON body']);
-    exit();
+    apiResponse::error('Invalid or missing JSON body', 400);
 }
 
-// Get and validate all required parameters from the app
 $conversation_id = isset($input['conversation_id']) ? (int)$input['conversation_id'] : 0;
 $sender_id = isset($input['user_id']) ? (int)$input['user_id'] : 0;
 $content = isset($input['content']) ? trim($input['content']) : '';
 $nonce = isset($input['nonce']) ? trim($input['nonce']) : '';
-$sender_type = isset($input['sender_type']) ? trim($input['sender_type']) : 'citizen'; // Default to 'citizen' for app users
+$sender_type = isset($input['sender_type']) ? trim($input['sender_type']) : 'citizen';
 
 if ($conversation_id <= 0 || $sender_id <= 0 || $content === '' || $nonce === '') {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Missing required fields: conversation_id, user_id, content, and nonce are required.']);
-    exit();
+    apiResponse::error('Missing required fields.', 400);
 }
 
 try {
-    // Check for an existing nonce to prevent creating duplicate messages
+    // Check for duplicate nonce
     $stmt = $pdo->prepare('SELECT id FROM messages WHERE nonce = ?');
     $stmt->execute([$nonce]);
     if ($stmt->fetch()) {
-        http_response_code(200); // OK, but not created
-        echo json_encode(['success' => true, 'message' => 'Message already received.']);
-        exit();
+        apiResponse::success(null, 'Message already received.');
     }
 
-    // Insert the new message into the corrected table structure
+    // Insert message (Note: sender_type must exist in your messages table)
     $stmt = $pdo->prepare('INSERT INTO messages (conversation_id, sender_id, content, sender_type, nonce) VALUES (?, ?, ?, ?, ?)');
     $stmt->execute([$conversation_id, $sender_id, $content, $sender_type, $nonce]);
     $id = (int)$pdo->lastInsertId();
 
-    // Fetch and return the full message details, as the app expects
     $stmt = $pdo->prepare('
         SELECT m.id, m.conversation_id, m.sender_id, u.name AS senderName, m.content AS messageText, m.sent_at, m.nonce
         FROM messages m
@@ -51,7 +42,6 @@ try {
     $newMessage = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$newMessage) {
-        // Fallback: If the JOIN failed (e.g., user missing), construct the response manually
         $newMessage = [
             'id' => $id,
             'conversation_id' => $conversation_id,
@@ -63,12 +53,13 @@ try {
         ];
     }
 
-    http_response_code(201); // 201 Created
-    echo json_encode(['success' => true, 'message' => 'Message sent successfully', 'data' => $newMessage]);
+    apiResponse::success(['data' => $newMessage], 'Message sent successfully', 201);
 
 } catch (PDOException $e) {
-    http_response_code(500); // Internal Server Error
-    error_log('Message send error: ' . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    error_log('Message Send DB Error: ' . $e->getMessage());
+    apiResponse::error('Failed to send message.', 500, $e->getMessage());
+} catch (Exception $e) {
+    error_log('Message Send Error: ' . $e->getMessage());
+    apiResponse::error('An unexpected error occurred.', 500, $e->getMessage());
 }
 ?>

@@ -1,22 +1,16 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 require_once 'db_connect.php';   // must define $pdo
 
-// Ensure $pdo is valid to prevent static analysis errors
-if (!$pdo) {
-    http_response_code(500);
-    exit(json_encode(["success" => false, "message" => "Database connection failed"]));
-}
+/** @var PDO $pdo */
 
 $userId = isset($_GET['user_id']) ? $_GET['user_id'] : null;
 
 try {
-    // Base query
+    // Note: 'location', 'latitude', 'longitude' are included as NULL fallbacks 
+    // if they don't exist in your 'alerts' table yet. 
+    // Update your schema to include them if the app needs real values.
     $sql = "
         SELECT 
             id,
@@ -24,14 +18,13 @@ try {
             title,
             message AS content,
             source,
-            location,
-            latitude,
-            longitude,
+            NULL AS location, 
+            NULL AS latitude,
+            NULL AS longitude,
             created_at AS timestamp
         FROM alerts
     ";
 
-    // If user_id is provided, filter out categories they have disabled (is_active = 0)
     if ($userId) {
         $sql .= " WHERE category_id NOT IN (
                     SELECT category_id FROM user_subscriptions 
@@ -49,18 +42,12 @@ try {
 
     $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode([
-        "success" => true,
-        "message" => "OK",
-        "alerts"  => $alerts
-    ]);
+    apiResponse::success(["alerts" => $alerts], "OK");
 
 } catch (PDOException $e) {
-    // TEMP: expose exact DB error so we can fix it
-    http_response_code(500);
-    echo json_encode([
-        "success" => false,
-        "message" => "DB error: " . $e->getMessage(),
-        "alerts"  => []
-    ]);
+    error_log("Alerts DB Error: " . $e->getMessage());
+    apiResponse::error("Failed to fetch alerts.", 500, $e->getMessage());
+} catch (Exception $e) {
+    error_log("Alerts Error: " . $e->getMessage());
+    apiResponse::error("An unexpected error occurred.", 500, $e->getMessage());
 }
