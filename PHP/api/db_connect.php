@@ -13,7 +13,7 @@ ini_set('display_errors', 0);
 // vvv  REPLACE THESE WITH YOUR ACTUAL HOSTINGER CREDENTIALS vvv
 $online_creds = [
     'host' => 'localhost',
-    'db'   => 'emer_comm_test_app',
+    'db'   => 'LGU',
     'user' => 'root',
     'pass' => 'YsqnXk6q#145'
 ];
@@ -22,7 +22,7 @@ $online_creds = [
 // 2. Local (XAMPP) Credentials
 $local_creds = [
     'host' => '127.0.0.1',
-    'db'   => 'emer_comm_test',
+    'db'   => 'LGU',
     'user' => 'root',
     'pass' => ''
 ];
@@ -61,4 +61,4 @@ try {
     }
 }
 
-?>
+/** @var PDO $pdo */

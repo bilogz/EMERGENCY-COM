@@ -2,6 +2,7 @@
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../db_connect.php';
+/** @var PDO $pdo */
 
 if (!isset($_GET['conversation_id'])) {
     http_response_code(400);

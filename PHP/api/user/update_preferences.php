@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json');
 require_once '../db_connect.php';
+/** @var PDO $pdo */
 
 $input = json_decode(file_get_contents('php://input'), true);
 
@@ -11,31 +12,40 @@ if ($userId <= 0) {
     exit();
 }
 
-// Prepare data with defaults
-$shareLocation = isset($input['share_location']) ? (int)(bool)$input['share_location'] : 1;
-$receiveNotifications = isset($input['receive_notifications']) ? (int)(bool)$input['receive_notifications'] : 1;
-$crimeAlerts = isset($input['crime_alerts']) ? (int)(bool)$input['crime_alerts'] : 1;
-$disasterWarnings = isset($input['disaster_warnings']) ? (int)(bool)$input['disaster_warnings'] : 1;
-$fireAlerts = isset($input['fire_alerts']) ? (int)(bool)$input['fire_alerts'] : 1;
-$weatherAdvisories = isset($input['weather_advisories']) ? (int)(bool)$input['weather_advisories'] : 1;
+// Prepare data with defaults matching the schema
+$shareLocation = isset($input['share_location']) ? (int)(bool)$input['share_location'] : 0;
+$smsNotifications = isset($input['sms_notifications']) ? (int)(bool)$input['sms_notifications'] : 1;
+$emailNotifications = isset($input['email_notifications']) ? (int)(bool)$input['email_notifications'] : 1;
+$pushNotifications = isset($input['push_notifications']) ? (int)(bool)$input['push_notifications'] : 1;
+$preferredLanguage = isset($input['preferred_language']) ? trim($input['preferred_language']) : 'en';
+$alertPriority = isset($input['alert_priority']) ? trim($input['alert_priority']) : 'all';
+$theme = isset($input['theme']) ? trim($input['theme']) : 'light';
+$timezone = isset($input['timezone']) ? trim($input['timezone']) : 'Asia/Manila';
+$profileVisibility = isset($input['profile_visibility']) ? trim($input['profile_visibility']) : 'private';
+$alertCategories = isset($input['alert_categories']) ? trim($input['alert_categories']) : null;
 
 try {
     // This query will INSERT a new row if the user_id doesn't exist,
     // or UPDATE the existing row if it does. This is very robust.
     $sql = "
-        INSERT INTO user_preferences (user_id, share_location, receive_notifications, crime_alerts, disaster_warnings, fire_alerts, weather_advisories)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO user_preferences (user_id, share_location, sms_notifications, email_notifications, push_notifications, preferred_language, alert_priority, theme, timezone, profile_visibility, alert_categories)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             share_location = VALUES(share_location),
-            receive_notifications = VALUES(receive_notifications),
-            crime_alerts = VALUES(crime_alerts),
-            disaster_warnings = VALUES(disaster_warnings),
-            fire_alerts = VALUES(fire_alerts),
-            weather_advisories = VALUES(weather_advisories)
+            sms_notifications = VALUES(sms_notifications),
+            email_notifications = VALUES(email_notifications),
+            push_notifications = VALUES(push_notifications),
+            preferred_language = VALUES(preferred_language),
+            alert_priority = VALUES(alert_priority),
+            theme = VALUES(theme),
+            timezone = VALUES(timezone),
+            profile_visibility = VALUES(profile_visibility),
+            alert_categories = VALUES(alert_categories),
+            updated_at = CURRENT_TIMESTAMP
     ";
 
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$userId, $shareLocation, $receiveNotifications, $crimeAlerts, $disasterWarnings, $fireAlerts, $weatherAdvisories]);
+    $stmt->execute([$userId, $shareLocation, $smsNotifications, $emailNotifications, $pushNotifications, $preferredLanguage, $alertPriority, $theme, $timezone, $profileVisibility, $alertCategories]);
 
     echo json_encode(['success' => true, 'message' => 'Preferences updated successfully.']);
 

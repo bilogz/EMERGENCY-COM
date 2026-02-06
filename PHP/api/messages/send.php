@@ -2,6 +2,7 @@
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../db_connect.php';
+/** @var PDO $pdo */
 
 // Get the JSON input from the app
 $input = json_decode(file_get_contents('php://input'), true);
@@ -16,6 +17,7 @@ $conversation_id = isset($input['conversation_id']) ? (int)$input['conversation_
 $sender_id = isset($input['user_id']) ? (int)$input['user_id'] : 0;
 $content = isset($input['content']) ? trim($input['content']) : '';
 $nonce = isset($input['nonce']) ? trim($input['nonce']) : '';
+$sender_type = isset($input['sender_type']) ? trim($input['sender_type']) : 'citizen'; // Default to 'citizen' for app users
 
 if ($conversation_id <= 0 || $sender_id <= 0 || $content === '' || $nonce === '') {
     http_response_code(400);
@@ -34,8 +36,8 @@ try {
     }
 
     // Insert the new message into the corrected table structure
-    $stmt = $pdo->prepare('INSERT INTO messages (conversation_id, sender_id, content, nonce) VALUES (?, ?, ?, ?)');
-    $stmt->execute([$conversation_id, $sender_id, $content, $nonce]);
+    $stmt = $pdo->prepare('INSERT INTO messages (conversation_id, sender_id, content, sender_type, nonce) VALUES (?, ?, ?, ?, ?)');
+    $stmt->execute([$conversation_id, $sender_id, $content, $sender_type, $nonce]);
     $id = (int)$pdo->lastInsertId();
 
     // Fetch and return the full message details, as the app expects

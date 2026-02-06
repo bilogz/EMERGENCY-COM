@@ -4,6 +4,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 // Include the database connection file
 require_once __DIR__ . '/../db_connect.php';
+/** @var PDO $pdo */
 
 // --- Input Validation ---
 // Get the raw JSON POST data

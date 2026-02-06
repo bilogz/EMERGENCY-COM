@@ -3,6 +3,7 @@
 header('Content-Type: application/json');
 
 require_once 'db_connect.php';
+/** @var PDO $pdo */
 
 $data = json_decode(file_get_contents('php://input'), true);
 
@@ -51,7 +52,7 @@ if (strlen($plainPassword) < 6) {
 
 // --- Database Operations ---
 try {
-    // Check if email already exists in the correct 'users' table
+    // Check if email already exists in the users table
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE email = ?");
     $stmt->execute([$email]);
     if ($stmt->fetchColumn() > 0) {

@@ -4,6 +4,7 @@
 header('Content-Type: application/json');
 
 require_once '../db_connect.php';
+/** @var PDO $pdo */
 
 $input = json_decode(file_get_contents('php://input'), true);
 
@@ -24,10 +25,12 @@ if ($userId <= 0 || empty($deviceId) || empty($pushToken)) {
 try {
     // Use INSERT ... ON DUPLICATE KEY UPDATE to handle both new devices and token refreshes.
     // This requires a UNIQUE key on (user_id, device_id) in the database, which we already have.
+    // Note: Schema uses 'push_token' column, but we'll also support 'fcm_token' for backward compatibility
     $sql = "
-        INSERT INTO user_devices (user_id, device_id, fcm_token, device_name, is_active, last_active)
-        VALUES (?, ?, ?, ?, 1, NOW())
+        INSERT INTO user_devices (user_id, device_id, push_token, fcm_token, device_name, is_active, last_active)
+        VALUES (?, ?, ?, ?, ?, 1, NOW())
         ON DUPLICATE KEY UPDATE
+            push_token = VALUES(push_token),
             fcm_token = VALUES(fcm_token),
             device_name = VALUES(device_name),
             is_active = 1,
@@ -35,7 +38,7 @@ try {
     ";
 
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$userId, $deviceId, $pushToken, $deviceName]);
+    $stmt->execute([$userId, $deviceId, $pushToken, $pushToken, $deviceName]);
 
     http_response_code(200);
     echo json_encode(['success' => true, 'message' => 'Device registered successfully.']);

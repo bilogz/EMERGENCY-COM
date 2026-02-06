@@ -4,6 +4,7 @@
 header('Content-Type: application/json');
 
 require_once 'db_connect.php';
+/** @var PDO $pdo */
 
 $data = json_decode(file_get_contents('php://input'), true);
 

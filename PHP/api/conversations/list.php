@@ -2,6 +2,7 @@
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../db_connect.php';
+/** @var PDO $pdo */
 
 $user_id  = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
 $role     = isset($_GET['role']) ? strtolower(trim($_GET['role'])) : '';

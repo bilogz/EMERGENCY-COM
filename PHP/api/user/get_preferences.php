@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json');
 require_once '../db_connect.php';
+/** @var PDO $pdo */
 
 // User ID must be provided to know whose preferences to fetch
 if (!isset($_GET['user_id'])) {
@@ -19,18 +20,23 @@ try {
     if ($prefs) {
         // Coerce boolean values for JSON consistency
         $prefs['share_location'] = (bool)$prefs['share_location'];
-        $prefs['receive_notifications'] = (bool)$prefs['receive_notifications'];
-        $prefs['crime_alerts'] = (bool)$prefs['crime_alerts'];
-        $prefs['disaster_warnings'] = (bool)$prefs['disaster_warnings'];
-        $prefs['fire_alerts'] = (bool)$prefs['fire_alerts'];
-        $prefs['weather_advisories'] = (bool)$prefs['weather_advisories'];
+        $prefs['sms_notifications'] = (bool)$prefs['sms_notifications'];
+        $prefs['email_notifications'] = (bool)$prefs['email_notifications'];
+        $prefs['push_notifications'] = (bool)$prefs['push_notifications'];
         echo json_encode(['success' => true, 'preferences' => $prefs]);
     } else {
-        // If no preferences found, return a default set
+        // If no preferences found, return a default set matching the schema
         $defaults = [
-            'user_id' => $userId, 'share_location' => true, 'receive_notifications' => true, 
-            'crime_alerts' => true, 'disaster_warnings' => true, 'fire_alerts' => true, 
-            'weather_advisories' => true
+            'user_id' => $userId, 
+            'share_location' => false, 
+            'sms_notifications' => true,
+            'email_notifications' => true,
+            'push_notifications' => true,
+            'preferred_language' => 'en',
+            'alert_priority' => 'all',
+            'theme' => 'light',
+            'timezone' => 'Asia/Manila',
+            'profile_visibility' => 'private'
         ];
         echo json_encode(['success' => true, 'preferences' => $defaults]);
     }

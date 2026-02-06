@@ -4,6 +4,7 @@
 header('Content-Type: application/json');
 
 require_once 'db_connect.php';
+/** @var PDO $pdo */
 
 $method = $_SERVER['REQUEST_METHOD'];
 
