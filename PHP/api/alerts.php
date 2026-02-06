@@ -8,20 +8,23 @@ require_once 'db_connect.php';   // must define $pdo
 $userId = isset($_GET['user_id']) ? $_GET['user_id'] : null;
 
 try {
-    // Note: 'location', 'latitude', 'longitude' are included as NULL fallbacks 
-    // if they don't exist in your 'alerts' table yet. 
-    // Update your schema to include them if the app needs real values.
+    // Select explicit alert columns so the mobile app receives a consistent payload.
+    // Columns: id, category_id, title, message, category, area, content, source,
+    // status, created_at, updated_at, incident_id
     $sql = "
-        SELECT 
+        SELECT
             id,
-            category_id AS category,
+            category_id,
             title,
-            message AS content,
+            message,
+            category,
+            area,
+            content,
             source,
-            NULL AS location, 
-            NULL AS latitude,
-            NULL AS longitude,
-            created_at AS timestamp
+            status,
+            created_at,
+            updated_at,
+            incident_id
         FROM alerts
     ";
 
