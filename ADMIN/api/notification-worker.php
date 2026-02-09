@@ -10,11 +10,43 @@ require_once 'db_connect.php';
 $batchSize = 100;
 
 try {
+    // Ensure minimal columns exist for progress tracking (best-effort, backward compatible)
+    try {
+        $logColsStmt = $pdo->query("SHOW COLUMNS FROM notification_logs");
+        $logCols = $logColsStmt->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('response', $logCols, true)) {
+            try { $pdo->exec("ALTER TABLE notification_logs ADD COLUMN response TEXT NULL"); } catch (PDOException $e) {}
+        }
+        if (!in_array('status', $logCols, true)) {
+            try { $pdo->exec("ALTER TABLE notification_logs ADD COLUMN status VARCHAR(20) DEFAULT 'pending'"); } catch (PDOException $e) {}
+        }
+    } catch (PDOException $e) {
+        // ignore
+    }
+
+    $queueCols = [];
+    $queueHasCreatedAt = false;
+    $queueHasDeliveryStatus = false;
+    $queueHasErrorMessage = false;
+    $queueHasProcessedAt = false;
+    $queueHasDeliveredAt = false;
+    try {
+        $qColsStmt = $pdo->query("SHOW COLUMNS FROM notification_queue");
+        $queueCols = $qColsStmt->fetchAll(PDO::FETCH_COLUMN);
+        $queueHasCreatedAt = in_array('created_at', $queueCols, true);
+        $queueHasDeliveryStatus = in_array('delivery_status', $queueCols, true);
+        $queueHasErrorMessage = in_array('error_message', $queueCols, true);
+        $queueHasProcessedAt = in_array('processed_at', $queueCols, true);
+        $queueHasDeliveredAt = in_array('delivered_at', $queueCols, true);
+    } catch (PDOException $e) {
+        $queueCols = [];
+    }
+
     // Get pending messages
     $stmt = $pdo->prepare(
         "SELECT * FROM notification_queue 
         WHERE status = 'pending' 
-        ORDER BY created_at ASC 
+        ORDER BY " . ($queueHasCreatedAt ? "created_at" : "id") . " ASC 
         LIMIT ?"
     );
     $stmt->bindValue(1, $batchSize, PDO::PARAM_INT);
@@ -54,33 +86,44 @@ try {
             $error = $e->getMessage();
         }
 
-                // Update job status
+        // Update job status (only touch columns that exist)
+        $status = $success ? 'sent' : 'failed';
+        $set = ["status = ?"];
+        $params = [$status];
 
-                $status = $success ? 'sent' : 'failed';
+        if ($queueHasDeliveryStatus) {
+            $set[] = "delivery_status = ?";
+            $params[] = $success ? 'delivered' : 'failed';
+        }
+        if ($queueHasErrorMessage) {
+            $set[] = "error_message = ?";
+            $params[] = $error;
+        }
+        if ($queueHasProcessedAt) {
+            $set[] = "processed_at = NOW()";
+        }
+        if ($queueHasDeliveredAt) {
+            $set[] = "delivered_at = " . ($success ? "NOW()" : "NULL");
+        }
 
-                $deliveryStatus = $success ? 'delivered' : 'failed';
-
-                $updateStmt = $pdo->prepare("
-
-                    UPDATE notification_queue 
-
-                    SET status = ?, delivery_status = ?, error_message = ?, processed_at = NOW(), delivered_at = " . ($success ? "NOW()" : "NULL") . " 
-
-                    WHERE id = ?
-
-                ");
-
-                $updateStmt->execute([$status, $deliveryStatus, $error, $job['id']]);
+        $updateStmt = $pdo->prepare("UPDATE notification_queue SET " . implode(', ', $set) . " WHERE id = ?");
+        $params[] = $job['id'];
+        $updateStmt->execute($params);
 
         // Update master log progress
         updateLogProgress($pdo, $job['log_id']);
     }
 
-    echo "Processed " . count($jobs) . " jobs.\n";
+    // Avoid breaking JSON callers; output is only for CLI usage.
+    if (php_sapi_name() === 'cli') {
+        echo "Processed " . count($jobs) . " jobs.\n";
+    }
 
 } catch (PDOException $e) {
     error_log("Worker Error: " . $e->getMessage());
-    echo "Worker Error: " . $e->getMessage() . "\n";
+    if (php_sapi_name() === 'cli') {
+        echo "Worker Error: " . $e->getMessage() . "\n";
+    }
 }
 
 /**
@@ -106,12 +149,14 @@ function updateLogProgress($pdo, $logId) {
         $status = 'sending';
     }
 
-    $updateStmt = $pdo->prepare(
-        "UPDATE notification_logs 
-        SET status = ?, 
-            response = ? 
-        WHERE id = ?"
-    );
+    // Build backward-compatible update (response may not exist)
+    $logCols = [];
+    try {
+        $logColsStmt = $pdo->query("SHOW COLUMNS FROM notification_logs");
+        $logCols = $logColsStmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (PDOException $e) {
+        $logCols = [];
+    }
     
     $response = json_encode([
         'total' => $total,
@@ -121,7 +166,13 @@ function updateLogProgress($pdo, $logId) {
         'progress' => $total > 0 ? round((($sent + $failed) / $total) * 100) : 0
     ]);
 
-    $updateStmt->execute([$status, $response, $logId]);
+    if (in_array('response', $logCols, true)) {
+        $updateStmt = $pdo->prepare("UPDATE notification_logs SET status = ?, response = ? WHERE id = ?");
+        $updateStmt->execute([$status, $response, $logId]);
+    } else {
+        $updateStmt = $pdo->prepare("UPDATE notification_logs SET status = ? WHERE id = ?");
+        $updateStmt->execute([$status, $logId]);
+    }
 }
 
 /**

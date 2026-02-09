@@ -66,6 +66,10 @@ $adminEmail = $_SESSION['admin_email'] ?? 'admin@example.com';
 // Hide for Multilingual Support module pages
 $currentScript = $_SERVER['PHP_SELF'];
 $hideNotifications = (strpos($currentScript, '/multilingual-support/') !== false);
+
+// Base path fix for pages inside /multilingual-support/*
+$currentDirForAssets = basename(dirname($_SERVER['PHP_SELF']));
+$headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
 ?>
 
 <link rel="stylesheet" href="css/notification-modal.css">
@@ -73,40 +77,7 @@ $hideNotifications = (strpos($currentScript, '/multilingual-support/') !== false
 <link rel="stylesheet" href="css/message-content-modal.css">
 <!-- Emergency Alert System -->
 <link rel="stylesheet" href="../header/css/emergency-alert.css">
-<style>
-/* Date Time Display */
-.datetime-display {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-right: 1.5rem;
-    color: var(--text-color-1);
-    font-size: 0.9rem;
-    font-weight: 500;
-    white-space: nowrap;
-}
 
-.datetime-display .date-part {
-    color: var(--text-secondary-1);
-}
-
-.datetime-display .time-separator {
-    color: var(--border-color-1);
-    margin: 0 0.25rem;
-}
-
-.datetime-display .time-part {
-    font-variant-numeric: tabular-nums;
-    color: var(--primary-color-1);
-    font-weight: 600;
-}
-
-@media (max-width: 1024px) {
-    .datetime-display {
-        display: none;
-    }
-}
-</style>
 
 <!-- Admin Header Component -->
 <header class="admin-header">
@@ -987,6 +958,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Emergency Alert System -->
 <script src="../header/js/emergency-alert.js"></script>
+<!-- Replace browser alert() with themed modal -->
+<script src="<?php echo $headerBase; ?>../shared/js/ui-alert.js?v=<?php echo filemtime(__DIR__ . '/../../shared/js/ui-alert.js'); ?>"></script>
 <script>
     // Set API endpoint for emergency alerts in admin context
     if (typeof window.API_BASE_PATH === 'undefined') {

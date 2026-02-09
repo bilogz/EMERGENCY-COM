@@ -12,6 +12,7 @@ require_once __DIR__ . '/../api/db_connect.php';
 class AlertRepository
 {
     private $pdo;
+    private $alertsColumns = null;
 
     /**
      * Constructor
@@ -22,6 +23,22 @@ class AlertRepository
     {
         $this->pdo = $pdo;
     }
+
+    private function getAlertsColumns()
+    {
+        if (is_array($this->alertsColumns)) {
+            return $this->alertsColumns;
+        }
+
+        try {
+            $stmt = $this->pdo->query("SHOW COLUMNS FROM alerts");
+            $this->alertsColumns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        } catch (PDOException $e) {
+            $this->alertsColumns = [];
+        }
+
+        return $this->alertsColumns;
+    }
     
     /**
      * Create a new alert
@@ -31,20 +48,47 @@ class AlertRepository
      * @param string|null $content Alert content (optional, defaults to message)
      * @param int|null $categoryId Category ID (optional)
      * @param string $status Alert status (default: 'active')
+     * @param string|null $severity Alert severity (optional)
+     * @param int|null $weatherSignal Weather signal (1-5) for weather category (optional)
+     * @param int|null $fireLevel Fire level (1-3) for fire category (optional)
      * @return int|null New alert ID or null on failure
      */
-    public function create($title, $message, $content = null, $categoryId = null, $status = 'active')
+    public function create($title, $message, $content = null, $categoryId = null, $status = 'active', $severity = null, $weatherSignal = null, $fireLevel = null)
     {
         if ($content === null) {
             $content = $message;
         }
         
         try {
-            $stmt = $this->pdo->prepare("
-                INSERT INTO alerts (title, message, content, category_id, status, created_at) 
-                VALUES (?, ?, ?, ?, ?, NOW())
-            ");
-            $stmt->execute([$title, $message, $content, $categoryId, $status]);
+            $cols = ['title', 'message', 'content', 'category_id', 'status'];
+            $vals = [$title, $message, $content, $categoryId, $status];
+            $placeholders = array_fill(0, count($vals), '?');
+
+            $available = $this->getAlertsColumns();
+
+            if ($severity !== null && in_array('severity', $available, true)) {
+                $cols[] = 'severity';
+                $vals[] = $severity;
+                $placeholders[] = '?';
+            }
+
+            if ($weatherSignal !== null && in_array('weather_signal', $available, true)) {
+                $cols[] = 'weather_signal';
+                $vals[] = $weatherSignal;
+                $placeholders[] = '?';
+            }
+
+            if ($fireLevel !== null && in_array('fire_level', $available, true)) {
+                $cols[] = 'fire_level';
+                $vals[] = $fireLevel;
+                $placeholders[] = '?';
+            }
+
+            $cols[] = 'created_at';
+            $placeholders[] = 'NOW()';
+
+            $stmt = $this->pdo->prepare("INSERT INTO alerts (" . implode(', ', $cols) . ") VALUES (" . implode(', ', $placeholders) . ")");
+            $stmt->execute($vals);
             return (int)$this->pdo->lastInsertId();
         } catch (PDOException $e) {
             error_log("Error creating alert: " . $e->getMessage());

@@ -1,0 +1,177 @@
+        /* Custom layout for Overview - Distinct from Settings Pages */
+        .overview-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        /* Hero / Explainer Section */
+        .explainer-section {
+            text-align: center;
+            margin-bottom: 3rem;
+            background: var(--card-bg-1);
+            padding: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            border: 1px solid var(--border-color-1);
+        }
+
+        .explainer-title {
+            font-size: 1.5rem;
+            color: var(--primary-color-1);
+            margin-bottom: 2rem;
+            font-weight: 700;
+        }
+
+        .process-flow {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 2rem;
+            position: relative;
+        }
+
+        .process-step {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .process-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--bg-color-1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: var(--primary-color-1);
+            margin-bottom: 1rem;
+            border: 2px solid var(--primary-color-1);
+            transition: transform 0.3s ease;
+        }
+
+        .process-step:hover .process-icon {
+            transform: scale(1.1);
+            background: var(--primary-color-1);
+            color: white;
+        }
+
+        .process-label {
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text-color-1);
+        }
+
+        .process-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary-1);
+            line-height: 1.4;
+        }
+
+        /* Connecting Arrows */
+        .process-flow::before {
+            content: '';
+            position: absolute;
+            top: 40px;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background: var(--border-color-1);
+            z-index: 1;
+        }
+        
+        .arrow-icon {
+            position: absolute;
+            top: 30px;
+            font-size: 1.2rem;
+            color: var(--text-secondary-1);
+            z-index: 1;
+        }
+        
+        .arrow-1 { left: 33%; }
+        .arrow-2 { left: 66%; }
+
+        /* Status Cards Section */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .status-card {
+            background: var(--card-bg-1);
+            padding: 1.5rem;
+            border-radius: 10px;
+            border: 1px solid var(--border-color-1);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        }
+
+        .status-icon-box {
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .status-info h4 {
+            margin: 0 0 0.25rem 0;
+            font-size: 0.85rem;
+            color: var(--text-secondary-1);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-info .value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-color-1);
+        }
+
+        /* CTA Section */
+        .cta-section {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(76, 138, 137, 0.05);
+            border-radius: 12px;
+            border: 1px dashed var(--primary-color-1);
+        }
+
+        .cta-text {
+            margin-bottom: 1.5rem;
+            color: var(--text-secondary-1);
+        }
+
+        .btn-large {
+            padding: 0.85rem 2.5rem;
+            font-size: 1.1rem;
+            border-radius: 30px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(76, 138, 137, 0.3);
+            transition: all 0.2s;
+        }
+
+        .btn-large:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 138, 137, 0.4);
+        }
+
+        /* Hide Chat/Messages Panel for this Module */
+        .notification-btn[aria-label="Messages"],
+        .notification-btn[aria-label="Messages"] + .notification-badge,
+        #messageModal,
+        #messageContentModal {
+            display: none !important;
+        }
+    

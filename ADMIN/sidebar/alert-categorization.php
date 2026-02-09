@@ -27,9 +27,9 @@ $pageTitle = 'Alert Categorization';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($pageTitle); ?></title>
     <link rel="icon" type="image/x-icon" href="images/favicon.ico">
-    <link rel="stylesheet" href="css/global.css">
+    <link rel="stylesheet" href="css/global.css?v=<?php echo filemtime(__DIR__ . '/css/global.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="css/sidebar.css">
+    <link rel="stylesheet" href="css/sidebar.css?v=<?php echo filemtime(__DIR__ . '/css/sidebar.css'); ?>">
     <link rel="stylesheet" href="css/admin-header.css">
     <link rel="stylesheet" href="css/buttons.css">
     <link rel="stylesheet" href="css/forms.css">
@@ -37,371 +37,11 @@ $pageTitle = 'Alert Categorization';
     <link rel="stylesheet" href="css/hero.css">
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
+    <link rel="stylesheet" href="css/module-alert-categorization.css?v=<?php echo filemtime(__DIR__ . '/css/module-alert-categorization.css'); ?>">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
-    <style>
-        /* Enhanced Alert Categorization Styles */
-        :root {
-            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            --transition-speed: 0.2s;
-        }
-
-        .module-card {
-            background: var(--card-bg-1);
-            border-radius: 10px;
-            box-shadow: var(--card-shadow);
-            border: 1px solid var(--border-color-1);
-            overflow: hidden;
-            height: 100%;
-            transition: box-shadow var(--transition-speed) ease;
-        }
-
-        .module-card:hover {
-            box-shadow: var(--card-shadow-hover);
-        }
-
-        .module-card-header {
-            padding: 1.25rem 1.5rem;
-            border-bottom: 1px solid var(--border-color-1);
-            background: var(--bg-color-1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .module-card-header h2 {
-            margin: 0;
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: var(--text-color-1);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .module-card-content {
-            padding: 1.5rem;
-        }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.25rem;
-            margin-bottom: 1.25rem;
-        }
-
-        .form-group {
-            margin-bottom: 1.25rem;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-            color: var(--text-color-1);
-            font-size: 0.9rem;
-        }
-
-        .form-group input, .form-group textarea, .form-group select {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1px solid var(--border-color-1);
-            border-radius: 8px;
-            font-size: 0.95rem;
-            background: var(--bg-color-1);
-            color: var(--text-color-1);
-            transition: border-color var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
-        }
-
-        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
-            outline: none;
-            border-color: var(--primary-color-1);
-            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
-        }
-
-        .form-actions {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-
-        /* Icon Grid */
-        .icon-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
-            gap: 0.75rem;
-            margin-top: 0.5rem;
-            max-height: 160px;
-            overflow-y: auto;
-            padding: 0.75rem;
-            border: 1px solid var(--border-color-1);
-            border-radius: 8px;
-            background: var(--bg-color-1);
-        }
-
-        .icon-option {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 40px;
-            border: 1px solid var(--border-color-1);
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all var(--transition-speed) ease;
-            color: var(--text-secondary-1);
-            background: var(--card-bg-1);
-        }
-
-        .icon-option:hover {
-            background: rgba(76, 138, 137, 0.1);
-            border-color: var(--primary-color-1);
-            color: var(--primary-color-1);
-        }
-
-        .icon-option.selected {
-            background: var(--primary-color-1);
-            color: white;
-            border-color: var(--primary-color-1);
-            box-shadow: 0 2px 4px rgba(76, 138, 137, 0.3);
-        }
-
-        /* Live Preview */
-        .preview-container {
-            background: var(--bg-color-1);
-            border: 1px solid var(--border-color-1);
-            border-radius: 8px;
-            padding: 2rem;
-            margin-top: 1rem;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 180px;
-            position: relative;
-        }
-
-        .category-preview-card {
-            padding: 1rem 2rem;
-            border-radius: 50px;
-            color: white;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            font-size: 1.1rem;
-            font-weight: 700;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .category-preview-card i {
-            font-size: 1.4rem;
-        }
-
-        /* Data Table Enhancements */
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .data-table th, .data-table td {
-            padding: 1rem 1.25rem;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color-1);
-        }
-
-        .data-table th {
-            background-color: var(--bg-color-1);
-            font-weight: 600;
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-secondary-1);
-        }
-
-        .data-table tr:hover {
-            background-color: rgba(0,0,0,0.02);
-        }
-
-        .expand-btn {
-            cursor: pointer;
-            color: var(--text-secondary-1);
-            transition: transform 0.2s ease, color 0.2s ease;
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-        }
-
-        .expand-btn:hover {
-            background-color: rgba(0,0,0,0.05);
-            color: var(--primary-color-1);
-        }
-
-        .expand-btn.active {
-            transform: rotate(180deg);
-            color: var(--primary-color-1);
-        }
-
-        /* Badges */
-        .status-badge {
-            padding: 0.35rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            display: inline-block;
-        }
-
-        .status-active { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
-        .status-inactive { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
-        
-        .muted-row { opacity: 0.6; }
-
-        /* Analytics and Audit Log UI */
-        .details-row { background: var(--bg-color-1) !important; display: none; }
-        .details-content { padding: 1.5rem; border-top: 1px solid var(--border-color-1); }
-        
-        .analytics-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
-            gap: 1rem; 
-            margin-bottom: 1.5rem; 
-        }
-        
-        .stat-box { 
-            background: var(--card-bg-1); 
-            padding: 1rem; 
-            border-radius: 8px; 
-            border: 1px solid var(--border-color-1); 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
-        }
-        
-        .stat-box .label { 
-            font-size: 0.7rem; 
-            color: var(--text-secondary-1); 
-            text-transform: uppercase; 
-            letter-spacing: 0.5px; 
-            margin-bottom: 0.5rem; 
-            font-weight: 600;
-        }
-        
-        .stat-box .value { 
-            font-size: 1.4rem; 
-            font-weight: 700; 
-            color: var(--text-color-1); 
-        }
-        
-        .audit-list { 
-            font-size: 0.85rem; 
-            max-height: 250px; 
-            overflow-y: auto; 
-            border: 1px solid var(--border-color-1); 
-            border-radius: 8px; 
-            background: var(--card-bg-1); 
-        }
-        
-        .audit-item { 
-            padding: 0.75rem 1rem; 
-            border-bottom: 1px solid var(--border-color-1); 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-        }
-        
-        .audit-item:last-child { border-bottom: none; }
-        
-        .audit-date { 
-            color: var(--text-secondary-1); 
-            font-size: 0.75rem; 
-            white-space: nowrap; 
-            margin-left: 1rem; 
-        }
-        
-        .access-denied { 
-            opacity: 0.6; 
-            pointer-events: none; 
-            position: relative; 
-        }
-        
-        .access-denied::after { 
-            content: '\f023  Restricted'; 
-            font-family: 'Font Awesome 6 Free'; 
-            font-weight: 900; 
-            position: absolute; 
-            top: 50%; 
-            left: 50%; 
-            transform: translate(-50%, -50%); 
-            background: rgba(0,0,0,0.7); 
-            color: white; 
-            padding: 0.5rem 1.25rem; 
-            border-radius: 50px; 
-            font-size: 0.9rem; 
-            z-index: 10; 
-            backdrop-filter: blur(4px);
-        }
-
-        /* Impact Warnings & AI Suggestions */
-        .impact-warning {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35rem;
-            background: rgba(243, 156, 18, 0.1);
-            color: #f39c12;
-            padding: 0.25rem 0.6rem;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            margin-left: 0.75rem;
-            border: 1px solid rgba(243, 156, 18, 0.2);
-        }
-        
-        .ai-suggestion-box {
-            background: rgba(156, 39, 176, 0.05);
-            border-left: 4px solid #9c27b0;
-            padding: 1rem;
-            border-radius: 6px;
-            margin: 1rem 0;
-            font-size: 0.9rem;
-            color: var(--text-color-1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .ai-badge {
-            background: #9c27b0;
-            color: white;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.65rem;
-            font-weight: 800;
-            margin-right: 0.5rem;
-            text-transform: uppercase;
-        }
-        
-        .chart-container {
-            height: 200px;
-            margin-top: 0.5rem;
-        }
-        
-        .export-actions {
-            display: flex;
-            gap: 0.75rem;
-            margin-bottom: 1.25rem;
-        }
-
-        @media (max-width: 992px) {
-            .page-content > div { grid-template-columns: 1fr !important; }
-        }
-    </style>
-
     <!-- Include Sidebar Component -->
     <?php include 'includes/sidebar.php'; ?>
 
@@ -441,74 +81,70 @@ $pageTitle = 'Alert Categorization';
             
             <div class="sub-container">
                 <div class="page-content">
-                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
-                        <!-- Add New Category Form -->
-                        <div class="module-card <?php echo !$canEdit ? 'access-denied' : ''; ?>">
-                            <div class="module-card-header">
-                                <h2 id="formTitle"><i class="fas fa-plus-circle"></i> Add New Category</h2>
+                    <div class="ac-mini-analytics" id="acSummaryCards">
+                        <div class="ac-stat ac-stat--total">
+                            <div class="ac-stat-top">
+                                <div class="ac-stat-label">Total Categories</div>
+                                <div class="ac-stat-icon"><i class="fas fa-tags"></i></div>
                             </div>
-                            <div class="module-card-content">
-                                <form id="categoryForm">
-                                    <input type="hidden" id="categoryId" name="id">
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label for="categoryName">Category Name *</label>
-                                            <input type="text" id="categoryName" name="name" placeholder="e.g. Flash Flood" required <?php echo !$canEdit ? 'disabled' : ''; ?>>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Select Icon *</label>
-                                            <input type="hidden" id="categoryIcon" name="icon" value="fa-exclamation-triangle">
-                                            <div class="icon-grid" id="iconGrid">
-                                                <!-- Icons will be populated by JS -->
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="categoryDescription">Description</label>
-                                        <textarea id="categoryDescription" name="description" rows="2" placeholder="Briefly describe what this category covers..." <?php echo !$canEdit ? 'disabled' : ''; ?>></textarea>
-                                    </div>
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label for="categoryColor">Identity Color *</label>
-                                            <input type="color" id="categoryColor" name="color" value="#4c8a89" style="height: 42px; padding: 0.25rem;" <?php echo !$canEdit ? 'disabled' : ''; ?>>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="categoryStatus">Status</label>
-                                            <select id="categoryStatus" name="status" <?php echo !$canEdit ? 'disabled' : ''; ?>>
-                                                <option value="active">Active</option>
-                                                <option value="inactive">Inactive</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="form-actions">
-                                        <?php if ($canEdit): ?>
-                                        <button type="submit" class="btn btn-primary" id="submitBtn" style="padding: 0.75rem 1.5rem;">
-                                            <i class="fas fa-save"></i> Save Category
-                                        </button>
-                                        <button type="button" class="btn btn-secondary" id="resetBtn" style="display:none; padding: 0.75rem 1.5rem;">
-                                            <i class="fas fa-times"></i> Cancel Edit
-                                        </button>
-                                        <?php endif; ?>
-                                    </div>
-                                </form>
+                            <div class="ac-stat-value" id="acTotalCats">0</div>
+                            <div class="ac-stat-sub" id="acTotalCatsSub">Loaded from category list</div>
+                        </div>
+                        <div class="ac-stat ac-stat--done">
+                            <div class="ac-stat-top">
+                                <div class="ac-stat-label">Active</div>
+                                <div class="ac-stat-icon"><i class="fas fa-check-circle"></i></div>
+                            </div>
+                            <div class="ac-stat-value" id="acActiveCats">0</div>
+                            <div class="ac-stat-sub" id="acActiveCatsSub">Currently enabled</div>
+                        </div>
+                        <div class="ac-stat ac-stat--progress">
+                            <div class="ac-stat-top">
+                                <div class="ac-stat-label">Inactive</div>
+                                <div class="ac-stat-icon"><i class="fas fa-pause-circle"></i></div>
+                            </div>
+                            <div class="ac-stat-value" id="acInactiveCats">0</div>
+                            <div class="ac-stat-sub" id="acInactiveCatsSub">Not shown to users</div>
+                        </div>
+                        <div class="ac-stat ac-stat--rate">
+                            <div class="ac-stat-top">
+                                <div class="ac-stat-label">High Load</div>
+                                <div class="ac-stat-icon"><i class="fas fa-exclamation-circle"></i></div>
+                            </div>
+                            <div class="ac-stat-value" id="acHighLoadCats">0</div>
+                            <div class="ac-stat-sub" id="acHighLoadCatsSub">Categories over 20 alerts</div>
+                        </div>
+                    </div>
+                    <div class="ac-process" aria-label="How alert categorization works">
+                        <div class="ac-process-title">How Alert Categorization Works</div>
+                        <div class="ac-process-track">
+                            <div class="ac-process-step">
+                                <div class="ac-process-icon" aria-hidden="true"><i class="fas fa-tags"></i></div>
+                                <h4>Define Categories</h4>
+                                <p>Create clear labels, icons, and colors for each alert type.</p>
+                            </div>
+                            <div class="ac-process-arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></div>
+                            <div class="ac-process-step">
+                                <div class="ac-process-icon" aria-hidden="true"><i class="fas fa-shield-alt"></i></div>
+                                <h4>System Uses Tags</h4>
+                                <p>Alerts are organized by category for routing and analytics.</p>
+                            </div>
+                            <div class="ac-process-arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></div>
+                            <div class="ac-process-step">
+                                <div class="ac-process-icon" aria-hidden="true"><i class="fas fa-bell"></i></div>
+                                <h4>Citizens Receive</h4>
+                                <p>Users see consistent labels and colors across channels.</p>
                             </div>
                         </div>
-
-                        <!-- Live Preview -->
-                        <div class="module-card">
-                            <div class="module-card-header">
-                                <h2><i class="fas fa-eye"></i> Live Preview</h2>
-                            </div>
-                            <div class="module-card-content">
-                                <p style="font-size: 0.9rem; color: var(--text-secondary-1); margin-bottom: 1rem;">Citizens see this visual style in their alert feed.</p>
-                                <div class="preview-container">
-                                    <div id="livePreview" class="category-preview-card">
-                                        <i class="fas fa-exclamation-triangle" id="previewIcon"></i>
-                                        <span id="previewName">Category Name</span>
-                                    </div>
-                                </div>
-                            </div>
+                    </div>
+                    <div class="ac-cta" aria-label="Add new category">
+                        <div>
+                            <div class="ac-cta-title">Create a New Alert Category</div>
+                            <div class="ac-cta-sub">Use the guided modal to keep labels consistent and user-friendly.</div>
                         </div>
+                        <button type="button" class="btn btn-primary" id="openCategoryModalBtn">
+                            <i class="fas fa-plus-circle" style="margin-right: 0.5rem;"></i> Add New Category
+                        </button>
                     </div>
 
                     <!-- Categories List -->
@@ -540,6 +176,105 @@ $pageTitle = 'Alert Categorization';
         </div>
     </div>
 
+    <!-- Add/Edit Category Modal -->
+    <div class="ac-modal-backdrop" id="acCategoryModalBackdrop" aria-hidden="true">
+        <div class="ac-modal" role="dialog" aria-modal="true" aria-labelledby="acCategoryModalTitle">
+            <div class="ac-modal-header">
+                <div>
+                    <h3 class="ac-modal-title" id="acCategoryModalTitle">Add New Category</h3>
+                    <div class="ac-modal-subtitle">Define a clear category name, icon, and color for alerts.</div>
+                </div>
+                <button class="ac-modal-close" type="button" id="acCloseCategoryModalBtn" aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="ac-modal-body">
+                <div class="ac-modal-grid">
+                    <div class="ac-modal-left">
+                        <div class="module-card <?php echo !$canEdit ? 'access-denied' : ''; ?>">
+                            <div class="module-card-header">
+                                <h2 id="formTitleModal"><i class="fas fa-plus-circle"></i> Add New Category</h2>
+                            </div>
+                            <div class="module-card-content">
+                                <form id="categoryFormModal">
+                                    <input type="hidden" id="categoryIdModal" name="id">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="categoryNameModal">Category Name *</label>
+                                            <input type="text" id="categoryNameModal" name="name" placeholder="e.g. Flash Flood" required <?php echo !$canEdit ? 'disabled' : ''; ?>>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Select Icon *</label>
+                                            <input type="hidden" id="categoryIconModal" name="icon" value="fa-exclamation-triangle">
+                                            <div class="icon-grid" id="iconGridModal">
+                                                <!-- Icons will be populated by JS -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="categoryDescriptionModal">Description</label>
+                                        <textarea id="categoryDescriptionModal" name="description" rows="2" placeholder="Briefly describe what this category covers..." <?php echo !$canEdit ? 'disabled' : ''; ?>></textarea>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="categoryColorModal">Identity Color *</label>
+                                            <input type="color" id="categoryColorModal" name="color" value="#4c8a89" style="height: 42px; padding: 0.25rem;" <?php echo !$canEdit ? 'disabled' : ''; ?>>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="categoryStatusModal">Status</label>
+                                            <select id="categoryStatusModal" name="status" <?php echo !$canEdit ? 'disabled' : ''; ?>>
+                                                <option value="active">Active</option>
+                                                <option value="inactive">Inactive</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-actions">
+                                        <?php if ($canEdit): ?>
+                                        <button type="submit" class="btn btn-primary" id="submitBtnModal" style="padding: 0.75rem 1.5rem;">
+                                            <i class="fas fa-save"></i> Save Category
+                                        </button>
+                                        <button type="button" class="btn btn-secondary" id="resetBtnModal" style="display:none; padding: 0.75rem 1.5rem;">
+                                            <i class="fas fa-times"></i> Cancel Edit
+                                        </button>
+                                        <?php endif; ?>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ac-modal-right">
+                        <div class="module-card">
+                            <div class="module-card-header">
+                                <h2><i class="fas fa-eye"></i> Live Preview</h2>
+                            </div>
+                            <div class="module-card-content">
+                                <p style="font-size: 0.9rem; color: var(--text-secondary-1); margin-bottom: 1rem;">Citizens see this visual style in their alert feed.</p>
+                                <div class="preview-container">
+                                    <div id="livePreviewModal" class="category-preview-card">
+                                        <i class="fas fa-exclamation-triangle" id="previewIconModal"></i>
+                                        <span id="previewNameModal">Category Name</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ac-modal-note">
+                            Tip: Keep names short and action-focused for clarity during emergencies.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="ac-modal-footer">
+                <div class="ac-modal-hint">Changes are audited for accountability.</div>
+                <div class="ac-modal-actions">
+                    <button type="button" class="btn btn-secondary" id="acCloseCategoryModalBtnFooter">Close</button>
+                    <button type="button" class="btn btn-primary" id="acSaveFromFooterBtn">
+                        <i class="fas fa-save" style="margin-right: 0.4rem;"></i> Save Category
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const icons = [
             'fa-exclamation-triangle', 'fa-cloud-rain', 'fa-mountain', 'fa-bomb', 
@@ -554,95 +289,57 @@ $pageTitle = 'Alert Categorization';
         let analyticsCache = {};
         let activeCharts = {};
 
-        function initIconGrid() {
-            const grid = document.getElementById('iconGrid');
-            const iconInput = document.getElementById('categoryIcon');
+        function initIconGrid(gridId, inputId, canEditLocal) {
+            const grid = document.getElementById(gridId);
+            const iconInput = document.getElementById(inputId);
+            if (!grid || !iconInput) return;
+            grid.innerHTML = '';
             
             icons.forEach(icon => {
                 const div = document.createElement('div');
                 div.className = `icon-option ${icon === iconInput.value ? 'selected' : ''}`;
                 div.innerHTML = `<i class="fas ${icon}"></i>`;
-                if (canEdit) {
+                if (canEditLocal) {
                     div.onclick = () => {
-                        document.querySelectorAll('.icon-option').forEach(opt => opt.classList.remove('selected'));
+                        grid.querySelectorAll('.icon-option').forEach(opt => opt.classList.remove('selected'));
                         div.classList.add('selected');
                         iconInput.value = icon;
-                        updatePreview();
+                        updatePreviewModal(inputId);
                     };
                 }
                 grid.appendChild(div);
             });
         }
 
-        function updatePreview() {
-            const name = document.getElementById('categoryName').value || 'Category Name';
-            const icon = document.getElementById('categoryIcon').value;
-            const color = document.getElementById('categoryColor').value;
-            
-            const preview = document.getElementById('livePreview');
-            const previewIcon = document.getElementById('previewIcon');
-            const previewName = document.getElementById('previewName');
-            
-            preview.style.backgroundColor = color;
-            previewIcon.className = `fas ${icon}`;
-            previewName.textContent = name;
+        function updatePreviewModal(inputId) {
+            const isModal = inputId === 'categoryIconModal';
+            const name = document.getElementById(isModal ? 'categoryNameModal' : 'categoryName')?.value || 'Category Name';
+            const icon = document.getElementById(isModal ? 'categoryIconModal' : 'categoryIcon')?.value || 'fa-exclamation-triangle';
+            const color = document.getElementById(isModal ? 'categoryColorModal' : 'categoryColor')?.value || '#4c8a89';
+
+            const preview = document.getElementById(isModal ? 'livePreviewModal' : 'livePreview');
+            const previewIcon = document.getElementById(isModal ? 'previewIconModal' : 'previewIcon');
+            const previewName = document.getElementById(isModal ? 'previewNameModal' : 'previewName');
+
+            if (preview) preview.style.backgroundColor = color;
+            if (previewIcon) previewIcon.className = `fas ${icon}`;
+            if (previewName) previewName.textContent = name;
         }
 
-        document.getElementById('categoryName').oninput = updatePreview;
-        document.getElementById('categoryColor').oninput = updatePreview;
-
-        document.getElementById('categoryForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            if (!canEdit) return;
-
-            const formData = new FormData(this);
-            const submitBtn = document.getElementById('submitBtn');
-            const originalBtnHtml = submitBtn.innerHTML;
-            
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-            submitBtn.disabled = true;
-            
-            fetch('../api/alert-categories.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    resetForm();
-                    loadCategories();
-                    // Brief delay before re-enabling
-                    setTimeout(() => {
-                        submitBtn.innerHTML = originalBtnHtml;
-                        submitBtn.disabled = false;
-                    }, 500);
-                } else {
-                    alert('Error: ' + data.message);
-                    submitBtn.innerHTML = originalBtnHtml;
-                    submitBtn.disabled = false;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while saving.');
-                submitBtn.innerHTML = originalBtnHtml;
-                submitBtn.disabled = false;
-            });
-        });
-
-        function resetForm() {
-            document.getElementById('categoryForm').reset();
-            document.getElementById('categoryId').value = '';
-            document.getElementById('formTitle').innerHTML = '<i class="fas fa-plus-circle"></i> Add New Category';
-            document.getElementById('submitBtn').innerHTML = '<i class="fas fa-save"></i> Save Category';
-            document.getElementById('resetBtn').style.display = 'none';
-            document.getElementById('categoryIcon').value = 'fa-exclamation-triangle';
-            document.querySelectorAll('.icon-option').forEach(opt => opt.classList.remove('selected'));
-            document.querySelector('.icon-option').classList.add('selected');
-            updatePreview();
+        function resetFormModal() {
+            const form = document.getElementById('categoryFormModal');
+            if (!form) return;
+            form.reset();
+            document.getElementById('categoryIdModal').value = '';
+            document.getElementById('formTitleModal').innerHTML = '<i class="fas fa-plus-circle"></i> Add New Category';
+            document.getElementById('submitBtnModal').innerHTML = '<i class="fas fa-save"></i> Save Category';
+            document.getElementById('resetBtnModal').style.display = 'none';
+            document.getElementById('categoryIconModal').value = 'fa-exclamation-triangle';
+            document.querySelectorAll('#iconGridModal .icon-option').forEach(opt => opt.classList.remove('selected'));
+            const firstIcon = document.querySelector('#iconGridModal .icon-option');
+            if (firstIcon) firstIcon.classList.add('selected');
+            updatePreviewModal('categoryIconModal');
         }
-
-        document.getElementById('resetBtn').onclick = resetForm;
 
         function loadCategories() {
             fetch('../api/alert-categories.php?action=list')
@@ -652,6 +349,7 @@ $pageTitle = 'Alert Categorization';
                     tbody.innerHTML = '';
                     
                     if (data.success && data.categories) {
+                        updateCategorySummary(data.categories);
                         data.categories.forEach(cat => {
                             const isInactive = cat.status === 'inactive';
                             const tr = document.createElement('tr');
@@ -684,7 +382,7 @@ $pageTitle = 'Alert Categorization';
                                 </td>
                                 <td>
                                     <div class="btn-group">
-                                        <button class="btn btn-sm btn-primary" onclick='editCategory(${JSON.stringify(cat)})' title="Edit" ${!canEdit ? 'disabled' : ''}>
+                                        <button class="btn btn-sm btn-primary" onclick='editCategoryModal(${JSON.stringify(cat)})' title="Edit" ${!canEdit ? 'disabled' : ''}>
                                             <i class="fas fa-edit"></i>
                                         </button>
                                         <button class="btn btn-sm btn-danger" onclick="deleteCategory(${cat.id}, '${cat.name}', ${cat.alerts_count || 0})" title="Delete" ${!canDelete ? 'disabled' : ''}>
@@ -712,6 +410,30 @@ $pageTitle = 'Alert Categorization';
                         });
                     }
                 });
+        }
+
+        function updateCategorySummary(categories) {
+            const total = categories.length;
+            const active = categories.filter(c => (c.status || 'active') === 'active').length;
+            const inactive = total - active;
+            const highLoad = categories.filter(c => (c.alerts_count || 0) > 20).length;
+
+            const totalEl = document.getElementById('acTotalCats');
+            const activeEl = document.getElementById('acActiveCats');
+            const inactiveEl = document.getElementById('acInactiveCats');
+            const highLoadEl = document.getElementById('acHighLoadCats');
+
+            if (totalEl) totalEl.textContent = total;
+            if (activeEl) activeEl.textContent = active;
+            if (inactiveEl) inactiveEl.textContent = inactive;
+            if (highLoadEl) highLoadEl.textContent = highLoad;
+
+            const activeSub = document.getElementById('acActiveCatsSub');
+            const inactiveSub = document.getElementById('acInactiveCatsSub');
+            const highLoadSub = document.getElementById('acHighLoadCatsSub');
+            if (activeSub) activeSub.textContent = total ? `${Math.round((active / total) * 100)}% of categories` : 'No categories yet';
+            if (inactiveSub) inactiveSub.textContent = inactive ? `${inactive} pending review` : 'All active';
+            if (highLoadSub) highLoadSub.textContent = highLoad ? `${highLoad} needs attention` : 'Healthy usage';
         }
 
         function toggleDetails(id) {
@@ -883,25 +605,25 @@ $pageTitle = 'Alert Categorization';
             }
         }
 
-        function editCategory(cat) {
+        function editCategoryModal(cat) {
             if (!canEdit) return;
-            document.getElementById('categoryId').value = cat.id;
-            document.getElementById('categoryName').value = cat.name;
-            document.getElementById('categoryDescription').value = cat.description || '';
-            document.getElementById('categoryColor').value = cat.color;
-            document.getElementById('categoryIcon').value = cat.icon;
-            document.getElementById('categoryStatus').value = cat.status || 'active';
-            
-            document.getElementById('formTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Category';
-            document.getElementById('submitBtn').innerHTML = '<i class="fas fa-check"></i> Update Category';
-            document.getElementById('resetBtn').style.display = 'inline-block';
-            
-            document.querySelectorAll('.icon-option').forEach(opt => {
+            document.getElementById('categoryIdModal').value = cat.id;
+            document.getElementById('categoryNameModal').value = cat.name;
+            document.getElementById('categoryDescriptionModal').value = cat.description || '';
+            document.getElementById('categoryColorModal').value = cat.color;
+            document.getElementById('categoryIconModal').value = cat.icon;
+            document.getElementById('categoryStatusModal').value = cat.status || 'active';
+
+            document.getElementById('formTitleModal').innerHTML = '<i class="fas fa-edit"></i> Edit Category';
+            document.getElementById('submitBtnModal').innerHTML = '<i class="fas fa-check"></i> Update Category';
+            document.getElementById('resetBtnModal').style.display = 'inline-block';
+
+            document.querySelectorAll('#iconGridModal .icon-option').forEach(opt => {
                 opt.classList.toggle('selected', opt.innerHTML.includes(cat.icon));
             });
-            
-            updatePreview();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            updatePreviewModal('categoryIconModal');
+            openCategoryModal();
         }
 
         function deleteCategory(id, name, count) {
@@ -930,10 +652,118 @@ $pageTitle = 'Alert Categorization';
 
         // Initialize grid and load data
         document.addEventListener('DOMContentLoaded', () => {
-            initIconGrid();
+            initIconGrid('iconGridModal', 'categoryIconModal', canEdit);
             loadCategories();
-            updatePreview();
+            updatePreviewModal('categoryIconModal');
         });
+
+        // Modal controls
+        const modalBackdrop = document.getElementById('acCategoryModalBackdrop');
+        const openBtn = document.getElementById('openCategoryModalBtn');
+        const closeBtn = document.getElementById('acCloseCategoryModalBtn');
+        const closeBtnFooter = document.getElementById('acCloseCategoryModalBtnFooter');
+        const saveFooterBtn = document.getElementById('acSaveFromFooterBtn');
+        const modalForm = document.getElementById('categoryFormModal');
+
+        function openCategoryModal() {
+            if (modalBackdrop) {
+                modalBackdrop.classList.add('show');
+                modalBackdrop.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        function closeCategoryModal() {
+            if (modalBackdrop) {
+                modalBackdrop.classList.remove('show');
+                modalBackdrop.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+            }
+        }
+
+        if (openBtn) openBtn.onclick = () => {
+            resetFormModal();
+            openCategoryModal();
+        };
+        if (closeBtn) closeBtn.onclick = closeCategoryModal;
+        if (closeBtnFooter) closeBtnFooter.onclick = closeCategoryModal;
+        if (saveFooterBtn && modalForm) {
+            saveFooterBtn.onclick = () => modalForm.requestSubmit();
+        }
+
+        if (modalBackdrop) {
+            modalBackdrop.addEventListener('click', (e) => {
+                if (e.target === modalBackdrop) closeCategoryModal();
+            });
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modalBackdrop && modalBackdrop.classList.contains('show')) {
+                closeCategoryModal();
+            }
+        });
+
+        const categoryNameModal = document.getElementById('categoryNameModal');
+        const categoryColorModal = document.getElementById('categoryColorModal');
+        if (categoryNameModal) categoryNameModal.oninput = () => updatePreviewModal('categoryIconModal');
+        if (categoryColorModal) categoryColorModal.oninput = () => updatePreviewModal('categoryIconModal');
+
+        if (modalForm) {
+            modalForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                if (!canEdit) return;
+
+                const formData = new FormData(this);
+                const submitBtn = document.getElementById('submitBtnModal');
+                const originalBtnHtml = submitBtn.innerHTML;
+                
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                submitBtn.disabled = true;
+                if (saveFooterBtn) {
+                    saveFooterBtn.disabled = true;
+                    saveFooterBtn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 0.4rem;"></i> Saving';
+                }
+                
+                fetch('../api/alert-categories.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        resetFormModal();
+                        loadCategories();
+                        closeCategoryModal();
+                        setTimeout(() => {
+                            submitBtn.innerHTML = originalBtnHtml;
+                            submitBtn.disabled = false;
+                            if (saveFooterBtn) {
+                                saveFooterBtn.disabled = false;
+                                saveFooterBtn.innerHTML = '<i class="fas fa-save" style="margin-right: 0.4rem;"></i> Save Category';
+                            }
+                        }, 500);
+                    } else {
+                        alert('Error: ' + data.message);
+                        submitBtn.innerHTML = originalBtnHtml;
+                        submitBtn.disabled = false;
+                        if (saveFooterBtn) {
+                            saveFooterBtn.disabled = false;
+                            saveFooterBtn.innerHTML = '<i class="fas fa-save" style="margin-right: 0.4rem;"></i> Save Category';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while saving.');
+                    submitBtn.innerHTML = originalBtnHtml;
+                    submitBtn.disabled = false;
+                    if (saveFooterBtn) {
+                        saveFooterBtn.disabled = false;
+                        saveFooterBtn.innerHTML = '<i class="fas fa-save" style="margin-right: 0.4rem;"></i> Save Category';
+                    }
+                });
+            });
+        }
     </script>
 </body>
 </html>

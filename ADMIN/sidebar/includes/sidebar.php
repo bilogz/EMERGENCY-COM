@@ -36,8 +36,8 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     <!-- Dashboard -->
                     <?php $isActive = basename($_SERVER['PHP_SELF']) == 'dashboard.php'; ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>dashboard.php" class="sidebar-link <?php echo $isActive ? 'active' : ''; ?>">
-                            <i class="fas fa-home" style="margin-right: 0.5rem; color: <?php echo $isActive ? '#ffffff' : '#2563eb'; ?>;"></i>
+                        <a href="<?php echo $sidebarBase; ?>dashboard.php" class="sidebar-link sidebar-accent-dashboard <?php echo $isActive ? 'active' : ''; ?>">
+                            <i class="fas fa-home sidebar-icon" aria-hidden="true"></i>
                             <span>Dashboard</span>
                         </a>
                     </li>
@@ -45,8 +45,8 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     <!-- Users -->
                     <?php $isActive = basename($_SERVER['PHP_SELF']) == 'users.php'; ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>users.php" class="sidebar-link <?php echo $isActive ? 'active' : ''; ?>">
-                            <i class="fas fa-users" style="margin-right: 0.5rem; color: <?php echo $isActive ? '#ffffff' : '#16a34a'; ?>;"></i>
+                        <a href="<?php echo $sidebarBase; ?>users.php" class="sidebar-link sidebar-accent-users <?php echo $isActive ? 'active' : ''; ?>">
+                            <i class="fas fa-users sidebar-icon" aria-hidden="true"></i>
                             <span>Users</span>
                         </a>
                     </li>
@@ -54,8 +54,8 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     <!-- Admin Approvals -->
                     <?php $isActive = basename($_SERVER['PHP_SELF']) == 'admin-approvals.php'; ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>admin-approvals.php" class="sidebar-link <?php echo $isActive ? 'active' : ''; ?>">
-                            <i class="fas fa-user-check" style="margin-right: 0.5rem; color: <?php echo $isActive ? '#ffffff' : '#9333ea'; ?>;"></i>
+                        <a href="<?php echo $sidebarBase; ?>admin-approvals.php" class="sidebar-link sidebar-accent-approvals <?php echo $isActive ? 'active' : ''; ?>">
+                            <i class="fas fa-user-check sidebar-icon" aria-hidden="true"></i>
                             <span>Admin Approvals</span>
                         </a>
                     </li>
@@ -63,8 +63,8 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     <!-- My Profile -->
                     <?php $isActive = basename($_SERVER['PHP_SELF']) == 'profile.php'; ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>profile.php" class="sidebar-link <?php echo $isActive ? 'active' : ''; ?>">
-                            <i class="fas fa-user-circle" style="margin-right: 0.5rem; color: <?php echo $isActive ? '#ffffff' : '#f97316'; ?>;"></i>
+                        <a href="<?php echo $sidebarBase; ?>profile.php" class="sidebar-link sidebar-accent-profile <?php echo $isActive ? 'active' : ''; ?>">
+                            <i class="fas fa-user-circle sidebar-icon" aria-hidden="true"></i>
                             <span>My Profile</span>
                         </a>
                     </li>
@@ -72,8 +72,8 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     <!-- Settings -->
                     <?php $isActive = basename($_SERVER['PHP_SELF']) == 'general-settings.php'; ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>general-settings.php" class="sidebar-link <?php echo $isActive ? 'active' : ''; ?>">
-                            <i class="fas fa-cog" style="margin-right: 0.5rem; color: <?php echo $isActive ? '#ffffff' : '#64748b'; ?>;"></i>
+                        <a href="<?php echo $sidebarBase; ?>general-settings.php" class="sidebar-link sidebar-accent-settings <?php echo $isActive ? 'active' : ''; ?>">
+                            <i class="fas fa-cog sidebar-icon" aria-hidden="true"></i>
                             <span>Settings</span>
                         </a>
                     </li>
@@ -87,8 +87,8 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     <!-- Mass Notification -->
                     <?php $isActive = basename($_SERVER['PHP_SELF']) == 'mass-notification.php'; ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>mass-notification.php" class="sidebar-link <?php echo $isActive ? 'active' : ''; ?>">
-                            <i class="fas fa-broadcast-tower" style="margin-right: 0.5rem; color: <?php echo $isActive ? '#ffffff' : '#dc2626'; ?>;"></i>
+                        <a href="<?php echo $sidebarBase; ?>mass-notification.php" class="sidebar-link sidebar-accent-mass <?php echo $isActive ? 'active' : ''; ?>">
+                            <i class="fas fa-broadcast-tower sidebar-icon" aria-hidden="true"></i>
                             <span>Mass Notification</span>
                         </a>
                     </li>
@@ -96,19 +96,86 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     <!-- Alert Categorization -->
                     <?php $isActive = basename($_SERVER['PHP_SELF']) == 'alert-categorization.php'; ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>alert-categorization.php" class="sidebar-link <?php echo $isActive ? 'active' : ''; ?>">
-                            <i class="fas fa-tags" style="margin-right: 0.5rem; color: <?php echo $isActive ? '#ffffff' : '#0d9488'; ?>;"></i>
+                        <a href="<?php echo $sidebarBase; ?>alert-categorization.php" class="sidebar-link sidebar-accent-categorization <?php echo $isActive ? 'active' : ''; ?>">
+                            <i class="fas fa-tags sidebar-icon" aria-hidden="true"></i>
                             <span>Alert Categorization</span>
                         </a>
                     </li>
                     
                     <!-- Two-Way Communication -->
-                    <?php $isActive = basename($_SERVER['PHP_SELF']) == 'two-way-communication.php'; ?>
+                    <?php
+                    $isTwoWayPage = basename($_SERVER['PHP_SELF']) == 'two-way-communication.php';
+                    $currentDept = isset($_GET['dept']) ? $_GET['dept'] : '';
+                    $isTwoWayActive = $isTwoWayPage;
+                    ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>two-way-communication.php" class="sidebar-link <?php echo $isActive ? 'active' : ''; ?>">
-                            <i class="fas fa-comments" style="margin-right: 0.5rem; color: <?php echo $isActive ? '#ffffff' : '#4f46e5'; ?>;"></i>
+                        <a href="<?php echo $sidebarBase; ?>two-way-communication.php" class="sidebar-link sidebar-submenu-toggle sidebar-accent-2way <?php echo $isTwoWayActive ? 'active' : ''; ?>">
+                            <i class="fas fa-comments sidebar-icon" aria-hidden="true"></i>
                             <span>Two-Way Communication</span>
+                            <i class="fas fa-chevron-down submenu-icon" aria-hidden="true"></i>
                         </a>
+                        <ul class="sidebar-submenu <?php echo $isTwoWayActive ? 'sidebar-submenu-open' : ''; ?>">
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === '') ? 'active' : ''; ?>">
+                                    <i class="fas fa-layer-group sidebar-icon" aria-hidden="true"></i>
+                                    <span>Centralized View</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=incident_nlp" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'incident_nlp') ? 'active' : ''; ?>">
+                                    <i class="fas fa-microscope sidebar-icon" aria-hidden="true"></i>
+                                    <span>Incident & NLP Investigation</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=traffic_transport" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'traffic_transport') ? 'active' : ''; ?>">
+                                    <i class="fas fa-traffic-light sidebar-icon" aria-hidden="true"></i>
+                                    <span>Traffic & Transport</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=emergency_response" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'emergency_response') ? 'active' : ''; ?>">
+                                    <i class="fas fa-ambulance sidebar-icon" aria-hidden="true"></i>
+                                    <span>Emergency Response</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=community_policing" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'community_policing') ? 'active' : ''; ?>">
+                                    <i class="fas fa-shield-alt sidebar-icon" aria-hidden="true"></i>
+                                    <span>Community Policing</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=crime_analytics" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'crime_analytics') ? 'active' : ''; ?>">
+                                    <i class="fas fa-chart-line sidebar-icon" aria-hidden="true"></i>
+                                    <span>Crime Analytics</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=public_safety_campaign" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'public_safety_campaign') ? 'active' : ''; ?>">
+                                    <i class="fas fa-bullhorn sidebar-icon" aria-hidden="true"></i>
+                                    <span>Public Safety Campaign</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=health_inspection" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'health_inspection') ? 'active' : ''; ?>">
+                                    <i class="fas fa-notes-medical sidebar-icon" aria-hidden="true"></i>
+                                    <span>Health & Safety Inspection</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=disaster_preparedness" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'disaster_preparedness') ? 'active' : ''; ?>">
+                                    <i class="fas fa-hard-hat sidebar-icon" aria-hidden="true"></i>
+                                    <span>Disaster Preparedness</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=emergency_comm" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'emergency_comm') ? 'active' : ''; ?>">
+                                    <i class="fas fa-broadcast-tower sidebar-icon" aria-hidden="true"></i>
+                                    <span>Emergency Communication</span>
+                                </a>
+                            </li>
+                        </ul>
                     </li>
 
                     <!-- Automated Warnings -->
@@ -116,27 +183,27 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     $isAutoWarningsActive = (basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' || basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php' || basename($_SERVER['PHP_SELF']) == 'earthquake-monitoring.php');
                     ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>automated-warnings.php" class="sidebar-link sidebar-submenu-toggle <?php echo $isAutoWarningsActive ? 'active' : ''; ?>">
-                            <i class="fas fa-plug" style="margin-right: 0.5rem; color: <?php echo $isAutoWarningsActive ? '#ffffff' : '#d97706'; ?>;"></i>
+                        <a href="<?php echo $sidebarBase; ?>automated-warnings.php" class="sidebar-link sidebar-submenu-toggle sidebar-accent-auto <?php echo $isAutoWarningsActive ? 'active' : ''; ?>">
+                            <i class="fas fa-plug sidebar-icon" aria-hidden="true"></i>
                             <span>Automated Warnings</span>
-                            <i class="fas fa-chevron-down submenu-icon"></i>
+                            <i class="fas fa-chevron-down submenu-icon" aria-hidden="true"></i>
                         </a>
                         <ul class="sidebar-submenu <?php echo $isAutoWarningsActive ? 'sidebar-submenu-open' : ''; ?>">
                             <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>automated-warnings.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' ? 'active' : ''; ?>">
-                                    <i class="fas fa-cog" style="margin-right: 0.5rem;"></i>
+                                <a href="<?php echo $sidebarBase; ?>automated-warnings.php" class="sidebar-link sidebar-accent-auto <?php echo basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' ? 'active' : ''; ?>">
+                                    <i class="fas fa-cog sidebar-icon" aria-hidden="true"></i>
                                     <span>Settings</span>
                                 </a>
                             </li>
                             <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>weather-monitoring.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php' ? 'active' : ''; ?>">
-                                    <i class="fas fa-cloud-sun" style="margin-right: 0.5rem;"></i>
+                                <a href="<?php echo $sidebarBase; ?>weather-monitoring.php" class="sidebar-link sidebar-accent-weather <?php echo basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php' ? 'active' : ''; ?>">
+                                    <i class="fas fa-cloud-sun sidebar-icon" aria-hidden="true"></i>
                                     <span>Weather Monitoring</span>
                                 </a>
                             </li>
                             <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>earthquake-monitoring.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'earthquake-monitoring.php' ? 'active' : ''; ?>">
-                                    <i class="fas fa-mountain" style="margin-right: 0.5rem;"></i>
+                                <a href="<?php echo $sidebarBase; ?>earthquake-monitoring.php" class="sidebar-link sidebar-accent-earthquake <?php echo basename($_SERVER['PHP_SELF']) == 'earthquake-monitoring.php' ? 'active' : ''; ?>">
+                                    <i class="fas fa-mountain sidebar-icon" aria-hidden="true"></i>
                                     <span>Earthquake Monitoring</span>
                                 </a>
                             </li>
@@ -146,21 +213,21 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     <!-- Multilingual Support -->
                     <?php $isMultiLangActive = (strpos($_SERVER['PHP_SELF'], 'multilingual-support') !== false); ?>
                     <li class="sidebar-menu-item">
-                        <a href="javascript:void(0)" class="sidebar-link sidebar-submenu-toggle <?php echo $isMultiLangActive ? 'active' : ''; ?>">
-                            <i class="fas fa-language" style="margin-right: 0.5rem; color: <?php echo $isMultiLangActive ? '#ffffff' : '#db2777'; ?>;"></i>
+                        <a href="javascript:void(0)" class="sidebar-link sidebar-submenu-toggle sidebar-accent-multilang <?php echo $isMultiLangActive ? 'active' : ''; ?>">
+                            <i class="fas fa-language sidebar-icon" aria-hidden="true"></i>
                             <span>Multilingual Support</span>
-                            <i class="fas fa-chevron-down submenu-icon"></i>
+                            <i class="fas fa-chevron-down submenu-icon" aria-hidden="true"></i>
                         </a>
                         <ul class="sidebar-submenu <?php echo $isMultiLangActive ? 'sidebar-submenu-open' : ''; ?>">
                             <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>multilingual-support/overview.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'overview.php' ? 'active' : ''; ?>">
-                                    <i class="fas fa-info-circle" style="margin-right: 0.5rem;"></i>
+                                <a href="<?php echo $sidebarBase; ?>multilingual-support/overview.php" class="sidebar-link sidebar-accent-overview <?php echo basename($_SERVER['PHP_SELF']) == 'overview.php' ? 'active' : ''; ?>">
+                                    <i class="fas fa-info-circle sidebar-icon" aria-hidden="true"></i>
                                     <span>Overview</span>
                                 </a>
                             </li>
                             <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>multilingual-support/language-management.php" class="sidebar-link <?php echo basename($_SERVER['PHP_SELF']) == 'language-management.php' ? 'active' : ''; ?>">
-                                    <i class="fas fa-list" style="margin-right: 0.5rem;"></i>
+                                <a href="<?php echo $sidebarBase; ?>multilingual-support/language-management.php" class="sidebar-link sidebar-accent-language <?php echo basename($_SERVER['PHP_SELF']) == 'language-management.php' ? 'active' : ''; ?>">
+                                    <i class="fas fa-list sidebar-icon" aria-hidden="true"></i>
                                     <span>Language Management</span>
                                 </a>
                             </li>
@@ -170,8 +237,8 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     <!-- Citizen Subscriptions -->
                     <?php $isActive = basename($_SERVER['PHP_SELF']) == 'citizen-subscriptions.php'; ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>citizen-subscriptions.php" class="sidebar-link <?php echo $isActive ? 'active' : ''; ?>">
-                            <i class="fas fa-users" style="margin-right: 0.5rem; color: <?php echo $isActive ? '#ffffff' : '#64748b'; ?>;"></i>
+                        <a href="<?php echo $sidebarBase; ?>citizen-subscriptions.php" class="sidebar-link sidebar-accent-citizen <?php echo $isActive ? 'active' : ''; ?>">
+                            <i class="fas fa-users sidebar-icon" aria-hidden="true"></i>
                             <span>Citizen Subscriptions</span>
                         </a>
                     </li>
@@ -179,8 +246,8 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     <!-- Audit Trail -->
                     <?php $isActive = basename($_SERVER['PHP_SELF']) == 'audit-trail.php'; ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>audit-trail.php" class="sidebar-link <?php echo $isActive ? 'active' : ''; ?>">
-                            <i class="fas fa-history" style="margin-right: 0.5rem; color: <?php echo $isActive ? '#ffffff' : '#64748b'; ?>;"></i>
+                        <a href="<?php echo $sidebarBase; ?>audit-trail.php" class="sidebar-link sidebar-accent-audit <?php echo $isActive ? 'active' : ''; ?>">
+                            <i class="fas fa-history sidebar-icon" aria-hidden="true"></i>
                             <span>Audit Trail</span>
                         </a>
                     </li>
@@ -297,3 +364,5 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+<script src="<?php echo $sidebarBase; ?>../shared/js/draft-persist.js?v=<?php echo filemtime(__DIR__ . '/../../shared/js/draft-persist.js'); ?>"></script>

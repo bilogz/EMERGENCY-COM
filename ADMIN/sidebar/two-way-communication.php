@@ -23,462 +23,16 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($pageTitle); ?></title>
     <link rel="icon" type="image/x-icon" href="images/favicon.ico">
-    <link rel="stylesheet" href="css/global.css">
+    <link rel="stylesheet" href="css/global.css?v=<?php echo filemtime(__DIR__ . '/css/global.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="css/sidebar.css">
+    <link rel="stylesheet" href="css/sidebar.css?v=<?php echo filemtime(__DIR__ . '/css/sidebar.css'); ?>">
     <link rel="stylesheet" href="css/admin-header.css">
     <link rel="stylesheet" href="css/buttons.css">
     <link rel="stylesheet" href="css/forms.css">
     <link rel="stylesheet" href="css/hero.css">
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
-    <style>
-        /* Enhanced Communication Interface Styles */
-        :root {
-            --chat-sidebar-width: 320px;
-            --message-radius: 18px;
-            --transition-speed: 0.2s;
-            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-
-        .communication-container {
-            display: grid;
-            grid-template-columns: var(--chat-sidebar-width) 1fr;
-            gap: 1.5rem;
-            height: calc(100vh - 240px);
-            min-height: 600px;
-            position: relative;
-        }
-
-        /* Sidebar / Conversations List */
-        .conversations-list-container {
-            display: flex;
-            flex-direction: column;
-            background: var(--card-bg-1);
-            border-radius: 12px;
-            box-shadow: var(--card-shadow);
-            border: 1px solid var(--border-color-1);
-            overflow: hidden;
-            height: 100%;
-        }
-
-        .chat-tabs {
-            display: flex;
-            border-bottom: 1px solid var(--border-color-1);
-            background: var(--bg-color-1);
-            flex-shrink: 0;
-        }
-
-        .chat-tab {
-            flex: 1;
-            padding: 1rem;
-            text-align: center;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 0.9rem;
-            color: var(--text-secondary-1);
-            transition: all var(--transition-speed) ease;
-            border-bottom: 3px solid transparent;
-            user-select: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-        }
-
-        .chat-tab:hover {
-            color: var(--primary-color-1);
-            background: rgba(76, 138, 137, 0.05);
-        }
-
-        .chat-tab.active {
-            color: var(--primary-color-1);
-            border-bottom-color: var(--primary-color-1);
-            background: var(--card-bg-1);
-        }
-
-        .conversations-list {
-            flex: 1;
-            padding: 0.75rem;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        /* Custom Scrollbar */
-        .conversations-list::-webkit-scrollbar {
-            width: 6px;
-        }
-        .conversations-list::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .conversations-list::-webkit-scrollbar-thumb {
-            background: var(--border-color-1);
-            border-radius: 3px;
-        }
-
-        .conversation-item {
-            padding: 1rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all var(--transition-speed) ease;
-            margin-bottom: 0.5rem;
-            color: var(--text-color-1);
-            border: 1px solid transparent;
-            position: relative;
-        }
-
-        .conversation-item:hover {
-            background: rgba(76, 138, 137, 0.05);
-            border-color: rgba(76, 138, 137, 0.1);
-        }
-
-        .conversation-item.active {
-            background: var(--primary-color-1);
-            color: white;
-            box-shadow: 0 4px 12px rgba(76, 138, 137, 0.3);
-            border-color: var(--primary-color-1);
-        }
-
-        .conversation-item.active * {
-            color: white !important;
-            opacity: 1 !important;
-        }
-
-        .conversation-item.closed {
-            opacity: 0.7;
-            background: var(--bg-color-1);
-            border-color: var(--border-color-1);
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #2ecc71;
-            display: inline-block;
-            margin-right: 0.5rem;
-            flex-shrink: 0;
-        }
-
-        .conversation-item.closed .status-dot {
-            background: #95a5a6;
-        }
-
-        /* Main Chat Window */
-        .chat-window {
-            display: flex;
-            flex-direction: column;
-            background: var(--card-bg-1);
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: var(--card-shadow);
-            border: 1px solid var(--border-color-1);
-            height: 100%;
-        }
-
-        .chat-header {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--border-color-1);
-            background: var(--card-bg-1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-shrink: 0;
-            z-index: 10;
-        }
-
-        .chat-header-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .chat-header-info h3 {
-            margin: 0;
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: var(--text-color-1);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .chat-header-info small {
-            display: block;
-            margin-top: 0.25rem;
-            color: var(--text-secondary-1);
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-
-        .chat-messages {
-            flex: 1;
-            padding: 1.5rem;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            background: var(--bg-color-1);
-            scroll-behavior: smooth;
-        }
-
-        /* Message Bubbles */
-        .message {
-            display: flex;
-            gap: 0.75rem;
-            max-width: 80%;
-            animation: slideInUp 0.3s ease;
-        }
-
-        @keyframes slideInUp {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .message.admin {
-            align-self: flex-end;
-            flex-direction: row-reverse;
-        }
-
-        .message.user {
-            align-self: flex-start;
-        }
-
-        .message.system-message {
-            align-self: center;
-            max-width: 100%;
-            margin: 1rem 0;
-            display: flex;
-            justify-content: center;
-        }
-
-        .system-message-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 1rem 1.25rem;
-            background: rgba(55, 65, 81, 0.8); /* Dark grey background like the image */
-            border-radius: 16px;
-            color: #ffffff;
-            font-size: 0.9rem;
-            min-width: 200px;
-            max-width: 280px;
-        }
-
-        .system-message-header {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            width: 100%;
-            justify-content: center;
-        }
-
-        .system-message-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: rgba(75, 85, 99, 0.9); /* Slightly darker grey for icon background */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .system-message-icon i {
-            font-size: 0.9rem;
-            color: #ffffff;
-        }
-
-        .system-message-text {
-            font-weight: 500;
-            color: #ffffff;
-        }
-
-        .system-message-meta {
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.6);
-            margin-top: 0.25rem;
-        }
-
-        .message-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            flex-shrink: 0;
-            object-fit: cover;
-            border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .message-content {
-            padding: 0.75rem 1rem;
-            border-radius: var(--message-radius);
-            position: relative;
-            font-size: 0.95rem;
-            line-height: 1.5;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            word-wrap: break-word;
-        }
-
-        .message.user .message-content {
-            background: white;
-            color: var(--text-color-1);
-            border-top-left-radius: 4px;
-            border: 1px solid var(--border-color-1);
-        }
-
-        .message.admin .message-content {
-            background: var(--primary-color-1);
-            color: white;
-            border-top-right-radius: 4px;
-        }
-
-        .message-meta {
-            font-size: 0.7rem;
-            margin-top: 4px;
-            opacity: 0.7;
-            text-align: right;
-        }
-
-        .message.user .message-meta {
-            text-align: left;
-            color: var(--text-secondary-1);
-        }
-
-        .date-separator {
-            display: flex;
-            align-items: center;
-            margin: 1rem 0;
-            color: var(--text-secondary-1);
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .date-separator::before,
-        .date-separator::after {
-            content: '';
-            flex: 1;
-            border-bottom: 1px solid var(--border-color-1);
-        }
-
-        .date-separator::before { margin-right: 1rem; }
-        .date-separator::after { margin-left: 1rem; }
-
-        .chat-input {
-            padding: 1rem;
-            border-top: 1px solid var(--border-color-1);
-            display: flex;
-            gap: 0.75rem;
-            background: var(--card-bg-1);
-            align-items: center;
-            flex-shrink: 0;
-        }
-
-        .chat-input input {
-            flex: 1;
-            padding: 0.85rem 1.25rem;
-            border: 1px solid var(--border-color-1);
-            border-radius: 24px;
-            background: var(--bg-color-1);
-            color: var(--text-color-1);
-            font-size: 0.95rem;
-            transition: all 0.2s ease;
-        }
-
-        .chat-input input:focus {
-            outline: none;
-            border-color: var(--primary-color-1);
-            background: var(--card-bg-1);
-            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
-        }
-
-        .btn-load-more {
-            background: var(--bg-color-1);
-            border: 1px solid var(--border-color-1);
-            color: var(--text-secondary-1);
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            font-weight: 600;
-            transition: all 0.2s ease;
-            margin: 1rem auto;
-            display: block;
-        }
-
-        .btn-load-more:hover {
-            background: var(--card-bg-1);
-            color: var(--primary-color-1);
-            border-color: var(--primary-color-1);
-        }
-
-        /* Mobile Responsive */
-        .mobile-back-btn {
-            display: none;
-            background: none;
-            border: none;
-            color: var(--text-secondary-1);
-            font-size: 1.2rem;
-            margin-right: 0.75rem;
-            cursor: pointer;
-            padding: 0.25rem;
-        }
-
-        @media (max-width: 992px) {
-            .communication-container {
-                grid-template-columns: 280px 1fr;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .communication-container {
-                grid-template-columns: 1fr;
-                height: calc(100vh - 140px);
-                overflow: hidden;
-            }
-            
-            .conversations-list-container {
-                width: 100%;
-                position: absolute;
-                top: 0;
-                left: 0;
-                bottom: 0;
-                z-index: 10;
-                transition: transform 0.3s ease;
-            }
-            
-            .chat-window {
-                width: 100%;
-                position: absolute;
-                top: 0;
-                left: 0;
-                bottom: 0;
-                z-index: 20;
-                transform: translateX(100%);
-                transition: transform 0.3s ease;
-            }
-            
-            .communication-container.chat-active .conversations-list-container {
-                transform: translateX(-20%);
-                opacity: 0;
-                pointer-events: none;
-            }
-            
-            .communication-container.chat-active .chat-window {
-                transform: translateX(0);
-            }
-            
-            .mobile-back-btn {
-                display: block;
-            }
-            
-            .message {
-                max-width: 90%;
-            }
-        }
-    </style>
+        <link rel="stylesheet" href="css/module-two-way-communication.css?v=<?php echo filemtime(__DIR__ . '/css/module-two-way-communication.css'); ?>">
 </head>
 <body>
     <!-- Include Sidebar Component -->
@@ -517,6 +71,25 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 <div class="chat-tab" onclick="switchTab('closed')">
                                     <i class="fas fa-check-circle"></i> Closed
                                 </div>
+                            </div>
+                            <div class="chat-filters">
+                                <label for="deptFilter">Department</label>
+                                <select id="deptFilter">
+                                    <option value="all">All Departments</option>
+                                    <option value="incident_nlp">Incident & NLP Investigation</option>
+                                    <option value="traffic_transport">Traffic & Transport Management</option>
+                                    <option value="emergency_response">Emergency Response & Recovery</option>
+                                    <option value="community_policing">Community Policing & Surveillance</option>
+                                    <option value="crime_analytics">Crime Data Analytics</option>
+                                    <option value="public_safety_campaign">Public Safety Campaign</option>
+                                    <option value="health_inspection">Health & Safety Inspection</option>
+                                    <option value="disaster_preparedness">Disaster Preparedness Training</option>
+                                    <option value="emergency_comm">Emergency Communication</option>
+                                </select>
+                                <label for="topicFilter">Topic</label>
+                                <select id="topicFilter">
+                                    <option value="all">All Topics</option>
+                                </select>
                             </div>
                             <div class="conversations-list" id="scrollableList">
                                 <div id="incomingEmergencyCallRow" style="display:none;"></div>
@@ -586,6 +159,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         let isLoading = false;
         let hasMore = true;
         let lastDisplayedDate = null; // Track the last date shown in the chat
+        let currentDept = 'all';
+        let currentTopic = 'all';
+        let lastUnreadCount = 0;
+        let hasUnreadBaseline = false;
+        let topicSet = new Set();
         
         // Polling Intervals
         let pollInterval = null;
@@ -618,6 +196,126 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         // --- Data Loading ---
 
+        function normalizeDeptKey(value) {
+            return String(value || '').trim().toLowerCase();
+        }
+
+        function mapConversationDept(conv) {
+            if (conv.department) return normalizeDeptKey(conv.department);
+            const concern = normalizeDeptKey(conv.userConcern);
+            const msg = normalizeDeptKey(conv.lastMessage);
+            const hay = `${concern} ${msg}`;
+
+            if (/(incident|investigation|case|nlp)/.test(hay)) return 'incident_nlp';
+            if (/(traffic|transport|violation|road)/.test(hay)) return 'traffic_transport';
+            if (/(emergency response|response|recovery|incident logging|resource)/.test(hay)) return 'emergency_response';
+            if (/(police|policing|surveillance|cctv)/.test(hay)) return 'community_policing';
+            if (/(crime|hotspot|geospatial|analytics)/.test(hay)) return 'crime_analytics';
+            if (/(public safety|campaign|awareness)/.test(hay)) return 'public_safety_campaign';
+            if (/(health|inspection|safety|compliance)/.test(hay)) return 'health_inspection';
+            if (/(disaster|preparedness|training|simulation)/.test(hay)) return 'disaster_preparedness';
+            if (/(alert|warning|multilingual|communication)/.test(hay)) return 'emergency_comm';
+            return '';
+        }
+
+        function mapConversationTopic(conv) {
+            if (conv.topic) return normalizeDeptKey(conv.topic);
+            if (conv.userConcern) return normalizeDeptKey(conv.userConcern);
+            return '';
+        }
+
+        function topicLabel(key) {
+            if (!key) return '';
+            return key.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function updateTopicFilterOptions() {
+            const topicFilter = document.getElementById('topicFilter');
+            if (!topicFilter) return;
+            const current = topicFilter.value || 'all';
+            const options = Array.from(topicSet).sort();
+            topicFilter.innerHTML = '<option value="all">All Topics</option>' +
+                options.map(t => `<option value="${t}">${topicLabel(t)}</option>`).join('');
+            if (options.includes(current)) topicFilter.value = current;
+        }
+
+        function deptLabel(key) {
+            const map = {
+                incident_nlp: 'Incident & NLP',
+                traffic_transport: 'Traffic & Transport',
+                emergency_response: 'Emergency Response',
+                community_policing: 'Policing & CCTV',
+                crime_analytics: 'Crime Analytics',
+                public_safety_campaign: 'Public Safety',
+                health_inspection: 'Health Inspection',
+                disaster_preparedness: 'Disaster Training',
+                emergency_comm: 'Emergency Comms',
+                unassigned: 'Unassigned'
+            };
+            return map[key] || '';
+        }
+
+        function deptOrder() {
+            return [
+                'incident_nlp',
+                'traffic_transport',
+                'emergency_response',
+                'community_policing',
+                'crime_analytics',
+                'public_safety_campaign',
+                'health_inspection',
+                'disaster_preparedness',
+                'emergency_comm',
+                'unassigned'
+            ];
+        }
+
+        function ensureDeptSection(listContainer, key) {
+            const id = `dept-${key}`;
+            let section = document.getElementById(id);
+            if (section) return section;
+
+            section = document.createElement('div');
+            section.className = 'dept-section';
+            section.id = id;
+            section.innerHTML = `
+                <div class="dept-section-title">
+                    <span class="dept-toggle"><i class="fas fa-chevron-down dept-caret"></i> ${deptLabel(key) || 'Unassigned'}</span>
+                    <span id="${id}-count">0</span>
+                </div>
+                <div class="dept-section-list"></div>
+            `;
+            section.querySelector('.dept-section-title').addEventListener('click', () => {
+                section.classList.toggle('collapsed');
+            });
+            listContainer.appendChild(section);
+            return section;
+        }
+
+        function renderGroupedConversations(conversations, append) {
+            const listContainer = document.getElementById('conversationsList');
+            if (!listContainer) return;
+
+            if (!append) listContainer.innerHTML = '';
+
+            const grouped = {};
+            conversations.forEach(conv => {
+                const key = mapConversationDept(conv) || 'unassigned';
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(conv);
+            });
+
+            // Render in fixed department order
+            deptOrder().forEach(key => {
+                if (!grouped[key] || grouped[key].length === 0) return;
+                const section = ensureDeptSection(listContainer, key);
+                const list = section.querySelector('.dept-section-list');
+                grouped[key].forEach(conv => list.appendChild(createConversationElement(conv)));
+                const count = section.querySelector(`#dept-${key}-count`);
+                if (count) count.textContent = String(list.children.length);
+            });
+        }
+
         async function loadConversations(isInitial = false, append = false) {
             if (isLoading) return;
             isLoading = true;
@@ -648,13 +346,26 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 
                 if (!data.success) throw new Error(data.message);
                 
-                const conversations = data.conversations || [];
+                let conversations = data.conversations || [];
+                conversations.forEach(c => {
+                    const t = mapConversationTopic(c);
+                    if (t) topicSet.add(t);
+                });
+                updateTopicFilterOptions();
+                if (currentDept !== 'all') {
+                    conversations = conversations.filter(conv => mapConversationDept(conv) === currentDept);
+                }
+                if (currentTopic !== 'all') {
+                    conversations = conversations.filter(conv => mapConversationTopic(conv) === currentTopic);
+                }
                 
                 // Handle Empty State
                 if (conversations.length === 0) {
                     hasMore = false;
                     if (isInitial && !append) {
-                        listContainer.innerHTML = `<p style="text-align: center; color: var(--text-secondary-1); padding: 2rem;">No ${currentStatus} conversations</p>`;
+                        const suffix = currentDept === 'all' ? '' : ' for this department';
+                        const topicSuffix = currentTopic === 'all' ? '' : ' for this topic';
+                        listContainer.innerHTML = `<p style="text-align: center; color: var(--text-secondary-1); padding: 2rem;">No ${currentStatus} conversations${suffix}${topicSuffix}</p>`;
                     }
                     return;
                 }
@@ -666,11 +377,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     loadMoreBtn.style.display = 'block';
                 }
                 
-                // Render Items
-                conversations.forEach(conv => {
-                    const el = createConversationElement(conv);
-                    listContainer.appendChild(el);
-                });
+                // Render Items (grouped by department)
+                renderGroupedConversations(conversations, append);
                 
             } catch (error) {
                 console.error('Error loading conversations:', error);
@@ -689,6 +397,31 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         
         // --- Real-time Polling ---
         
+        function ensureToastContainer() {
+            let container = document.querySelector('.tw-toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'tw-toast-container';
+                document.body.appendChild(container);
+            }
+            return container;
+        }
+
+        function showToast(title, message) {
+            const container = ensureToastContainer();
+            const toast = document.createElement('div');
+            toast.className = 'tw-toast';
+            toast.innerHTML = `
+                <i class="fas fa-comment-dots"></i>
+                <div>
+                    <strong>${title}</strong><br/>
+                    <small>${message}</small>
+                </div>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => { toast.remove(); }, 3500);
+        }
+
         async function pollUpdates() {
             // 1. Update Badge & Unread Count
             try {
@@ -696,6 +429,16 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 const data = await response.json();
                 if (data.success) {
                     const count = data.unreadCount;
+                    if (!hasUnreadBaseline) {
+                        lastUnreadCount = count;
+                        hasUnreadBaseline = true;
+                    } else if (count > lastUnreadCount) {
+                        const diff = count - lastUnreadCount;
+                        showToast('New message', diff === 1 ? '1 new conversation update' : `${diff} new conversation updates`);
+                        lastUnreadCount = count;
+                    } else if (count < lastUnreadCount) {
+                        lastUnreadCount = count;
+                    }
                     // Sidebar Badge
                     const sidebarLinks = document.querySelectorAll('.sidebar-menu li a');
                     sidebarLinks.forEach(link => {
@@ -785,6 +528,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const guestBadge = conv.isGuest ? '<span style="background: #ff9800; color: white; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; margin-left: 0.5rem; vertical-align: middle; font-weight: 700;">GUEST</span>' : '';
             const concernBadge = conv.userConcern ? `<span style="background: rgba(33, 150, 243, 0.15); color: #2196f3; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; margin-left: 0.5rem; text-transform: capitalize; vertical-align: middle; font-weight: 600;">${conv.userConcern}</span>` : '';
             const callBadge = conv.hasCall ? '<span style="background: rgba(76, 138, 137, 0.2); color: #4c8a89; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; margin-left: 0.5rem; vertical-align: middle; font-weight: 600;"><i class="fas fa-phone" style="margin-right: 0.2rem;"></i>Call</span>' : '';
+            const deptKey = mapConversationDept(conv);
+            const deptTag = deptKey ? `<span class="dept-badge">${deptLabel(deptKey)}</span>` : '';
+            const topicKey = mapConversationTopic(conv);
+            const topicTag = topicKey ? `<span class="topic-badge">${topicLabel(topicKey)}</span>` : '';
             const statusDot = `<span class="status-dot"></span>`;
             
             const time = conv.lastMessageTime ? new Date(conv.lastMessageTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
@@ -813,6 +560,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 </p>
                 <div style="margin-top: 0.5rem; font-size: 0.75rem; opacity: 0.6;">
                     ${userInfo.join(' &nbsp; ')} &nbsp; ${conv.userLocation || ''}
+                </div>
+                <div style="margin-top: 0.45rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                    ${deptTag} ${topicTag}
                 </div>
             `;
         }
@@ -1165,6 +915,34 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         
         // Init
         document.addEventListener('DOMContentLoaded', () => {
+            const deptFilter = document.getElementById('deptFilter');
+            if (deptFilter) {
+                const urlDept = new URLSearchParams(window.location.search).get('dept');
+                if (urlDept && Array.from(deptFilter.options).some(o => o.value === urlDept)) {
+                    deptFilter.value = urlDept;
+                    currentDept = urlDept;
+                }
+                deptFilter.addEventListener('change', () => {
+                    currentDept = deptFilter.value || 'all';
+                    currentPage = 1;
+                    hasMore = true;
+                    document.getElementById('conversationsList').innerHTML = '';
+                    document.getElementById('loadMoreContainer').style.display = 'none';
+                    loadConversations(true);
+                });
+            }
+            const topicFilter = document.getElementById('topicFilter');
+            if (topicFilter) {
+                topicFilter.addEventListener('change', () => {
+                    currentTopic = topicFilter.value || 'all';
+                    currentPage = 1;
+                    hasMore = true;
+                    document.getElementById('conversationsList').innerHTML = '';
+                    document.getElementById('loadMoreContainer').style.display = 'none';
+                    loadConversations(true);
+                });
+            }
+
             loadConversations(true);
             pollInterval = setInterval(pollUpdates, 5000);
         });

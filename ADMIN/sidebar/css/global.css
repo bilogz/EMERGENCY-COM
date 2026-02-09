@@ -1,3 +1,5 @@
+@import url('../../shared/css/ui-kit.css');
+
 /* ===================================
    CSS VARIABLES - COLOR SCHEME
    =================================== */
@@ -16,20 +18,52 @@
     --card-bg-1: #ffffff;
     --shadow-1: rgba(0, 0, 0, 0.05);
     --font-family-1: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    /* Aliases for legacy stylesheets (do not change palette) */
+    --primary-color: var(--primary-color-1);
+    --secondary-color: var(--secondary-color-1);
+    --tertiary-color: var(--tertiary-color-1);
+    --dark-color: var(--dark-color-1);
+    --text-color: var(--text-color-1);
+    --text-secondary: var(--text-secondary-1);
+    --bg-color: var(--bg-color-1);
+    --header-bg: var(--header-bg-1);
+    --footer-bg: var(--footer-bg-1);
+    --nav-text: var(--nav-text-1);
+    --border-color: var(--border-color-1);
+    --card-bg: var(--card-bg-1);
+    --shadow: var(--shadow-1);
+    --font-family: var(--font-family-1);
 }
 
 /* Dark mode variables */
 [data-theme="dark"] {
-    --text-color-1: #fafafa;
-    --text-secondary-1: #a1a1aa;
-    /* Softer grayish background for better eye comfort */
-    --bg-color-1: #2d2d2f;        /* deep gray instead of pure black */
-    --header-bg-1: #18181b;      /* slightly lighter header/footer */
-    --footer-bg-1: #18181b;
-    --nav-text-1: #fafafa;
-    --border-color-1: #27272a;
-    --card-bg-1: #18181b;        /* cards match header/footer gray */
-    --shadow-1: rgba(0, 0, 0, 0.2);
+    /* Teal-driven dark theme (no black/gray surfaces) */
+    --text-color-1: #f2fbfb;
+    --text-secondary-1: #c6d9de;
+    --bg-color-1: #0f2730;
+    --header-bg-1: #14323d;
+    --footer-bg-1: #14323d;
+    --nav-text-1: #f2fbfb;
+    --border-color-1: #21414c;
+    --card-bg-1: #152f39;
+    --shadow-1: rgba(6, 22, 28, 0.35);
+
+    /* Aliases for legacy stylesheets (do not change palette) */
+    --primary-color: var(--primary-color-1);
+    --secondary-color: var(--secondary-color-1);
+    --tertiary-color: var(--tertiary-color-1);
+    --dark-color: var(--dark-color-1);
+    --text-color: var(--text-color-1);
+    --text-secondary: var(--text-secondary-1);
+    --bg-color: var(--bg-color-1);
+    --header-bg: var(--header-bg-1);
+    --footer-bg: var(--footer-bg-1);
+    --nav-text: var(--nav-text-1);
+    --border-color: var(--border-color-1);
+    --card-bg: var(--card-bg-1);
+    --shadow: var(--shadow-1);
+    --font-family: var(--font-family-1);
 }
 
 /* ===================================
@@ -875,4 +909,101 @@ html {
     display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
+}
+
+/* ============================================
+   UI Alert Modal (replaces browser alert)
+   ============================================ */
+.ui-alert-backdrop {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 10050;
+    padding: 1.25rem;
+}
+
+[data-theme="dark"] .ui-alert-backdrop {
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.ui-alert-backdrop.is-open {
+    display: flex;
+}
+
+.ui-alert-modal {
+    width: min(520px, 100%);
+    background: var(--card-bg-1);
+    border: 1px solid var(--border-color-1);
+    border-radius: 14px;
+    box-shadow: 0 18px 60px rgba(0,0,0,0.35);
+    overflow: hidden;
+    transform: translateY(6px);
+    opacity: 0;
+    transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.ui-alert-backdrop.is-open .ui-alert-modal {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.ui-alert-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem 1.1rem;
+    background: color-mix(in srgb, var(--primary-color-1) 14%, var(--card-bg-1));
+    border-bottom: 1px solid var(--border-color-1);
+}
+
+.ui-alert-title {
+    font-weight: 900;
+    color: var(--text-color-1);
+    letter-spacing: 0.2px;
+}
+
+.ui-alert-x {
+    border: 1px solid var(--border-color-1);
+    background: transparent;
+    color: var(--text-color-1);
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: transform 160ms ease, background 160ms ease;
+}
+
+.ui-alert-x:hover {
+    background: color-mix(in srgb, var(--primary-color-1) 10%, transparent);
+    transform: translateY(-1px);
+}
+
+.ui-alert-body {
+    padding: 1rem 1.1rem;
+}
+
+.ui-alert-message {
+    color: var(--text-secondary-1);
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.ui-alert-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.1rem;
+    border-top: 1px solid var(--border-color-1);
+}
+
+.ui-alert-ok {
+    min-width: 110px;
 }

@@ -1,0 +1,607 @@
+/* ===================================
+   EMERGENCY-COM ADMIN UI KIT (Shared)
+   - Design tokens + reusable components
+   - Dark surfaces + brand accent preserved via existing variables
+   =================================== */
+
+/* -----------------------------------
+   Tokens (map to existing theme vars)
+   ----------------------------------- */
+:root {
+    /* Color tokens (do not introduce new palette; alias existing vars) */
+    --bg: var(--bg-color-1, var(--bg-color));
+    --surface: var(--card-bg-1, var(--card-bg));
+    --surface-2: var(--header-bg-1, var(--header-bg));
+    --border: var(--border-color-1, var(--border-color));
+    --text: var(--text-color-1, var(--text-color));
+    --muted: var(--text-secondary-1, var(--text-secondary));
+    --brand-gold: var(--primary-color-1, var(--primary-color));
+    --brand-gold-hover: var(--primary-hover-1, var(--primary-color-1, var(--primary-color)));
+
+    /* Sizing + motion */
+    --radius: 12px;
+    --radius-sm: 10px;
+    --radius-xs: 8px;
+
+    --space-1: 8px;
+    --space-2: 12px;
+    --space-3: 16px;
+    --space-4: 20px;
+    --space-5: 24px;
+
+    --shadow-subtle: 0 8px 18px rgba(0, 0, 0, 0.18);
+    --shadow-raise: 0 12px 28px rgba(0, 0, 0, 0.24);
+
+    --t-fast: 150ms;
+    --t: 200ms;
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+    /* Layering */
+    --z-header: 1000;
+    --z-popover: 1200;
+    --z-overlay: 1400;
+    --z-modal: 1500;
+    --z-toast: 1600;
+
+    /* Accessibility */
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--brand-gold) 28%, transparent);
+    --focus-outline: 2px solid color-mix(in srgb, var(--brand-gold) 85%, transparent);
+
+    /* Controls */
+    --control-h: 44px;
+}
+
+/* -----------------------------------
+   Base polishing (safe/global)
+   ----------------------------------- */
+body {
+    background: var(--bg);
+    color: var(--text);
+}
+
+body.ui-modal-open {
+    overflow: hidden;
+}
+
+:where(a, button, input, select, textarea) {
+    -webkit-tap-highlight-color: transparent;
+}
+
+:where(a, button, input, select, textarea):focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: 2px;
+}
+
+/* Consistent typography defaults */
+:where(h1, h2, h3, h4, h5, h6) {
+    letter-spacing: -0.02em;
+}
+
+/* -----------------------------------
+   Layout helpers (opt-in classes)
+   ----------------------------------- */
+.ui-page {
+    padding: var(--space-5);
+}
+
+.ui-page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.ui-title {
+    font-size: 1.5rem;
+    line-height: 1.2;
+    font-weight: 700;
+    margin: 0;
+}
+
+.ui-subtitle {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.ui-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+
+.ui-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+}
+
+@media (min-width: 1024px) {
+    .ui-grid.ui-grid-2 {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* -----------------------------------
+   Cards / sections
+   ----------------------------------- */
+.ui-card,
+.card {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: none;
+}
+
+.ui-card {
+    overflow: hidden;
+}
+
+.ui-card-header,
+.card-header {
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    padding: var(--space-3) var(--space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.ui-card-title {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+.ui-card-help {
+    margin-top: 2px;
+    font-size: 0.875rem;
+    color: var(--muted);
+}
+
+.ui-card-body,
+.card-body {
+    padding: var(--space-4);
+}
+
+.ui-card-footer,
+.card-footer {
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--muted);
+}
+
+/* -----------------------------------
+   Buttons (support existing .btn usage)
+   ----------------------------------- */
+.ui-btn,
+.btn,
+button.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: var(--control-h);
+    padding: 0.6rem 1rem;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    user-select: none;
+    text-decoration: none;
+    transition: transform var(--t-fast) var(--ease), background-color var(--t) var(--ease), border-color var(--t) var(--ease), color var(--t) var(--ease), box-shadow var(--t) var(--ease), opacity var(--t) var(--ease);
+    will-change: transform;
+}
+
+.ui-btn:active,
+.btn:active {
+    transform: translateY(0);
+}
+
+.ui-btn:disabled,
+.btn:disabled,
+.ui-btn[aria-disabled="true"],
+.btn[aria-disabled="true"] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* Primary = brand accent (kept from existing theme vars) */
+.ui-btn-primary,
+.btn-primary {
+    background: var(--brand-gold);
+    border-color: var(--brand-gold);
+    color: #fff;
+}
+
+.ui-btn-primary:hover,
+.btn-primary:hover {
+    background: var(--brand-gold-hover);
+    border-color: var(--brand-gold-hover);
+}
+
+/* Secondary surface button */
+.ui-btn-secondary {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.ui-btn-secondary:hover {
+    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+/* Ghost */
+.ui-btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text);
+}
+
+.ui-btn-ghost:hover {
+    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+/* Loading state (works with existing .btn.loading too) */
+.ui-btn.is-loading,
+.btn.loading {
+    position: relative;
+    color: transparent !important;
+    pointer-events: none;
+}
+
+.ui-btn.is-loading::after,
+.btn.loading::after {
+    content: \"\";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    inset: 0;
+    margin: auto;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    animation: ui-spin 900ms linear infinite;
+}
+
+@keyframes ui-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* -----------------------------------
+   Inputs / selects / textareas
+   ----------------------------------- */
+.ui-field {
+    display: grid;
+    gap: 6px;
+}
+
+.ui-label,
+.form-label {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.ui-input,
+.ui-select,
+.ui-textarea,
+.form-control,
+input.search-input {
+    width: 100%;
+    min-height: var(--control-h);
+    padding: 0.7rem 0.9rem;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg) 45%, var(--surface) 55%);
+    color: var(--text);
+    transition: box-shadow var(--t) var(--ease), border-color var(--t) var(--ease), background-color var(--t) var(--ease);
+}
+
+.ui-textarea,
+textarea.form-control {
+    min-height: 120px;
+    resize: vertical;
+}
+
+.ui-input::placeholder,
+.form-control::placeholder,
+input.search-input::placeholder {
+    color: color-mix(in srgb, var(--muted) 80%, transparent);
+}
+
+.ui-input:focus,
+.ui-select:focus,
+.ui-textarea:focus,
+.form-control:focus,
+input.search-input:focus {
+    border-color: var(--brand-gold);
+    box-shadow: var(--focus-ring);
+    outline: none;
+}
+
+.ui-help,
+.form-text {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+/* -----------------------------------
+   Tables (works with plain + DataTables)
+   ----------------------------------- */
+.ui-table-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
+}
+
+table.ui-table,
+table,
+.dataTable {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+table.ui-table thead th,
+table thead th,
+.dataTable thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--surface-2);
+    color: var(--text);
+    text-align: left;
+    font-weight: 700;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+table.ui-table tbody td,
+table tbody td,
+.dataTable tbody td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    color: var(--text);
+}
+
+table.ui-table tbody tr:nth-child(even),
+table tbody tr:nth-child(even),
+.dataTable tbody tr:nth-child(even) {
+    background: color-mix(in srgb, var(--surface-2) 12%, transparent);
+}
+
+table.ui-table tbody tr:hover,
+table tbody tr:hover,
+.dataTable tbody tr:hover {
+    background: color-mix(in srgb, var(--surface-2) 22%, transparent);
+}
+
+.ui-empty {
+    padding: var(--space-5);
+    text-align: center;
+    color: var(--muted);
+}
+
+/* -----------------------------------
+   Tabs / segmented
+   ----------------------------------- */
+.ui-tabs {
+    display: inline-flex;
+    gap: 6px;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+}
+
+.ui-tab {
+    min-height: 38px;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color var(--t) var(--ease), color var(--t) var(--ease), border-color var(--t) var(--ease);
+}
+
+.ui-tab[aria-selected=\"true\"],
+.ui-tab.is-active {
+    background: var(--brand-gold);
+    border-color: var(--brand-gold);
+    color: #fff;
+}
+
+/* -----------------------------------
+   Badges
+   ----------------------------------- */
+.ui-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface-2) 50%, transparent);
+    color: var(--text);
+    font-weight: 700;
+    font-size: 0.78rem;
+    line-height: 1.2;
+}
+
+/* -----------------------------------
+   Modals / overlays (layering + scroll)
+   ----------------------------------- */
+.ui-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: var(--z-overlay);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--t) var(--ease), visibility var(--t) var(--ease);
+}
+
+.ui-overlay.is-open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.ui-modal {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    z-index: var(--z-modal);
+    pointer-events: none;
+}
+
+.ui-modal.is-open {
+    pointer-events: auto;
+}
+
+.ui-modal-dialog {
+    width: min(720px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-raise);
+    overflow: hidden;
+    transform: translateY(6px);
+    opacity: 0;
+    transition: transform var(--t) var(--ease), opacity var(--t) var(--ease);
+}
+
+.ui-modal.is-open .ui-modal-dialog {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.ui-modal-header {
+    background: var(--brand-gold);
+    color: #fff;
+    padding: var(--space-3) var(--space-4);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.ui-modal-title {
+    font-weight: 800;
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.ui-modal-close {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, #fff 30%, transparent);
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color var(--t) var(--ease), border-color var(--t) var(--ease);
+}
+
+.ui-modal-close:hover {
+    background: color-mix(in srgb, #000 18%, transparent);
+}
+
+.ui-modal-body {
+    padding: var(--space-4);
+    overflow: auto;
+    max-height: calc(100vh - 240px);
+}
+
+.ui-modal-footer {
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--border);
+    background: var(--surface-2);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+
+/* Ensure existing modals/popovers are above header */
+.admin-header { z-index: var(--z-header) !important; }
+.notification-modal,
+.message-modal,
+.message-content-modal,
+.dropdown-menu,
+.user-profile-dropdown {
+    z-index: var(--z-popover) !important;
+}
+
+/* Common third-party modal containers (bootstrap/sweetalert) */
+.modal,
+.modal-backdrop,
+.swal2-container {
+    z-index: var(--z-modal) !important;
+}
+
+/* -----------------------------------
+   Toasts / alerts
+   ----------------------------------- */
+.ui-toast-stack {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: var(--z-toast);
+    display: grid;
+    gap: 10px;
+    width: min(420px, calc(100vw - 32px));
+}
+
+.ui-toast {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-subtle);
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    gap: 10px;
+    align-items: start;
+}
+
+.ui-toast-title {
+    font-weight: 800;
+    margin: 0;
+}
+
+.ui-toast-text {
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 0.92rem;
+}
+
+/* -----------------------------------
+   Skeleton loaders (opt-in)
+   ----------------------------------- */
+.ui-skeleton {
+    background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--surface-2) 45%, transparent),
+        color-mix(in srgb, var(--surface-2) 65%, transparent),
+        color-mix(in srgb, var(--surface-2) 45%, transparent)
+    );
+    background-size: 200% 100%;
+    border-radius: 10px;
+    animation: ui-shimmer 1.15s ease-in-out infinite;
+}
+
+@keyframes ui-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}

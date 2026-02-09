@@ -187,6 +187,7 @@ function purposeToKeyName($purpose) {
     $map = [
         'earthquake' => 'AI_API_KEY_EARTHQUAKE',
         'analysis' => 'AI_API_KEY_ANALYSIS',
+        'ai_message' => 'AI_API_KEY_AI_MESSAGE',
         'analysis_backup' => 'AI_API_KEY_ANALYSIS_BACKUP',
         'translation' => 'AI_API_KEY_TRANSLATION',
         'default' => 'AI_API_KEY'

@@ -34,6 +34,10 @@ try {
     $barangay = $_POST['barangay'] ?? '';
     $role = $_POST['role'] ?? '';
     $categoryId = $_POST['category_id'] ?? null;
+    $targetLatRaw = $_POST['target_lat'] ?? null;
+    $targetLngRaw = $_POST['target_lng'] ?? null;
+    $radiusMRaw = $_POST['radius_m'] ?? null;
+    $targetAddress = trim((string)($_POST['target_address'] ?? ''));
     
     $channels = $_POST['channels'] ?? []; 
     if (is_string($channels)) {
@@ -44,6 +48,47 @@ try {
     $severity = $_POST['severity'] ?? 'Medium';
     $title = trim($_POST['title'] ?? '');
     $body  = trim($_POST['body'] ?? '');
+    $weatherSignalRaw = $_POST['weather_signal'] ?? null;
+    $fireLevelRaw = $_POST['fire_level'] ?? null;
+
+    $severityAllowed = ['Low', 'Medium', 'High', 'Critical'];
+    if (!in_array($severity, $severityAllowed, true)) {
+        $severity = 'Medium';
+    }
+
+    $weatherSignal = null;
+    if ($weatherSignalRaw !== null && $weatherSignalRaw !== '') {
+        $weatherSignal = (int)$weatherSignalRaw;
+        if ($weatherSignal < 1 || $weatherSignal > 5) $weatherSignal = null;
+    }
+
+    $fireLevel = null;
+    if ($fireLevelRaw !== null && $fireLevelRaw !== '') {
+        $fireLevel = (int)$fireLevelRaw;
+        if ($fireLevel < 1 || $fireLevel > 3) $fireLevel = null;
+    }
+
+    $targetLat = null;
+    $targetLng = null;
+    $radiusM = null;
+    if ($audienceType === 'location') {
+        if ($targetLatRaw === null || $targetLngRaw === null) {
+            throw new Exception('Required fields missing: target_lat, target_lng');
+        }
+        if (!is_numeric($targetLatRaw) || !is_numeric($targetLngRaw)) {
+            throw new Exception('Invalid location coordinates.');
+        }
+        $targetLat = (float)$targetLatRaw;
+        $targetLng = (float)$targetLngRaw;
+        if ($targetLat < -90 || $targetLat > 90 || $targetLng < -180 || $targetLng > 180) {
+            throw new Exception('Invalid location coordinates.');
+        }
+
+        $radiusM = is_numeric($radiusMRaw) ? (int)$radiusMRaw : 0;
+        if ($radiusM <= 0 || $radiusM > 20000) {
+            throw new Exception('Invalid radius. Please set a radius between 1 and 20000 meters.');
+        }
+    }
 
     if (empty($channels) || empty($title) || empty($body)) {
         $missing = [];
@@ -54,22 +99,57 @@ try {
     }
 
     // 5. Build Recipient Query
-    $sql = "SELECT u.id, u.name, u.email, u.phone, d.fcm_token 
-            FROM users u 
-            LEFT JOIN user_devices d ON u.id = d.user_id AND d.is_active = 1
-            WHERE u.status = 'active'";
+    $baseSelect = "SELECT u.id, u.name, u.email, u.phone, d.fcm_token";
+    $baseFrom = " FROM users u 
+            LEFT JOIN user_devices d ON u.id = d.user_id AND d.is_active = 1";
+    $baseWhere = " WHERE u.status = 'active'";
     $params = [];
 
-    if ($audienceType === 'barangay' && !empty($barangay)) {
-        $sql .= " AND u.barangay = ?";
+    $join = "";
+    $having = "";
+
+    if ($audienceType === 'location') {
+        // Target by latest known location within radius (meters)
+        $tblExists = $pdo->query("SHOW TABLES LIKE 'user_locations'")->rowCount() > 0;
+        if (!$tblExists) {
+            throw new Exception('Location targeting is unavailable: user_locations table not found.');
+        }
+
+        $hasIsCurrent = $pdo->query("SHOW COLUMNS FROM user_locations LIKE 'is_current'")->rowCount() > 0;
+        if ($hasIsCurrent) {
+            $join .= " INNER JOIN user_locations ul ON ul.user_id = u.id AND ul.is_current = 1";
+        } else {
+            // fallback: latest by id
+            $join .= " INNER JOIN (SELECT user_id, MAX(id) AS max_id FROM user_locations GROUP BY user_id) ulm ON ulm.user_id = u.id
+                      INNER JOIN user_locations ul ON ul.id = ulm.max_id";
+        }
+
+        // Haversine distance (meters)
+        $distanceSql = " (6371000 * 2 * ASIN(SQRT(
+            POWER(SIN(RADIANS(ul.latitude - ?)/2), 2) +
+            COS(RADIANS(?)) * COS(RADIANS(ul.latitude)) *
+            POWER(SIN(RADIANS(ul.longitude - ?)/2), 2)
+        ))) ";
+
+        $baseSelect .= ", ul.latitude, ul.longitude, {$distanceSql} AS distance_m";
+        $params[] = $targetLat;
+        $params[] = $targetLat;
+        $params[] = $targetLng;
+        $having = " HAVING distance_m <= ?";
+        $params[] = $radiusM;
+
+    } elseif ($audienceType === 'barangay' && !empty($barangay)) {
+        $baseWhere .= " AND u.barangay = ?";
         $params[] = $barangay;
     } elseif ($audienceType === 'role' && !empty($role)) {
-        $sql .= " AND u.user_type = ?";
+        $baseWhere .= " AND u.user_type = ?";
         $params[] = $role;
     } elseif ($audienceType === 'topic' && !empty($categoryId)) {
-        $sql .= " AND u.id IN (SELECT user_id FROM user_subscriptions WHERE category_id = ? AND is_active = 1)";
+        $baseWhere .= " AND u.id IN (SELECT user_id FROM user_subscriptions WHERE category_id = ? AND is_active = 1)";
         $params[] = $categoryId;
     }
+
+    $sql = $baseSelect . $baseFrom . $join . $baseWhere . $having;
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -82,7 +162,14 @@ try {
 
     // 6. Insert Pending Log Entry
     $channelStr = implode(',', $channels);
-    $audienceStr = $audienceType . ($barangay ? ": $barangay" : "") . ($role ? ": $role" : "") . ($categoryId ? ": Cat $categoryId" : "");
+    $audienceStr = $audienceType
+        . ($barangay ? ": $barangay" : "")
+        . ($role ? ": $role" : "")
+        . ($categoryId ? ": Cat $categoryId" : "");
+    if ($audienceType === 'location' && $targetLat !== null && $targetLng !== null) {
+        $audienceStr .= ": within {$radiusM}m of {$targetLat},{$targetLng}";
+        if ($targetAddress !== '') $audienceStr .= " ($targetAddress)";
+    }
     
     $logStmt = $pdo->prepare("
         INSERT INTO notification_logs (channel, message, recipients, priority, status, sent_at, sent_by, ip_address)
@@ -138,11 +225,45 @@ try {
     }
 
     // 8. Create Entry in Alerts table for global monitoring
-    $aStmt = $pdo->prepare("
-        INSERT INTO alerts (title, message, content, category_id, severity, status, created_at) 
-        VALUES (?, ?, ?, ?, ?, 'active', NOW())
-    ");
-    $aStmt->execute([$title, $body, $body, $categoryId, $severity]);
+    $hasSeverityCol = false;
+    $hasWeatherSignalCol = false;
+    $hasFireLevelCol = false;
+    try {
+        $hasSeverityCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'severity'")->rowCount() > 0;
+        $hasWeatherSignalCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'weather_signal'")->rowCount() > 0;
+        $hasFireLevelCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'fire_level'")->rowCount() > 0;
+    } catch (PDOException $e) {
+        $hasSeverityCol = false;
+        $hasWeatherSignalCol = false;
+        $hasFireLevelCol = false;
+    }
+
+    $alertCols = ['title', 'message', 'content', 'category_id', 'status'];
+    $alertVals = [$title, $body, $body, $categoryId, 'active'];
+    $alertPlaceholders = array_fill(0, count($alertVals), '?');
+
+    if ($hasSeverityCol) {
+        $alertCols[] = 'severity';
+        $alertVals[] = $severity;
+        $alertPlaceholders[] = '?';
+    }
+
+    if ($hasWeatherSignalCol) {
+        $alertCols[] = 'weather_signal';
+        $alertVals[] = $weatherSignal;
+        $alertPlaceholders[] = '?';
+    }
+    if ($hasFireLevelCol) {
+        $alertCols[] = 'fire_level';
+        $alertVals[] = $fireLevel;
+        $alertPlaceholders[] = '?';
+    }
+
+    $alertCols[] = 'created_at';
+    $alertPlaceholders[] = 'NOW()';
+
+    $aStmt = $pdo->prepare("INSERT INTO alerts (" . implode(', ', $alertCols) . ") VALUES (" . implode(', ', $alertPlaceholders) . ")");
+    $aStmt->execute($alertVals);
 
     // 9. Update Log Status to 'sent' (Queued successfully)
     // Note: 'updated_at' is omitted as it does not exist in the schema.

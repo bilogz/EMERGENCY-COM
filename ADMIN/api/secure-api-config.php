@@ -28,6 +28,8 @@ function getGeminiApiKey($purpose = 'default', $tryRotation = false) {
                 $keyName = 'AI_API_KEY_EARTHQUAKE';
             } elseif ($purpose === 'analysis') {
                 $keyName = 'AI_API_KEY_ANALYSIS';
+            } elseif ($purpose === 'ai_message') {
+                $keyName = 'AI_API_KEY_AI_MESSAGE';
             } elseif ($purpose === 'analysis_backup') {
                 $keyName = 'AI_API_KEY_ANALYSIS_BACKUP';
             } elseif ($purpose === 'translation_backup') {
@@ -97,6 +99,10 @@ function getGeminiApiKey($purpose = 'default', $tryRotation = false) {
                 if ($purpose === 'analysis_backup' && !empty($secureConfig['AI_API_KEY_ANALYSIS_BACKUP'])) {
                     error_log("Found AI_API_KEY_ANALYSIS_BACKUP in config");
                     return $secureConfig['AI_API_KEY_ANALYSIS_BACKUP'];
+                }
+                if ($purpose === 'ai_message' && !empty($secureConfig['AI_API_KEY_AI_MESSAGE'])) {
+                    error_log("Found AI_API_KEY_AI_MESSAGE in config");
+                    return $secureConfig['AI_API_KEY_AI_MESSAGE'];
                 }
                 if ($purpose === 'analysis' && !empty($secureConfig['AI_API_KEY_ANALYSIS'])) {
                     error_log("Found AI_API_KEY_ANALYSIS in config");

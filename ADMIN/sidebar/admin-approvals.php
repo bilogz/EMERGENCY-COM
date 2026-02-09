@@ -22,9 +22,9 @@ $pageTitle = 'Admin Approvals';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($pageTitle); ?></title>
     <link rel="icon" type="image/x-icon" href="images/favicon.ico">
-    <link rel="stylesheet" href="css/global.css">
+    <link rel="stylesheet" href="css/global.css?v=<?php echo filemtime(__DIR__ . '/css/global.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="css/sidebar.css">
+    <link rel="stylesheet" href="css/sidebar.css?v=<?php echo filemtime(__DIR__ . '/css/sidebar.css'); ?>">
     <link rel="stylesheet" href="css/admin-header.css">
     <link rel="stylesheet" href="css/buttons.css">
     <link rel="stylesheet" href="css/forms.css">
@@ -32,142 +32,7 @@ $pageTitle = 'Admin Approvals';
     <link rel="stylesheet" href="css/hero.css">
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
-    <style>
-        /* Enhanced Admin Approvals Styles */
-        :root {
-            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            --transition-speed: 0.2s;
-        }
-
-        .module-card {
-            background: var(--card-bg-1);
-            border-radius: 10px;
-            box-shadow: var(--card-shadow);
-            border: 1px solid var(--border-color-1);
-            overflow: hidden;
-            margin-bottom: 1.5rem;
-            transition: box-shadow var(--transition-speed) ease;
-        }
-
-        .module-card:hover {
-            box-shadow: var(--card-shadow-hover);
-        }
-
-        .module-card-header {
-            padding: 1.25rem 1.5rem;
-            border-bottom: 1px solid var(--border-color-1);
-            background: var(--bg-color-1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .module-card-header h2 {
-            margin: 0;
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: var(--text-color-1);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .stat-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            padding: 1.5rem;
-        }
-
-        .stat-card {
-            background: var(--card-bg-1);
-            padding: 1.5rem;
-            border-radius: 10px;
-            border: 1px solid var(--border-color-1);
-            text-align: center;
-            transition: transform var(--transition-speed) ease;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-
-        .stat-card:hover {
-            transform: translateY(-3px);
-            border-color: var(--primary-color-1);
-        }
-
-        .stat-value {
-            font-size: 2.25rem;
-            font-weight: 700;
-            margin: 0 0 0.5rem 0;
-            line-height: 1.2;
-        }
-
-        .stat-label {
-            font-size: 0.9rem;
-            color: var(--text-secondary-1);
-            font-weight: 500;
-        }
-
-        .badge {
-            padding: 0.35rem 0.65rem;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            display: inline-block;
-        }
-        
-        .badge.pending { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
-        .badge.active { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
-        .badge.inactive { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
-
-        .table-responsive {
-            overflow-x: auto;
-            width: 100%;
-        }
-
-        .data-table th {
-            background: var(--bg-color-1);
-            color: var(--text-secondary-1);
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .info-box {
-            background-color: rgba(76, 138, 137, 0.1);
-            border-left: 4px solid var(--primary-color-1);
-            color: var(--text-color-1);
-            padding: 1.25rem;
-            border-radius: 8px;
-            margin-top: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        
-        .info-box i {
-            color: var(--primary-color-1);
-            font-size: 1.25rem;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--text-secondary-1);
-        }
-
-        .empty-state i {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            opacity: 0.2;
-        }
-    </style>
+        <link rel="stylesheet" href="css/module-admin-approvals.css?v=<?php echo filemtime(__DIR__ . '/css/module-admin-approvals.css'); ?>">
 </head>
 <body>
     <!-- Include Sidebar Component -->
