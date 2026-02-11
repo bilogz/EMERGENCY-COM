@@ -19,15 +19,14 @@ if ($conversation_id <= 0 || empty($sender_id) || empty($message_text)) {
     apiResponse::error('Missing required fields.', 400);
 }
 
-if (!in_array($sender_type, ['user', 'admin'])) {
-    $sender_type = 'user';
-}
-
 $ip_address = $_SERVER['REMOTE_ADDR'] ?? null;
 $device_info = $_SERVER['HTTP_USER_AGENT'] ?? null;
 $created_at = date('Y-m-d H:i:s');
 
 try {
+    // START TRANSACTION to ensure both operations happen
+    $pdo->beginTransaction();
+
     // 1. INSERT INTO chat_messages
     $stmt = $pdo->prepare('
         INSERT INTO chat_messages (
@@ -36,16 +35,12 @@ try {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
     ');
     
-    $success = $stmt->execute([
+    $stmt->execute([
         $conversation_id, $sender_id, $sender_name, $sender_type, 
         $message_text, $ip_address, $device_info, $created_at
     ]);
     
     $new_message_id = (int)$pdo->lastInsertId();
-
-    if (!$success || $new_message_id === 0) {
-        throw new Exception("Insert failed or lastInsertId is 0");
-    }
 
     // 2. UPDATE conversations table
     $stmtUpdate = $pdo->prepare('
@@ -55,24 +50,19 @@ try {
     ');
     $stmtUpdate->execute([$message_text, $created_at, $conversation_id]);
 
-    // 3. FETCH the inserted message
+    $pdo->commit();
+
+    // FETCH the inserted message
     $stmtFetch = $pdo->prepare('SELECT * FROM chat_messages WHERE message_id = ?');
     $stmtFetch->execute([$new_message_id]);
     $newMessage = $stmtFetch->fetch(PDO::FETCH_ASSOC);
 
-    // Ensure types are correct for Kotlin
-    if ($newMessage) {
-        $newMessage['message_id'] = (int)$newMessage['message_id'];
-        $newMessage['conversation_id'] = (int)$newMessage['conversation_id'];
-        $newMessage['is_read'] = (int)$newMessage['is_read'];
-    }
-
     apiResponse::success(['data' => $newMessage], 'Message sent successfully', 201);
 
-} catch (PDOException $e) {
-    error_log('Chat Message Send DB Error: ' . $e->getMessage());
-    apiResponse::error('Database Error: ' . $e->getMessage(), 500);
 } catch (Exception $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     error_log('Chat Message Send Error: ' . $e->getMessage());
     apiResponse::error('Server Error: ' . $e->getMessage(), 500);
 }
