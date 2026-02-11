@@ -59,6 +59,25 @@ try {
     exit;
 }
 
+function resolveUserLanguagesTable(PDO $pdo): ?string {
+    $candidates = ['supported_languages', 'supported_languages_catalog', 'emergency_comm_supported_languages'];
+    foreach ($candidates as $table) {
+        try {
+            $stmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+            if (!$stmt || !$stmt->fetch()) {
+                continue;
+            }
+            $pdo->query("SELECT 1 FROM {$table} LIMIT 1");
+            return $table;
+        } catch (PDOException $e) {
+            // Try next candidate table.
+        }
+    }
+    return null;
+}
+
+$languagesTable = null;
+
 $action = $_GET['action'] ?? 'list';
 $lastUpdate = $_GET['last_update'] ?? null;
 
@@ -78,10 +97,35 @@ try {
         }
         exit;
     }
+
+    $languagesTable = resolveUserLanguagesTable($pdo);
     
     if ($action === 'list' || $action === 'check-updates') {
+        if ($languagesTable === null) {
+            if (ob_get_level()) {
+                ob_clean();
+            }
+            echo json_encode([
+                'success' => true,
+                'languages' => [
+                    ['language_code' => 'en', 'language_name' => 'English', 'native_name' => 'English', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 100],
+                    ['language_code' => 'fil', 'language_name' => 'Filipino', 'native_name' => 'Filipino', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 98],
+                    ['language_code' => 'ceb', 'language_name' => 'Cebuano', 'native_name' => 'Cebuano', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 94],
+                    ['language_code' => 'ilo', 'language_name' => 'Ilocano', 'native_name' => 'Ilokano', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 92],
+                    ['language_code' => 'war', 'language_name' => 'Waray', 'native_name' => 'Winaray', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 88],
+                ],
+                'last_update' => null,
+                'count' => 5,
+                'updated' => true
+            ]);
+            if (ob_get_level()) {
+                ob_end_flush();
+            }
+            exit;
+        }
+
         // Get last update timestamp from database
-        $stmt = $pdo->query("SELECT MAX(updated_at) as last_update FROM supported_languages");
+        $stmt = $pdo->query("SELECT MAX(updated_at) as last_update FROM {$languagesTable}");
         $dbUpdate = $stmt->fetch();
         $dbLastUpdate = $dbUpdate['last_update'] ?? null;
         
@@ -113,7 +157,7 @@ try {
                 is_ai_supported, 
                 priority,
                 updated_at
-            FROM supported_languages
+            FROM {$languagesTable}
             WHERE is_active = 1
             ORDER BY priority DESC, language_name ASC
         ");
@@ -153,12 +197,29 @@ try {
         // Try to match with supported languages
         $detectedLanguage = 'en'; // Default
         $matchedLanguage = null;
+
+        if ($languagesTable === null) {
+            if (ob_get_level()) {
+                ob_clean();
+            }
+            echo json_encode([
+                'success' => true,
+                'detected_language' => $detectedLanguage,
+                'matched_language' => null,
+                'browser_languages' => $languages,
+                'supported' => false
+            ]);
+            if (ob_get_level()) {
+                ob_end_flush();
+            }
+            exit;
+        }
         
         foreach ($languages as $langCode) {
             // Try exact match first
             $stmt = $pdo->prepare("
                 SELECT language_code, language_name, native_name, flag_emoji 
-                FROM supported_languages 
+                FROM {$languagesTable} 
                 WHERE language_code = ? AND is_active = 1 
                 LIMIT 1
             ");
@@ -174,7 +235,7 @@ try {
             // Try prefix match (e.g., 'en' matches 'en-US')
             $stmt = $pdo->prepare("
                 SELECT language_code, language_name, native_name, flag_emoji 
-                FROM supported_languages 
+                FROM {$languagesTable} 
                 WHERE language_code LIKE ? AND is_active = 1 
                 LIMIT 1
             ");

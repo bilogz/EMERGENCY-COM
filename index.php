@@ -15,9 +15,13 @@ $assetBase = 'ADMIN/header/';
     <link rel="stylesheet" href="ADMIN/sidebar/css/global.css">
     <link rel="stylesheet" href="ADMIN/sidebar/css/sidebar.css">
     <link rel="stylesheet" href="ADMIN/sidebar/css/content.css">
+    <link rel="stylesheet" href="ADMIN/sidebar/css/admin-header.css">
     <link rel="stylesheet" href="ADMIN/sidebar/css/buttons.css">
     <link rel="stylesheet" href="USERS/css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script>
         // Set global API base path for all JS files
@@ -102,7 +106,7 @@ $assetBase = 'ADMIN/header/';
         });
     </script>
 </head>
-<body>
+<body class="user-home user-admin-header">
     <?php 
     // Set base paths for sidebar when included from root
     $basePath = '';
@@ -110,6 +114,7 @@ $assetBase = 'ADMIN/header/';
     $assetSidebar = 'ADMIN/sidebar/';
     include 'USERS/includes/sidebar.php'; 
     ?>
+    <?php include 'USERS/includes/admin-style-header.php'; ?>
 
     <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
         <i class="fas fa-bars"></i>
@@ -679,6 +684,67 @@ $assetBase = 'ADMIN/header/';
                     });
                 }
             }
+        });
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tempEl = document.getElementById('topbarTemp');
+            const conditionEl = document.getElementById('topbarCondition');
+            const iconEl = document.getElementById('topbarWeatherIcon');
+            const authTempEl = document.getElementById('authWeatherTemp');
+            const authConditionEl = document.getElementById('authWeatherDesc');
+            const authIconEl = document.getElementById('authWeatherIcon');
+
+            const hasTopbar = tempEl && conditionEl && iconEl;
+            const hasAuthPill = authTempEl && authConditionEl && authIconEl;
+
+            if (!hasTopbar && !hasAuthPill) {
+                return;
+            }
+
+            const lat = 14.6760;
+            const lon = 121.0437;
+            const apiUrl = `ADMIN/api/weather-monitoring.php?action=current&lat=${lat}&lon=${lon}`;
+
+            fetch(apiUrl)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data || !data.success || !data.data) {
+                        conditionEl.textContent = 'Weather unavailable';
+                        return;
+                    }
+
+                    const weather = data.data;
+                    const temp = Math.round(weather.main?.temp ?? 0);
+                    const condition = weather.weather?.[0]?.description || 'Current conditions';
+                    const icon = weather.weather?.[0]?.icon || '';
+
+                    const formattedCondition = condition.charAt(0).toUpperCase() + condition.slice(1);
+
+                    if (hasTopbar) {
+                        tempEl.textContent = `${temp}°C`;
+                        conditionEl.textContent = formattedCondition;
+                        if (icon) {
+                            iconEl.innerHTML = `<img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="${condition}" />`;
+                        }
+                    }
+
+                    if (hasAuthPill) {
+                        authTempEl.textContent = `${temp}°C`;
+                        authConditionEl.textContent = formattedCondition;
+                        if (icon) {
+                            authIconEl.innerHTML = `<img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="${condition}" />`;
+                        }
+                    }
+                })
+                .catch(() => {
+                    if (hasTopbar) {
+                        conditionEl.textContent = 'Weather unavailable';
+                    }
+                    if (hasAuthPill) {
+                        authConditionEl.textContent = 'Weather unavailable';
+                    }
+                });
         });
     </script>
 </body>

@@ -60,103 +60,69 @@ $pageTitle = 'Dashboard';
             
             <div class="sub-container">
                 <div class="page-content">
+                    <section class="module-analytics-strip" aria-label="System analytics overview">
+                        <div class="module-analytics-title">System Analytics</div>
+                        <div class="module-analytics-grid">
+                            <article class="module-analytics-card tone-a">
+                                <div class="module-analytics-head">
+                                    <span class="module-analytics-label">Total Subscribers</span>
+                                    <span class="module-analytics-icon"><i class="fas fa-users"></i></span>
+                                </div>
+                                <div class="module-analytics-value" id="totalSubscribers">0</div>
+                                <div class="module-analytics-sub"><span id="subscriberChange">+0 this week</span></div>
+                            </article>
+
+                            <article class="module-analytics-card tone-c">
+                                <div class="module-analytics-head">
+                                    <span class="module-analytics-label">Notifications Sent Today</span>
+                                    <span class="module-analytics-icon"><i class="fas fa-bell"></i></span>
+                                </div>
+                                <div class="module-analytics-value" id="notificationsToday">0</div>
+                                <div class="module-analytics-sub"><span id="notificationStatus">All delivered</span></div>
+                            </article>
+
+                            <article class="module-analytics-card tone-d">
+                                <div class="module-analytics-head">
+                                    <span class="module-analytics-label">Success Rate</span>
+                                    <span class="module-analytics-icon"><i class="fas fa-chart-line"></i></span>
+                                </div>
+                                <div class="module-analytics-value" id="successRate">0%</div>
+                                <div class="module-analytics-sub">Excellent</div>
+                            </article>
+
+                            <article class="module-analytics-card tone-b">
+                                <div class="module-analytics-head">
+                                    <span class="module-analytics-label">Weather Alerts</span>
+                                    <span class="module-analytics-icon"><i class="fas fa-cloud-rain"></i></span>
+                                </div>
+                                <div class="module-analytics-value" id="weatherAlerts">0</div>
+                                <div class="module-analytics-sub" id="weatherStatus"><i class="fas fa-info-circle"></i> No active alerts</div>
+                            </article>
+
+                            <article class="module-analytics-card tone-c">
+                                <div class="module-analytics-head">
+                                    <span class="module-analytics-label">Earthquake Alerts</span>
+                                    <span class="module-analytics-icon"><i class="fas fa-mountain"></i></span>
+                                </div>
+                                <div class="module-analytics-value" id="earthquakeAlerts">0</div>
+                                <div class="module-analytics-sub" id="earthquakeStatus"><i class="fas fa-info-circle"></i> No active alerts</div>
+                            </article>
+
+                            <article class="module-analytics-card tone-a">
+                                <div class="module-analytics-head">
+                                    <span class="module-analytics-label">Pending Messages</span>
+                                    <span class="module-analytics-icon"><i class="fas fa-comments"></i></span>
+                                </div>
+                                <div class="module-analytics-value" id="pendingMessages">0</div>
+                                <div class="module-analytics-sub"><a href="two-way-communication.php" style="color: inherit; text-decoration: underline;">View conversations</a></div>
+                            </article>
+                        </div>
+                    </section>
+
                     <!-- Info Box for New Users -->
                     <div class="info-box">
                         <i class="fas fa-info-circle"></i>
                         <strong>Getting Started:</strong> This dashboard shows you everything at a glance. Click on any card or button to learn more about that feature.
-                    </div>
-
-                    <!-- Key Statistics -->
-                    <div class="dashboard-grid">
-                        <div class="stat-card subscribers">
-                            <div class="stat-label">
-                                <i class="fas fa-users"></i> Total Subscribers
-                                <span class="help-tooltip">
-                                    <i class="fas fa-question-circle"></i>
-                                    <span class="tooltip-text">Total number of citizens registered to receive emergency alerts</span>
-                                </span>
-                            </div>
-                            <div class="stat-value" id="totalSubscribers">0</div>
-                            <div class="stat-change positive">
-                                <i class="fas fa-arrow-up"></i>
-                                <span id="subscriberChange">+0 this week</span>
-                            </div>
-                        </div>
-
-                        <div class="stat-card notifications">
-                            <div class="stat-label">
-                                <i class="fas fa-bell"></i> Notifications Sent Today
-                                <span class="help-tooltip">
-                                    <i class="fas fa-question-circle"></i>
-                                    <span class="tooltip-text">Number of emergency alerts sent today through all channels (SMS, Email, PA)</span>
-                                </span>
-                            </div>
-                            <div class="stat-value" id="notificationsToday">0</div>
-                            <div class="stat-change positive">
-                                <i class="fas fa-check-circle"></i>
-                                <span id="notificationStatus">All delivered</span>
-                            </div>
-                        </div>
-
-                        <div class="stat-card success">
-                            <div class="stat-label">
-                                <i class="fas fa-check-circle"></i> Success Rate
-                                <span class="help-tooltip">
-                                    <i class="fas fa-question-circle"></i>
-                                    <span class="tooltip-text">Percentage of notifications successfully delivered to recipients</span>
-                                </span>
-                            </div>
-                            <div class="stat-value" id="successRate">0%</div>
-                            <div class="stat-change positive">
-                                <i class="fas fa-arrow-up"></i>
-                                <span>Excellent</span>
-                            </div>
-                        </div>
-
-                        <div class="stat-card weather">
-                            <div class="stat-label">
-                                <i class="fas fa-cloud-rain"></i> Weather Alerts
-                                <span class="help-tooltip">
-                                    <i class="fas fa-question-circle"></i>
-                                    <span class="tooltip-text">Active weather-related alerts from PAGASA</span>
-                                </span>
-                            </div>
-                            <div class="stat-value" id="weatherAlerts">0</div>
-                            <div class="stat-change" id="weatherStatus">
-                                <i class="fas fa-info-circle"></i>
-                                <span>No active alerts</span>
-                            </div>
-                        </div>
-
-                        <div class="stat-card earthquake">
-                            <div class="stat-label">
-                                <i class="fas fa-mountain"></i> Earthquake Alerts
-                                <span class="help-tooltip">
-                                    <i class="fas fa-question-circle"></i>
-                                    <span class="tooltip-text">Active earthquake warnings from PHIVOLCS</span>
-                                </span>
-                            </div>
-                            <div class="stat-value" id="earthquakeAlerts">0</div>
-                            <div class="stat-change" id="earthquakeStatus">
-                                <i class="fas fa-info-circle"></i>
-                                <span>No active alerts</span>
-                            </div>
-                        </div>
-
-                        <div class="stat-card pending">
-                            <div class="stat-label">
-                                <i class="fas fa-clock"></i> Pending Messages
-                                <span class="help-tooltip">
-                                    <i class="fas fa-question-circle"></i>
-                                    <span class="tooltip-text">Messages from citizens waiting for your response</span>
-                                </span>
-                            </div>
-                            <div class="stat-value" id="pendingMessages">0</div>
-                            <div class="stat-change">
-                                <i class="fas fa-comments"></i>
-                                <span><a href="two-way-communication.php" style="color: var(--primary-color-1);">View conversations</a></span>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Quick Actions -->
@@ -306,7 +272,7 @@ $pageTitle = 'Dashboard';
 
         let notificationsChartInstance = null;
         let channelsChartInstance = null;
-        
+
         function loadNotificationsChart(data) {
             const ctx = document.getElementById('notificationsChart');
             if (!ctx) return;
@@ -323,8 +289,8 @@ $pageTitle = 'Dashboard';
                     datasets: [{
                         label: 'Notifications',
                         data: data.values || [0, 0, 0, 0, 0, 0, 0],
-                        borderColor: '#4c8a89',
-                        backgroundColor: 'rgba(76, 138, 137, 0.1)',
+                        borderColor: '#3a7675',
+                        backgroundColor: 'rgba(58, 118, 117, 0.1)',
                         tension: 0.4,
                         fill: true
                     }]
@@ -412,7 +378,9 @@ $pageTitle = 'Dashboard';
 
         // Load data on page load (wait for DOM to be ready)
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', loadDashboardData);
+            document.addEventListener('DOMContentLoaded', () => {
+                loadDashboardData();
+            });
         } else {
             // DOM is already ready
             loadDashboardData();

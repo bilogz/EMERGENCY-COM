@@ -20,8 +20,26 @@ function loadRootEnv() {
     }
     $loaded = true;
 
-    $rootEnvPath = dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . '.env';
-    if (!file_exists($rootEnvPath)) {
+    // Try common locations in priority order:
+    // 1) Explicit override via environment
+    // 2) Project root (.env beside ADMIN/ and USERS/)
+    // 3) Parent web root fallback (legacy)
+    $candidatePaths = [];
+    $explicitPath = getenv('EMERGENCY_ENV_PATH');
+    if ($explicitPath !== false && trim((string)$explicitPath) !== '') {
+        $candidatePaths[] = trim((string)$explicitPath);
+    }
+    $candidatePaths[] = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.env'; // <project>/.env
+    $candidatePaths[] = dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . '.env'; // parent fallback
+
+    $rootEnvPath = null;
+    foreach ($candidatePaths as $path) {
+        if (is_string($path) && $path !== '' && file_exists($path)) {
+            $rootEnvPath = $path;
+            break;
+        }
+    }
+    if ($rootEnvPath === null) {
         return;
     }
 
@@ -74,16 +92,31 @@ function getSecureConfig($key, $default = null) {
     // First, try environment variable
     $envValue = getenv($key);
     if ($envValue !== false) {
-        return $envValue;
+        $trimmed = trim((string)$envValue);
+        // Ignore blank/null-like env values so they don't override valid file config.
+        if ($trimmed !== '' && strcasecmp($trimmed, 'null') !== 0) {
+            return $envValue;
+        }
     }
     
     // Second, try local config file (not committed to Git)
     if ($localConfig === null) {
-        $localConfigPath = __DIR__ . '/config.local.php';
-        if (file_exists($localConfigPath)) {
-            $localConfig = require $localConfigPath;
-        } else {
-            $localConfig = [];
+        $localConfig = [];
+        $candidatePaths = [
+            __DIR__ . '/config.local.php', // ADMIN/api/config.local.php
+            dirname(__DIR__, 2) . '/config.local.php', // project-root config.local.php (fallback)
+            __DIR__ . '/../../USERS/api/config.local.php', // USERS fallback
+        ];
+
+        foreach ($candidatePaths as $localConfigPath) {
+            if (!is_string($localConfigPath) || $localConfigPath === '' || !file_exists($localConfigPath)) {
+                continue;
+            }
+            $loadedConfig = @require $localConfigPath;
+            if (is_array($loadedConfig)) {
+                $localConfig = $loadedConfig;
+                break;
+            }
         }
     }
     

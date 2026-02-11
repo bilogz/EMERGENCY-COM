@@ -94,6 +94,26 @@
             flex-direction: column;
             align-items: center;
             gap: 0.5rem;
+            color: var(--text-color-1);
+        }
+
+        /* Visual previews for each theme option */
+        .theme-option[data-theme="light"] {
+            background: #f6fbfb;
+            border-color: #b9d5d3;
+            color: #2b5b5a;
+        }
+
+        .theme-option[data-theme="dark"] {
+            background: #0e1b1e;
+            border-color: #1f3437;
+            color: #d7f1ee;
+        }
+
+        .theme-option[data-theme="system"] {
+            background: #f2f6f6;
+            border-color: #cfe0df;
+            color: #1f2d2e;
         }
 
         .theme-option:hover {
@@ -106,6 +126,12 @@
             border-color: var(--primary-color-1);
             background: rgba(76, 138, 137, 0.1);
             color: var(--primary-color-1);
+            box-shadow: 0 8px 18px rgba(20, 60, 60, 0.18);
+        }
+
+        /* Keep active text/icon readable on dark preview */
+        .theme-option.active[data-theme="dark"] {
+            color: #e9faf8;
         }
 
         .theme-option i {

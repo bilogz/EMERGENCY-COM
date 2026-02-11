@@ -1013,9 +1013,7 @@ function analyzeWithAI($settings) {
 function getWeatherData() {
     global $pdo;
 
-    $stmt = $pdo->query("SELECT api_key FROM integration_settings WHERE source = 'pagasa' LIMIT 1");
-    $apiKeyRow = $stmt->fetch(PDO::FETCH_ASSOC);
-    $apiKey = $apiKeyRow['api_key'] ?? '';
+    $apiKey = function_exists('getOpenWeatherApiKey') ? getOpenWeatherApiKey(true) : null;
 
     if (empty($apiKey)) {
         return [];
@@ -1078,14 +1076,21 @@ function sendNotificationsToSubscribers($alertId, $warning, $settings) {
         $userChannels = array_map('trim', $userChannels);
 
         // Get translated alert for user's preferred language
-        $userLanguage = $subscriber['preferred_language'] ?? 'en';
-        $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $userLanguage, $userId);
+        $userLanguage = strtolower(trim((string)($subscriber['preferred_language'] ?? 'en')));
+        if ($userLanguage === 'tl') {
+            $userLanguage = 'fil';
+        }
+        if ($userLanguage === '') {
+            $userLanguage = 'en';
+        }
+        $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $userLanguage, $warning['title'], $warning['content']);
 
         if (!$translatedAlert) {
             // Fallback to original warning
             $translatedAlert = [
                 'title' => $warning['title'],
-                'message' => $warning['content']
+                'message' => $warning['content'],
+                'language' => 'en'
             ];
         }
 
@@ -1231,10 +1236,8 @@ function checkWeatherConditions($settings) {
     $rainThreshold = floatval($settings['rain_threshold'] ?? 20); // mm/hour
     $warningTypes = explode(',', $settings['warning_types'] ?? '');
 
-    // Get OpenWeatherMap API key
-    $stmt = $pdo->query("SELECT api_key FROM integration_settings WHERE source = 'pagasa' LIMIT 1");
-    $apiKeyRow = $stmt->fetch(PDO::FETCH_ASSOC);
-    $apiKey = $apiKeyRow['api_key'] ?? '';
+    // Get OpenWeatherMap API key (PAGASA alias)
+    $apiKey = function_exists('getOpenWeatherApiKey') ? getOpenWeatherApiKey(true) : null;
 
     if (empty($apiKey)) {
         return $warnings; // No API key configured
@@ -1356,7 +1359,7 @@ function sendWeatherAnalysisAuto() {
 
     if (empty($weatherData) || !is_array($weatherData)) {
         http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Please check PAGASA API key configuration.']);
+        echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Set OPENWEATHER_API_KEY (or PAGASA_API_KEY) in ADMIN/api/config.local.php or .env.']);
         return;
     }
 
@@ -1495,13 +1498,20 @@ Keep concise and actionable for public communication.";
             $userChannels = array_map('trim', $userChannels);
 
             // Get translated alert for user's preferred language
-            $userLanguage = $subscriber['preferred_language'] ?? 'en';
-            $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $userLanguage, $userId);
+            $userLanguage = strtolower(trim((string)($subscriber['preferred_language'] ?? 'en')));
+            if ($userLanguage === 'tl') {
+                $userLanguage = 'fil';
+            }
+            if ($userLanguage === '') {
+                $userLanguage = 'en';
+            }
+            $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $userLanguage, $alertTitle, $alertContent);
 
             if (!$translatedAlert) {
                 $translatedAlert = [
                     'title' => $alertTitle,
-                    'message' => $alertContent
+                    'message' => $alertContent,
+                    'language' => 'en'
                 ];
             }
 
@@ -1671,7 +1681,7 @@ function getWeatherAnalysis() {
 
         if (empty($weatherData) || !is_array($weatherData)) {
             http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Please check PAGASA API key configuration.']);
+            echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Set OPENWEATHER_API_KEY (or PAGASA_API_KEY) in ADMIN/api/config.local.php or .env.']);
             return;
         }
 
@@ -1944,10 +1954,8 @@ function checkFloodingLandslideRisks($settings) {
 
     $rainThreshold = floatval($settings['rain_threshold'] ?? 20);
 
-    // Get OpenWeatherMap API key
-    $stmt = $pdo->query("SELECT api_key FROM integration_settings WHERE source = 'pagasa' LIMIT 1");
-    $apiKeyRow = $stmt->fetch(PDO::FETCH_ASSOC);
-    $apiKey = $apiKeyRow['api_key'] ?? '';
+    // Get OpenWeatherMap API key (PAGASA alias)
+    $apiKey = function_exists('getOpenWeatherApiKey') ? getOpenWeatherApiKey(true) : null;
 
     if (empty($apiKey)) {
         return $warnings;

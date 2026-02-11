@@ -120,8 +120,11 @@ $pageTitle = 'Multilingual Support Overview';
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const appBase = window.location.pathname.split('/ADMIN/')[0] || '';
+            const apiBase = appBase + '/ADMIN/api';
+
             // Check AI Status
-            fetch('../../api/ai-translation-service.php')
+            fetch(`${apiBase}/ai-translation-service.php`)
                 .then(r => r.json())
                 .then(data => {
                     const statusText = document.getElementById('aiStatusText');
@@ -143,7 +146,7 @@ $pageTitle = 'Multilingual Support Overview';
                 });
 
             // Get Language Count
-            fetch('../../api/multilingual-alerts.php?action=languages')
+            fetch(`${apiBase}/multilingual-alerts.php?action=languages`)
                 .then(r => r.json())
                 .then(data => {
                     if (data.success && data.languages) {

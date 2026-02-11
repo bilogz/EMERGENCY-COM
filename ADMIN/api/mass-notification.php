@@ -12,6 +12,21 @@ require_once 'alert-translation-helper.php';
 
 session_start();
 
+/**
+ * Normalize language code and map aliases.
+ */
+function normalizeAlertLanguage($language): string {
+    $lang = strtolower(trim((string)$language));
+    if ($lang === 'tl') {
+        $lang = 'fil';
+    }
+    // Keep simple BCP-47 style safety (letters, digits, hyphen, underscore)
+    if ($lang !== '' && !preg_match('/^[a-z0-9_-]{2,15}$/', $lang)) {
+        return '';
+    }
+    return $lang;
+}
+
 $action = $_GET['action'] ?? 'send';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
@@ -74,6 +89,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         if (is_array($recipients)) {
             $subscribers = $subscriberRepository->getByRecipients($recipients);
         }
+
+        // Resolve each subscriber's language:
+        // 1) subscriptions.preferred_language (already in result)
+        // 2) SubscriberRepository fallback (user_preferences/users)
+        // 3) default English
+        $languagesToPreGenerate = [];
+        foreach ($subscribers as $idx => $subscriber) {
+            $userId = (int)($subscriber['user_id'] ?? 0);
+            $userLanguage = normalizeAlertLanguage($subscriber['preferred_language'] ?? '');
+            if ($userLanguage === '' && $userId > 0) {
+                $userLanguage = normalizeAlertLanguage($subscriberRepository->getUserLanguage($userId));
+            }
+            if ($userLanguage === '') {
+                $userLanguage = 'en';
+            }
+            $subscribers[$idx]['resolved_language'] = $userLanguage;
+            if ($userLanguage !== 'en') {
+                $languagesToPreGenerate[] = $userLanguage;
+            }
+        }
+
+        // Warm up translation cache once per language for this alert.
+        if (!empty($languagesToPreGenerate)) {
+            $translationHelper->preGenerateTranslations($alertId, $title, $message, $languagesToPreGenerate);
+        }
         
         $sentCount = 0;
         $translationStats = ['total' => 0, 'translated' => 0, 'english' => 0];
@@ -84,23 +124,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             $userChannels = explode(',', $subscriber['channels'] ?? '');
             $userChannels = array_map('trim', $userChannels);
             
-            // Get user's preferred language
-            $userLanguage = $subscriber['preferred_language'] ?? 'en';
+            // Get user's resolved preferred language
+            $userLanguage = $subscriber['resolved_language'] ?? 'en';
             
-            // Get translated alert for user's preferred language (from database)
-            $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $userLanguage, $userId);
+            // Get translated alert for user's preferred language
+            $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $userLanguage, $title, $message);
             
             if (!$translatedAlert) {
                 // Fallback to original
                 $translatedAlert = [
                     'title' => $title,
-                    'message' => $message
+                    'message' => $message,
+                    'language' => 'en',
+                    'method' => 'fallback_original'
                 ];
+            }
+            if (!isset($translatedAlert['language']) || !$translatedAlert['language']) {
+                $translatedAlert['language'] = 'en';
             }
             
             // Track translation stats
             $translationStats['total']++;
-            if ($translatedAlert['language'] !== 'en') {
+            if (strtolower((string)$translatedAlert['language']) !== 'en') {
                 $translationStats['translated']++;
             } else {
                 $translationStats['english']++;

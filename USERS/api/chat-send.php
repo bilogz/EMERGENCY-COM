@@ -1,12 +1,13 @@
 <?php
 /**
- * Send Chat Message API
- * Handles sending messages from users to admin
+ * Send Chat Message API (User/Citizen)
+ * User reply flow: creates/routs thread and keeps status in_progress.
  */
 
 header('Content-Type: application/json');
 require_once __DIR__ . '/db_connect.php';
 require_once __DIR__ . '/device_tracking.php';
+require_once __DIR__ . '/../../ADMIN/api/chat-logic.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -21,222 +22,301 @@ if (!$pdo) {
 }
 
 try {
-    // Get data from POST (FormData) or JSON
     $input = null;
     $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
     if (strpos($contentType, 'application/json') !== false) {
         $input = json_decode(file_get_contents('php://input'), true);
     }
-    
-    $text = $input['text'] ?? $_POST['text'] ?? '';
+
+    $text = trim((string)($input['text'] ?? $_POST['text'] ?? ''));
     $userId = $input['userId'] ?? $_POST['userId'] ?? null;
-    $userName = $input['userName'] ?? $_POST['userName'] ?? 'Guest User';
+    $userName = trim((string)($input['userName'] ?? $_POST['userName'] ?? 'Guest User'));
     $userEmail = $input['userEmail'] ?? $_POST['userEmail'] ?? null;
     $userPhone = $input['userPhone'] ?? $_POST['userPhone'] ?? null;
     $userLocation = $input['userLocation'] ?? $_POST['userLocation'] ?? null;
     $userConcern = $input['userConcern'] ?? $_POST['userConcern'] ?? null;
-    $isGuest = isset($input['isGuest']) ? ($input['isGuest'] === '1' || $input['isGuest'] === true) : (isset($_POST['isGuest']) ? ($_POST['isGuest'] === '1') : true);
+    $rawCategory = $input['category'] ?? $_POST['category'] ?? $userConcern;
+    $rawPriority = $input['priority'] ?? $_POST['priority'] ?? null;
+    $isGuest = isset($input['isGuest'])
+        ? ($input['isGuest'] === '1' || $input['isGuest'] === true)
+        : (isset($_POST['isGuest']) ? ($_POST['isGuest'] === '1') : true);
     $conversationId = $input['conversationId'] ?? $_POST['conversationId'] ?? null;
-    
-    // Get device info and IP address
-    $ipAddress = getClientIP();
-    $deviceInfo = formatDeviceInfoForDB();
+    $conversationId = twc_safe_int($conversationId);
+
+    $ipAddress = function_exists('getClientIP') ? getClientIP() : ($_SERVER['REMOTE_ADDR'] ?? null);
+    $deviceInfo = function_exists('formatDeviceInfoForDB') ? formatDeviceInfoForDB() : null;
     $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-    
-    if (empty($text)) {
+
+    if ($text === '') {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Message text is required']);
         exit;
     }
-    
+
     if (empty($userId)) {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'User ID is required']);
         exit;
     }
-    
-    // Check if conversation is closed - only check if conversationId is provided
+
+    $category = twc_normalize_category($rawCategory ?? '');
+    $priority = twc_normalize_priority($rawPriority ?? '', $text, $category);
+
+    $hasCategoryColumn = twc_column_exists($pdo, 'conversations', 'category');
+    $hasPriorityColumn = twc_column_exists($pdo, 'conversations', 'priority');
+    $hasUserIdStringColumn = twc_column_exists($pdo, 'conversations', 'user_id_string');
+    $hasAssignedToColumn = twc_column_exists($pdo, 'conversations', 'assigned_to');
+    $statusOpen = twc_status_for_db($pdo, 'open');
+    $statusInProgress = twc_status_for_db($pdo, 'in_progress');
+
     if (!empty($conversationId)) {
-        $stmt = $pdo->prepare("SELECT status FROM conversations WHERE conversation_id = ?");
-        $stmt->execute([$conversationId]);
-        $conversation = $stmt->fetch();
-        
-        if ($conversation && $conversation['status'] === 'closed') {
+        $statusStmt = $pdo->prepare("SELECT status FROM conversations WHERE conversation_id = ?");
+        $statusStmt->execute([$conversationId]);
+        $conversation = $statusStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$conversation) {
+            // Stale client-side conversation id; auto-create/reuse active thread below.
+            $conversationId = null;
+        } elseif (twc_is_closed_status($conversation['status'] ?? '')) {
             http_response_code(403);
-            echo json_encode(['success' => false, 'message' => 'This conversation is closed. You cannot send messages.']);
+            echo json_encode([
+                'success' => false,
+                'message' => 'This conversation is closed. Please start a new conversation.',
+                'conversationStatus' => 'closed'
+            ]);
             exit;
         }
-    } else {
-        // If no conversationId, this is a new conversation - allow it
-        // The conversation will be created below
     }
-    
-    // Start transaction
+
     $pdo->beginTransaction();
-    
-    // Get or create conversation
+
+    $statusActive = twc_active_statuses();
+    $statusInClause = twc_placeholders($statusActive);
+    $existingConv = null;
+
     if (empty($conversationId)) {
-        // For anonymous/guest users, find conversation by user_id first, then device/IP
-        // For registered users, find by user_id
-        if ($isGuest) {
-            // First, try to find by user_id (most reliable for same user)
-            $stmt = $pdo->prepare("
-                SELECT conversation_id 
-                FROM conversations 
-                WHERE user_id = ? 
-                  AND status = 'active' 
-                ORDER BY updated_at DESC 
+        if ($hasUserIdStringColumn && !is_numeric($userId)) {
+            $sql = "
+                SELECT conversation_id, assigned_to
+                FROM conversations
+                WHERE user_id_string = ?
+                  AND status IN ($statusInClause)
+                ORDER BY updated_at DESC
                 LIMIT 1
-            ");
-            $stmt->execute([$userId]);
-            $existingConv = $stmt->fetch();
-            
-            // If not found by user_id, try device/IP as fallback
-            if (!$existingConv) {
-                $stmt = $pdo->prepare("
-                    SELECT conversation_id 
-                    FROM conversations 
-                    WHERE ip_address = ? 
-                      AND device_info = ? 
-                      AND status = 'active' 
-                    ORDER BY updated_at DESC 
+            ";
+            $params = [$userId];
+            $params = array_merge($params, $statusActive);
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $existingConv = $stmt->fetch(PDO::FETCH_ASSOC);
+        } else {
+            // If user_id_string is unavailable and userId is non-numeric,
+            // skip user_id matching to avoid guest collisions on implicit 0 casts.
+            if (is_numeric($userId)) {
+                $sql = "
+                    SELECT conversation_id, assigned_to
+                    FROM conversations
+                    WHERE user_id = ?
+                      AND status IN ($statusInClause)
+                    ORDER BY updated_at DESC
                     LIMIT 1
-                ");
-                $stmt->execute([$ipAddress, $deviceInfo]);
-                $existingConv = $stmt->fetch();
+                ";
+                $params = [$userId];
+                $params = array_merge($params, $statusActive);
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+                $existingConv = $stmt->fetch(PDO::FETCH_ASSOC);
             }
-        } else {
-            // Registered user - find by user_id
-            $stmt = $pdo->prepare("
-                SELECT conversation_id 
-                FROM conversations 
-                WHERE user_id = ? AND status = 'active' 
-                ORDER BY updated_at DESC 
-                LIMIT 1
-            ");
-            $stmt->execute([$userId]);
-            $existingConv = $stmt->fetch();
         }
-        
+
+        if (!$existingConv && $isGuest && $ipAddress && $deviceInfo) {
+            $sql = "
+                SELECT conversation_id, assigned_to
+                FROM conversations
+                WHERE ip_address = ?
+                  AND device_info = ?
+                  AND status IN ($statusInClause)
+                ORDER BY updated_at DESC
+                LIMIT 1
+            ";
+            $params = [$ipAddress, $deviceInfo];
+            $params = array_merge($params, $statusActive);
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $existingConv = $stmt->fetch(PDO::FETCH_ASSOC);
+        }
+
         if ($existingConv) {
-            $conversationId = $existingConv['conversation_id'];
+            $conversationId = (int)$existingConv['conversation_id'];
         } else {
-            // Create new conversation
-            $stmt = $pdo->prepare("
-                INSERT INTO conversations 
-                (user_id, user_name, user_email, user_phone, user_location, user_concern, is_guest, device_info, ip_address, user_agent, status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NOW(), NOW())
-            ");
-            $stmt->execute([
-                $userId,
+            $fallbackAssignee = $hasAssignedToColumn ? twc_pick_assignee($pdo) : null;
+
+            $columns = [
+                'user_id',
+                'user_name',
+                'user_email',
+                'user_phone',
+                'user_location',
+                'user_concern',
+                'is_guest',
+                'device_info',
+                'ip_address',
+                'user_agent',
+                'status',
+                'created_at',
+                'updated_at',
+            ];
+            $values = [
+                !is_numeric($userId) ? 0 : $userId,
                 $userName,
                 $userEmail,
                 $userPhone,
                 $userLocation,
-                $userConcern,
+                $category !== '' ? $category : $userConcern,
                 $isGuest ? 1 : 0,
                 $deviceInfo,
                 $ipAddress,
-                $userAgent
-            ]);
-            $conversationId = $pdo->lastInsertId();
+                $userAgent,
+                $statusOpen,
+                date('Y-m-d H:i:s'),
+                date('Y-m-d H:i:s'),
+            ];
+
+            if ($hasUserIdStringColumn) {
+                $columns[] = 'user_id_string';
+                $values[] = is_numeric($userId) ? null : (string)$userId;
+            }
+            if ($hasAssignedToColumn && $fallbackAssignee !== null) {
+                $columns[] = 'assigned_to';
+                $values[] = $fallbackAssignee;
+            }
+            if ($hasCategoryColumn) {
+                $columns[] = 'category';
+                $values[] = $category !== '' ? $category : null;
+            }
+            if ($hasPriorityColumn) {
+                $columns[] = 'priority';
+                $values[] = $priority;
+            }
+
+            $insertSql = "INSERT INTO conversations (" . implode(',', $columns) . ")
+                          VALUES (" . twc_placeholders($values) . ")";
+            $insertStmt = $pdo->prepare($insertSql);
+            $insertStmt->execute($values);
+            $conversationId = (int)$pdo->lastInsertId();
         }
-    } else {
-        // Update conversation info if provided (also update device/IP if changed)
-        $stmt = $pdo->prepare("
-            UPDATE conversations 
-            SET user_name = COALESCE(?, user_name),
-                user_email = COALESCE(?, user_email),
-                user_phone = COALESCE(?, user_phone),
-                user_location = COALESCE(?, user_location),
-                user_concern = COALESCE(?, user_concern),
-                device_info = COALESCE(?, device_info),
-                ip_address = COALESCE(?, ip_address),
-                user_agent = COALESCE(?, user_agent),
-                updated_at = NOW()
-            WHERE conversation_id = ?
-        ");
-        $stmt->execute([
-            $userName,
-            $userEmail,
-            $userPhone,
-            $userLocation,
-            $userConcern,
-            $deviceInfo,
-            $ipAddress,
-            $userAgent,
-            $conversationId
-        ]);
     }
-    
-    // Insert message (with device/IP tracking)
-    $stmt = $pdo->prepare("
-        INSERT INTO chat_messages 
-        (conversation_id, sender_id, sender_name, sender_type, message_text, ip_address, device_info, created_at)
-        VALUES (?, ?, ?, 'user', ?, ?, ?, NOW())
+
+    $insertMessageStmt = $pdo->prepare("
+        INSERT INTO chat_messages
+        (conversation_id, sender_id, sender_name, sender_type, message_text, ip_address, device_info, is_read, created_at)
+        VALUES (?, ?, ?, 'user', ?, ?, ?, 0, NOW())
     ");
-    $stmt->execute([
+    $insertMessageStmt->execute([
         $conversationId,
-        $userId,
+        (string)$userId,
         $userName,
         $text,
         $ipAddress,
         $deviceInfo
     ]);
-    $messageId = $pdo->lastInsertId();
-    
-    // Update conversation last message and timestamp
-    $stmt = $pdo->prepare("
-        UPDATE conversations 
-        SET last_message = ?, last_message_time = NOW(), updated_at = NOW()
-        WHERE conversation_id = ?
-    ");
-    $stmt->execute([$text, $conversationId]);
-    
-    // Add to chat queue for admin
-    $stmt = $pdo->prepare("
-        INSERT INTO chat_queue 
-        (conversation_id, user_id, user_name, user_email, user_phone, user_location, user_concern, is_guest, message, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
-        ON DUPLICATE KEY UPDATE
-            message = VALUES(message),
-            status = 'pending',
-            created_at = NOW()
-    ");
-    $stmt->execute([
-        $conversationId,
-        $userId,
-        $userName,
-        $userEmail,
-        $userPhone,
-        $userLocation,
-        $userConcern,
-        $isGuest ? 1 : 0,
-        $text
-    ]);
-    
+    $messageId = (int)$pdo->lastInsertId();
+
+    $convAssignStmt = $pdo->prepare("SELECT assigned_to FROM conversations WHERE conversation_id = ? LIMIT 1");
+    $convAssignStmt->execute([$conversationId]);
+    $convNow = $convAssignStmt->fetch(PDO::FETCH_ASSOC);
+    $assignedTo = twc_safe_int($convNow['assigned_to'] ?? null);
+    if ($assignedTo === null && $hasAssignedToColumn) {
+        $assignedTo = twc_pick_assignee($pdo);
+    }
+
+    $updateParts = [
+        "last_message = ?",
+        "last_message_time = NOW()",
+        "updated_at = NOW()",
+        "status = ?",
+        "user_concern = COALESCE(?, user_concern)",
+    ];
+    $updateParams = [
+        $text,
+        $statusInProgress,
+        $category !== '' ? $category : $userConcern,
+    ];
+
+    if ($hasAssignedToColumn && $assignedTo !== null) {
+        $updateParts[] = "assigned_to = ?";
+        $updateParams[] = $assignedTo;
+    }
+    if ($hasCategoryColumn && $category !== '') {
+        $updateParts[] = "category = ?";
+        $updateParams[] = $category;
+    }
+    if ($hasPriorityColumn) {
+        $updateParts[] = "priority = ?";
+        $updateParams[] = $priority;
+    }
+
+    $updateParams[] = $conversationId;
+    $updateSql = "UPDATE conversations SET " . implode(', ', $updateParts) . " WHERE conversation_id = ?";
+    $updateStmt = $pdo->prepare($updateSql);
+    $updateStmt->execute($updateParams);
+
+    if (twc_table_exists($pdo, 'chat_queue')) {
+        $queueHasAssigned = twc_column_exists($pdo, 'chat_queue', 'assigned_to');
+
+        $queueColumns = [
+            'conversation_id', 'user_id', 'user_name', 'user_email', 'user_phone',
+            'user_location', 'user_concern', 'is_guest', 'message', 'status', 'created_at'
+        ];
+        $queueValues = [
+            $conversationId, (string)$userId, $userName, $userEmail, $userPhone,
+            $userLocation, ($category !== '' ? $category : $userConcern), $isGuest ? 1 : 0, $text, 'pending', date('Y-m-d H:i:s')
+        ];
+        if ($queueHasAssigned) {
+            $queueColumns[] = 'assigned_to';
+            $queueValues[] = $assignedTo;
+        }
+
+        $queueSql = "INSERT INTO chat_queue (" . implode(',', $queueColumns) . ")
+                     VALUES (" . twc_placeholders($queueValues) . ")
+                     ON DUPLICATE KEY UPDATE
+                        message = VALUES(message),
+                        status = 'pending',
+                        updated_at = NOW()";
+        if ($queueHasAssigned) {
+            $queueSql .= ", assigned_to = VALUES(assigned_to)";
+        }
+        $queueStmt = $pdo->prepare($queueSql);
+        $queueStmt->execute($queueValues);
+    }
+
     $pdo->commit();
-    
+
     echo json_encode([
         'success' => true,
         'messageId' => $messageId,
         'conversationId' => $conversationId,
+        'workflowStatus' => $statusInProgress,
+        'category' => $category,
+        'priority' => $priority,
+        'assignedTo' => $assignedTo,
         'message' => 'Message sent successfully'
     ]);
-    
 } catch (PDOException $e) {
-    if ($pdo->inTransaction()) {
+    if ($pdo && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
     error_log('Chat send error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Failed to send message']);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Failed to send message',
+        'error' => $e->getMessage()
+    ]);
 } catch (Exception $e) {
-    if ($pdo->inTransaction()) {
+    if ($pdo && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    error_log('Chat send error: ' . $e->getMessage());
+    error_log('Chat send general error: ' . $e->getMessage());
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'An error occurred']);
 }
-

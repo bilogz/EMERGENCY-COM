@@ -163,7 +163,7 @@ $pageTitle = 'Admin Approvals';
                             <td>#${admin.id}</td>
                             <td><strong>${admin.name}</strong></td>
                             <td>${admin.email}</td>
-                            <td><span class="badge" style="background: rgba(76, 138, 137, 0.1); color: var(--primary-color-1);">${admin.role || 'Admin'}</span></td>
+                            <td><span class="badge" style="background: rgba(58, 118, 117, 0.1); color: var(--primary-color-1);">${admin.role || 'Admin'}</span></td>
                             <td><small>${new Date(admin.created_at).toLocaleString()}</small></td>
                             <td><span class="badge pending">Pending</span></td>
                             <td>

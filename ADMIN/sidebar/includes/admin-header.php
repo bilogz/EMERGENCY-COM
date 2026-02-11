@@ -328,6 +328,20 @@ $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
 </div>
 
 <script>
+// Build stable API base path for all ADMIN pages (works for nested routes)
+(function () {
+    const normalizedPath = window.location.pathname.replace(/\\/g, '/');
+    const adminIndex = normalizedPath.toLowerCase().indexOf('/admin/');
+    const appBase = adminIndex >= 0 ? normalizedPath.substring(0, adminIndex) : '';
+
+    if (typeof window.APP_BASE_PATH === 'undefined') {
+        window.APP_BASE_PATH = appBase;
+    }
+    if (typeof window.API_BASE_PATH === 'undefined') {
+        window.API_BASE_PATH = appBase + '/ADMIN/api/';
+    }
+})();
+
 // Admin Header functionality
 document.addEventListener('DOMContentLoaded', function() {
     const menuToggle = document.getElementById('menuToggle');
@@ -726,7 +740,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Check if admin info is missing or default
         if (adminName && (adminName.textContent === 'Admin User' || !adminName.textContent.trim())) {
-            fetch('../api/get-admin-profile.php')
+            fetch(window.API_BASE_PATH + 'get-admin-profile.php')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.profile) {
@@ -960,11 +974,9 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="../header/js/emergency-alert.js"></script>
 <!-- Replace browser alert() with themed modal -->
 <script src="<?php echo $headerBase; ?>../shared/js/ui-alert.js?v=<?php echo filemtime(__DIR__ . '/../../shared/js/ui-alert.js'); ?>"></script>
+<script src="<?php echo $headerBase; ?>../shared/js/module-analytics-strip.js?v=<?php echo filemtime(__DIR__ . '/../../shared/js/module-analytics-strip.js'); ?>"></script>
 <script>
-    // Set API endpoint for emergency alerts in admin context
-    if (typeof window.API_BASE_PATH === 'undefined') {
-        window.API_BASE_PATH = '../api/';
-    }
+    // API base is initialized in the header script above.
 
     // Date Time Update
     document.addEventListener('DOMContentLoaded', function() {

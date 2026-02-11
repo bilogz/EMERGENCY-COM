@@ -9,6 +9,62 @@ require_once '../../ADMIN/api/db_connect.php';
 
 session_start();
 
+function normalizeRealtimeAlertLanguage($language): string {
+    $lang = strtolower(trim((string)$language));
+    if ($lang === 'tl') {
+        $lang = 'fil';
+    }
+    if ($lang !== '' && !preg_match('/^[a-z0-9_-]{2,15}$/', $lang)) {
+        return '';
+    }
+    return $lang;
+}
+
+function resolveRealtimeUserLanguage(PDO $pdo, int $userId): string {
+    if ($userId <= 0) {
+        return 'en';
+    }
+
+    $queries = [
+        [
+            "SELECT preferred_language FROM user_preferences
+             WHERE user_id = ? AND preferred_language IS NOT NULL AND preferred_language <> ''
+             ORDER BY id DESC LIMIT 1",
+            [$userId]
+        ],
+        [
+            "SELECT preferred_language FROM subscriptions
+             WHERE user_id = ? AND status = 'active' AND preferred_language IS NOT NULL AND preferred_language <> ''
+             ORDER BY id DESC LIMIT 1",
+            [$userId]
+        ],
+        [
+            "SELECT preferred_language FROM users
+             WHERE id = ? AND preferred_language IS NOT NULL AND preferred_language <> ''
+             LIMIT 1",
+            [$userId]
+        ],
+    ];
+
+    foreach ($queries as [$sql, $params]) {
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($row && isset($row['preferred_language'])) {
+                $lang = normalizeRealtimeAlertLanguage($row['preferred_language']);
+                if ($lang !== '') {
+                    return $lang;
+                }
+            }
+        } catch (Throwable $e) {
+            // Continue to next source.
+        }
+    }
+
+    return 'en';
+}
+
 // Current user identification (assuming citizen user_id or admin_user_id)
 $userId = $_SESSION['user_id'] ?? $_SESSION['admin_user_id'] ?? null;
 
@@ -54,6 +110,23 @@ try {
     
     $latestAlert = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    // Translate latest alert according to user preference/device-derived preference
+    $targetLanguage = resolveRealtimeUserLanguage($pdo, (int)$userId);
+    if ($latestAlert && $targetLanguage !== 'en' && file_exists(__DIR__ . '/../../ADMIN/api/alert-translation-helper.php')) {
+        require_once __DIR__ . '/../../ADMIN/api/alert-translation-helper.php';
+        if (class_exists('AlertTranslationHelper')) {
+            $translationHelper = new AlertTranslationHelper($pdo);
+            $sourceTitle = (string)($latestAlert['title'] ?? '');
+            $sourceMessage = (string)($latestAlert['message'] ?? ($latestAlert['content'] ?? ''));
+            $translated = $translationHelper->getTranslatedAlert((int)$latestAlert['id'], $targetLanguage, $sourceTitle, $sourceMessage);
+            if ($translated && !empty($translated['title']) && !empty($translated['message'])) {
+                $latestAlert['title'] = $translated['title'];
+                $latestAlert['message'] = $translated['message'];
+                $latestAlert['content'] = $translated['message'];
+            }
+        }
+    }
+
     // 4. Get unread count for badge
     $cStmt = $pdo->prepare("
         SELECT COUNT(*) 
@@ -73,7 +146,8 @@ try {
         'success' => true,
         'alert' => $latestAlert,
         'unread_count' => (int)$unreadCount,
-        'server_time' => date('Y-m-d H:i:s')
+        'server_time' => date('Y-m-d H:i:s'),
+        'language' => $targetLanguage ?? 'en'
     ]);
 
 } catch (PDOException $e) {

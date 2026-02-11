@@ -396,7 +396,7 @@ $pageTitle = 'Automated Warning Integration';
                             const row = document.createElement('tr');
                             row.innerHTML = `
                                 <td>${warning.id}</td>
-                                <td><span class="badge" style="background: rgba(76, 138, 137, 0.1); color: var(--primary-color-1); font-weight: 700;">${warning.source.toUpperCase()}</span></td>
+                                <td><span class="badge" style="background: rgba(58, 118, 117, 0.1); color: var(--primary-color-1); font-weight: 700;">${warning.source.toUpperCase()}</span></td>
                                 <td>${warning.type}</td>
                                 <td><strong>${warning.title}</strong></td>
                                 <td><span class="badge ${warning.severity.toLowerCase()}">${warning.severity}</span></td>

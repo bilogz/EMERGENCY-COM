@@ -7,39 +7,156 @@
 
 header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
+require_once 'config.env.php';
+if (file_exists(__DIR__ . '/secure-api-config.php')) {
+    require_once __DIR__ . '/secure-api-config.php';
+}
 
 $action = $_GET['action'] ?? 'current';
 
-// Get PAGASA API key from database (OpenWeather API key stored as PAGASA)
-$apiKey = null;
-try {
-    if ($pdo !== null) {
-        $stmt = $pdo->prepare("SELECT api_key FROM integration_settings WHERE source = 'pagasa'");
-        $stmt->execute();
-        $result = $stmt->fetch();
-        $apiKey = $result['api_key'] ?? null;
-        
-        // If no API key found, try to set a default one (OpenWeather free tier key)
-        if (!$apiKey || empty($apiKey)) {
-            // Default OpenWeather API key (you should replace this with your own)
-            $defaultApiKey = 'f35609a701ba47952fba4fd4604c12c7';
-            try {
-                $insertStmt = $pdo->prepare("
-                    INSERT INTO integration_settings (source, enabled, api_key, api_url, updated_at)
-                    VALUES ('pagasa', 0, ?, 'https://api.openweathermap.org/data/2.5/', NOW())
-                    ON DUPLICATE KEY UPDATE api_key = ?, updated_at = NOW()
-                ");
-                $insertStmt->execute([$defaultApiKey, $defaultApiKey]);
-                $apiKey = $defaultApiKey;
-                error_log("PAGASA API key auto-configured with default key");
-            } catch (PDOException $e) {
-                error_log("Auto-configure API key error: " . $e->getMessage());
+function isPlaceholderWeatherKey($key) {
+    $key = trim((string)$key);
+    if ($key === '') {
+        return true;
+    }
+
+    // Legacy/demo placeholders that should never be used in runtime.
+    $invalid = [
+        'f35609a701ba47952fba4fd4604c12c7',
+        'YOUR_OPENWEATHER_API_KEY',
+    ];
+
+    return in_array($key, $invalid, true);
+}
+
+function getConfiguredWeatherKey() {
+    // Prefer centralized secure resolver when available.
+    if (function_exists('getOpenWeatherApiKey')) {
+        try {
+            $key = trim((string)getOpenWeatherApiKey(true));
+            if (!isPlaceholderWeatherKey($key)) {
+                return $key;
             }
+        } catch (Throwable $e) {
+            error_log('getOpenWeatherApiKey failed in weather-monitoring.php: ' . $e->getMessage());
         }
     }
-} catch (PDOException $e) {
-    error_log("Get API Key Error: " . $e->getMessage());
-    // Continue without API key - will show error message but won't break
+
+    if (!function_exists('getSecureConfig')) {
+        return null;
+    }
+
+    $candidates = [
+        getSecureConfig('OPENWEATHER_API_KEY', ''),
+        getSecureConfig('OPEN_WEATHER_API_KEY', ''),
+        getSecureConfig('OWM_API_KEY', ''),
+        getSecureConfig('PAGASA_API_KEY', ''),
+        getSecureConfig('PAGASA_OPENWEATHER_API_KEY', ''),
+        getSecureConfig('WEATHER_API_KEY', ''),
+    ];
+
+    foreach ($candidates as $candidate) {
+        $candidate = trim((string)$candidate);
+        if (!isPlaceholderWeatherKey($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return null;
+}
+
+function getDbWeatherKey($pdo) {
+    if ($pdo === null) {
+        return null;
+    }
+    ensureIntegrationSettingsTable($pdo);
+    try {
+        $sources = ['pagasa', 'openweather', 'open_weather', 'weather'];
+        foreach ($sources as $source) {
+            $stmt = $pdo->prepare("SELECT api_key FROM integration_settings WHERE source = ? LIMIT 1");
+            $stmt->execute([$source]);
+            $result = $stmt->fetch();
+            $dbKey = trim((string)($result['api_key'] ?? ''));
+            if (!isPlaceholderWeatherKey($dbKey)) {
+                return $dbKey;
+            }
+        }
+    } catch (PDOException $e) {
+        error_log("Get PAGASA/OpenWeather key error: " . $e->getMessage());
+    }
+    return null;
+}
+
+function ensureIntegrationSettingsTable($pdo) {
+    if ($pdo === null) {
+        return false;
+    }
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS integration_settings (
+                source VARCHAR(64) NOT NULL PRIMARY KEY,
+                enabled TINYINT(1) NOT NULL DEFAULT 0,
+                api_key VARCHAR(255) DEFAULT NULL,
+                api_url VARCHAR(255) DEFAULT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        return true;
+    } catch (PDOException $e) {
+        $message = $e->getMessage();
+        error_log('Ensure integration_settings table error: ' . $message);
+
+        // Handle corrupted InnoDB metadata/table (common local issue: "doesn't exist in engine")
+        if (stripos($message, "doesn't exist in engine") !== false || stripos($message, 'error code: 1932') !== false) {
+            try {
+                $pdo->exec("DROP TABLE IF EXISTS integration_settings");
+                $pdo->exec("
+                    CREATE TABLE integration_settings (
+                        source VARCHAR(64) NOT NULL PRIMARY KEY,
+                        enabled TINYINT(1) NOT NULL DEFAULT 0,
+                        api_key VARCHAR(255) DEFAULT NULL,
+                        api_url VARCHAR(255) DEFAULT NULL,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ");
+                error_log('Recreated corrupted integration_settings table');
+                return true;
+            } catch (PDOException $recreateError) {
+                error_log('Failed to recreate integration_settings table: ' . $recreateError->getMessage());
+            }
+        }
+        return false;
+    }
+}
+
+function persistWeatherKeyToDb($pdo, $apiKey) {
+    if ($pdo === null || isPlaceholderWeatherKey($apiKey)) {
+        return;
+    }
+    ensureIntegrationSettingsTable($pdo);
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO integration_settings (source, enabled, api_key, api_url, updated_at)
+            VALUES ('pagasa', 1, ?, 'https://api.openweathermap.org/data/2.5/', NOW())
+            ON DUPLICATE KEY UPDATE
+                api_key = VALUES(api_key),
+                api_url = VALUES(api_url),
+                updated_at = NOW()
+        ");
+        $stmt->execute([$apiKey]);
+    } catch (PDOException $e) {
+        error_log("Persist PAGASA/OpenWeather key error: " . $e->getMessage());
+    }
+}
+
+// Resolve OpenWeather API key:
+// 1) secure config/env, 2) DB integration_settings (pagasa), 3) none.
+$apiKey = getConfiguredWeatherKey();
+if ($apiKey === null) {
+    $apiKey = getDbWeatherKey($pdo);
+} else {
+    // Keep DB in sync when local config/env key exists (helpful for modules reading DB directly).
+    persistWeatherKeyToDb($pdo, $apiKey);
 }
 
 // Philippines coordinates (center)
@@ -61,6 +178,10 @@ $philippinesCities = [
 ];
 
 function fetchWeatherData($lat, $lon, $apiKey) {
+    if (isPlaceholderWeatherKey($apiKey)) {
+        return ['error' => 'OpenWeather API key is not configured. Set OPENWEATHER_API_KEY in ADMIN/api/config.local.php (or .env), then reload.'];
+    }
+
     $url = "https://api.openweathermap.org/data/2.5/weather?lat={$lat}&lon={$lon}&appid={$apiKey}&units=metric";
     
     $ch = curl_init();
@@ -86,6 +207,10 @@ function fetchWeatherData($lat, $lon, $apiKey) {
 }
 
 function fetchForecastData($lat, $lon, $apiKey) {
+    if (isPlaceholderWeatherKey($apiKey)) {
+        return ['error' => 'OpenWeather API key is not configured. Set OPENWEATHER_API_KEY in ADMIN/api/config.local.php (or .env), then reload.'];
+    }
+
     $url = "https://api.openweathermap.org/data/2.5/forecast?lat={$lat}&lon={$lon}&appid={$apiKey}&units=metric";
     
     $ch = curl_init();
@@ -232,7 +357,7 @@ if ($action === 'current') {
     if (!$apiKey) {
         echo json_encode([
             'success' => false,
-            'message' => 'PAGASA API key not configured. Please set it up in Automated Warnings.',
+            'message' => 'OpenWeather/PAGASA API key not configured. Set OPENWEATHER_API_KEY in ADMIN/api/config.local.php (or .env).',
             'data' => []
         ]);
         exit();
@@ -285,7 +410,7 @@ if ($action === 'current') {
     if (!$apiKey) {
         echo json_encode([
             'success' => false,
-            'message' => 'PAGASA API key not configured. Please set it up in Automated Warnings.'
+            'message' => 'OpenWeather/PAGASA API key not configured. Set OPENWEATHER_API_KEY in ADMIN/api/config.local.php (or .env).'
         ]);
         exit();
     }
@@ -332,6 +457,7 @@ if ($action === 'current') {
                     'description' => $forecast['weather'][0]['description'] ?? '',
                     'icon' => $forecast['weather'][0]['icon'] ?? '01d',
                     'rain' => round($rain, 2),
+                    'pop' => isset($forecast['pop']) ? (int)round(floatval($forecast['pop']) * 100) : 0,
                     'humidity' => $humidity,
                     'wind_speed' => $forecast['wind']['speed'] ?? 0,
                     'wind_deg' => $forecast['wind']['deg'] ?? 0
@@ -372,7 +498,7 @@ if ($action === 'current') {
     }
 } elseif ($action === 'getApiKey') {
     // Return OpenWeatherMap API key for layer tiles
-    if ($apiKey) {
+    if (!isPlaceholderWeatherKey($apiKey)) {
         echo json_encode([
             'success' => true,
             'apiKey' => $apiKey
@@ -380,7 +506,7 @@ if ($action === 'current') {
     } else {
         echo json_encode([
             'success' => false,
-            'message' => 'PAGASA API key not configured. Please set it up in Automated Warnings.',
+            'message' => 'OpenWeather/PAGASA API key not configured. Set OPENWEATHER_API_KEY in ADMIN/api/config.local.php (or .env).',
             'apiKey' => null
         ]);
     }

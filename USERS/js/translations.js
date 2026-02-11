@@ -6,6 +6,8 @@ window.translations = window.translations || {
         'nav.alerts': 'Alerts',
         'nav.profile': 'Profile',
         'nav.support': 'Support',
+        'nav.weatherMap': 'Weather Map',
+        'nav.earthquakeMonitoring': 'Earthquake Monitoring',
         'nav.emergency': 'Emergency Call',
         'nav.login': 'Login / Sign Up',
         'nav.user': 'User',
@@ -59,6 +61,10 @@ window.translations = window.translations || {
         
         // Home page
         'home.title': 'QUEZON CITY EMERGENCY COMMUNICATION PORTAL',
+        'home.header.title': 'Welcome to Alertara',
+        'home.header.subtitle': 'Stay informed with live emergency updates in Quezon City.',
+        'home.header.weatherLabel': 'Quezon City',
+        'home.header.weatherLoading': 'Loading weather...',
         'home.mission': 'Mission:',
         'home.mission.text': 'To operationalize an effective, efficient, and inclusive DRRM system dedicated to Resilience-building in Quezon City communities.',
         'home.vision': 'Vision:',
@@ -66,6 +72,8 @@ window.translations = window.translations || {
         'home.emergency.call': 'Call for Emergency',
         'home.download.title': 'Download Our Mobile App',
         'home.download.desc': 'Get instant emergency alerts and notifications on your mobile device',
+        'home.download.download': 'Download APK',
+        'home.download.apk.desc': 'Get the Android app now',
         'home.download.comingsoon': 'Coming Soon',
         'home.download.comingsoon.desc': 'Mobile app launching soon',
         'home.download.badge': 'SOON',
@@ -86,6 +94,19 @@ window.translations = window.translations || {
         'home.guide.3': 'Prepare key details.',
         'home.guide.4': 'Follow instructions.',
         'home.guide.5': 'Keep lines open.',
+
+        // Emergency Hotlines Section
+        'home.hotlines.title': 'Quezon City Emergency Hotlines',
+        'home.hotlines.desc': 'Save these numbers for quick access during emergencies',
+        'home.hotlines.helpline': 'QC HELPLINE',
+        'home.hotlines.dial': 'DIAL 122',
+        'home.hotlines.call122': 'Call 122',
+        'home.hotlines.eoc': 'Emergency Operations Center (EOC)',
+        'home.hotlines.callGlobe': 'Call Globe',
+        'home.hotlines.callSmart': 'Call Smart',
+        'home.hotlines.ems': 'Emergency Medical Services / Urban Search and Rescue',
+        'home.hotlines.callEMS': 'Call EMS',
+        'home.hotlines.landline': 'QCDRRMO Landline',
         
         // Language Modal
         'lang.select': 'Select Language',
@@ -195,6 +216,8 @@ window.translations = window.translations || {
         'nav.alerts': 'Mga Alert',
         'nav.profile': 'Profile',
         'nav.support': 'Suporta',
+        'nav.weatherMap': 'Mapa ng Panahon',
+        'nav.earthquakeMonitoring': 'Pagsubaybay ng Lindol',
         'nav.emergency': 'Tawag sa Emergency',
         'nav.login': 'Mag-login / Mag-sign Up',
         'nav.user': 'User',
@@ -248,6 +271,10 @@ window.translations = window.translations || {
         
         // Home page
         'home.title': 'QUEZON CITY EMERGENCY COMMUNICATION PORTAL',
+        'home.header.title': 'Maligayang pagdating sa Alertara',
+        'home.header.subtitle': 'Manatiling updated sa mga emergency sa Lungsod Quezon.',
+        'home.header.weatherLabel': 'Lungsod Quezon',
+        'home.header.weatherLoading': 'Nilo-load ang lagay ng panahon...',
         'home.mission': 'Misyon:',
         'home.mission.text': 'Upang mapaandar ang isang epektibo, mahusay, at inclusive na DRRM system na nakatuon sa pagbuo ng Resilience sa mga komunidad ng Quezon City.',
         'home.vision': 'Bisyon:',
@@ -255,6 +282,8 @@ window.translations = window.translations || {
         'home.emergency.call': 'Tumawag para sa Emergency',
         'home.download.title': 'I-download ang Aming Mobile App',
         'home.download.desc': 'Kumuha ng instant emergency alerts at notifications sa inyong mobile device',
+        'home.download.download': 'I-download ang APK',
+        'home.download.apk.desc': 'Kunin ang Android app ngayon',
         'home.download.comingsoon': 'Darating Na',
         'home.download.comingsoon.desc': 'Malapit nang i-launch ang mobile app',
         'home.download.badge': 'DARATING',
@@ -275,6 +304,19 @@ window.translations = window.translations || {
         'home.guide.3': 'Maghanda ng mahahalagang detalye.',
         'home.guide.4': 'Sundin ang mga tagubilin.',
         'home.guide.5': 'Panatilihing bukas ang linya.',
+
+        // Emergency Hotlines Section
+        'home.hotlines.title': 'Mga Emergency Hotline ng Quezon City',
+        'home.hotlines.desc': 'I-save ang mga numerong ito para mabilis na ma-access sa oras ng emergency',
+        'home.hotlines.helpline': 'QC HELPLINE',
+        'home.hotlines.dial': 'I-DIAL ANG 122',
+        'home.hotlines.call122': 'Tumawag sa 122',
+        'home.hotlines.eoc': 'Emergency Operations Center (EOC)',
+        'home.hotlines.callGlobe': 'Tumawag sa Globe',
+        'home.hotlines.callSmart': 'Tumawag sa Smart',
+        'home.hotlines.ems': 'Emergency Medical Services / Urban Search and Rescue',
+        'home.hotlines.callEMS': 'Tumawag sa EMS',
+        'home.hotlines.landline': 'QCDRRMO Landline',
         
         // Language Modal
         'lang.select': 'Pumili ng Wika',

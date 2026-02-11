@@ -52,6 +52,30 @@ class AlertTranslationHelper {
         } catch (PDOException $e) {
             error_log("Error fetching translation: " . $e->getMessage());
         }
+
+        // 1.5 If caller did not pass original content, load it from alerts table
+        if (!$originalTitle || !$originalMessage) {
+            try {
+                $stmt = $this->pdo->prepare("
+                    SELECT title, message, content
+                    FROM alerts
+                    WHERE id = ?
+                    LIMIT 1
+                ");
+                $stmt->execute([$alertId]);
+                $alert = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($alert) {
+                    if (!$originalTitle) {
+                        $originalTitle = $alert['title'] ?? null;
+                    }
+                    if (!$originalMessage) {
+                        $originalMessage = $alert['message'] ?? ($alert['content'] ?? null);
+                    }
+                }
+            } catch (PDOException $e) {
+                error_log("Error loading original alert content: " . $e->getMessage());
+            }
+        }
         
         // 2. If not found and original content provided, Try AI Translation
         if ($originalTitle && $originalMessage && $this->aiService->isAvailable()) {

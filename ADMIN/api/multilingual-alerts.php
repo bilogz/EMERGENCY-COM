@@ -12,6 +12,23 @@ header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
 require_once 'activity_logger.php';
 
+function resolveLanguagesTableForMultilingual(PDO $pdo): string {
+    $candidates = ['supported_languages', 'supported_languages_catalog'];
+    foreach ($candidates as $table) {
+        try {
+            $stmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+            if (!$stmt || !$stmt->fetch()) {
+                continue;
+            }
+            $pdo->query("SELECT 1 FROM {$table} LIMIT 1");
+            return $table;
+        } catch (PDOException $e) {
+            // Try fallback table name.
+        }
+    }
+    return 'supported_languages_catalog';
+}
+
 // Check admin authentication for write operations
 function checkAdminAuth() {
     if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
@@ -135,9 +152,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 } elseif ($action === 'languages') {
     // Get supported languages
     try {
+        $languagesTable = resolveLanguagesTableForMultilingual($pdo);
         $stmt = $pdo->query("
             SELECT language_code, language_name, native_name, flag_emoji, is_active, is_ai_supported, priority
-            FROM supported_languages
+            FROM {$languagesTable}
             WHERE is_active = 1
             ORDER BY priority DESC, language_name ASC
         ");
@@ -193,6 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 } elseif ($action === 'list') {
     try {
         $alertId = isset($_GET['alert_id']) ? (int)$_GET['alert_id'] : null;
+        $languagesTable = resolveLanguagesTableForMultilingual($pdo);
         
         $query = "
             SELECT t.*, 
@@ -206,7 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             FROM alert_translations t
             LEFT JOIN alerts a ON a.id = t.alert_id
             LEFT JOIN users u ON u.id = t.translated_by_admin_id
-            LEFT JOIN supported_languages sl ON sl.language_code = t.target_language
+            LEFT JOIN {$languagesTable} sl ON sl.language_code = t.target_language
         ";
         
         if ($alertId) {

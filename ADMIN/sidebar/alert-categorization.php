@@ -218,7 +218,7 @@ $pageTitle = 'Alert Categorization';
                                     <div class="form-row">
                                         <div class="form-group">
                                             <label for="categoryColorModal">Identity Color *</label>
-                                            <input type="color" id="categoryColorModal" name="color" value="#4c8a89" style="height: 42px; padding: 0.25rem;" <?php echo !$canEdit ? 'disabled' : ''; ?>>
+                                            <input type="color" id="categoryColorModal" name="color" value="#3a7675" style="height: 42px; padding: 0.25rem;" <?php echo !$canEdit ? 'disabled' : ''; ?>>
                                         </div>
                                         <div class="form-group">
                                             <label for="categoryStatusModal">Status</label>
@@ -315,7 +315,7 @@ $pageTitle = 'Alert Categorization';
             const isModal = inputId === 'categoryIconModal';
             const name = document.getElementById(isModal ? 'categoryNameModal' : 'categoryName')?.value || 'Category Name';
             const icon = document.getElementById(isModal ? 'categoryIconModal' : 'categoryIcon')?.value || 'fa-exclamation-triangle';
-            const color = document.getElementById(isModal ? 'categoryColorModal' : 'categoryColor')?.value || '#4c8a89';
+            const color = document.getElementById(isModal ? 'categoryColorModal' : 'categoryColor')?.value || '#3a7675';
 
             const preview = document.getElementById(isModal ? 'livePreviewModal' : 'livePreview');
             const previewIcon = document.getElementById(isModal ? 'previewIconModal' : 'previewIcon');
@@ -408,7 +408,13 @@ $pageTitle = 'Alert Categorization';
                             `;
                             tbody.appendChild(detailsTr);
                         });
+                    } else {
+                        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:1.5rem; color:#c0392b;">${data.message || 'Failed to load categories.'}</td></tr>`;
                     }
+                })
+                .catch(() => {
+                    const tbody = document.querySelector('#categoriesTable tbody');
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:1.5rem; color:#c0392b;">Failed to load categories. Please refresh.</td></tr>`;
                 });
         }
 
@@ -560,8 +566,8 @@ $pageTitle = 'Alert Categorization';
                     datasets: [{
                         label: 'Alerts',
                         data: trendData.values,
-                        borderColor: '#4c8a89',
-                        backgroundColor: 'rgba(76, 138, 137, 0.1)',
+                        borderColor: '#3a7675',
+                        backgroundColor: 'rgba(58, 118, 117, 0.1)',
                         tension: 0.4,
                         fill: true
                     }]

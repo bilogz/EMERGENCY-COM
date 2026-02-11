@@ -8,6 +8,28 @@
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate, max-age=0');
 
+function normalizeMobileAlertLanguage($language): string {
+    $lang = strtolower(trim((string)$language));
+    if ($lang === 'tl') {
+        $lang = 'fil';
+    }
+    if ($lang !== '' && !preg_match('/^[a-z0-9_-]{2,15}$/', $lang)) {
+        return '';
+    }
+    return $lang;
+}
+
+function detectMobileBrowserLanguage(): string {
+    $acceptLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
+    if ($acceptLanguage === '') {
+        return 'en';
+    }
+    $first = trim(explode(',', $acceptLanguage)[0] ?? '');
+    $base = strtolower(trim(explode('-', $first)[0] ?? ''));
+    $lang = normalizeMobileAlertLanguage($base);
+    return $lang !== '' ? $lang : 'en';
+}
+
 // Use admin database connection to ensure we get alerts from the same source
 if (file_exists(__DIR__ . '/../../ADMIN/api/db_connect.php')) {
     require_once __DIR__ . '/../../ADMIN/api/db_connect.php';
@@ -103,38 +125,50 @@ try {
     $stmt->execute($params);
     $alerts = $stmt->fetchAll();
     
-    // If user is logged in, get translated alerts in their preferred language
-    if ($userId && $userId > 0 && !empty($alerts)) {
-        // Get user's preferred language
-        $userLang = 'en';
-        if ($subscription && !empty($subscription['preferred_language'])) {
-            $userLang = $subscription['preferred_language'];
+    // Resolve target language:
+    // 1) explicit query parameter
+    // 2) logged-in user's preference
+    // 3) browser/device language
+    $requestedLang = normalizeMobileAlertLanguage($_GET['lang'] ?? '');
+    $userLang = $requestedLang !== '' ? $requestedLang : 'en';
+
+    if ($userId && $userId > 0 && $userLang === 'en') {
+        if (!empty($subscription['preferred_language'])) {
+            $userLang = normalizeMobileAlertLanguage($subscription['preferred_language']) ?: 'en';
         } else {
-            // Try user_preferences table
-            $prefStmt = $pdo->prepare("SELECT preferred_language FROM user_preferences WHERE user_id = ? LIMIT 1");
-            $prefStmt->execute([$userId]);
-            $pref = $prefStmt->fetch();
-            if ($pref && !empty($pref['preferred_language'])) {
-                $userLang = $pref['preferred_language'];
+            try {
+                $prefStmt = $pdo->prepare("SELECT preferred_language FROM user_preferences WHERE user_id = ? LIMIT 1");
+                $prefStmt->execute([$userId]);
+                $pref = $prefStmt->fetch();
+                if ($pref && !empty($pref['preferred_language'])) {
+                    $userLang = normalizeMobileAlertLanguage($pref['preferred_language']) ?: 'en';
+                }
+            } catch (Throwable $e) {
+                // Keep fallback.
             }
         }
-        
-        // Load translation helper if available
-        if (file_exists(__DIR__ . '/../../ADMIN/api/alert-translation-helper.php')) {
-            require_once __DIR__ . '/../../ADMIN/api/alert-translation-helper.php';
+    }
+
+    if ($userLang === 'en') {
+        $userLang = detectMobileBrowserLanguage();
+    }
+
+    // Translate alerts server-side when non-English language is requested
+    if (!empty($alerts) && $userLang !== 'en' && file_exists(__DIR__ . '/../../ADMIN/api/alert-translation-helper.php')) {
+        require_once __DIR__ . '/../../ADMIN/api/alert-translation-helper.php';
+        if (class_exists('AlertTranslationHelper')) {
             $translationHelper = new AlertTranslationHelper($pdo);
-            
-            // Translate alerts to user's preferred language
             foreach ($alerts as &$alert) {
-                if ($userLang !== 'en') {
-                    $translated = $translationHelper->getTranslatedAlert($alert['id'], $userLang, $userId);
-                    if ($translated) {
-                        $alert['title'] = $translated['translated_title'] ?? $alert['title'];
-                        $alert['message'] = $translated['translated_content'] ?? $alert['message'];
-                        $alert['content'] = $translated['translated_content'] ?? $alert['content'];
-                    }
+                $sourceTitle = (string)($alert['title'] ?? '');
+                $sourceMessage = (string)($alert['message'] ?? ($alert['content'] ?? ''));
+                $translated = $translationHelper->getTranslatedAlert((int)$alert['id'], $userLang, $sourceTitle, $sourceMessage);
+                if ($translated && !empty($translated['title']) && !empty($translated['message'])) {
+                    $alert['title'] = $translated['title'];
+                    $alert['message'] = $translated['message'];
+                    $alert['content'] = $translated['message'];
                 }
             }
+            unset($alert);
         }
     }
     
@@ -149,7 +183,8 @@ try {
         'message' => 'Alerts retrieved successfully',
         'alerts' => $alerts,
         'count' => count($alerts),
-        'timestamp' => date('c')
+        'timestamp' => date('c'),
+        'language' => $userLang
     ], JSON_UNESCAPED_UNICODE);
     
 } catch (PDOException $e) {

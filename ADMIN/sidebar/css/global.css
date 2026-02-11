@@ -9,12 +9,12 @@
     --tertiary-color-1: #1c2541;
     --dark-color-1: #0b132b;
     --text-color-1: #171717;
-    --text-secondary-1: #575757;
-    --bg-color-1: #ffffff;
+    --text-secondary-1: #4f6767;
+    --bg-color-1: #f6fbfb;
     --header-bg-1: #ffffff;
-    --footer-bg-1: #fafafa;
+    --footer-bg-1: #f2f9f9;
     --nav-text-1: #171717;
-    --border-color-1: #e5e5e5;
+    --border-color-1: #d9e8e8;
     --card-bg-1: #ffffff;
     --shadow-1: rgba(0, 0, 0, 0.05);
     --font-family-1: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -38,16 +38,16 @@
 
 /* Dark mode variables */
 [data-theme="dark"] {
-    /* Teal-driven dark theme (no black/gray surfaces) */
-    --text-color-1: #f2fbfb;
-    --text-secondary-1: #c6d9de;
-    --bg-color-1: #0f2730;
-    --header-bg-1: #14323d;
-    --footer-bg-1: #14323d;
-    --nav-text-1: #f2fbfb;
-    --border-color-1: #21414c;
-    --card-bg-1: #152f39;
-    --shadow-1: rgba(6, 22, 28, 0.35);
+    /* Softer brand-aligned dark theme */
+    --text-color-1: #e8f4f4;
+    --text-secondary-1: #a8c1c1;
+    --bg-color-1: #0e1f25;
+    --header-bg-1: #122b33;
+    --footer-bg-1: #122b33;
+    --nav-text-1: #e8f4f4;
+    --border-color-1: #1f434d;
+    --card-bg-1: #14323b;
+    --shadow-1: rgba(3, 13, 16, 0.35);
 
     /* Aliases for legacy stylesheets (do not change palette) */
     --primary-color: var(--primary-color-1);
@@ -819,6 +819,115 @@ html {
     
     .theme-toggle {
         order: 0;
+    }
+}
+
+/* ===================================
+   SHARED MODULE ANALYTICS STRIP
+   =================================== */
+.module-analytics-strip {
+    margin: 0 0 1.25rem;
+    padding: 0.95rem;
+    border-radius: 14px;
+    border: 1px solid var(--border-color-1);
+    background: color-mix(in srgb, var(--card-bg-1) 86%, var(--bg-color-1));
+}
+
+.module-analytics-title {
+    font-size: 0.85rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary-1);
+    margin-bottom: 0.7rem;
+}
+
+.module-analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.8rem;
+}
+
+.module-analytics-card {
+    border-radius: 12px;
+    padding: 0.9rem 0.95rem;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 5px 16px rgba(10, 34, 33, 0.16);
+}
+
+.module-analytics-card.tone-a {
+    background: linear-gradient(135deg, #1ec866 0%, #149b56 100%);
+}
+
+.module-analytics-card.tone-b {
+    background: linear-gradient(135deg, #20baf6 0%, #3579f6 100%);
+}
+
+.module-analytics-card.tone-c {
+    background: linear-gradient(135deg, #ff920f 0%, #ff5f16 100%);
+}
+
+.module-analytics-card.tone-d {
+    background: linear-gradient(135deg, #bb28ff 0%, #8021c7 100%);
+}
+
+.module-analytics-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.45rem;
+}
+
+.module-analytics-label {
+    font-size: 0.66rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    font-weight: 800;
+    opacity: 0.94;
+}
+
+.module-analytics-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.module-analytics-icon i {
+    font-size: 0.86rem;
+}
+
+.module-analytics-value {
+    font-size: 1.45rem;
+    font-weight: 900;
+    line-height: 1.1;
+    margin: 0.15rem 0 0.35rem;
+    word-break: break-word;
+}
+
+.module-analytics-sub {
+    font-size: 0.76rem;
+    opacity: 0.95;
+}
+
+@media (max-width: 1100px) {
+    .module-analytics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .module-analytics-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .module-analytics-card {
+        padding: 0.85rem 0.9rem;
     }
 }
 

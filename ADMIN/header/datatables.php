@@ -534,7 +534,7 @@ function deleteRow(id) {
                 title: 'Edit User',
                 text: `Editing user ${id}`,
                 icon: 'info',
-                confirmButtonColor: '#4c8a89'
+                confirmButtonColor: '#3a7675'
             });
         }
 
@@ -652,7 +652,7 @@ function deleteRow(id) {
                 title: 'Bulk Edit',
                 text: `Editing ${selectedRows.size} selected rows`,
                 icon: 'info',
-                confirmButtonColor: '#4c8a89'
+                confirmButtonColor: '#3a7675'
             });
         }
 
@@ -688,7 +688,7 @@ function deleteRow(id) {
                 title: 'Export Data',
                 text: 'Exporting table data to CSV...',
                 icon: 'info',
-                confirmButtonColor: '#4c8a89'
+                confirmButtonColor: '#3a7675'
             });
         }
 
@@ -698,7 +698,7 @@ function deleteRow(id) {
                 title: 'Edit User',
                 text: `Editing user ${id}`,
                 icon: 'info',
-                confirmButtonColor: '#4c8a89'
+                confirmButtonColor: '#3a7675'
             });
         }
 

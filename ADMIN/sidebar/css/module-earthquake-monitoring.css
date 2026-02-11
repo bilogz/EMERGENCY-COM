@@ -146,20 +146,23 @@
 
         /* --- NEW AI RISK PANEL STYLES (Refactored) --- */
         .ai-glass-panel {
-            background: linear-gradient(135deg, rgba(30, 20, 60, 0.95) 0%, rgba(45, 27, 78, 0.98) 100%);
-            border-radius: 12px;
+            background:
+                radial-gradient(1200px 280px at 10% -10%, rgba(139, 92, 246, 0.35), transparent 60%),
+                radial-gradient(1000px 320px at 90% 120%, rgba(56, 189, 248, 0.18), transparent 60%),
+                linear-gradient(145deg, rgba(29, 21, 56, 0.95), rgba(37, 25, 66, 0.98));
+            border-radius: 14px;
             margin-bottom: 1.5rem;
             color: white;
             overflow: hidden;
-            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(8px);
-            transition: border-color 0.3s ease;
+            box-shadow: 0 20px 35px rgba(15, 23, 42, 0.35), inset 0 1px 0 rgba(255,255,255,0.05);
+            border: 1px solid rgba(139, 92, 246, 0.35);
+            backdrop-filter: blur(10px);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
         }
 
         .ai-glass-panel.critical-alert {
             border-color: #F44336;
-            box-shadow: 0 0 20px rgba(244, 67, 54, 0.4);
+            box-shadow: 0 0 20px rgba(244, 67, 54, 0.25), 0 20px 35px rgba(15, 23, 42, 0.4);
         }
 
         .qc-risk-header {
@@ -168,13 +171,77 @@
             justify-content: space-between;
             align-items: center;
             cursor: pointer;
-            background: rgba(255,255,255,0.05);
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            transition: background 0.2s;
+            background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+            border-bottom: 1px solid rgba(255,255,255,0.12);
+            transition: background 0.2s, border-color 0.2s;
         }
 
         .qc-risk-header:hover {
-            background: rgba(255,255,255,0.1);
+            background: linear-gradient(90deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04));
+            border-bottom-color: rgba(167, 139, 250, 0.5);
+        }
+
+        .qc-risk-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .qc-risk-title {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #f5f3ff;
+        }
+
+        .qc-risk-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 0.3rem;
+            font-size: 0.75rem;
+            color: #c4b5fd;
+        }
+
+        .qc-risk-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        .qc-ai-icon {
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid rgba(196, 181, 253, 0.35);
+            padding: 0.55rem;
+            border-radius: 10px;
+            color: #ddd6fe;
+        }
+
+        .qc-ai-icon i {
+            font-size: 1rem;
+        }
+
+        .qc-reanalyze-btn {
+            background: rgba(255,255,255,0.12);
+            border-color: rgba(255,255,255,0.22);
+            color: #f8fafc;
+            border-radius: 999px;
+            padding: 0.45rem 0.95rem;
+            font-size: 0.74rem;
+            letter-spacing: 0.4px;
+        }
+
+        .qc-reanalyze-btn:hover {
+            border-color: rgba(196, 181, 253, 0.9);
+            color: #e9d5ff;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+        }
+
+        .qc-reanalyze-btn:disabled {
+            opacity: 0.72;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         /* Collapsible Transition */
@@ -190,19 +257,20 @@
             overflow: hidden;
         }
 
-        .qc-risk-panel.minimized .qc-risk-content {
+        .ai-glass-panel.minimized .qc-risk-content {
             max-height: 0;
             opacity: 0;
             padding-top: 0;
             padding-bottom: 0;
         }
 
-        .qc-risk-panel.minimized #qcRiskChevron {
+        .ai-glass-panel.minimized #qcRiskChevron {
             transform: rotate(-90deg);
         }
 
         #qcRiskChevron {
             transition: transform 0.3s ease;
+            color: #c4b5fd;
         }
 
         .qc-risk-badge {
@@ -217,6 +285,21 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
+        }
+
+        .ai-glass-panel[data-risk="critical"] .qc-risk-badge {
+            background: rgba(220, 38, 38, 0.2);
+            border-color: rgba(248, 113, 113, 0.6);
+        }
+
+        .ai-glass-panel[data-risk="high"] .qc-risk-badge {
+            background: rgba(245, 158, 11, 0.2);
+            border-color: rgba(251, 191, 36, 0.6);
+        }
+
+        .ai-glass-panel[data-risk="moderate"] .qc-risk-badge {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(96, 165, 250, 0.6);
         }
 
         .live-pulse {
@@ -254,21 +337,22 @@
         }
 
         .risk-info-box {
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(9, 9, 20, 0.36);
             padding: 1rem;
             border-radius: 6px;
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid rgba(196, 181, 253, 0.2);
             min-height: 80px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
         }
 
         .recommendation-item {
-            background: rgba(16, 185, 129, 0.1);
+            background: rgba(148, 163, 184, 0.12);
             padding: 0.75rem 1rem;
             border-radius: 6px;
             font-size: 0.85rem;
             margin-bottom: 0.5rem;
-            border-left: 3px solid #10b981;
-            color: #ecfdf5;
+            border-left: 3px solid #34d399;
+            color: #ecfeff;
         }
 
         /* Animations */
@@ -293,5 +377,9 @@
             .stat-grid { grid-template-columns: 1fr 1fr; }
             .qc-risk-content { grid-template-columns: 1fr; }
             .map-wrapper { height: 400px; }
+            .qc-risk-title-wrap { gap: 0.65rem; }
+            .qc-risk-title { font-size: 0.92rem; }
+            .qc-risk-header { padding: 1rem; }
+            .qc-reanalyze-btn span { display: none; }
         }
     

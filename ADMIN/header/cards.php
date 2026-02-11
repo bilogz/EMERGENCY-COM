@@ -526,7 +526,7 @@ include 'includes/header.php'; ?>
                 title: 'Card Clicked!',
                 text: `You clicked on ${cardName}`,
                 icon: 'info',
-                confirmButtonColor: '#4c8a89'
+                confirmButtonColor: '#3a7675'
             });
         }
     </script>

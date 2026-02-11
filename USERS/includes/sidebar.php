@@ -78,6 +78,22 @@ include __DIR__ . '/guest-monitoring-notice.php';
                         </a>
                     </li>
 
+                    <!-- Weather Map -->
+                    <li class="sidebar-menu-item">
+                        <a href="<?= $basePath ?><?= $linkPrefix ?>weather-monitoring.php" class="sidebar-link <?= $current === 'weather-monitoring.php' ? 'active' : '' ?>">
+                            <i class="fas fa-map-marked-alt"></i>
+                            <span data-translate="nav.weatherMap">Weather Map</span>
+                        </a>
+                    </li>
+
+                    <!-- Earthquake Monitoring -->
+                    <li class="sidebar-menu-item">
+                        <a href="<?= $basePath ?><?= $linkPrefix ?>earthquake-monitoring.php" class="sidebar-link <?= $current === 'earthquake-monitoring.php' ? 'active' : '' ?>">
+                            <i class="fas fa-mountain"></i>
+                            <span data-translate="nav.earthquakeMonitoring">Earthquake Monitoring</span>
+                        </a>
+                    </li>
+
                     <!-- Profile (for logged-in registered users) -->
                     <?php if ($showProfile): ?>
                         <li class="sidebar-menu-item">
@@ -108,6 +124,15 @@ include __DIR__ . '/guest-monitoring-notice.php';
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
 <div class="auth-icons">
+    <div class="auth-weather-pill" id="authWeatherPill" aria-live="polite">
+        <div class="auth-weather-icon" id="authWeatherIcon">
+            <i class="fas fa-cloud-sun"></i>
+        </div>
+        <div class="auth-weather-info">
+            <div class="auth-weather-temp" id="authWeatherTemp">--&deg;C</div>
+            <div class="auth-weather-desc" id="authWeatherDesc">Loading weather...</div>
+        </div>
+    </div>
     <button class="auth-icon-link" id="languageSelectorBtn" title="Change Language" aria-label="Select Language">
         <i class="fas fa-globe"></i>
     </button>
@@ -149,7 +174,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
             </div>
         </div>
     <?php else: ?>
-        <a href="<?= $basePath ?><?= $linkPrefix ?>login.php" class="auth-icon-link" title="Login / Sign Up">
+        <a href="<?= $basePath ?><?= $linkPrefix ?>login.php?method=facebook" class="auth-icon-link" title="Login / Sign Up">
             <i class="fas fa-user-circle"></i>
         </a>
     <?php endif; ?>
@@ -1349,7 +1374,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Chat modal not found. Please refresh the page.');
                 return;
             }
-            
+
+            const useBottomRightChatLayout =
+                document.body.classList.contains('user-admin-header') ||
+                document.body.classList.contains('user-admin-ui');
+            const modalAlignItems = useBottomRightChatLayout ? 'flex-end' : 'center';
+            const modalJustifyContent = useBottomRightChatLayout ? 'flex-end' : 'center';
+             
             // Force show modal
             console.log('Showing modal...');
             modal.style.cssText = `
@@ -1364,8 +1395,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 pointer-events: auto !important;
                 z-index: 99999 !important;
                 background: rgba(0,0,0,0.5) !important;
-                align-items: center !important;
-                justify-content: center !important;
+                align-items: ${modalAlignItems} !important;
+                justify-content: ${modalJustifyContent} !important;
                 padding: 1rem !important;
             `;
             modal.classList.add('chat-modal-open');

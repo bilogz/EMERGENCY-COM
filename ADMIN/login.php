@@ -120,7 +120,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             justify-content: center;
             background: var(--primary-color-1);
             border-radius: 16px;
-            box-shadow: 0 4px 12px rgba(76, 138, 137, 0.3);
+            box-shadow: 0 4px 12px rgba(58, 118, 117, 0.3);
         }
 
         .login-logo img {
@@ -187,7 +187,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
 
         .form-control:focus {
             border-color: var(--primary-color-1);
-            box-shadow: 0 0 0 3px rgba(76, 138, 137, 0.1);
+            box-shadow: 0 0 0 3px rgba(58, 118, 117, 0.1);
         }
 
         .form-control::placeholder {
@@ -305,7 +305,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
         .btn-login:hover {
             background-color: #4ca8a6;
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(76, 138, 137, 0.3);
+            box-shadow: 0 4px 12px rgba(58, 118, 117, 0.3);
         }
 
         .btn-login:active {
@@ -374,8 +374,8 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             justify-content: center;
             gap: 0.5rem;
             padding: 0.75rem 1rem;
-            background: rgba(76, 138, 137, 0.1);
-            border: 1px solid rgba(76, 138, 137, 0.3);
+            background: rgba(58, 118, 117, 0.1);
+            border: 1px solid rgba(58, 118, 117, 0.3);
             border-radius: 8px;
             margin-bottom: 1.5rem;
             font-size: 12px;
@@ -445,7 +445,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
         }
 
         .login-info {
-            background: rgba(76, 138, 137, 0.05);
+            background: rgba(58, 118, 117, 0.05);
             border-left: 3px solid var(--primary-color-1);
             padding: 0.75rem 1rem;
             margin-bottom: 1.5rem;
@@ -1412,7 +1412,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 title: 'Password Recovery',
                 html: 'For security reasons, password recovery must be handled by your system administrator.<br><br>Please contact your administrator with your registered email address to reset your password.',
                 confirmButtonText: 'OK',
-                confirmButtonColor: '#4c8a89'
+                confirmButtonColor: '#3a7675'
             });
         });
 

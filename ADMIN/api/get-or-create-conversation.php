@@ -6,6 +6,7 @@
 
 header('Content-Type: application/json');
 require_once __DIR__ . '/db_connect.php';
+require_once __DIR__ . '/chat-logic.php';
 
 session_start();
 
@@ -36,12 +37,15 @@ try {
     
     // Try to find existing active conversation
     if ($userId) {
+        $activeStatuses = twc_active_statuses();
         $stmt = $pdo->prepare("
             SELECT conversation_id FROM conversations 
-            WHERE user_id = ? AND status = 'active'
+            WHERE user_id = ? AND status IN (" . twc_placeholders($activeStatuses) . ")
             ORDER BY updated_at DESC LIMIT 1
         ");
-        $stmt->execute([$userId]);
+        $params = [$userId];
+        $params = array_merge($params, $activeStatuses);
+        $stmt->execute($params);
         $existing = $stmt->fetch();
         if ($existing) {
             $conversationId = $existing['conversation_id'];
@@ -50,12 +54,15 @@ try {
     
     // If not found by user_id, try by phone
     if (!$conversationId && $phone) {
+        $activeStatuses = twc_active_statuses();
         $stmt = $pdo->prepare("
             SELECT conversation_id FROM conversations 
-            WHERE user_phone = ? AND status = 'active'
+            WHERE user_phone = ? AND status IN (" . twc_placeholders($activeStatuses) . ")
             ORDER BY updated_at DESC LIMIT 1
         ");
-        $stmt->execute([$phone]);
+        $params = [$phone];
+        $params = array_merge($params, $activeStatuses);
+        $stmt->execute($params);
         $existing = $stmt->fetch();
         if ($existing) {
             $conversationId = $existing['conversation_id'];

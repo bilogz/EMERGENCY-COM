@@ -10,6 +10,23 @@ require_once '../../ADMIN/api/security-helpers.php';
 
 session_start();
 
+function resolvePreferenceLanguagesTable(PDO $pdo): ?string {
+    $candidates = ['supported_languages', 'supported_languages_catalog', 'emergency_comm_supported_languages'];
+    foreach ($candidates as $table) {
+        try {
+            $stmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+            if (!$stmt || !$stmt->fetch()) {
+                continue;
+            }
+            $pdo->query("SELECT 1 FROM {$table} LIMIT 1");
+            return $table;
+        } catch (PDOException $e) {
+            // Try next table.
+        }
+    }
+    return null;
+}
+
 $action = $_GET['action'] ?? ($_SERVER['REQUEST_METHOD'] === 'POST' ? 'set' : 'get');
 
 try {
@@ -20,6 +37,8 @@ try {
         ]);
         exit;
     }
+
+    $languagesTable = resolvePreferenceLanguagesTable($pdo);
     
     if ($action === 'set') {
         // Set user language preference
@@ -37,8 +56,15 @@ try {
         
         // Validate language exists if provided
         if ($language) {
+            if ($languagesTable === null) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Language catalog unavailable'
+                ]);
+                exit;
+            }
             $stmt = $pdo->prepare("
-                SELECT language_code FROM supported_languages 
+                SELECT language_code FROM {$languagesTable} 
                 WHERE language_code = ? AND is_active = 1
             ");
             $stmt->execute([$language]);
@@ -139,13 +165,15 @@ try {
                 $langCode = strtolower(explode('-', explode(',', $acceptLanguage)[0])[0]);
                 
                 // Check if supported
-                $stmt = $pdo->prepare("
-                    SELECT language_code FROM supported_languages 
-                    WHERE language_code = ? AND is_active = 1
-                ");
-                $stmt->execute([$langCode]);
-                if ($stmt->fetch()) {
-                    $language = $langCode;
+                if ($languagesTable !== null) {
+                    $stmt = $pdo->prepare("
+                        SELECT language_code FROM {$languagesTable} 
+                        WHERE language_code = ? AND is_active = 1
+                    ");
+                    $stmt->execute([$langCode]);
+                    if ($stmt->fetch()) {
+                        $language = $langCode;
+                    }
                 }
             }
         }

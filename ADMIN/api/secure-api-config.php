@@ -18,6 +18,12 @@ function getGeminiApiKey($purpose = 'default', $tryRotation = false) {
     if (!isset($pdo) || $pdo === null) {
         $pdo = $GLOBALS['pdo'] ?? null;
     }
+
+    // Config-first: honor designated keys in config.local.php/.env before DB-managed keys.
+    $configKey = getGeminiApiKeyFromConfig($purpose);
+    if (!empty($configKey)) {
+        return $configKey;
+    }
     
     // Priority 0: API Key Management System (NEW)
     if ($pdo !== null) {
@@ -65,6 +71,7 @@ function getGeminiApiKey($purpose = 'default', $tryRotation = false) {
     $baseDir = dirname(dirname(__DIR__)); // Go up from ADMIN/api to EMERGENCY-COM
     $possiblePaths = [
         __DIR__ . '/config.local.php', // ADMIN/api/config.local.php (current directory)
+        $baseDir . '/config.local.php', // project-root fallback (common server edit location)
         __DIR__ . '/../../USERS/api/config.local.php',
         $baseDir . '/ADMIN/api/config.local.php',
         $baseDir . '/USERS/api/config.local.php',
@@ -188,8 +195,10 @@ function getGeminiApiKey($purpose = 'default', $tryRotation = false) {
  */
 function getGeminiModel() {
     // Try multiple possible paths - check ADMIN first, then USERS
+    $baseDir = dirname(dirname(__DIR__)); // EMERGENCY-COM
     $possiblePaths = [
         __DIR__ . '/config.local.php', // ADMIN/api/config.local.php (current directory)
+        $baseDir . '/config.local.php', // project-root fallback
         __DIR__ . '/../../USERS/api/config.local.php',
         __DIR__ . '/../../../USERS/api/config.local.php',
         dirname(dirname(dirname(__DIR__))) . '/ADMIN/api/config.local.php',
@@ -378,16 +387,14 @@ function isAIAnalysisEnabled($type = 'all') {
     }
     
     if ($pdo === null) {
-        // If no database connection, default to disabled for safety
-        return false;
+        // Fallback: if DB is unavailable but Gemini key exists in secure config/env, allow analysis.
+        return !empty(getGeminiApiKey('default'));
     }
     
     try {
-        // Check if table exists
-        $tableCheck = $pdo->query("SHOW TABLES LIKE 'ai_warning_settings'");
-        if (!$tableCheck || $tableCheck->rowCount() === 0) {
-            // Table doesn't exist, default to disabled
-            return false;
+        if (!ensureAiWarningSettingsTableHealthy($pdo)) {
+            // Fallback: allow only when a key exists in secure config/env.
+            return !empty(getGeminiApiKey('default'));
         }
         
         // Determine which field to check based on type
@@ -419,16 +426,314 @@ function isAIAnalysisEnabled($type = 'all') {
             return (bool)$result[$fieldName];
         }
         
-        // Default to disabled if no setting found
-        return false;
+        // No row found after table health check. Seed defaults (enabled) and allow.
+        try {
+            $pdo->exec("
+                INSERT INTO ai_warning_settings
+                    (ai_enabled, ai_weather_enabled, ai_earthquake_enabled, ai_disaster_monitoring_enabled, ai_translation_enabled, updated_at)
+                VALUES
+                    (1, 1, 1, 1, 1, NOW())
+            ");
+        } catch (Throwable $seedEx) {
+            error_log("Unable to seed ai_warning_settings defaults: " . $seedEx->getMessage());
+        }
+
+        return true;
     } catch (PDOException $e) {
         error_log("Error checking AI analysis enabled status ($type): " . $e->getMessage());
-        // On error, default to disabled for safety
-        return false;
+        return !empty(getGeminiApiKey('default'));
     } catch (Exception $e) {
         error_log("Error checking AI analysis enabled status ($type): " . $e->getMessage());
+        return !empty(getGeminiApiKey('default'));
+    }
+}
+
+/**
+ * Ensure ai_warning_settings exists and is queryable.
+ * Recovers local broken-table state (error 1932: doesn't exist in engine) by recreating the table.
+ */
+function ensureAiWarningSettingsTableHealthy($pdo) {
+    if ($pdo === null) {
         return false;
     }
+
+    $createSql = "
+        CREATE TABLE IF NOT EXISTS ai_warning_settings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            gemini_api_key VARCHAR(255) DEFAULT NULL,
+            ai_enabled TINYINT(1) DEFAULT 1,
+            ai_weather_enabled TINYINT(1) DEFAULT 1,
+            ai_earthquake_enabled TINYINT(1) DEFAULT 1,
+            ai_disaster_monitoring_enabled TINYINT(1) DEFAULT 1,
+            ai_translation_enabled TINYINT(1) DEFAULT 1,
+            ai_check_interval INT DEFAULT 30,
+            wind_threshold DECIMAL(5,2) DEFAULT 60,
+            rain_threshold DECIMAL(5,2) DEFAULT 20,
+            earthquake_threshold DECIMAL(3,1) DEFAULT 5.0,
+            warning_types TEXT DEFAULT NULL,
+            monitored_areas TEXT DEFAULT NULL,
+            ai_channels TEXT DEFAULT NULL,
+            weather_analysis_auto_send TINYINT(1) DEFAULT 0,
+            weather_analysis_interval INT DEFAULT 60,
+            weather_analysis_verification_key VARCHAR(255) DEFAULT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ";
+
+    try {
+        $pdo->exec($createSql);
+        // Probe table health
+        $pdo->query("SELECT id FROM ai_warning_settings LIMIT 1");
+        return true;
+    } catch (PDOException $e) {
+        $message = $e->getMessage();
+        error_log("ai_warning_settings health check failed: " . $message);
+
+        if (stripos($message, "doesn't exist in engine") !== false || stripos($message, 'error code: 1932') !== false) {
+            try {
+                $pdo->exec("DROP TABLE IF EXISTS ai_warning_settings");
+                $pdo->exec($createSql);
+                $pdo->query("SELECT id FROM ai_warning_settings LIMIT 1");
+                error_log("Recreated corrupted ai_warning_settings table");
+                return true;
+            } catch (PDOException $recreateEx) {
+                error_log("Failed to recreate ai_warning_settings: " . $recreateEx->getMessage());
+            }
+        }
+
+        return false;
+    }
+}
+
+/**
+ * Validate OpenWeather/PAGASA key placeholders.
+ */
+function isPlaceholderWeatherApiKey($key) {
+    $key = trim((string)$key);
+    if ($key === '') {
+        return true;
+    }
+    $invalid = [
+        'YOUR_OPENWEATHER_API_KEY',
+        'f35609a701ba47952fba4fd4604c12c7',
+    ];
+    return in_array($key, $invalid, true);
+}
+
+/**
+ * Ensure integration_settings table exists and is queryable.
+ * Handles local corrupted-table state (1932) where metadata exists but table is inaccessible.
+ */
+function ensureIntegrationSettingsTableHealthy($pdo) {
+    if ($pdo === null) {
+        return false;
+    }
+
+    $createSql = "
+        CREATE TABLE IF NOT EXISTS integration_settings (
+            source VARCHAR(64) NOT NULL PRIMARY KEY,
+            enabled TINYINT(1) NOT NULL DEFAULT 0,
+            api_key VARCHAR(255) DEFAULT NULL,
+            api_url VARCHAR(255) DEFAULT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ";
+
+    try {
+        $pdo->exec($createSql);
+        $pdo->query("SELECT source FROM integration_settings LIMIT 1");
+        return true;
+    } catch (PDOException $e) {
+        $message = $e->getMessage();
+        error_log("integration_settings health check failed: " . $message);
+
+        if (stripos($message, "doesn't exist in engine") !== false || stripos($message, 'error code: 1932') !== false) {
+            try {
+                $pdo->exec("DROP TABLE IF EXISTS integration_settings");
+                $pdo->exec($createSql);
+                $pdo->query("SELECT source FROM integration_settings LIMIT 1");
+                error_log("Recreated corrupted integration_settings table");
+                return true;
+            } catch (PDOException $recreateEx) {
+                error_log("Failed to recreate integration_settings: " . $recreateEx->getMessage());
+            }
+        }
+
+        return false;
+    }
+}
+
+/**
+ * Get OpenWeather API key (PAGASA alias) securely.
+ * Priority: env/config.local.php > integration_settings('pagasa')
+ */
+function getOpenWeatherApiKey($persistToDatabase = true) {
+    global $pdo;
+
+    if (!isset($pdo) || $pdo === null) {
+        $pdo = $GLOBALS['pdo'] ?? null;
+    }
+
+    // 1) Environment variables
+    $envCandidates = [
+        getenv('OPENWEATHER_API_KEY') ?: '',
+        getenv('OPEN_WEATHER_API_KEY') ?: '',
+        getenv('OWM_API_KEY') ?: '',
+        getenv('PAGASA_API_KEY') ?: '',
+        getenv('PAGASA_OPENWEATHER_API_KEY') ?: '',
+        getenv('WEATHER_API_KEY') ?: '',
+    ];
+    foreach ($envCandidates as $candidate) {
+        $candidate = trim((string)$candidate);
+        if (!isPlaceholderWeatherApiKey($candidate)) {
+            return $candidate;
+        }
+    }
+
+    // 2) config.local.php candidates (ADMIN + USERS)
+    $baseDir = dirname(dirname(__DIR__)); // EMERGENCY-COM
+    $possiblePaths = [
+        __DIR__ . '/config.local.php',
+        $baseDir . '/config.local.php', // project-root fallback
+        __DIR__ . '/../../USERS/api/config.local.php',
+        $baseDir . '/ADMIN/api/config.local.php',
+        $baseDir . '/USERS/api/config.local.php',
+        dirname($baseDir) . '/EMERGENCY-COM/ADMIN/api/config.local.php',
+        dirname($baseDir) . '/EMERGENCY-COM/USERS/api/config.local.php',
+    ];
+
+    foreach ($possiblePaths as $path) {
+        $realPath = realpath($path);
+        if (!$realPath || !file_exists($realPath)) {
+            continue;
+        }
+        try {
+            $config = @require $realPath;
+            if (!is_array($config)) {
+                continue;
+            }
+            $candidates = [
+                $config['OPENWEATHER_API_KEY'] ?? '',
+                $config['OPEN_WEATHER_API_KEY'] ?? '',
+                $config['OWM_API_KEY'] ?? '',
+                $config['PAGASA_API_KEY'] ?? '',
+                $config['PAGASA_OPENWEATHER_API_KEY'] ?? '',
+                $config['WEATHER_API_KEY'] ?? '',
+            ];
+            foreach ($candidates as $candidate) {
+                $candidate = trim((string)$candidate);
+                if (!isPlaceholderWeatherApiKey($candidate)) {
+                    if ($persistToDatabase && $pdo !== null && ensureIntegrationSettingsTableHealthy($pdo)) {
+                        try {
+                            $stmt = $pdo->prepare("
+                                INSERT INTO integration_settings (source, enabled, api_key, api_url, updated_at)
+                                VALUES ('pagasa', 1, ?, 'https://api.openweathermap.org/data/2.5/', NOW())
+                                ON DUPLICATE KEY UPDATE
+                                    enabled = VALUES(enabled),
+                                    api_key = VALUES(api_key),
+                                    api_url = VALUES(api_url),
+                                    updated_at = NOW()
+                            ");
+                            $stmt->execute([$candidate]);
+                        } catch (Throwable $persistEx) {
+                            error_log("Failed to persist OpenWeather key to DB: " . $persistEx->getMessage());
+                        }
+                    }
+                    return $candidate;
+                }
+            }
+        } catch (Throwable $e) {
+            error_log("Error reading weather key from config file {$realPath}: " . $e->getMessage());
+        }
+    }
+
+    // 3) Database fallback
+    if ($pdo !== null && ensureIntegrationSettingsTableHealthy($pdo)) {
+        try {
+            $stmt = $pdo->prepare("SELECT api_key FROM integration_settings WHERE source = 'pagasa' LIMIT 1");
+            $stmt->execute();
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            $apiKey = trim((string)($row['api_key'] ?? ''));
+            if (!isPlaceholderWeatherApiKey($apiKey)) {
+                return $apiKey;
+            }
+        } catch (Throwable $dbEx) {
+            error_log("Error getting OpenWeather key from integration_settings: " . $dbEx->getMessage());
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Read Gemini API key from config files / env according to purpose.
+ * This keeps purpose mapping deterministic based on config.local.php values.
+ */
+function getGeminiApiKeyFromConfig($purpose = 'default') {
+    // Map purpose to preferred config key names
+    $preferred = ['AI_API_KEY'];
+    if ($purpose === 'earthquake') {
+        $preferred = ['AI_API_KEY_EARTHQUAKE', 'AI_API_KEY_ANALYSIS', 'AI_API_KEY'];
+    } elseif ($purpose === 'analysis') {
+        $preferred = ['AI_API_KEY_ANALYSIS', 'AI_API_KEY'];
+    } elseif ($purpose === 'ai_message') {
+        $preferred = ['AI_API_KEY_AI_MESSAGE', 'AI_API_KEY'];
+    } elseif ($purpose === 'analysis_backup') {
+        $preferred = ['AI_API_KEY_ANALYSIS_BACKUP', 'AI_API_KEY_ANALYSIS', 'AI_API_KEY'];
+    } elseif ($purpose === 'translation_backup') {
+        $preferred = ['AI_API_KEY_TRANSLATION_BACKUP', 'AI_API_KEY_TRANSLATION', 'AI_API_KEY'];
+    } elseif ($purpose === 'translation') {
+        $preferred = ['AI_API_KEY_TRANSLATION', 'AI_API_KEY'];
+    }
+
+    // Environment lookup first
+    foreach ($preferred as $envName) {
+        $value = getenv($envName);
+        if ($value !== false && trim((string)$value) !== '') {
+            return trim((string)$value);
+        }
+    }
+
+    // Fallback legacy env var
+    $legacy = getenv('GEMINI_API_KEY');
+    if ($legacy !== false && trim((string)$legacy) !== '') {
+        return trim((string)$legacy);
+    }
+
+    // Config files lookup
+    $baseDir = dirname(dirname(__DIR__)); // EMERGENCY-COM
+    $possiblePaths = [
+        __DIR__ . '/config.local.php',
+        $baseDir . '/config.local.php', // project-root fallback
+        __DIR__ . '/../../USERS/api/config.local.php',
+        $baseDir . '/ADMIN/api/config.local.php',
+        $baseDir . '/USERS/api/config.local.php',
+        dirname($baseDir) . '/EMERGENCY-COM/ADMIN/api/config.local.php',
+        dirname($baseDir) . '/EMERGENCY-COM/USERS/api/config.local.php',
+    ];
+
+    foreach ($possiblePaths as $path) {
+        $realPath = realpath($path);
+        if (!$realPath || !file_exists($realPath)) {
+            continue;
+        }
+        try {
+            $config = @require $realPath;
+            if (!is_array($config)) {
+                continue;
+            }
+            foreach ($preferred as $keyName) {
+                $val = trim((string)($config[$keyName] ?? ''));
+                if ($val !== '') {
+                    return $val;
+                }
+            }
+        } catch (Throwable $e) {
+            error_log("Error loading config for Gemini purpose {$purpose} from {$realPath}: " . $e->getMessage());
+        }
+    }
+
+    return null;
 }
 ?>
 

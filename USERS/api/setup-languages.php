@@ -11,9 +11,24 @@ require_once __DIR__ . '/../../ADMIN/api/db_connect.php';
 echo "<h1>🌍 Setting Up Languages</h1>";
 
 try {
+    $languagesTable = 'supported_languages_catalog';
+    $candidates = ['supported_languages', 'supported_languages_catalog', 'emergency_comm_supported_languages'];
+    foreach ($candidates as $candidate) {
+        try {
+            $stmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($candidate));
+            if ($stmt && $stmt->fetch()) {
+                $pdo->query("SELECT 1 FROM {$candidate} LIMIT 1");
+                $languagesTable = $candidate;
+                break;
+            }
+        } catch (PDOException $e) {
+            // Try next candidate table.
+        }
+    }
+
     // Create the table if it doesn't exist
     $pdo->exec("
-        CREATE TABLE IF NOT EXISTS supported_languages (
+        CREATE TABLE IF NOT EXISTS {$languagesTable} (
             id INT AUTO_INCREMENT PRIMARY KEY,
             language_code VARCHAR(10) NOT NULL UNIQUE,
             language_name VARCHAR(100) NOT NULL,
@@ -124,7 +139,7 @@ try {
     ];
     
     $stmt = $pdo->prepare("
-        INSERT INTO supported_languages 
+        INSERT INTO {$languagesTable} 
         (language_code, language_name, native_name, flag_emoji, is_active, is_ai_supported, priority) 
         VALUES (?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE 
@@ -148,7 +163,7 @@ try {
     }
     
     // Count total languages
-    $count = $pdo->query("SELECT COUNT(*) FROM supported_languages WHERE is_active = 1")->fetchColumn();
+    $count = $pdo->query("SELECT COUNT(*) FROM {$languagesTable} WHERE is_active = 1")->fetchColumn();
     
     echo "<p>✅ Languages processed: " . count($languages) . "</p>";
     echo "<p>✅ Total active languages in database: <strong>$count</strong></p>";
@@ -157,7 +172,7 @@ try {
     echo "<table border='1' cellpadding='8' style='border-collapse: collapse;'>";
     echo "<tr><th>Code</th><th>Name</th><th>Native</th><th>Flag</th><th>Priority</th></tr>";
     
-    $result = $pdo->query("SELECT * FROM supported_languages WHERE is_active = 1 ORDER BY priority DESC LIMIT 30");
+    $result = $pdo->query("SELECT * FROM {$languagesTable} WHERE is_active = 1 ORDER BY priority DESC LIMIT 30");
     while ($row = $result->fetch()) {
         echo "<tr>";
         echo "<td>{$row['language_code']}</td>";
@@ -178,4 +193,5 @@ try {
     echo "<p style='color: red;'>❌ Error: " . htmlspecialchars($e->getMessage()) . "</p>";
 }
 ?>
+
 

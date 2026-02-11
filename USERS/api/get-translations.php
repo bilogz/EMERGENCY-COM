@@ -50,6 +50,23 @@ try {
     exit();
 }
 
+function resolveTranslationsLanguagesTable(PDO $pdo): ?string {
+    $candidates = ['supported_languages', 'supported_languages_catalog', 'emergency_comm_supported_languages'];
+    foreach ($candidates as $table) {
+        try {
+            $stmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+            if (!$stmt || !$stmt->fetch()) {
+                continue;
+            }
+            $pdo->query("SELECT 1 FROM {$table} LIMIT 1");
+            return $table;
+        } catch (PDOException $e) {
+            // Try next table.
+        }
+    }
+    return null;
+}
+
 $languageCode = $_GET['lang'] ?? 'en';
 
 // Base English translations
@@ -59,6 +76,8 @@ $baseTranslations = [
     'nav.alerts' => 'Alerts',
     'nav.profile' => 'Profile',
     'nav.support' => 'Support',
+    'nav.weatherMap' => 'Weather Map',
+    'nav.earthquakeMonitoring' => 'Earthquake Monitoring',
     'nav.emergency' => 'Emergency Call',
     'nav.login' => 'Login / Sign Up',
     'nav.user' => 'User',
@@ -111,6 +130,10 @@ $baseTranslations = [
     'login.emailHint' => 'We\'ll send you a verification code via email',
     
     'home.title' => 'QUEZON CITY EMERGENCY COMMUNICATION PORTAL',
+    'home.header.title' => 'Welcome to Alertara',
+    'home.header.subtitle' => 'Stay informed with live emergency updates in Quezon City.',
+    'home.header.weatherLabel' => 'Quezon City',
+    'home.header.weatherLoading' => 'Loading weather...',
     'home.mission' => 'Mission:',
     'home.mission.text' => 'To operationalize an effective, efficient, and inclusive DRRM system dedicated to Resilience-building in Quezon City communities.',
     'home.vision' => 'Vision:',
@@ -251,6 +274,10 @@ $baseTranslations = [
 // Filipino translations (pre-translated for speed)
 $filipinoTranslations = [
     'home.title' => 'QUEZON CITY EMERGENCY COMMUNICATION PORTAL',
+    'home.header.title' => 'Maligayang pagdating sa Alertara',
+    'home.header.subtitle' => 'Manatiling updated sa mga emergency sa Lungsod Quezon.',
+    'home.header.weatherLabel' => 'Lungsod Quezon',
+    'home.header.weatherLoading' => 'Nilo-load ang lagay ng panahon...',
     'home.mission' => 'Misyon:',
     'home.mission.text' => 'Upang mapaandar ang isang epektibo, mahusay, at inclusive na DRRM system na nakatuon sa pagbuo ng Resilience sa mga komunidad ng Quezon City.',
     'home.vision' => 'Bisyon:',
@@ -522,9 +549,14 @@ try {
     $language = null;
     if ($pdo) {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM supported_languages WHERE language_code = ? AND is_active = 1");
-            $stmt->execute([$languageCode]);
-            $language = $stmt->fetch(PDO::FETCH_ASSOC);
+            $languagesTable = resolveTranslationsLanguagesTable($pdo);
+            if ($languagesTable !== null) {
+                $stmt = $pdo->prepare("SELECT * FROM {$languagesTable} WHERE language_code = ? AND is_active = 1");
+                $stmt->execute([$languageCode]);
+                $language = $stmt->fetch(PDO::FETCH_ASSOC);
+            } else {
+                $language = ['language_code' => $languageCode, 'language_name' => ucfirst($languageCode)];
+            }
         } catch (PDOException $e) {
             // Table might not exist, continue without language check
             error_log("Supported languages table check failed: " . $e->getMessage());
@@ -599,14 +631,20 @@ try {
             $cached = null;
             
             if ($pdo) {
-                $stmt = $pdo->prepare("
-                    SELECT translated_text 
-                    FROM translation_cache 
-                    WHERE cache_key = ? 
-                    AND TIMESTAMPDIFF(DAY, created_at, NOW()) < ?
-                ");
-                $stmt->execute([$cacheKey, TRANSLATION_CACHE_DAYS]);
-                $cached = $stmt->fetch(PDO::FETCH_ASSOC);
+                try {
+                    $stmt = $pdo->prepare("
+                        SELECT translated_text 
+                        FROM translation_cache 
+                        WHERE cache_key = ? 
+                        AND TIMESTAMPDIFF(DAY, created_at, NOW()) < ?
+                    ");
+                    $stmt->execute([$cacheKey, TRANSLATION_CACHE_DAYS]);
+                    $cached = $stmt->fetch(PDO::FETCH_ASSOC);
+                } catch (PDOException $e) {
+                    // If translation_cache table is unavailable/corrupted, continue without cache.
+                    $cached = null;
+                    error_log("Translation cache read failed: " . $e->getMessage());
+                }
             }
             
             if ($cached) {
@@ -650,15 +688,20 @@ try {
                 $cacheKey = md5($englishText . 'en' . $languageCode);
                 
                 if ($pdo && $translatedText !== $englishText) {
-                    $stmt = $pdo->prepare("
-                        INSERT INTO translation_cache 
-                        (cache_key, source_text, source_lang, target_lang, translated_text, translation_method)
-                        VALUES (?, ?, 'en', ?, ?, ?)
-                        ON DUPLICATE KEY UPDATE 
-                        translated_text = VALUES(translated_text),
-                        updated_at = NOW()
-                    ");
-                    $stmt->execute([$cacheKey, $englishText, $languageCode, $translatedText, $translationMethod]);
+                    try {
+                        $stmt = $pdo->prepare("
+                            INSERT INTO translation_cache 
+                            (cache_key, source_text, source_lang, target_lang, translated_text, translation_method)
+                            VALUES (?, ?, 'en', ?, ?, ?)
+                            ON DUPLICATE KEY UPDATE 
+                            translated_text = VALUES(translated_text),
+                            updated_at = NOW()
+                        ");
+                        $stmt->execute([$cacheKey, $englishText, $languageCode, $translatedText, $translationMethod]);
+                    } catch (PDOException $e) {
+                        // Cache write failure should not fail the translation response.
+                        error_log("Translation cache write failed: " . $e->getMessage());
+                    }
                 }
             }
         }

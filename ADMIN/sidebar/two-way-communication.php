@@ -34,7 +34,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <link rel="stylesheet" href="css/modules.css">
         <link rel="stylesheet" href="css/module-two-way-communication.css?v=<?php echo filemtime(__DIR__ . '/css/module-two-way-communication.css'); ?>">
 </head>
-<body>
+<body class="twc-page">
     <!-- Include Sidebar Component -->
     <?php include 'includes/sidebar.php'; ?>
 
@@ -58,6 +58,59 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 <h1><i class="fas fa-comments" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Two-Way Communication Interface</h1>
                 <p>Interactive communication platform allowing administrators and citizens to exchange messages in real-time.</p>
             </div>
+
+            <div class="department-top-nav" id="departmentTopNav" aria-label="Department Navigation">
+                <button type="button" class="dept-nav-chip active" data-dept="all">
+                    <i class="fas fa-layer-group"></i>
+                    <span>All Conversations</span>
+                    <span class="dept-nav-count" data-dept-count="all">0</span>
+                </button>
+                <button type="button" class="dept-nav-chip" data-dept="incident_nlp">
+                    <i class="fas fa-microscope"></i>
+                    <span>Incident &amp; NLP</span>
+                    <span class="dept-nav-count" data-dept-count="incident_nlp">0</span>
+                </button>
+                <button type="button" class="dept-nav-chip" data-dept="traffic_transport">
+                    <i class="fas fa-traffic-light"></i>
+                    <span>Traffic &amp; Transport</span>
+                    <span class="dept-nav-count" data-dept-count="traffic_transport">0</span>
+                </button>
+                <button type="button" class="dept-nav-chip" data-dept="emergency_response">
+                    <i class="fas fa-ambulance"></i>
+                    <span>Emergency Response</span>
+                    <span class="dept-nav-count" data-dept-count="emergency_response">0</span>
+                </button>
+                <button type="button" class="dept-nav-chip" data-dept="community_policing">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>Community Policing</span>
+                    <span class="dept-nav-count" data-dept-count="community_policing">0</span>
+                </button>
+                <button type="button" class="dept-nav-chip" data-dept="crime_analytics">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Crime Analytics</span>
+                    <span class="dept-nav-count" data-dept-count="crime_analytics">0</span>
+                </button>
+                <button type="button" class="dept-nav-chip" data-dept="public_safety_campaign">
+                    <i class="fas fa-bullhorn"></i>
+                    <span>Public Safety</span>
+                    <span class="dept-nav-count" data-dept-count="public_safety_campaign">0</span>
+                </button>
+                <button type="button" class="dept-nav-chip" data-dept="health_inspection">
+                    <i class="fas fa-notes-medical"></i>
+                    <span>Health &amp; Safety</span>
+                    <span class="dept-nav-count" data-dept-count="health_inspection">0</span>
+                </button>
+                <button type="button" class="dept-nav-chip" data-dept="disaster_preparedness">
+                    <i class="fas fa-hard-hat"></i>
+                    <span>Disaster Preparedness</span>
+                    <span class="dept-nav-count" data-dept-count="disaster_preparedness">0</span>
+                </button>
+                <button type="button" class="dept-nav-chip" data-dept="emergency_comm">
+                    <i class="fas fa-broadcast-tower"></i>
+                    <span>Emergency Comms</span>
+                    <span class="dept-nav-count" data-dept-count="emergency_comm">0</span>
+                </button>
+            </div>
             
             <div class="sub-container">
                 <div class="page-content">
@@ -65,8 +118,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         <!-- Conversations List Container -->
                         <div class="conversations-list-container">
                             <div class="chat-tabs">
-                                <div class="chat-tab active" onclick="switchTab('active')">
-                                    <i class="fas fa-inbox"></i> Active <span id="activeCount" class="badge"></span>
+                                <div class="chat-tab active" onclick="switchTab('open')">
+                                    <i class="fas fa-inbox"></i> Open <span id="openCount" class="badge"></span>
+                                </div>
+                                <div class="chat-tab" onclick="switchTab('assigned')">
+                                    <i class="fas fa-user-check"></i> Assigned
                                 </div>
                                 <div class="chat-tab" onclick="switchTab('closed')">
                                     <i class="fas fa-check-circle"></i> Closed
@@ -89,6 +145,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 <label for="topicFilter">Topic</label>
                                 <select id="topicFilter">
                                     <option value="all">All Topics</option>
+                                </select>
+                                <label for="priorityFilter">Priority</label>
+                                <select id="priorityFilter">
+                                    <option value="all">All Priorities</option>
+                                    <option value="urgent">Urgent</option>
+                                    <option value="normal">Normal</option>
                                 </select>
                             </div>
                             <div class="conversations-list" id="scrollableList">
@@ -151,7 +213,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=4c8a89&color=fff&size=128`;
         
         // State Management
-        let currentStatus = 'active';
+        let currentStatus = 'open';
         let currentConversationId = null;
         let lastMessageId = 0;
         let currentPage = 1;
@@ -164,6 +226,18 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         let lastUnreadCount = 0;
         let hasUnreadBaseline = false;
         let topicSet = new Set();
+        let currentPriority = 'all';
+        const DEPARTMENT_KEYS = [
+            'incident_nlp',
+            'traffic_transport',
+            'emergency_response',
+            'community_policing',
+            'crime_analytics',
+            'public_safety_campaign',
+            'health_inspection',
+            'disaster_preparedness',
+            'emergency_comm'
+        ];
         
         // Polling Intervals
         let pollInterval = null;
@@ -270,6 +344,82 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             ];
         }
 
+        function setActiveDepartmentNav(key) {
+            const normalizedKey = normalizeDeptKey(key || 'all') || 'all';
+            document.querySelectorAll('.dept-nav-chip').forEach(chip => {
+                chip.classList.toggle('active', chip.getAttribute('data-dept') === normalizedKey);
+            });
+        }
+
+        function updateDepartmentNavCounts(conversations) {
+            const counts = { all: conversations.length };
+            DEPARTMENT_KEYS.forEach(key => {
+                counts[key] = 0;
+            });
+
+            conversations.forEach(conv => {
+                const key = mapConversationDept(conv);
+                if (key && Object.prototype.hasOwnProperty.call(counts, key)) {
+                    counts[key] += 1;
+                }
+            });
+
+            document.querySelectorAll('.dept-nav-count').forEach(node => {
+                const key = node.getAttribute('data-dept-count') || 'all';
+                const value = counts[key] || 0;
+                node.textContent = String(value);
+                node.style.display = value > 0 || key === 'all' ? 'inline-flex' : 'none';
+            });
+        }
+
+        function updateDepartmentQueryParam(dept) {
+            const url = new URL(window.location.href);
+            const normalizedDept = normalizeDeptKey(dept || 'all');
+
+            if (normalizedDept && normalizedDept !== 'all') {
+                url.searchParams.set('dept', normalizedDept);
+            } else {
+                url.searchParams.delete('dept');
+            }
+
+            window.history.replaceState({}, '', url.toString());
+        }
+
+        function resetConversationsAndReload() {
+            currentPage = 1;
+            hasMore = true;
+            document.getElementById('conversationsList').innerHTML = '';
+            document.getElementById('loadMoreContainer').style.display = 'none';
+            loadConversations(true);
+        }
+
+        function getConversationTimestamp(conv) {
+            const raw = conv.lastMessageTime ?? conv.lastMessageAt ?? conv.updatedAt ?? conv.createdAt ?? 0;
+            const ts = Number(raw);
+            return Number.isFinite(ts) ? ts : 0;
+        }
+
+        function sortConversationsNewest(conversations) {
+            return [...conversations].sort((a, b) => {
+                const diff = getConversationTimestamp(b) - getConversationTimestamp(a);
+                if (diff !== 0) return diff;
+                return Number(b.id || 0) - Number(a.id || 0);
+            });
+        }
+
+        function orderedDeptKeysByRecency(grouped) {
+            const fallbackOrder = deptOrder();
+            return Object.keys(grouped).sort((a, b) => {
+                const aTopTs = grouped[a]?.[0] ? getConversationTimestamp(grouped[a][0]) : 0;
+                const bTopTs = grouped[b]?.[0] ? getConversationTimestamp(grouped[b][0]) : 0;
+                if (aTopTs !== bTopTs) return bTopTs - aTopTs;
+
+                const aIdx = fallbackOrder.indexOf(a);
+                const bIdx = fallbackOrder.indexOf(b);
+                return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
+            });
+        }
+
         function ensureDeptSection(listContainer, key) {
             const id = `dept-${key}`;
             let section = document.getElementById(id);
@@ -299,24 +449,35 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (!append) listContainer.innerHTML = '';
 
             const grouped = {};
-            conversations.forEach(conv => {
+            sortConversationsNewest(conversations).forEach(conv => {
                 const key = mapConversationDept(conv) || 'unassigned';
                 if (!grouped[key]) grouped[key] = [];
                 grouped[key].push(conv);
             });
 
-            // Render in fixed department order
-            deptOrder().forEach(key => {
+            Object.keys(grouped).forEach(key => {
+                grouped[key] = sortConversationsNewest(grouped[key]);
+            });
+
+            orderedDeptKeysByRecency(grouped).forEach(key => {
                 if (!grouped[key] || grouped[key].length === 0) return;
                 const section = ensureDeptSection(listContainer, key);
                 const list = section.querySelector('.dept-section-list');
-                grouped[key].forEach(conv => list.appendChild(createConversationElement(conv)));
+                const existingIds = new Set(
+                    Array.from(list.querySelectorAll('.conversation-item')).map(node => String(node.getAttribute('data-conversation-id')))
+                );
+                grouped[key].forEach(conv => {
+                    const convId = String(conv.id);
+                    if (existingIds.has(convId)) return;
+                    list.appendChild(createConversationElement(conv));
+                    existingIds.add(convId);
+                });
                 const count = section.querySelector(`#dept-${key}-count`);
                 if (count) count.textContent = String(list.children.length);
             });
         }
 
-        async function loadConversations(isInitial = false, append = false) {
+        async function loadConversations(isInitial = false, append = false, silent = false) {
             if (isLoading) return;
             isLoading = true;
             
@@ -324,7 +485,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const spinner = document.getElementById('loadingSpinner');
             const loadMoreBtn = document.getElementById('loadMoreContainer');
             
-            if (isInitial && !append) {
+            if (isInitial && !append && !silent) {
                 spinner.style.display = 'block';
                 listContainer.innerHTML = ''; // Clear for initial load
             } else if (append) {
@@ -338,15 +499,32 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     page: currentPage,
                     limit: pageLimit
                 });
+                if (currentDept !== 'all') {
+                    params.set('category', currentDept);
+                }
+                if (currentPriority !== 'all') {
+                    params.set('priority', currentPriority);
+                }
                 
                 const response = await fetch(`${API_BASE}chat-get-conversations.php?${params}`);
                 const data = await response.json();
                 
-                spinner.style.display = 'none';
+                if (!silent) {
+                    spinner.style.display = 'none';
+                }
                 
                 if (!data.success) throw new Error(data.message);
                 
                 let conversations = data.conversations || [];
+                updateDepartmentNavCounts(conversations);
+                const openBadge = document.getElementById('openCount');
+                if (openBadge && (currentStatus === 'open' || currentStatus === 'active')) {
+                    const totalOpen = (data.pagination && typeof data.pagination.total === 'number')
+                        ? data.pagination.total
+                        : conversations.length;
+                    openBadge.textContent = totalOpen > 0 ? String(totalOpen) : '';
+                    openBadge.style.display = totalOpen > 0 ? 'inline-block' : 'none';
+                }
                 conversations.forEach(c => {
                     const t = mapConversationTopic(c);
                     if (t) topicSet.add(t);
@@ -382,8 +560,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 
             } catch (error) {
                 console.error('Error loading conversations:', error);
-                if (isInitial) listContainer.innerHTML = '<p style="color: #e74c3c; text-align: center; padding: 1rem;">Failed to load data</p>';
+                if (isInitial && !silent) listContainer.innerHTML = '<p style="color: #e74c3c; text-align: center; padding: 1rem;">Failed to load data</p>';
             } finally {
+                if (!silent) {
+                    spinner.style.display = 'none';
+                }
                 isLoading = false;
             }
         }
@@ -459,48 +640,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 }
             } catch (e) {}
 
-            // 2. Refresh List (Page 1 Only) - Silent Update
-            // We only do this if we aren't loading, and user is viewing top of list
-            // to avoid jumping.
+            // 2. Silent list refresh for first page only (stable re-render, no manual DOM shuffling)
             const listEl = document.getElementById('scrollableList');
-            if (!isLoading && listEl.scrollTop < 50 && currentStatus === 'active') {
-                try {
-                    const params = new URLSearchParams({ status: 'active', page: 1, limit: pageLimit });
-                    const res = await fetch(`${API_BASE}chat-get-conversations.php?${params}`);
-                    const data = await res.json();
-                    
-                    if (data.success && data.conversations) {
-                        data.conversations.forEach(conv => {
-                            const existing = document.querySelector(`.conversation-item[data-conversation-id="${conv.id}"]`);
-                            
-                            // If exists, update content and move to top if new message
-                            // Ideally we check timestamps, but for simplicity:
-                            // If it's not the first item, move it to top.
-                            const list = document.getElementById('conversationsList');
-                            const firstItem = list.firstElementChild;
-                            
-                            // Create new element content
-                            const tempDiv = document.createElement('div');
-                            tempDiv.innerHTML = getConversationHTML(conv);
-                            
-                            if (existing) {
-                                // Update content
-                                existing.innerHTML = tempDiv.innerHTML;
-                                existing._conversationData = conv; // Update data
-                                
-                                // Move to top if timestamp is newer than current top
-                                // or simply if it's not already top
-                                if (existing !== firstItem) {
-                                    list.insertBefore(existing, firstItem);
-                                }
-                            } else {
-                                // New item! Prepend.
-                                const newEl = createConversationElement(conv);
-                                list.insertBefore(newEl, firstItem);
-                            }
-                        });
-                    }
-                } catch (e) { console.error('Poll error', e); }
+            if (!isLoading && currentPage === 1 && listEl && listEl.scrollTop < 50 && (currentStatus === 'open' || currentStatus === 'active')) {
+                await loadConversations(false, false, true);
             }
         }
 
@@ -525,18 +668,43 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         
         function getConversationHTML(conv) {
-            const guestBadge = conv.isGuest ? '<span style="background: #ff9800; color: white; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; margin-left: 0.5rem; vertical-align: middle; font-weight: 700;">GUEST</span>' : '';
-            const concernBadge = conv.userConcern ? `<span style="background: rgba(33, 150, 243, 0.15); color: #2196f3; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; margin-left: 0.5rem; text-transform: capitalize; vertical-align: middle; font-weight: 600;">${conv.userConcern}</span>` : '';
-            const callBadge = conv.hasCall ? '<span style="background: rgba(76, 138, 137, 0.2); color: #4c8a89; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; margin-left: 0.5rem; vertical-align: middle; font-weight: 600;"><i class="fas fa-phone" style="margin-right: 0.2rem;"></i>Call</span>' : '';
+            const guestBadge = conv.isGuest ? '<span class="list-chip list-chip-guest">GUEST</span>' : '';
+            const concernBadge = conv.userConcern ? `<span class="list-chip list-chip-concern">${conv.userConcern}</span>` : '';
+            const callBadge = conv.hasCall ? '<span class="list-chip list-chip-call"><i class="fas fa-phone"></i>Call</span>' : '';
+            const unreadBadge = conv.unreadCount > 0 ? `<span class="list-chip list-chip-unread">${conv.unreadCount}</span>` : '';
             const deptKey = mapConversationDept(conv);
             const deptTag = deptKey ? `<span class="dept-badge">${deptLabel(deptKey)}</span>` : '';
             const topicKey = mapConversationTopic(conv);
             const topicTag = topicKey ? `<span class="topic-badge">${topicLabel(topicKey)}</span>` : '';
+            const workflowRaw = (conv.workflowStatus || '').toLowerCase();
+            const workflowLabelMap = {
+                open: 'Open',
+                active: 'Open',
+                in_progress: 'In Progress',
+                waiting_user: 'Waiting User',
+                resolved: 'Resolved',
+                closed: 'Closed'
+            };
+            const workflowLabel = workflowLabelMap[workflowRaw] || 'Open';
+            const workflowClassMap = {
+                open: 'workflow-open',
+                active: 'workflow-open',
+                in_progress: 'workflow-progress',
+                waiting_user: 'workflow-waiting',
+                resolved: 'workflow-resolved',
+                closed: 'workflow-closed'
+            };
+            const workflowClass = workflowClassMap[workflowRaw] || 'workflow-open';
+            const statusBadge = `<span class="workflow-pill ${workflowClass}">${workflowLabel}</span>`;
             const statusDot = `<span class="status-dot"></span>`;
-            
-            const time = conv.lastMessageTime ? new Date(conv.lastMessageTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
-            const date = conv.lastMessageTime ? new Date(conv.lastMessageTime).toLocaleDateString() : '';
-            const displayTime = time ? `<small style="float: right; opacity: 0.7; font-size: 0.75rem;">${time}</small>` : '';
+
+            const timestamp = getConversationTimestamp(conv);
+            const displayTime = timestamp
+                ? `<small style="opacity:0.75;font-size:0.72rem;white-space:nowrap;display:block;text-align:right;line-height:1.25;">
+                        ${new Date(timestamp).toLocaleDateString([], { month: 'short', day: '2-digit', year: 'numeric' })}
+                        ${new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                   </small>`
+                : '';
 
             // User Info Line
             const userInfo = [];
@@ -551,7 +719,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
                     <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 0.5rem; font-size: 0.95rem;">
                         ${statusDot}
-                        <strong>${conv.userName || 'Unknown'}</strong>${guestBadge}${concernBadge}${callBadge}
+                        <strong>${conv.userName || 'Unknown'}</strong>${guestBadge}${concernBadge}${callBadge}${unreadBadge}
                     </div>
                     ${displayTime}
                 </div>
@@ -562,7 +730,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     ${userInfo.join(' &nbsp; ')} &nbsp; ${conv.userLocation || ''}
                 </div>
                 <div style="margin-top: 0.45rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                    ${deptTag} ${topicTag}
+                    ${statusBadge} ${deptTag} ${topicTag}
                 </div>
             `;
         }
@@ -589,7 +757,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const nameEl = document.getElementById('chatUserName');
             const statusEl = document.getElementById('chatUserStatus');
             
-            const guestBadge = data.isGuest ? ' <span style="font-size: 0.7rem; background: #ff9800; color: white; padding: 2px 6px; border-radius: 4px; vertical-align: middle;">GUEST</span>' : '';
+            const guestBadge = data.isGuest ? ' <span class="list-chip list-chip-guest">GUEST</span>' : '';
             nameEl.innerHTML = (data.userName || 'Unknown') + guestBadge;
             
             // Detailed Info for Status Bar
@@ -916,6 +1084,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         // Init
         document.addEventListener('DOMContentLoaded', () => {
             const deptFilter = document.getElementById('deptFilter');
+            const deptTopNav = document.getElementById('departmentTopNav');
             if (deptFilter) {
                 const urlDept = new URLSearchParams(window.location.search).get('dept');
                 if (urlDept && Array.from(deptFilter.options).some(o => o.value === urlDept)) {
@@ -924,22 +1093,39 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 }
                 deptFilter.addEventListener('change', () => {
                     currentDept = deptFilter.value || 'all';
-                    currentPage = 1;
-                    hasMore = true;
-                    document.getElementById('conversationsList').innerHTML = '';
-                    document.getElementById('loadMoreContainer').style.display = 'none';
-                    loadConversations(true);
+                    setActiveDepartmentNav(currentDept);
+                    updateDepartmentQueryParam(currentDept);
+                    resetConversationsAndReload();
                 });
             }
+            if (deptTopNav) {
+                deptTopNav.addEventListener('click', (event) => {
+                    const chip = event.target.closest('.dept-nav-chip');
+                    if (!chip) return;
+
+                    const selectedDept = chip.getAttribute('data-dept') || 'all';
+                    if (normalizeDeptKey(selectedDept) === normalizeDeptKey(currentDept)) return;
+
+                    currentDept = selectedDept;
+                    if (deptFilter) deptFilter.value = selectedDept;
+                    setActiveDepartmentNav(currentDept);
+                    updateDepartmentQueryParam(currentDept);
+                    resetConversationsAndReload();
+                });
+            }
+            setActiveDepartmentNav(currentDept);
             const topicFilter = document.getElementById('topicFilter');
             if (topicFilter) {
                 topicFilter.addEventListener('change', () => {
                     currentTopic = topicFilter.value || 'all';
-                    currentPage = 1;
-                    hasMore = true;
-                    document.getElementById('conversationsList').innerHTML = '';
-                    document.getElementById('loadMoreContainer').style.display = 'none';
-                    loadConversations(true);
+                    resetConversationsAndReload();
+                });
+            }
+            const priorityFilter = document.getElementById('priorityFilter');
+            if (priorityFilter) {
+                priorityFilter.addEventListener('change', () => {
+                    currentPriority = priorityFilter.value || 'all';
+                    resetConversationsAndReload();
                 });
             }
 
@@ -972,8 +1158,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             <div style="display:flex; gap:20px; flex:1; min-height:0;">
                 <div style="width:420px; max-width:40%; min-width:380px; border:1px solid rgba(255,255,255,0.10); border-radius:14px; padding:18px; background:rgba(0,0,0,0.18); display:flex; flex-direction:column; gap:14px;">
                     <div style="display:flex; align-items:center; gap:12px;">
-                        <div style="width:44px; height:44px; border-radius:12px; background:rgba(76,138,137,0.2); display:flex; align-items:center; justify-content:center; flex:0 0 auto;">
-                            <i class="fas fa-user" style="color:#4c8a89;"></i>
+                        <div style="width:44px; height:44px; border-radius:12px; background:rgba(58, 118, 117,0.2); display:flex; align-items:center; justify-content:center; flex:0 0 auto;">
+                            <i class="fas fa-user" style="color:#3a7675;"></i>
                         </div>
                         <div style="flex:1; min-width:0;">
                             <div style="font-weight:900; letter-spacing:0.4px;">Caller Details</div>
@@ -1020,8 +1206,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
                     <!-- Call Header -->
                     <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
-                        <div style="width:44px; height:44px; border-radius:12px; background:rgba(76,138,137,0.2); display:flex; align-items:center; justify-content:center;">
-                            <i class="fas fa-headset" style="color:#4c8a89;"></i>
+                        <div style="width:44px; height:44px; border-radius:12px; background:rgba(58, 118, 117,0.2); display:flex; align-items:center; justify-content:center;">
+                            <i class="fas fa-headset" style="color:#3a7675;"></i>
                         </div>
                         <div style="flex:1;">
                             <div style="font-weight:700; font-size:16px;">Emergency Call</div>
@@ -1278,8 +1464,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             margin-bottom: 8px;
             padding: 8px 12px;
             border-radius: 8px;
-            background: ${sender === 'admin' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(59, 130, 246, 0.2)'};
-            border-left: 3px solid ${sender === 'admin' ? '#22c55e' : '#3b82f6'};
+            background: ${sender === 'admin'
+                ? 'color-mix(in srgb, var(--primary-color-1) 22%, transparent)'
+                : 'color-mix(in srgb, var(--secondary-color-1) 18%, transparent)'};
+            border-left: 3px solid ${sender === 'admin' ? 'var(--primary-color-1)' : 'var(--secondary-color-1)'};
             font-size: 13px;
             line-height: 1.4;
         `;
@@ -1878,7 +2066,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             pendingCandidates = [];
 
             try {
-                if (typeof switchTab === 'function') switchTab('active');
+                if (typeof switchTab === 'function') switchTab('open');
             } catch (e) {}
 
             _startAlertSound(notificationSound);

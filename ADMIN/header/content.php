@@ -225,7 +225,7 @@ Swal.fire({
     text: "This action cannot be undone!",
     icon: 'warning',
     showCancelButton: true,
-    confirmButtonColor: '#4c8a89',
+    confirmButtonColor: '#3a7675',
     cancelButtonColor: '#6c757d',
     confirmButtonText: 'Yes, delete it!'
 }).then((result) => {
@@ -245,7 +245,7 @@ Swal.fire({
             title: 'Success!',
             text: 'Operation completed successfully.',
             icon: 'success',
-            confirmButtonColor: '#4c8a89'
+            confirmButtonColor: '#3a7675'
         },
         warning: {
             title: 'Warning!',
@@ -417,7 +417,7 @@ alert-secondary  // Gray secondary alert</code></pre>
                     title: 'Success!',
                     text: 'Your changes have been saved successfully.',
                     icon: 'success',
-                    confirmButtonColor: '#4c8a89'
+                    confirmButtonColor: '#3a7675'
                 },
                 warning: {
                     title: 'Warning!',
@@ -448,7 +448,7 @@ alert-secondary  // Gray secondary alert</code></pre>
                 text: "You won't be able to revert this!",
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonColor: '#4c8a89',
+                confirmButtonColor: '#3a7675',
                 cancelButtonColor: '#6c757d',
                 confirmButtonText: 'Yes, delete it!'
             }).then((result) => {
@@ -457,7 +457,7 @@ alert-secondary  // Gray secondary alert</code></pre>
                         title: 'Confirmed!',
                         text: 'Action completed successfully.',
                         icon: 'success',
-                        confirmButtonColor: '#4c8a89'
+                        confirmButtonColor: '#3a7675'
                     });
                 }
             });
