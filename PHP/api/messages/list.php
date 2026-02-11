@@ -17,18 +17,9 @@ if ($conversation_id <= 0) {
 
 try {
     $stmt = $pdo->prepare('
-        SELECT
-            m.id,
-            m.conversation_id,
-            m.sender_id,
-            u.name as senderName,
-            m.content as messageText,
-            m.sent_at,
-            m.nonce
-        FROM messages m
-        JOIN users u ON m.sender_id = u.id
-        WHERE m.conversation_id = ? AND m.id > ?
-        ORDER BY m.id ASC
+        SELECT * FROM chat_messages 
+        WHERE conversation_id = ? AND message_id > ?
+        ORDER BY message_id ASC
     ');
 
     $stmt->execute([$conversation_id, $last_message_id]);
@@ -37,10 +28,10 @@ try {
     apiResponse::success(['messages' => $messages], 'OK');
 
 } catch (PDOException $e) {
-    error_log('Messages list DB error: ' . $e->getMessage());
+    error_log('Chat Messages list DB error: ' . $e->getMessage());
     apiResponse::error('A database error occurred.', 500, $e->getMessage());
 } catch (Exception $e) {
-    error_log('Messages list error: ' . $e->getMessage());
+    error_log('Chat Messages list error: ' . $e->getMessage());
     apiResponse::error('An unexpected error occurred.', 500, $e->getMessage());
 }
 ?>

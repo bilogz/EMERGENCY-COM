@@ -3556,7 +3556,7 @@ textarea:focus {
 @media (max-width: 768px) {
     .hero-buttons {
         flex-direction: column;
-        align-items: flex-start;
+        align-items: center;
         gap: 0.5rem;
     }
 }
@@ -4168,6 +4168,14 @@ body[data-theme="dark"] .sidebar-link.active i:before {
         min-height: 52px;
     }
 
+    /* Center buttons inside cards on mobile */
+    .card .btn {
+        align-self: center;
+        width: 100%;
+        max-width: 280px;
+        justify-content: center;
+    }
+
     /* Action buttons container */
     .action-buttons {
         display: flex;
@@ -4184,6 +4192,7 @@ body[data-theme="dark"] .sidebar-link.active i:before {
     /* Hero buttons - stack on mobile */
     .hero-buttons {
         flex-direction: column;
+        align-items: center;
         gap: 0.625rem;
         width: 100%;
     }
