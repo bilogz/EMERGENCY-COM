@@ -17,6 +17,7 @@ header('Content-Type: application/json; charset=utf-8');
 try {
     require_once 'db_connect.php';
     require_once 'activity_logger.php';
+    require_once 'secure-api-config.php';
 } catch (Exception $e) {
     ob_end_clean();
     http_response_code(500);
@@ -47,6 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if ($pdo === null) {
                 throw new Exception('Database connection not available');
+            }
+            if (function_exists('ensureIntegrationSettingsTableHealthy')) {
+                ensureIntegrationSettingsTableHealthy($pdo);
             }
             
             try {
@@ -150,9 +154,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($pdo === null) {
             throw new Exception('Database connection not available');
         }
-        
-        $stmt = $pdo->query("SELECT source, enabled FROM integration_settings");
-        $settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        if (function_exists('ensureIntegrationSettingsTableHealthy')) {
+            ensureIntegrationSettingsTableHealthy($pdo);
+        }
+
+        $settings = [];
+        try {
+            $stmt = $pdo->query("SELECT source, enabled FROM integration_settings");
+            $settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        } catch (Throwable $settingsEx) {
+            error_log("Integration settings read error: " . $settingsEx->getMessage());
+            $settings = [];
+        }
         
         // Check Gemini status from AI settings and secure config
         $geminiEnabled = false;
@@ -202,7 +216,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // No settings in table, but check secure config
                 if (!empty($secureApiKey)) {
                     $geminiApiKeySet = true;
-                    $geminiStatusMessage = 'API Key Found - Configure Settings';
+                    $geminiEnabled = function_exists('isAIAnalysisEnabled') ? isAIAnalysisEnabled('weather') : false;
+                    $geminiStatusMessage = $geminiEnabled ? 'AI Active and Monitoring' : 'API Key Found - Configure Settings';
                 } else {
                     $geminiStatusMessage = 'API Key Required';
                 }
@@ -232,7 +247,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         echo json_encode([
             'success' => true,
-            'pagasa' => ['enabled' => isset($settings['pagasa']) && $settings['pagasa']],
+            'pagasa' => [
+                'enabled' => (isset($settings['pagasa']) && $settings['pagasa']) ||
+                    (function_exists('getOpenWeatherApiKey') && !empty(getOpenWeatherApiKey(false)))
+            ],
             'phivolcs' => ['enabled' => isset($settings['phivolcs']) && $settings['phivolcs']],
             'gemini' => [
                 'enabled' => $geminiEnabled, 

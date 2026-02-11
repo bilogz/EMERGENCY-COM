@@ -1,20 +1,11 @@
 <?php
 /**
- * PHIVOLCS Earthquake Monitoring Page
- * Monitor earthquakes in the Philippines region using USGS data
+ * PHIVOLCS Earthquake Monitoring Page (User)
+ * Reuses admin module styling/logic with user navigation
  */
 
-// Start session and check authentication
-session_start();
-
-$publicView = isset($_GET['public']) && $_GET['public'] == '1';
-
-// Check if user is logged in (skip for public view)
-if (!$publicView && (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true)) {
-    header('Location: ../login.php');
-    exit();
-}
-
+$assetBase = '../ADMIN/header/';
+$current = 'earthquake-monitoring.php';
 $pageTitle = 'PHIVOLCS Earthquake Monitoring';
 ?>
 <!DOCTYPE html>
@@ -23,49 +14,103 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($pageTitle); ?></title>
-    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
-    <link rel="stylesheet" href="css/global.css?v=<?php echo filemtime(__DIR__ . '/css/global.css'); ?>">
+    <link rel="icon" type="image/x-icon" href="<?= $assetBase ?>images/favicon.ico">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/global.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="css/sidebar.css?v=<?php echo filemtime(__DIR__ . '/css/sidebar.css'); ?>">
-    <link rel="stylesheet" href="css/admin-header.css">
-    <link rel="stylesheet" href="css/buttons.css">
-    <link rel="stylesheet" href="css/forms.css">
-    <link rel="stylesheet" href="css/datatables.css">
-    <link rel="stylesheet" href="css/hero.css">
-    <link rel="stylesheet" href="css/sidebar-footer.css">
-    <link rel="stylesheet" href="css/modules.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/sidebar.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/content.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/admin-header.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/buttons.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/forms.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/datatables.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/hero.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/modules.css">
+    <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <link rel="stylesheet" href="css/module-earthquake-monitoring.css?v=<?php echo filemtime(__DIR__ . '/css/module-earthquake-monitoring.css'); ?>">
-    <?php if ($publicView): ?>
-    <style>
-        body.public-view .main-content {
-            margin-left: 0;
-            padding-top: 2rem;
-        }
-        body.public-view .main-container {
-            max-width: 1200px;
-        }
-    </style>
-    <?php endif; ?>
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/module-earthquake-monitoring.css?v=<?php echo filemtime(__DIR__ . '/../ADMIN/sidebar/css/module-earthquake-monitoring.css'); ?>">
+    <script src="js/translations.js"></script>
+    <script src="js/language-manager.js"></script>
+    <script src="js/global-translator.js"></script>
+    <script src="js/language-selector-modal.js"></script>
+    <script src="js/language-sync.js"></script>
+    <script>
+        (function() {
+            if (typeof window.sidebarToggle !== 'function') {
+                window.sidebarToggle = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                };
+            }
+            if (typeof window.sidebarClose !== 'function') {
+                window.sidebarClose = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.remove('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.remove('sidebar-overlay-open');
+                        }
+                        document.body.classList.remove('sidebar-open');
+                    }
+                };
+            }
+        })();
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const langBtn = document.getElementById('languageSelectorBtn');
+            if (langBtn && window.languageSelectorModal) {
+                langBtn.addEventListener('click', function() {
+                    window.languageSelectorModal.open();
+                });
+            }
+
+            if (typeof window.sidebarToggle !== 'function') {
+                window.sidebarToggle = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                };
+            }
+
+            const toggleButtons = document.querySelectorAll('.sidebar-toggle-btn');
+            toggleButtons.forEach(function(btn) {
+                if (!btn.getAttribute('onclick') || !btn.getAttribute('onclick').includes('sidebarToggle')) {
+                    btn.setAttribute('onclick', 'window.sidebarToggle()');
+                }
+                if (!btn.hasAttribute('data-no-translate')) {
+                    btn.setAttribute('data-no-translate', '');
+                }
+            });
+        });
+    </script>
 </head>
-<body class="<?php echo $publicView ? 'public-view' : ''; ?>">
-    <?php if (!$publicView): ?>
-        <?php include 'includes/sidebar.php'; ?>
-        <?php include 'includes/admin-header.php'; ?>
-    <?php endif; ?>
+<body class="user-admin-ui">
+    <?php include 'includes/sidebar.php'; ?>
+    <?php include 'includes/admin-style-header.php'; ?>
+
+    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
+        <i class="fas fa-bars"></i>
+    </button>
     
     <div class="main-content">
         <div class="main-container">
             <div class="title">
-                <nav class="breadcrumb" aria-label="Breadcrumb">
-                    <ol class="breadcrumb-list">
-                        <li class="breadcrumb-item"><a href="dashboard.php" class="breadcrumb-link">Dashboard</a></li>
-                        <li class="breadcrumb-item active">Earthquake Monitoring</li>
-                    </ol>
-                </nav>
                 <h1><i class="fas fa-mountain" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> PHIVOLCS Earthquake Monitoring</h1>
                 <p>Monitor real-time seismic activity in the Philippines region with AI-driven risk assessment for Quezon City.</p>
             </div>
@@ -238,7 +283,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         }
 
         function loadQuezonCityBoundary() {
-            fetch('../api/quezon-city.geojson')
+            fetch('../ADMIN/api/quezon-city.geojson')
                 .then(r => r.json())
                 .then(data => {
                     L.geoJSON(data, {
@@ -395,7 +440,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 time: f.properties.time
             }));
 
-            fetch('../api/earthquake-ai-analytics.php?action=assess_risk', {
+            fetch('../ADMIN/api/earthquake-ai-analytics.php?action=assess_risk', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ earthquakes: relevant }),

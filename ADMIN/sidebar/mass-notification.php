@@ -42,7 +42,7 @@ $pageTitle = 'Mass Notification System';
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
-<body>
+<body class="mn-page">
         <link rel="stylesheet" href="css/module-mass-notification.css?v=<?php echo filemtime(__DIR__ . '/css/module-mass-notification.css'); ?>">
 
     <!-- Include Sidebar Component -->
@@ -440,7 +440,7 @@ $pageTitle = 'Mass Notification System';
                                     <button class="mn-preview-mode" type="button" data-mode="push">Push</button>
                                     <button class="mn-preview-mode" type="button" data-mode="pa">PA</button>
                                 </div>
-                                <div id="live-preview-pill" class="category-preview-pill" style="background: #95a5a6; display: none;">
+                                <div id="live-preview-pill" class="category-preview-pill category-preview-pill--default" style="display: none;">
                                     <i id="preview-icon" class="fas fa-exclamation-triangle"></i>
                                     <span id="preview-name">General</span>
                                 </div>
@@ -1373,7 +1373,7 @@ $pageTitle = 'Mass Notification System';
                         id: c.id,
                         name: c.name,
                         icon: c.icon || 'fa-exclamation-triangle',
-                        color: c.color || '#4c8a89',
+                        color: c.color || '#3a7675',
                         description: c.description || ''
                     }));
 
@@ -1399,7 +1399,7 @@ $pageTitle = 'Mass Notification System';
             function formatCategory(state) {
                 if (!state.id) return state.text;
                 const icon = $(state.element).data('icon') || 'fa-tag';
-                const color = $(state.element).data('color') || '#95a5a6';
+                const color = $(state.element).data('color') || '#3a7675';
                 return $(`<span><i class="fas ${icon}" style="color:${color}; width: 20px; text-align: center; margin-right: 8px;"></i>${state.text}</span>`);
             }
 
@@ -1864,7 +1864,7 @@ $pageTitle = 'Mass Notification System';
                 if (!geo || !mnMap) return;
                 if (mnQcLayer) return;
 
-                const brand = mnCssVar('--primary-color-1', '#4c8a89');
+                const brand = mnCssVar('--primary-color-1', '#3a7675');
                 mnQcLayer = L.geoJSON(geo, {
                     style: {
                         color: brand,
@@ -1912,7 +1912,7 @@ $pageTitle = 'Mass Notification System';
             if (!Number.isFinite(r) || r <= 0) return;
             if (mnMapSelected.lat === null || mnMapSelected.lng === null) return;
 
-            const brand = mnCssVar('--primary-color-1', '#4c8a89');
+            const brand = mnCssVar('--primary-color-1', '#3a7675');
             if (!mnMapRadiusCircle) {
                 mnMapRadiusCircle = L.circle([mnMapSelected.lat, mnMapSelected.lng], {
                     radius: r,

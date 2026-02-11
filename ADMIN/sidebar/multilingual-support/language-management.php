@@ -134,6 +134,9 @@ $pageTitle = 'Language Management';
     </div>
 
     <script>
+        const APP_BASE = window.location.pathname.split('/ADMIN/')[0] || '';
+        const API_BASE = APP_BASE + '/ADMIN/api';
+
         function openModal() { document.getElementById('addModal').classList.add('show'); }
         function closeModal() { document.getElementById('addModal').classList.remove('show'); document.getElementById('addForm').reset(); }
 
@@ -143,7 +146,7 @@ $pageTitle = 'Language Management';
         const rowsPerPage = 10;
 
         function loadData() {
-            fetch('../../api/language-management.php?action=list&include_inactive=1')
+            fetch(`${API_BASE}/language-management.php?action=list&include_inactive=1`)
                 .then(r => r.json())
                 .then(data => {
                     document.getElementById('loading').style.display = 'none';
@@ -154,6 +157,13 @@ $pageTitle = 'Language Management';
                         languagesData = data.languages;
                         filteredData = languagesData;
                         renderTable();
+                    }
+                })
+                .catch((error) => {
+                    console.error('Failed to load languages:', error);
+                    const loadingEl = document.getElementById('loading');
+                    if (loadingEl) {
+                        loadingEl.innerHTML = '<p style="color:#ff9b9b; font-weight:600;">Failed to load languages. Please refresh and try again.</p>';
                     }
                 });
         }
@@ -279,7 +289,7 @@ $pageTitle = 'Language Management';
         });
 
         function toggleStatus(id, isChecked) {
-            fetch('../../api/language-management.php?action=update', {
+            fetch(`${API_BASE}/language-management.php?action=update`, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({id: id, is_active: isChecked ? 1 : 0})
@@ -309,7 +319,7 @@ $pageTitle = 'Language Management';
                 is_active: 1,
                 is_ai_supported: 1
             };
-            fetch('../../api/language-management.php?action=add', {
+            fetch(`${API_BASE}/language-management.php?action=add`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)

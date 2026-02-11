@@ -571,6 +571,39 @@
     --primary-color: #8e44ad;
 }
 
+.user-home {
+    font-family: 'Manrope', 'Segoe UI', Tahoma, sans-serif;
+    letter-spacing: 0.01em;
+}
+
+/* Admin-like module pages on user side (weather/earthquake). */
+.user-admin-ui .auth-icons,
+.user-admin-ui .theme-toggle {
+    display: none !important;
+}
+
+.user-admin-ui .main-content {
+    padding-top: 5.2rem;
+}
+
+.user-admin-ui .main-content h1,
+.user-admin-ui .main-content h2,
+.user-admin-ui .main-content h3,
+.user-admin-ui .main-content h4,
+.user-admin-ui .main-content h5,
+.user-admin-ui .main-content h6,
+.user-admin-ui .main-content p,
+.user-admin-ui .main-content div,
+.user-admin-ui .main-content section,
+.user-admin-ui .main-content article {
+    text-align: left !important;
+}
+
+.user-admin-ui .title h1,
+.user-admin-ui .title p {
+    text-align: left !important;
+}
+
 /* ===================================
    BASE STYLES - Desktop First
    Clean, User-Friendly Design
@@ -583,6 +616,147 @@
     flex-direction: column;
     align-items: center;
     text-align: center !important;
+}
+
+.user-topbar {
+    width: 100%;
+    max-width: 1200px;
+    margin: 1.75rem auto 1.5rem;
+    padding: 2.25rem 2.5rem;
+    padding-right: 240px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(244, 251, 250, 0.96), rgba(231, 246, 244, 0.96));
+    border: 1px solid rgba(18, 86, 82, 0.18);
+    box-shadow: 0 18px 36px rgba(8, 45, 42, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+}
+
+.user-topbar,
+.user-topbar * {
+    text-align: left !important;
+}
+
+.user-topbar-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.topbar-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text-color, #1f2937);
+}
+
+.topbar-sub {
+    font-size: 1rem;
+    color: var(--text-muted, #4b5563);
+    max-width: 32rem;
+    line-height: 1.6;
+    font-weight: 500;
+}
+
+.user-topbar-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.topbar-weather {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 0.85rem 1.25rem;
+    border-radius: 14px;
+    background: rgba(243, 251, 250, 0.9);
+    border: 1px solid rgba(15, 118, 110, 0.24);
+    box-shadow: 0 12px 22px rgba(8, 45, 42, 0.1);
+    min-width: 240px;
+}
+
+.topbar-weather-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #bff0e8, #6fd8cb);
+    display: grid;
+    place-items: center;
+    color: #0f3d39;
+    font-size: 1.4rem;
+    overflow: hidden;
+}
+
+.topbar-weather-icon img {
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+}
+
+.topbar-weather-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.topbar-weather-temp {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #0f3d39;
+    line-height: 1.1;
+}
+
+.topbar-weather-desc {
+    font-size: 0.9rem;
+    color: var(--text-muted, #4b5563);
+    text-transform: capitalize;
+}
+
+.topbar-weather-meta {
+    margin-left: 0.5rem;
+    padding-left: 0.75rem;
+    border-left: 1px solid rgba(15, 118, 110, 0.2);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #0f3d39;
+}
+
+[data-theme="dark"] .user-topbar {
+    background: linear-gradient(135deg, rgba(18, 48, 46, 0.92), rgba(18, 60, 56, 0.92));
+    border-color: #2a4d49;
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .topbar-title {
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .topbar-sub {
+    color: #cbd5e1;
+}
+
+[data-theme="dark"] .topbar-weather {
+    background: rgba(21, 58, 55, 0.92);
+    border-color: #2a4d49;
+    box-shadow: 0 14px 24px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .topbar-weather-icon {
+    background: linear-gradient(135deg, #1f5f5a, #2a9d90);
+    color: #e3f7f5;
+}
+
+[data-theme="dark"] .topbar-weather-temp,
+[data-theme="dark"] .topbar-weather-meta {
+    color: #e3f7f5;
+}
+
+[data-theme="dark"] .topbar-weather-desc {
+    color: #b8d2cf;
 }
 
 /* Ensure main-container is block-level and centered */
@@ -632,6 +806,33 @@
 .main-content .hero-section p,
 .main-content .hero-section .hero-subtitle {
     text-align: center !important;
+}
+
+@media (max-width: 1024px) {
+    .auth-weather-pill {
+        display: none;
+    }
+
+    .user-topbar {
+        padding-right: 2rem;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .user-topbar-right {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .topbar-weather {
+        width: 100%;
+    }
+}
+
+@media (max-width: 640px) {
+    .user-topbar {
+        padding: 1.25rem;
+    }
 }
 
 /* Action buttons container - Desktop */
@@ -688,12 +889,17 @@
 
 .home-hero {
     position: relative;
-    min-height: 280px;
+    min-height: 360px;
     display: flex;
-    align-items: flex-end;
-    padding: 2rem 0;
-    background-image: linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.75)),
-                      url('../images/qc-hero-placeholder.svg');
+    align-items: center;
+    padding: 4.5rem 0;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 22px 46px rgba(12, 38, 38, 0.24);
+    background-image:
+        linear-gradient(135deg, rgba(7, 32, 36, 0.92), rgba(12, 64, 61, 0.88)),
+        radial-gradient(circle at 20% 20%, rgba(64, 190, 176, 0.22), transparent 50%),
+        url('../images/qc-hero-placeholder.svg');
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;
@@ -707,41 +913,65 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    gap: 0.5rem;
 }
 
 .home-hero h1 {
-    font-size: 2.1rem;
+    font-size: 2.6rem;
     font-weight: 800;
     color: #ffffff;
-    text-shadow: 0 3px 12px rgba(0,0,0,0.8), 0 1px 3px rgba(0,0,0,0.9);
+    text-shadow: 0 10px 28px rgba(0,0,0,0.45);
     letter-spacing: 0.02em;
     text-align: center;
+    margin-bottom: 1.5rem;
+    max-width: 880px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .home-hero .hero-subtitle {
-    margin-top: 0.6rem;
-    max-width: 52rem;
-    color: #ffffff;
-    font-size: 1.05rem;
+    margin-top: 0;
+    max-width: 56rem;
+    color: rgba(241, 255, 252, 0.92);
+    font-size: 1.06rem;
     line-height: 1.7;
-    text-shadow: 0 2px 8px rgba(0,0,0,0.8), 0 1px 2px rgba(0,0,0,0.9);
+    text-shadow: 0 6px 18px rgba(0,0,0,0.35);
     font-weight: 500;
     text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.home-hero .hero-subtitle:nth-of-type(1) {
+    margin-top: 0;
+}
+
+.home-hero .hero-subtitle:nth-of-type(2) {
+    margin-top: 1.25rem;
+}
+
+.home-hero .hero-subtitle:nth-of-type(3) {
+    margin-top: 1rem;
 }
 
 .home-hero .hero-subtitle strong {
-    color: #ffd700;
-    font-weight: 700;
+    color: #7ce8da;
+    font-weight: 600;
 }
 
 .home-download-app {
     text-align: center;
-    padding: 2rem 0 1rem;
+    padding: 2rem 1.5rem;
+    margin-top: 2rem;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(245,252,251,0.9));
+    border: 1px solid rgba(18, 86, 82, 0.12);
+    box-shadow: 0 18px 40px rgba(11, 36, 33, 0.12);
 }
 
 .home-download-app h3 {
     font-size: 1.5rem;
-    font-weight: 600;
+    font-weight: 700;
     margin: 0 0 0.5rem 0;
     color: var(--text-color, #171717);
 }
@@ -754,10 +984,10 @@
 
 .app-download-buttons {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     justify-content: center;
     align-items: center;
-    gap: 1rem;
+    gap: 1.25rem;
     flex-wrap: wrap;
 }
 
@@ -765,33 +995,31 @@
     display: inline-flex;
     align-items: center;
     gap: 1rem;
-    padding: 1rem 2rem;
-    background: var(--card-bg, #ffffff);
-    border: 2px solid var(--card-border, #e5e7eb);
-    border-radius: 12px;
+    padding: 1.1rem 1.6rem;
+    background: linear-gradient(135deg, #0f766e, #15a39a);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 16px;
     text-decoration: none;
-    color: var(--text-color, #171717);
+    color: #ffffff;
     transition: all 0.3s ease;
-    box-shadow: var(--card-shadow, 0 4px 12px rgba(0, 0, 0, 0.08));
+    box-shadow: 0 12px 26px rgba(15, 118, 110, 0.35);
     min-width: 200px;
     position: relative;
 }
 
 .app-download-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
-    border-color: var(--primary-color, #4c8a89);
-    background: var(--primary-color, #4c8a89);
-    color: white;
+    transform: translateY(-3px);
+    box-shadow: 0 16px 32px rgba(15, 118, 110, 0.4);
+    color: #ffffff;
 }
 
 .app-download-btn:hover .app-btn-small,
 .app-download-btn:hover .app-btn-large {
-    color: white;
+    color: #ffffff;
 }
 
 .app-download-btn:hover i {
-    color: white;
+    color: #ffffff;
 }
 
 /* Coming Soon button styles */
@@ -940,6 +1168,16 @@
     max-width: 300px;
     border-radius: 12px;
     justify-content: center;
+    background: linear-gradient(135deg, #0f766e, #16a39a);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #ffffff;
+    box-shadow: 0 12px 26px rgba(15, 118, 110, 0.35);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.emergency-call-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 32px rgba(15, 118, 110, 0.4);
 }
 
 .emergency-call-btn i {
@@ -969,12 +1207,13 @@
 .language-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.65);
+    background: rgba(12, 18, 20, 0.6);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1600;
-    backdrop-filter: blur(4px);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 
 .language-modal {
@@ -1213,7 +1452,279 @@
     z-index: 1300 !important;
     display: inline-flex;
     gap: 0.5rem;
+    align-items: center;
     pointer-events: auto !important;
+}
+
+.auth-weather-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.85rem;
+    border-radius: 14px;
+    background: rgba(244, 251, 250, 0.92);
+    border: 1px solid rgba(15, 118, 110, 0.2);
+    box-shadow: 0 10px 20px rgba(8, 45, 42, 0.12);
+    min-width: 170px;
+    max-width: 220px;
+}
+
+.auth-weather-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #bff0e8, #6fd8cb);
+    display: grid;
+    place-items: center;
+    color: #0f3d39;
+    font-size: 1rem;
+    overflow: hidden;
+    flex: 0 0 auto;
+}
+
+.auth-weather-icon img {
+    width: 34px;
+    height: 34px;
+    object-fit: cover;
+}
+
+.auth-weather-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.auth-weather-temp {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f3d39;
+    line-height: 1.1;
+}
+
+.auth-weather-desc {
+    font-size: 0.75rem;
+    color: var(--text-muted, #4b5563);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+[data-theme="dark"] .auth-weather-pill {
+    background: rgba(21, 58, 55, 0.92);
+    border-color: #2a4d49;
+    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .auth-weather-icon {
+    background: linear-gradient(135deg, #1f5f5a, #2a9d90);
+    color: #e3f7f5;
+}
+
+[data-theme="dark"] .auth-weather-temp {
+    color: #e3f7f5;
+}
+
+[data-theme="dark"] .auth-weather-desc {
+    color: #b8d2cf;
+}
+
+.weather-map-card {
+    margin-top: 2rem;
+    padding: 2rem;
+    border-radius: 18px;
+    background: var(--card-bg, #ffffff);
+    border: 1px solid var(--card-border, #d1d5db);
+    box-shadow: var(--card-shadow);
+    text-align: left;
+}
+
+.weather-map-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+
+.weather-map-header h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin: 0 0 0.35rem 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-color, #1f2937);
+}
+
+.weather-map-header p {
+    margin: 0;
+    color: var(--text-muted, #4b5563);
+}
+
+.weather-map-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.weather-map-actions .btn {
+    padding: 0.6rem 0.9rem;
+    font-size: 0.9rem;
+    border-radius: 10px;
+}
+
+.weather-map-actions .btn.active {
+    background: var(--primary-color, #4c8a89);
+    color: #ffffff;
+    border-color: transparent;
+}
+
+.weather-map-canvas {
+    width: 100%;
+    height: 480px;
+    border-radius: 14px;
+    border: 1px solid rgba(15, 118, 110, 0.2);
+    overflow: hidden;
+    box-shadow: 0 12px 24px rgba(8, 45, 42, 0.12);
+}
+
+.weather-map-note {
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--text-muted, #4b5563);
+}
+
+.weather-analytics-grid {
+    margin-top: 1.5rem;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.weather-analytics-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    align-items: start;
+}
+
+.weather-analytics-stack {
+    display: grid;
+    gap: 1rem;
+}
+
+.weather-analytics-card {
+    padding: 1.25rem;
+    border-radius: 14px;
+    border: 1px solid rgba(15, 118, 110, 0.18);
+    background: rgba(243, 251, 250, 0.9);
+    box-shadow: 0 10px 18px rgba(8, 45, 42, 0.08);
+}
+
+.weather-analytics-card h3 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #0f3d39;
+}
+
+.analytics-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.analytics-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.metric-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #4b6f6b;
+}
+
+.metric-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #0f3d39;
+}
+
+.weather-analytics-ai {
+    background: linear-gradient(135deg, rgba(76, 138, 137, 0.12), rgba(76, 138, 137, 0.25));
+}
+
+.weather-analytics-ai .btn {
+    margin-top: 0.75rem;
+}
+
+[data-theme="dark"] .weather-analytics-card {
+    background: rgba(21, 58, 55, 0.92);
+    border-color: #2a4d49;
+    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .weather-analytics-card h3,
+[data-theme="dark"] .metric-value {
+    color: #e3f7f5;
+}
+
+[data-theme="dark"] .metric-label {
+    color: #b8d2cf;
+}
+
+[data-theme="dark"] .weather-analytics-ai {
+    background: linear-gradient(135deg, rgba(79, 146, 140, 0.22), rgba(79, 146, 140, 0.35));
+}
+
+[data-theme="dark"] .weather-map-card {
+    background: #162826;
+    border-color: #2a4d49;
+}
+
+[data-theme="dark"] .weather-map-header h1,
+[data-theme="dark"] .weather-map-note {
+    color: #e3f7f5;
+}
+
+[data-theme="dark"] .weather-map-header p {
+    color: #b8d2cf;
+}
+
+[data-theme="dark"] .weather-map-canvas {
+    border-color: #2a4d49;
+}
+
+@media (max-width: 1024px) {
+    .weather-map-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .weather-map-canvas {
+        height: 380px;
+    }
+
+    .weather-analytics-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .weather-map-card {
+        padding: 1.25rem;
+    }
+
+    .weather-map-canvas {
+        height: 320px;
+    }
 }
 
 .auth-icon-link {
@@ -2830,7 +3341,7 @@ textarea:focus {
 .cards-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.25rem;
+    gap: 1.5rem;
 }
 
 .footer-main {
@@ -3765,6 +4276,10 @@ body[data-theme="dark"] .sidebar-link.active i:before {
         gap: 0.375rem;
     }
 
+    .auth-weather-pill {
+        display: none;
+    }
+
     .auth-icon-link {
         width: 44px;
         height: 44px;
@@ -4550,6 +5065,39 @@ body[data-theme="dark"] .sidebar-link.active i:before {
     background: #3d3d3d;
 }
 
+/* Facebook quick-login button */
+.btn-facebook {
+    background: linear-gradient(135deg, #1877f2, #1458b6);
+    color: #ffffff;
+    border: none;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    font-weight: 700;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 16px rgba(24, 119, 242, 0.35);
+    min-height: 64px;
+    font-size: 1.05rem;
+    border-radius: 14px;
+    padding: 1rem 1.5rem;
+}
+
+.btn-facebook:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(24, 119, 242, 0.42);
+    color: #ffffff;
+}
+
+.btn-facebook i {
+    font-size: 1.3rem;
+}
+
+[data-theme="dark"] .btn-facebook {
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+
 /* Phone OTP Login Button - Senior-Friendly */
 .btn-phone-otp {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -4624,7 +5172,18 @@ body[data-theme="dark"] .sidebar-link.active i:before {
 
 .emergency-card {
     text-align: center;
-    padding: 1.5rem;
+    padding: 1.75rem;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #ffffff, #f5fbfb);
+    border: 1px solid rgba(14, 95, 90, 0.12);
+    box-shadow: 0 12px 30px rgba(10, 34, 33, 0.12);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.emergency-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 18px 38px rgba(10, 34, 33, 0.18);
+    border-color: rgba(15, 118, 110, 0.25);
 }
 
 .emergency-card-header {
@@ -5301,5 +5860,110 @@ body .sub-container select {
         margin-left: auto !important;
         margin-right: auto !important;
         justify-content: center !important;
+    }
+}
+
+/* ===================================
+   ADMIN-STYLE USER HEADER OVERRIDES
+   =================================== */
+
+body.user-admin-header .theme-toggle,
+body.user-admin-ui .theme-toggle {
+    display: none !important;
+}
+
+body.user-admin-header .auth-icons,
+body.user-admin-ui .auth-icons {
+    display: inline-flex !important;
+    position: fixed !important;
+    top: auto !important;
+    right: 22px !important;
+    bottom: 22px !important;
+    left: auto !important;
+    z-index: 1400 !important;
+    gap: 0 !important;
+}
+
+body.user-admin-header .auth-icons .auth-weather-pill,
+body.user-admin-ui .auth-icons .auth-weather-pill,
+body.user-admin-header .auth-icons .user-dropdown-container,
+body.user-admin-ui .auth-icons .user-dropdown-container,
+body.user-admin-header .auth-icons .auth-icon-link:not(#chatFab),
+body.user-admin-ui .auth-icons .auth-icon-link:not(#chatFab) {
+    display: none !important;
+}
+
+body.user-admin-header .auth-icons #chatFab,
+body.user-admin-ui .auth-icons #chatFab {
+    display: grid !important;
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+    border: 1px solid rgba(63, 132, 126, 0.42);
+    background: linear-gradient(135deg, #2f928b, #4c8a89);
+    color: #ffffff;
+    box-shadow: 0 16px 32px rgba(11, 48, 47, 0.3);
+}
+
+body.user-admin-header .auth-icons #chatFab i,
+body.user-admin-ui .auth-icons #chatFab i {
+    color: #ffffff !important;
+}
+
+body.user-admin-header .chat-modal,
+body.user-admin-ui .chat-modal {
+    align-items: flex-end !important;
+    justify-content: flex-end !important;
+    padding: 1rem !important;
+}
+
+body.user-admin-header .chat-modal .chat-modal-content,
+body.user-admin-ui .chat-modal .chat-modal-content {
+    width: 100%;
+    max-width: 430px;
+    max-height: calc(100vh - 96px);
+    margin: 0 !important;
+}
+
+body.user-admin-header .main-content,
+body.user-admin-ui .main-content {
+    padding-top: 5.25rem !important;
+}
+
+/* Keep page/module titles on user monitoring pages left-aligned. */
+html body.user-admin-ui .main-content .main-container .title,
+html body.user-admin-ui .main-content .main-container .title h1,
+html body.user-admin-ui .main-content .main-container .title p {
+    text-align: left !important;
+}
+
+html body.user-admin-ui .main-content .main-container .title {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.user-profile-login-link {
+    text-decoration: none !important;
+}
+
+@media (max-width: 768px) {
+    body.user-admin-header .auth-icons,
+    body.user-admin-ui .auth-icons {
+        right: 14px !important;
+        bottom: 14px !important;
+    }
+
+    body.user-admin-header .chat-modal,
+    body.user-admin-ui .chat-modal {
+        justify-content: center !important;
+        padding: 0.75rem !important;
+    }
+
+    body.user-admin-header .chat-modal .chat-modal-content,
+    body.user-admin-ui .chat-modal .chat-modal-content {
+        max-width: 100%;
+        max-height: calc(100vh - 72px);
     }
 }

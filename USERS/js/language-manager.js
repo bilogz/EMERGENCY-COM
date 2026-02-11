@@ -301,43 +301,8 @@ window.LanguageManager = class LanguageManager {
     }
     
     showUpdateNotification() {
-        // Create or update notification element
-        let notification = document.getElementById('languageUpdateNotification');
-        if (!notification) {
-            notification = document.createElement('div');
-            notification.id = 'languageUpdateNotification';
-            notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: #4caf50;
-                color: white;
-                padding: 12px 20px;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                z-index: 10000;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                animation: slideIn 0.3s ease;
-            `;
-            document.body.appendChild(notification);
-        }
-        
-        notification.innerHTML = `
-            <i class="fas fa-check-circle"></i>
-            <span>New languages available! Refresh to see updates.</span>
-            <button onclick="this.parentElement.remove()" style="background: none; border: none; color: white; cursor: pointer; margin-left: 10px;">
-                <i class="fas fa-times"></i>
-            </button>
-        `;
-        
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            if (notification.parentElement) {
-                notification.remove();
-            }
-        }, 5000);
+        // Intentionally silent: language updates are applied in background
+        // without showing popup notifications.
     }
     
     getFallbackLanguages() {

@@ -105,77 +105,12 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     <!-- Two-Way Communication -->
                     <?php
                     $isTwoWayPage = basename($_SERVER['PHP_SELF']) == 'two-way-communication.php';
-                    $currentDept = isset($_GET['dept']) ? $_GET['dept'] : '';
-                    $isTwoWayActive = $isTwoWayPage;
                     ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>two-way-communication.php" class="sidebar-link sidebar-submenu-toggle sidebar-accent-2way <?php echo $isTwoWayActive ? 'active' : ''; ?>">
+                        <a href="<?php echo $sidebarBase; ?>two-way-communication.php" class="sidebar-link sidebar-accent-2way <?php echo $isTwoWayPage ? 'active' : ''; ?>">
                             <i class="fas fa-comments sidebar-icon" aria-hidden="true"></i>
                             <span>Two-Way Communication</span>
-                            <i class="fas fa-chevron-down submenu-icon" aria-hidden="true"></i>
                         </a>
-                        <ul class="sidebar-submenu <?php echo $isTwoWayActive ? 'sidebar-submenu-open' : ''; ?>">
-                            <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === '') ? 'active' : ''; ?>">
-                                    <i class="fas fa-layer-group sidebar-icon" aria-hidden="true"></i>
-                                    <span>Centralized View</span>
-                                </a>
-                            </li>
-                            <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=incident_nlp" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'incident_nlp') ? 'active' : ''; ?>">
-                                    <i class="fas fa-microscope sidebar-icon" aria-hidden="true"></i>
-                                    <span>Incident & NLP Investigation</span>
-                                </a>
-                            </li>
-                            <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=traffic_transport" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'traffic_transport') ? 'active' : ''; ?>">
-                                    <i class="fas fa-traffic-light sidebar-icon" aria-hidden="true"></i>
-                                    <span>Traffic & Transport</span>
-                                </a>
-                            </li>
-                            <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=emergency_response" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'emergency_response') ? 'active' : ''; ?>">
-                                    <i class="fas fa-ambulance sidebar-icon" aria-hidden="true"></i>
-                                    <span>Emergency Response</span>
-                                </a>
-                            </li>
-                            <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=community_policing" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'community_policing') ? 'active' : ''; ?>">
-                                    <i class="fas fa-shield-alt sidebar-icon" aria-hidden="true"></i>
-                                    <span>Community Policing</span>
-                                </a>
-                            </li>
-                            <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=crime_analytics" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'crime_analytics') ? 'active' : ''; ?>">
-                                    <i class="fas fa-chart-line sidebar-icon" aria-hidden="true"></i>
-                                    <span>Crime Analytics</span>
-                                </a>
-                            </li>
-                            <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=public_safety_campaign" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'public_safety_campaign') ? 'active' : ''; ?>">
-                                    <i class="fas fa-bullhorn sidebar-icon" aria-hidden="true"></i>
-                                    <span>Public Safety Campaign</span>
-                                </a>
-                            </li>
-                            <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=health_inspection" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'health_inspection') ? 'active' : ''; ?>">
-                                    <i class="fas fa-notes-medical sidebar-icon" aria-hidden="true"></i>
-                                    <span>Health & Safety Inspection</span>
-                                </a>
-                            </li>
-                            <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=disaster_preparedness" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'disaster_preparedness') ? 'active' : ''; ?>">
-                                    <i class="fas fa-hard-hat sidebar-icon" aria-hidden="true"></i>
-                                    <span>Disaster Preparedness</span>
-                                </a>
-                            </li>
-                            <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>two-way-communication.php?dept=emergency_comm" class="sidebar-link sidebar-accent-2way <?php echo ($isTwoWayPage && $currentDept === 'emergency_comm') ? 'active' : ''; ?>">
-                                    <i class="fas fa-broadcast-tower sidebar-icon" aria-hidden="true"></i>
-                                    <span>Emergency Communication</span>
-                                </a>
-                            </li>
-                        </ul>
                     </li>
 
                     <!-- Automated Warnings -->

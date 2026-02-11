@@ -1,15 +1,15 @@
 <?php
 /**
  * Send Chat Message API (Admin)
- * Handles sending messages from admin to users
+ * Staff/admin reply flow: updates thread to waiting_user.
  */
 
 header('Content-Type: application/json');
 require_once __DIR__ . '/db_connect.php';
+require_once __DIR__ . '/chat-logic.php';
 
 session_start();
 
-// Check if admin is logged in
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
     http_response_code(401);
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
@@ -29,135 +29,136 @@ if (!$pdo) {
 }
 
 try {
-    // Get data from POST (FormData) or JSON
     $input = null;
     $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
     if (strpos($contentType, 'application/json') !== false) {
         $input = json_decode(file_get_contents('php://input'), true);
     }
-    
-    $text = $input['text'] ?? $_POST['text'] ?? '';
-    $conversationId = $input['conversationId'] ?? $_POST['conversationId'] ?? null;
-    
-    // Get admin ID and name from session
-    $adminId = $_SESSION['admin_user_id'] ?? $_SESSION['admin_id'] ?? $_SESSION['user_id'] ?? 'admin';
+
+    $text = trim((string)($input['text'] ?? $_POST['text'] ?? ''));
+    $conversationId = (int)($input['conversationId'] ?? $_POST['conversationId'] ?? 0);
+    $rawCategory = $input['category'] ?? $_POST['category'] ?? null;
+    $rawPriority = $input['priority'] ?? $_POST['priority'] ?? null;
+
+    $adminIdRaw = $_SESSION['admin_user_id'] ?? $_SESSION['admin_id'] ?? $_SESSION['user_id'] ?? null;
+    $adminId = twc_safe_int($adminIdRaw);
     $adminName = $_SESSION['admin_username'] ?? $_SESSION['admin_name'] ?? $_SESSION['user_name'] ?? 'Admin';
-    
-    // Convert conversationId to integer if it's numeric
-    if (is_numeric($conversationId)) {
-        $conversationId = (int)$conversationId;
-    }
-    
-    if (empty($text)) {
+
+    if ($text === '') {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Message text is required']);
         exit;
     }
-    
-    if (empty($conversationId)) {
+    if ($conversationId <= 0) {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Conversation ID is required']);
         exit;
     }
-    
-    // Check if conversation is closed
-    $stmt = $pdo->prepare("SELECT status FROM conversations WHERE conversation_id = ?");
-    $stmt->execute([$conversationId]);
-    $conversation = $stmt->fetch();
-    
-    if ($conversation && $conversation['status'] === 'closed') {
+
+    $convStmt = $pdo->prepare("
+        SELECT conversation_id, status, user_concern
+        FROM conversations
+        WHERE conversation_id = ?
+        LIMIT 1
+    ");
+    $convStmt->execute([$conversationId]);
+    $conversation = $convStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$conversation) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'message' => 'Conversation not found']);
+        exit;
+    }
+
+    if (twc_is_closed_status($conversation['status'] ?? '')) {
         http_response_code(403);
         echo json_encode(['success' => false, 'message' => 'This conversation is closed.']);
         exit;
     }
-    
-    // Start transaction
+
+    $category = twc_normalize_category($rawCategory ?? $conversation['user_concern'] ?? '');
+    $priority = twc_normalize_priority($rawPriority ?? '', $text, $category);
+    $targetStatus = twc_status_for_db($pdo, 'waiting_user');
+
     $pdo->beginTransaction();
-    
-    // Insert message
-    $stmt = $pdo->prepare("
-        INSERT INTO chat_messages 
+
+    $insertStmt = $pdo->prepare("
+        INSERT INTO chat_messages
         (conversation_id, sender_id, sender_name, sender_type, message_text, is_read, created_at)
         VALUES (?, ?, ?, 'admin', ?, 0, NOW())
     ");
-    $stmt->execute([
+    $insertStmt->execute([
         $conversationId,
-        $adminId,
+        (string)($adminIdRaw ?? 'admin'),
         $adminName,
-        $text
+        $text,
     ]);
-    $messageId = $pdo->lastInsertId();
-    
-    // Update conversation
-    // Only update assigned_to if adminId is numeric (for INT column)
-    if (is_numeric($adminId)) {
-        $stmt = $pdo->prepare("
-            UPDATE conversations 
-            SET last_message = ?, last_message_time = NOW(), updated_at = NOW(), assigned_to = ?
-            WHERE conversation_id = ?
-        ");
-        $stmt->execute([$text, (int)$adminId, $conversationId]);
-    } else {
-        $stmt = $pdo->prepare("
-            UPDATE conversations 
-            SET last_message = ?, last_message_time = NOW(), updated_at = NOW()
-            WHERE conversation_id = ?
-        ");
-        $stmt->execute([$text, $conversationId]);
+    $messageId = (int)$pdo->lastInsertId();
+
+    $updateParts = [
+        "last_message = ?",
+        "last_message_time = NOW()",
+        "updated_at = NOW()",
+        "status = ?",
+    ];
+    $updateParams = [$text, $targetStatus];
+
+    if ($adminId !== null) {
+        $updateParts[] = "assigned_to = ?";
+        $updateParams[] = $adminId;
     }
-    
-    // Update chat queue status (if queue entry exists)
-    try {
-        if (is_numeric($adminId)) {
-            $stmt = $pdo->prepare("
-                UPDATE chat_queue 
-                SET status = 'accepted', assigned_to = ?, updated_at = NOW()
-                WHERE conversation_id = ?
-            ");
-            $stmt->execute([(int)$adminId, $conversationId]);
-        } else {
-            $stmt = $pdo->prepare("
-                UPDATE chat_queue 
-                SET status = 'accepted', updated_at = NOW()
-                WHERE conversation_id = ?
-            ");
-            $stmt->execute([$conversationId]);
+    if (twc_column_exists($pdo, 'conversations', 'category') && $category !== '') {
+        $updateParts[] = "category = ?";
+        $updateParams[] = $category;
+    }
+    if (twc_column_exists($pdo, 'conversations', 'priority')) {
+        $updateParts[] = "priority = ?";
+        $updateParams[] = $priority;
+    }
+    if ($category !== '') {
+        $updateParts[] = "user_concern = ?";
+        $updateParams[] = $category;
+    }
+
+    $updateParams[] = $conversationId;
+    $updateSql = "UPDATE conversations SET " . implode(', ', $updateParts) . " WHERE conversation_id = ?";
+    $updateStmt = $pdo->prepare($updateSql);
+    $updateStmt->execute($updateParams);
+
+    if (twc_table_exists($pdo, 'chat_queue')) {
+        try {
+            $queueSql = "UPDATE chat_queue SET status = 'accepted', updated_at = NOW()";
+            $queueParams = [];
+            if ($adminId !== null && twc_column_exists($pdo, 'chat_queue', 'assigned_to')) {
+                $queueSql .= ", assigned_to = ?";
+                $queueParams[] = $adminId;
+            }
+            $queueSql .= " WHERE conversation_id = ?";
+            $queueParams[] = $conversationId;
+            $queueStmt = $pdo->prepare($queueSql);
+            $queueStmt->execute($queueParams);
+        } catch (Throwable $e) {
+            error_log('Chat queue update warning: ' . $e->getMessage());
         }
-        // It's okay if no rows were affected (queue entry might not exist)
-    } catch (PDOException $e) {
-        // Log but don't fail if queue update fails
-        error_log('Chat queue update warning: ' . $e->getMessage());
     }
-    
+
     $pdo->commit();
-    
+
     echo json_encode([
         'success' => true,
         'messageId' => $messageId,
-        'message' => 'Message sent successfully'
+        'conversationId' => $conversationId,
+        'workflowStatus' => $targetStatus,
+        'message' => 'Message sent successfully',
     ]);
-    
 } catch (PDOException $e) {
     if ($pdo && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
     error_log('Admin chat send error: ' . $e->getMessage());
-    error_log('Stack trace: ' . $e->getTraceAsString());
     http_response_code(500);
     echo json_encode([
-        'success' => false, 
-        'message' => 'Failed to send message: ' . $e->getMessage()
-    ]);
-} catch (Exception $e) {
-    if ($pdo && $pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
-    error_log('Admin chat send error (non-PDO): ' . $e->getMessage());
-    error_log('Stack trace: ' . $e->getTraceAsString());
-    http_response_code(500);
-    echo json_encode([
-        'success' => false, 
-        'message' => 'Failed to send message: ' . $e->getMessage()
+        'success' => false,
+        'message' => 'Failed to send message',
+        'error' => $e->getMessage(),
     ]);
 }
-

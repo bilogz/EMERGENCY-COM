@@ -68,7 +68,7 @@ $pageTitle = 'Log and Audit Trail';
                         </div>
                         <div class="stat-grid">
                             <div class="stat-card">
-                                <div class="stat-value" id="totalNotifications" style="color: #4c8a89;">0</div>
+                                <div class="stat-value" id="totalNotifications" style="color: #3a7675;">0</div>
                                 <div class="stat-label">Total Notifications</div>
                             </div>
                             <div class="stat-card">
@@ -195,7 +195,7 @@ $pageTitle = 'Log and Audit Trail';
                             row.innerHTML = `
                                 <td>${log.id}</td>
                                 <td><small>${log.timestamp}</small></td>
-                                <td><span class="badge" style="background: rgba(76, 138, 137, 0.1); color: var(--primary-color-1); font-weight: 700;">${log.channel.toUpperCase()}</span></td>
+                                <td><span class="badge" style="background: rgba(58, 118, 117, 0.1); color: var(--primary-color-1); font-weight: 700;">${log.channel.toUpperCase()}</span></td>
                                 <td>${log.recipient}</td>
                                 <td><div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${log.message}</div></td>
                                 <td><span class="badge ${log.status}">${log.status}</span></td>
@@ -263,7 +263,7 @@ $pageTitle = 'Log and Audit Trail';
                                 </div>
                                 <div class="detail-item">
                                     <span class="detail-label">Channel</span>
-                                    <span class="detail-value"><span class="badge" style="background: rgba(76, 138, 137, 0.1); color: var(--primary-color-1); font-weight: 700;">${log.channel.toUpperCase()}</span></span>
+                                    <span class="detail-value"><span class="badge" style="background: rgba(58, 118, 117, 0.1); color: var(--primary-color-1); font-weight: 700;">${log.channel.toUpperCase()}</span></span>
                                 </div>
                                 <div class="detail-item">
                                     <span class="detail-label">Status</span>

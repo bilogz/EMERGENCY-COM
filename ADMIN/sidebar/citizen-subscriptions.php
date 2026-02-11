@@ -78,7 +78,7 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                         </div>
                         <div class="stat-grid">
                             <div class="stat-card">
-                                <div class="stat-value" id="totalSubscribers" style="color: #4c8a89;">0</div>
+                                <div class="stat-value" id="totalSubscribers" style="color: #3a7675;">0</div>
                                 <div class="stat-label">Total Subscribers</div>
                             </div>
                             <div class="stat-card">

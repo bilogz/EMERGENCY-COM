@@ -76,7 +76,7 @@ $admin_username = $admin['username'] ?? 'Admin';
             
             <div class="call-header">
                 <div class="call-icon">
-                    <i class="fas fa-headset" style="color: #4c8a89;"></i>
+                    <i class="fas fa-headset" style="color: #3a7675;"></i>
                 </div>
                 <div class="call-info">
                     <div class="call-title">Emergency Call</div>

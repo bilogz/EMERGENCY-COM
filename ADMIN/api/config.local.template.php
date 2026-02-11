@@ -45,6 +45,8 @@ return [
     // API Keys (get from respective providers)
     'AI_API_KEY' => '',                 // Default AI key
     'AI_API_KEY_ANALYSIS' => '',        // For AI analysis only
+    'OPENWEATHER_API_KEY' => '',        // OpenWeather key used by Weather Monitoring/PAGASA integration
+    'PAGASA_API_KEY' => '',             // Optional alias of OPENWEATHER_API_KEY
     
     // ===========================================
     // GOOGLE OAUTH CREDENTIALS

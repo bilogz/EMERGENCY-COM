@@ -1,11 +1,12 @@
 <?php
 /**
- * Get Chat Messages API
- * Retrieves messages for a conversation
+ * Get Chat Messages API (User/Citizen)
+ * Retrieves thread messages and marks inbound admin messages as read.
  */
 
 header('Content-Type: application/json');
 require_once __DIR__ . '/db_connect.php';
+require_once __DIR__ . '/../../ADMIN/api/chat-logic.php';
 
 if (!$pdo) {
     http_response_code(500);
@@ -14,63 +15,60 @@ if (!$pdo) {
 }
 
 try {
-    $conversationId = $_GET['conversationId'] ?? null;
+    $conversationId = isset($_GET['conversationId']) ? (int)$_GET['conversationId'] : 0;
     $userId = $_GET['userId'] ?? null;
     $lastMessageId = isset($_GET['lastMessageId']) ? (int)$_GET['lastMessageId'] : 0;
-    
-    if (empty($conversationId) && empty($userId)) {
+
+    if ($conversationId <= 0 && empty($userId)) {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'conversationId or userId is required']);
         exit;
     }
-    
-    // If userId provided but no conversationId, get the latest conversation
-    if (empty($conversationId) && !empty($userId)) {
+
+    if ($conversationId <= 0 && !empty($userId)) {
+        $active = twc_active_statuses();
         $stmt = $pdo->prepare("
-            SELECT conversation_id 
-            FROM conversations 
-            WHERE user_id = ? 
-            ORDER BY updated_at DESC 
+            SELECT conversation_id
+            FROM conversations
+            WHERE user_id = ? AND status IN (" . twc_placeholders($active) . ")
+            ORDER BY updated_at DESC
             LIMIT 1
         ");
-        $stmt->execute([$userId]);
-        $conv = $stmt->fetch();
+        $params = [$userId];
+        $params = array_merge($params, $active);
+        $stmt->execute($params);
+        $conv = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($conv) {
-            $conversationId = $conv['conversation_id'];
+            $conversationId = (int)$conv['conversation_id'];
         } else {
             echo json_encode(['success' => true, 'messages' => [], 'conversationId' => null]);
             exit;
         }
     }
-    
-    // Get conversation status and who closed it
-    // Query without closed_by column (it may not exist in all databases)
-    $stmt = $pdo->prepare("
-        SELECT status, last_message 
-        FROM conversations 
+
+    $statusStmt = $pdo->prepare("
+        SELECT status, last_message
+        FROM conversations
         WHERE conversation_id = ?
+        LIMIT 1
     ");
-    $stmt->execute([$conversationId]);
-    $conversation = $stmt->fetch();
-    
-    if ($conversation) {
-        $conversationStatus = $conversation['status'] ?? 'active';
-        
-        // Extract admin name from last_message if it contains "Closed by"
-        $closedBy = null;
-        if (isset($conversation['last_message']) && $conversation['last_message'] && strpos($conversation['last_message'], 'Closed by') === 0) {
-            $closedBy = str_replace('Closed by ', '', $conversation['last_message']);
-        }
-    } else {
-        $conversationStatus = 'closed';
-        $closedBy = null;
+    $statusStmt->execute([$conversationId]);
+    $conversation = $statusStmt->fetch(PDO::FETCH_ASSOC);
+
+    $workflowStatus = strtolower((string)($conversation['status'] ?? 'open'));
+    $conversationStatus = twc_ui_conversation_status($workflowStatus);
+
+    $closedBy = null;
+    if (!empty($conversation['last_message']) && strpos((string)$conversation['last_message'], 'Closed by ') === 0) {
+        $closedBy = str_replace('Closed by ', '', (string)$conversation['last_message']);
     }
-    
-    // Get messages - if lastMessageId is 0, get all messages (initial load), otherwise get only new ones
-    if ($lastMessageId == 0) {
-        // Initial load - get ALL messages for this conversation
+
+    $hasReadAt = twc_column_exists($pdo, 'chat_messages', 'read_at');
+    $messageSelectReadAt = $hasReadAt ? ', read_at' : ', NULL AS read_at';
+
+    if ($lastMessageId === 0) {
         $stmt = $pdo->prepare("
-            SELECT 
+            SELECT
                 message_id,
                 conversation_id,
                 sender_id,
@@ -79,15 +77,15 @@ try {
                 message_text,
                 created_at,
                 is_read
+                $messageSelectReadAt
             FROM chat_messages
             WHERE conversation_id = ?
-            ORDER BY created_at ASC
+            ORDER BY message_id ASC
         ");
         $stmt->execute([$conversationId]);
     } else {
-        // Polling - get only messages newer than lastMessageId
         $stmt = $pdo->prepare("
-            SELECT 
+            SELECT
                 message_id,
                 conversation_id,
                 sender_id,
@@ -96,50 +94,63 @@ try {
                 message_text,
                 created_at,
                 is_read
+                $messageSelectReadAt
             FROM chat_messages
             WHERE conversation_id = ? AND message_id > ?
-            ORDER BY created_at ASC
+            ORDER BY message_id ASC
         ");
         $stmt->execute([$conversationId, $lastMessageId]);
     }
-    $messages = $stmt->fetchAll();
-    
-    // Format messages - include sender_name for admin messages
-    $formattedMessages = array_map(function($msg) {
+    $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (!empty($messages)) {
+        $idsToMarkRead = [];
+        foreach ($messages as $msg) {
+            if (strtolower((string)$msg['sender_type']) === 'admin' && (int)$msg['is_read'] === 0) {
+                $idsToMarkRead[] = (int)$msg['message_id'];
+            }
+        }
+        if (!empty($idsToMarkRead)) {
+            $updateSql = "UPDATE chat_messages SET is_read = 1";
+            if ($hasReadAt) {
+                $updateSql .= ", read_at = NOW()";
+            }
+            $updateSql .= " WHERE message_id IN (" . twc_placeholders($idsToMarkRead) . ")";
+            $markStmt = $pdo->prepare($updateSql);
+            $markStmt->execute($idsToMarkRead);
+        }
+    }
+
+    $formattedMessages = array_map(function ($msg) {
+        $isRead = (bool)$msg['is_read'];
         return [
-            'id' => $msg['message_id'],
-            'conversationId' => $msg['conversation_id'],
+            'id' => (int)$msg['message_id'],
+            'conversationId' => (int)$msg['conversation_id'],
             'senderId' => $msg['sender_id'],
-            'senderName' => $msg['sender_name'] ?? null, // Include admin name
+            'senderName' => $msg['sender_name'] ?? null,
             'senderType' => $msg['sender_type'],
+            'senderRole' => $msg['sender_type'] === 'admin' ? 'staff' : 'citizen',
             'text' => $msg['message_text'],
-            'timestamp' => strtotime($msg['created_at']) * 1000, // Convert to milliseconds
-            'read' => (bool)$msg['is_read']
+            'timestamp' => strtotime((string)$msg['created_at']) * 1000,
+            'read' => $isRead,
+            'readAt' => !empty($msg['read_at']) ? strtotime((string)$msg['read_at']) * 1000 : null,
+            'deliveryStatus' => $isRead ? 'delivered' : 'sent',
         ];
     }, $messages);
-    
+
     echo json_encode([
         'success' => true,
         'messages' => $formattedMessages,
         'conversationId' => $conversationId,
         'conversationStatus' => $conversationStatus,
-        'closedBy' => $closedBy ?? null
+        'workflowStatus' => $workflowStatus,
+        'closedBy' => $closedBy
     ]);
-    
 } catch (PDOException $e) {
     error_log('Chat get messages error: ' . $e->getMessage());
-    error_log('Stack trace: ' . $e->getTraceAsString());
     http_response_code(500);
     echo json_encode([
-        'success' => false, 
-        'message' => 'Failed to retrieve messages',
-        'error' => $e->getMessage()
-    ]);
-} catch (Exception $e) {
-    error_log('Chat get messages general error: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode([
-        'success' => false, 
+        'success' => false,
         'message' => 'Failed to retrieve messages',
         'error' => $e->getMessage()
     ]);

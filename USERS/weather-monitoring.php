@@ -1,19 +1,11 @@
 <?php
 /**
- * Weather Monitoring Page
- * Real-time weather monitoring with map, AI analysis, and Google Weather style display
+ * Weather Monitoring Page (User)
+ * Reuses admin module styling/logic with user navigation
  */
 
-session_start();
-
-$publicView = isset($_GET['public']) && $_GET['public'] == '1';
-
-// Check if user is logged in (skip for public view)
-if (!$publicView && (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true)) {
-    header('Location: ../login.php');
-    exit();
-}
-
+$assetBase = '../ADMIN/header/';
+$current = 'weather-monitoring.php';
 $pageTitle = 'Weather Monitoring';
 ?>
 <!DOCTYPE html>
@@ -22,35 +14,95 @@ $pageTitle = 'Weather Monitoring';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($pageTitle); ?></title>
-    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
-    <link rel="stylesheet" href="css/global.css?v=<?php echo filemtime(__DIR__ . '/css/global.css'); ?>">
+    <link rel="icon" type="image/x-icon" href="<?= $assetBase ?>images/favicon.ico">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/global.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="css/sidebar.css?v=<?php echo filemtime(__DIR__ . '/css/sidebar.css'); ?>">
-    <link rel="stylesheet" href="css/admin-header.css">
-    <link rel="stylesheet" href="css/buttons.css">
-    <link rel="stylesheet" href="css/hero.css">
-    <link rel="stylesheet" href="css/sidebar-footer.css">
-    <link rel="stylesheet" href="css/modules.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/sidebar.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/content.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/admin-header.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/buttons.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/hero.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/modules.css">
+    <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="css/module-weather-monitoring.css?v=<?php echo filemtime(__DIR__ . '/css/module-weather-monitoring.css'); ?>">
-    <?php if ($publicView): ?>
-    <style>
-        body.public-view .main-content {
-            margin-left: 0;
-            padding-top: 2rem;
-        }
-        body.public-view .main-container {
-            max-width: 1200px;
-        }
-    </style>
-    <?php endif; ?>
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/module-weather-monitoring.css?v=<?php echo filemtime(__DIR__ . '/../ADMIN/sidebar/css/module-weather-monitoring.css'); ?>">
+    <script src="js/translations.js"></script>
+    <script src="js/language-manager.js"></script>
+    <script src="js/global-translator.js"></script>
+    <script src="js/language-selector-modal.js"></script>
+    <script src="js/language-sync.js"></script>
+    <script>
+        (function() {
+            if (typeof window.sidebarToggle !== 'function') {
+                window.sidebarToggle = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                };
+            }
+            if (typeof window.sidebarClose !== 'function') {
+                window.sidebarClose = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.remove('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.remove('sidebar-overlay-open');
+                        }
+                        document.body.classList.remove('sidebar-open');
+                    }
+                };
+            }
+        })();
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const langBtn = document.getElementById('languageSelectorBtn');
+            if (langBtn && window.languageSelectorModal) {
+                langBtn.addEventListener('click', function() {
+                    window.languageSelectorModal.open();
+                });
+            }
+
+            if (typeof window.sidebarToggle !== 'function') {
+                window.sidebarToggle = function() {
+                    const sidebar = document.getElementById('sidebar');
+                    const sidebarOverlay = document.getElementById('sidebarOverlay');
+                    if (sidebar) {
+                        sidebar.classList.toggle('sidebar-open');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
+                        }
+                        document.body.classList.toggle('sidebar-open');
+                    }
+                };
+            }
+
+            const toggleButtons = document.querySelectorAll('.sidebar-toggle-btn');
+            toggleButtons.forEach(function(btn) {
+                if (!btn.getAttribute('onclick') || !btn.getAttribute('onclick').includes('sidebarToggle')) {
+                    btn.setAttribute('onclick', 'window.sidebarToggle()');
+                }
+                if (!btn.hasAttribute('data-no-translate')) {
+                    btn.setAttribute('data-no-translate', '');
+                }
+            });
+        });
+    </script>
     
 </head>
-<body class="<?php echo $publicView ? 'public-view' : ''; ?>">
-    <?php if (!$publicView): ?>
-        <?php include 'includes/sidebar.php'; ?>
-        <?php include 'includes/admin-header.php'; ?>
-    <?php endif; ?>
+<body class="user-admin-ui">
+    <?php include 'includes/sidebar.php'; ?>
+    <?php include 'includes/admin-style-header.php'; ?>
+
+    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
+        <i class="fas fa-bars"></i>
+    </button>
     
     <div class="main-content">
         <div class="main-container">
@@ -172,7 +224,7 @@ $pageTitle = 'Weather Monitoring';
         let GEMINI_API_KEY = null;
         
         // Load Gemini API key from server
-        fetch('../api/get-gemini-key.php')
+        fetch('../ADMIN/api/get-gemini-key.php')
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.apiKey) {
@@ -660,7 +712,7 @@ $pageTitle = 'Weather Monitoring';
         
         // Load OpenWeather layer with API key
         function loadOpenWeatherLayer(type, layer) {
-            fetch('../api/weather-monitoring.php?action=getApiKey')
+            fetch('../ADMIN/api/weather-monitoring.php?action=getApiKey')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.apiKey) {
@@ -950,7 +1002,7 @@ $pageTitle = 'Weather Monitoring';
         
         // Load Quezon City boundary
         function loadQuezonCityBoundary() {
-            fetch('../api/quezon-city.geojson')
+            fetch('../ADMIN/api/quezon-city.geojson')
                 .then(response => response.json())
                 .then(geojsonData => {
                     L.geoJSON(geojsonData, {
@@ -1029,7 +1081,7 @@ $pageTitle = 'Weather Monitoring';
             
             container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
             
-            fetch(`../api/weather-monitoring.php?action=current&lat=${lat}&lon=${lon}`)
+            fetch(`../ADMIN/api/weather-monitoring.php?action=current&lat=${lat}&lon=${lon}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.data) {
@@ -1097,7 +1149,7 @@ $pageTitle = 'Weather Monitoring';
             setHourlyGraphState('loading', 'Loading forecast...');
             setWeeklyForecastState('loading', 'Loading...');
 
-            fetch(`../api/weather-monitoring.php?action=forecast&lat=${lat}&lon=${lon}`)
+            fetch(`../ADMIN/api/weather-monitoring.php?action=forecast&lat=${lat}&lon=${lon}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && Array.isArray(data.forecast) && data.forecast.length > 0) {
@@ -1112,7 +1164,7 @@ $pageTitle = 'Weather Monitoring';
                         setTimeout(() => {
                             if (window.currentWeatherData) {
                                 // Check if AI is enabled before auto-triggering
-                                fetch('../api/ai-warnings.php?action=getSettings')
+                                fetch('../ADMIN/api/ai-warnings.php?action=getSettings')
                                     .then(response => response.json())
                                     .then(data => {
                                         if (data.success && data.settings) {
@@ -1327,7 +1379,7 @@ $pageTitle = 'Weather Monitoring';
         
         // Load map data
         function loadMapData() {
-            fetch('../api/weather-monitoring.php?action=map')
+            fetch('../ADMIN/api/weather-monitoring.php?action=map')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.data) {
@@ -1404,7 +1456,7 @@ $pageTitle = 'Weather Monitoring';
             if (!GEMINI_API_KEY) {
                 // Try to load it again
                 try {
-                    const keyResponse = await fetch('../api/get-gemini-key.php');
+                    const keyResponse = await fetch('../ADMIN/api/get-gemini-key.php');
                     const keyData = await keyResponse.json();
                     if (keyData.success && keyData.apiKey) {
                         GEMINI_API_KEY = keyData.apiKey;
@@ -1439,7 +1491,7 @@ $pageTitle = 'Weather Monitoring';
                 const prompt = buildWeatherPrompt(weather, forecast, locationName);
                 
                 // Use PHP proxy to avoid CORS issues (API key is handled securely server-side)
-                const response = await fetch('../api/gemini-proxy.php', {
+                const response = await fetch('../ADMIN/api/gemini-proxy.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1670,7 +1722,7 @@ Keep concise and actionable.`;
             statusBadge.className = 'ai-status loading';
             
             try {
-                const response = await fetch('../api/ai-warnings.php?action=sendWeatherAnalysis');
+                const response = await fetch('../ADMIN/api/ai-warnings.php?action=sendWeatherAnalysis');
                 const data = await response.json();
                 
                 if (data.success) {
@@ -1702,7 +1754,7 @@ Keep concise and actionable.`;
         async function checkAndStartAIAutoSend() {
             try {
                 // Get AI settings to check if auto-send is enabled
-                const response = await fetch('../api/ai-warnings.php?action=getSettings');
+                const response = await fetch('../ADMIN/api/ai-warnings.php?action=getSettings');
                 const data = await response.json();
                 
                 if (data.success && data.settings) {
@@ -1722,7 +1774,7 @@ Keep concise and actionable.`;
                         aiAutoSendInterval = setInterval(async () => {
                             try {
                                 console.log('Auto-sending weather analysis alert...');
-                                const sendResponse = await fetch('../api/ai-warnings.php?action=sendWeatherAnalysis');
+                                const sendResponse = await fetch('../ADMIN/api/ai-warnings.php?action=sendWeatherAnalysis');
                                 const sendData = await sendResponse.json();
                                 
                                 if (sendData.success) {
@@ -1782,7 +1834,7 @@ Keep concise and actionable.`;
         async function checkWeatherConditions() {
             try {
                 // Get current weather for Quezon City
-                const response = await fetch('../api/weather-monitoring.php?action=current&lat=14.6488&lon=121.0509');
+                const response = await fetch('../ADMIN/api/weather-monitoring.php?action=current&lat=14.6488&lon=121.0509');
                 const data = await response.json();
                 
                 if (!data.success || !data.data) {
@@ -1944,7 +1996,7 @@ Keep concise and actionable.`;
             lastWarningTime[warningKey] = now;
             
             try {
-                const response = await fetch('../api/weather-warning.php', {
+                const response = await fetch('../ADMIN/api/weather-warning.php', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1970,7 +2022,7 @@ Keep concise and actionable.`;
         // Tab switching
         // Check AI Analysis status on page load
         function checkAIAnalysisStatus() {
-            fetch('../api/ai-warnings.php?action=getSettings')
+            fetch('../ADMIN/api/ai-warnings.php?action=getSettings')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.settings) {

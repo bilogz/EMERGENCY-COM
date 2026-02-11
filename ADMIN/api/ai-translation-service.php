@@ -133,6 +133,11 @@ class AITranslationService {
                     if ($this->apiKey) {
                         return;
                     }
+                    // Fallback to default designated key in config.local.php/.env
+                    $this->apiKey = getGeminiApiKey('default');
+                    if ($this->apiKey) {
+                        return;
+                    }
                 }
             }
             

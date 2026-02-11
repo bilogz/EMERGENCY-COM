@@ -9,10 +9,172 @@ header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
 require_once 'activity_logger.php';
 
+/**
+ * Resolve a usable languages table name.
+ * Uses legacy table when healthy; otherwise falls back to a new table.
+ */
+function resolveLanguagesTable(PDO $pdo): string {
+    $candidates = ['supported_languages', 'supported_languages_catalog'];
+    foreach ($candidates as $table) {
+        try {
+            $stmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+            if (!$stmt || !$stmt->fetch()) {
+                continue;
+            }
+            $pdo->query("SELECT 1 FROM {$table} LIMIT 1");
+            return $table;
+        } catch (PDOException $e) {
+            // Ignore broken table and try next candidate
+        }
+    }
+    return 'supported_languages_catalog';
+}
+
+/**
+ * Create supported_languages with expected schema.
+ */
+function createSupportedLanguagesTable(PDO $pdo, string $tableName): void {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS {$tableName} (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            language_code VARCHAR(10) NOT NULL,
+            language_name VARCHAR(120) NOT NULL,
+            native_name VARCHAR(120) DEFAULT NULL,
+            flag_emoji VARCHAR(16) DEFAULT NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            is_ai_supported TINYINT(1) NOT NULL DEFAULT 1,
+            priority INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_{$tableName}_code (language_code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
+
+/**
+ * Ensure multilingual table exists and has required columns/data.
+ */
+function ensureSupportedLanguagesSchema(PDO $pdo, string $tableName): void {
+    createSupportedLanguagesTable($pdo, $tableName);
+
+    $existingCols = [];
+    try {
+        $colStmt = $pdo->query("SHOW COLUMNS FROM {$tableName}");
+        foreach ($colStmt->fetchAll() as $col) {
+            $existingCols[$col['Field']] = true;
+        }
+    } catch (PDOException $e) {
+        // Recover from MySQL metadata corruption: "table doesn't exist in engine" (1932)
+        $message = strtolower($e->getMessage());
+        if (strpos($message, "doesn't exist in engine") !== false || strpos($message, "error 1932") !== false) {
+            $pdo->exec("DROP TABLE IF EXISTS {$tableName}");
+            createSupportedLanguagesTable($pdo, $tableName);
+            $colStmt = $pdo->query("SHOW COLUMNS FROM {$tableName}");
+            foreach ($colStmt->fetchAll() as $col) {
+                $existingCols[$col['Field']] = true;
+            }
+        } else {
+            throw $e;
+        }
+    }
+
+    if (!isset($existingCols['native_name'])) {
+        $pdo->exec("ALTER TABLE {$tableName} ADD COLUMN native_name VARCHAR(120) DEFAULT NULL AFTER language_name");
+    }
+    if (!isset($existingCols['flag_emoji'])) {
+        $pdo->exec("ALTER TABLE {$tableName} ADD COLUMN flag_emoji VARCHAR(16) DEFAULT NULL AFTER native_name");
+    }
+    if (!isset($existingCols['is_active'])) {
+        $pdo->exec("ALTER TABLE {$tableName} ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER flag_emoji");
+    }
+    if (!isset($existingCols['is_ai_supported'])) {
+        $pdo->exec("ALTER TABLE {$tableName} ADD COLUMN is_ai_supported TINYINT(1) NOT NULL DEFAULT 1 AFTER is_active");
+    }
+    if (!isset($existingCols['priority'])) {
+        $pdo->exec("ALTER TABLE {$tableName} ADD COLUMN priority INT NOT NULL DEFAULT 0 AFTER is_ai_supported");
+    }
+    if (!isset($existingCols['created_at'])) {
+        $pdo->exec("ALTER TABLE {$tableName} ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER priority");
+    }
+    if (!isset($existingCols['updated_at'])) {
+        $pdo->exec("ALTER TABLE {$tableName} ADD COLUMN updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP AFTER created_at");
+    }
+
+    // Seed core languages and PH dialects; preserve existing rows via upsert.
+    $seedStmt = $pdo->prepare("
+        INSERT INTO {$tableName}
+            (language_code, language_name, native_name, flag_emoji, is_active, is_ai_supported, priority)
+        VALUES
+            (?, ?, ?, ?, 1, 1, ?)
+        ON DUPLICATE KEY UPDATE
+            language_name = VALUES(language_name),
+            native_name = VALUES(native_name),
+            is_ai_supported = VALUES(is_ai_supported),
+            updated_at = NOW()
+    ");
+    $seedData = [
+        // Core
+        ['en', 'English', 'English', '', 100],
+        ['fil', 'Filipino', 'Filipino', '', 98],
+        ['tl', 'Tagalog', 'Tagalog', '', 96],
+        // Major Philippine languages/dialects
+        ['ceb', 'Cebuano', 'Cebuano', '', 94],
+        ['ilo', 'Ilocano', 'Ilokano', '', 92],
+        ['hil', 'Hiligaynon', 'Hiligaynon', '', 90],
+        ['war', 'Waray', 'Winaray', '', 88],
+        ['bik', 'Bikol', 'Bikol', '', 86],
+        ['kap', 'Kapampangan', 'Kapampangan', '', 84],
+        ['pan', 'Pangasinan', 'Pangasinan', '', 82],
+        ['mrw', 'Maranao', 'Maranao', '', 80],
+        ['tsg', 'Tausug', 'Tausug', '', 78],
+        ['mag', 'Maguindanaon', 'Maguindanaon', '', 76],
+        ['cha', 'Chavacano', 'Chavacano', '', 74],
+        ['kin', 'Kinaray-a', 'Kinaray-a', '', 72],
+        ['akl', 'Aklanon', 'Aklanon', '', 70],
+        ['sur', 'Surigaonon', 'Surigaonon', '', 68],
+        ['yka', 'Yakan', 'Yakan', '', 66],
+        // Additional global languages
+        ['zh', 'Chinese', '中文', '', 60],
+        ['es', 'Spanish', 'Español', '', 58],
+        ['ja', 'Japanese', '日本語', '', 56],
+        ['ko', 'Korean', '한국어', '', 54],
+        ['ar', 'Arabic', 'العربية', '', 52],
+        ['fr', 'French', 'Français', '', 50],
+        ['de', 'German', 'Deutsch', '', 48],
+        ['ru', 'Russian', 'Русский', '', 46],
+        ['hi', 'Hindi', 'हिन्दी', '', 44],
+    ];
+    foreach ($seedData as $row) {
+        $seedStmt->execute($row);
+    }
+}
+
 // Check admin authentication
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
     http_response_code(401);
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit();
+}
+
+if (!isset($pdo) || !$pdo) {
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Database connection failed.'
+    ]);
+    exit();
+}
+
+try {
+    $languagesTable = resolveLanguagesTable($pdo);
+    ensureSupportedLanguagesSchema($pdo, $languagesTable);
+} catch (Throwable $e) {
+    error_log('Language schema init error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Language setup failed. Please check database permissions.'
+    ]);
     exit();
 }
 
@@ -38,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'add') {
     
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO supported_languages 
+            INSERT INTO {$languagesTable} 
             (language_code, language_name, native_name, flag_emoji, is_active, is_ai_supported, priority)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ");
@@ -110,7 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'add') {
     
     try {
         $stmt = $pdo->prepare("
-            UPDATE supported_languages 
+            UPDATE {$languagesTable} 
             SET " . implode(', ', $updates) . "
             WHERE id = ?
         ");
@@ -141,7 +303,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'add') {
     
     try {
         // Get language info before deletion
-        $stmt = $pdo->prepare("SELECT language_code, language_name FROM supported_languages WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT language_code, language_name FROM {$languagesTable} WHERE id = ?");
         $stmt->execute([$languageId]);
         $lang = $stmt->fetch();
         
@@ -151,7 +313,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'add') {
         }
         
         // Soft delete (set is_active = 0)
-        $stmt = $pdo->prepare("UPDATE supported_languages SET is_active = 0, updated_at = NOW() WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE {$languagesTable} SET is_active = 0, updated_at = NOW() WHERE id = ?");
         $stmt->execute([$languageId]);
         
         // Log activity
@@ -174,7 +336,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'add') {
         $query = "
             SELECT id, language_code, language_name, native_name, flag_emoji, 
                    is_active, is_ai_supported, priority, created_at, updated_at
-            FROM supported_languages
+            FROM {$languagesTable}
         ";
         
         if (!$includeInactive) {

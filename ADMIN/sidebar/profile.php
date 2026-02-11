@@ -330,7 +330,7 @@ $pageTitle = 'My Profile';
                     tbody.innerHTML = data.activities.map(log => `
                         <tr>
                             <td><small>${new Date(log.created_at).toLocaleString()}</small></td>
-                            <td><span class="badge" style="background: rgba(76, 138, 137, 0.1); color: var(--primary-color-1); font-weight: 700;">${log.action.replace('_', ' ').toUpperCase()}</span></td>
+                            <td><span class="badge" style="background: rgba(58, 118, 117, 0.1); color: var(--primary-color-1); font-weight: 700;">${log.action.replace('_', ' ').toUpperCase()}</span></td>
                             <td><div style="max-width: 300px; font-size: 0.9rem;">${log.description}</div></td>
                             <td><small>${log.ip_address}</small></td>
                         </tr>

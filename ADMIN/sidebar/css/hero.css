@@ -133,6 +133,14 @@
     position: relative;
     z-index: 2;
     text-align: left;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.title h1 i {
+    font-size: 1.4rem;
+    line-height: 1;
 }
 
 .title p {

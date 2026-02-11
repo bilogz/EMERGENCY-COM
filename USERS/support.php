@@ -15,6 +15,7 @@ $current = 'support.php';
     <link rel="stylesheet" href="../ADMIN/sidebar/css/global.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/sidebar.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/content.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/admin-header.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/buttons.css">
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -96,8 +97,9 @@ $current = 'support.php';
         });
     </script>
 </head>
-<body>
+<body class="user-admin-header">
     <?php include 'includes/sidebar.php'; ?>
+    <?php include 'includes/admin-style-header.php'; ?>
 
     <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
         <i class="fas fa-bars"></i>

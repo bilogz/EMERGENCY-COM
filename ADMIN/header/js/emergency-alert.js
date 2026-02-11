@@ -17,7 +17,7 @@
 
     // Initialize API endpoint based on context
     if (typeof window.API_BASE_PATH !== 'undefined') {
-        CONFIG.apiEndpoint = window.API_BASE_PATH + 'get-alerts.php';
+        CONFIG.apiEndpoint = window.API_BASE_PATH + 'alerts.php';
     } else {
         // Try to detect context
         const path = window.location.pathname;
