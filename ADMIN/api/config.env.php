@@ -92,16 +92,31 @@ function getSecureConfig($key, $default = null) {
     // First, try environment variable
     $envValue = getenv($key);
     if ($envValue !== false) {
-        return $envValue;
+        $trimmed = trim((string)$envValue);
+        // Ignore blank/null-like env values so they don't override valid file config.
+        if ($trimmed !== '' && strcasecmp($trimmed, 'null') !== 0) {
+            return $envValue;
+        }
     }
     
     // Second, try local config file (not committed to Git)
     if ($localConfig === null) {
-        $localConfigPath = __DIR__ . '/config.local.php';
-        if (file_exists($localConfigPath)) {
-            $localConfig = require $localConfigPath;
-        } else {
-            $localConfig = [];
+        $localConfig = [];
+        $candidatePaths = [
+            __DIR__ . '/config.local.php', // ADMIN/api/config.local.php
+            dirname(__DIR__, 2) . '/config.local.php', // project-root config.local.php (fallback)
+            __DIR__ . '/../../USERS/api/config.local.php', // USERS fallback
+        ];
+
+        foreach ($candidatePaths as $localConfigPath) {
+            if (!is_string($localConfigPath) || $localConfigPath === '' || !file_exists($localConfigPath)) {
+                continue;
+            }
+            $loadedConfig = @require $localConfigPath;
+            if (is_array($loadedConfig)) {
+                $localConfig = $loadedConfig;
+                break;
+            }
         }
     }
     

@@ -71,6 +71,7 @@ function getGeminiApiKey($purpose = 'default', $tryRotation = false) {
     $baseDir = dirname(dirname(__DIR__)); // Go up from ADMIN/api to EMERGENCY-COM
     $possiblePaths = [
         __DIR__ . '/config.local.php', // ADMIN/api/config.local.php (current directory)
+        $baseDir . '/config.local.php', // project-root fallback (common server edit location)
         __DIR__ . '/../../USERS/api/config.local.php',
         $baseDir . '/ADMIN/api/config.local.php',
         $baseDir . '/USERS/api/config.local.php',
@@ -194,8 +195,10 @@ function getGeminiApiKey($purpose = 'default', $tryRotation = false) {
  */
 function getGeminiModel() {
     // Try multiple possible paths - check ADMIN first, then USERS
+    $baseDir = dirname(dirname(__DIR__)); // EMERGENCY-COM
     $possiblePaths = [
         __DIR__ . '/config.local.php', // ADMIN/api/config.local.php (current directory)
+        $baseDir . '/config.local.php', // project-root fallback
         __DIR__ . '/../../USERS/api/config.local.php',
         __DIR__ . '/../../../USERS/api/config.local.php',
         dirname(dirname(dirname(__DIR__))) . '/ADMIN/api/config.local.php',
@@ -591,6 +594,7 @@ function getOpenWeatherApiKey($persistToDatabase = true) {
     $baseDir = dirname(dirname(__DIR__)); // EMERGENCY-COM
     $possiblePaths = [
         __DIR__ . '/config.local.php',
+        $baseDir . '/config.local.php', // project-root fallback
         __DIR__ . '/../../USERS/api/config.local.php',
         $baseDir . '/ADMIN/api/config.local.php',
         $baseDir . '/USERS/api/config.local.php',
@@ -700,6 +704,7 @@ function getGeminiApiKeyFromConfig($purpose = 'default') {
     $baseDir = dirname(dirname(__DIR__)); // EMERGENCY-COM
     $possiblePaths = [
         __DIR__ . '/config.local.php',
+        $baseDir . '/config.local.php', // project-root fallback
         __DIR__ . '/../../USERS/api/config.local.php',
         $baseDir . '/ADMIN/api/config.local.php',
         $baseDir . '/USERS/api/config.local.php',
