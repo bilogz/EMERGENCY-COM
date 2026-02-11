@@ -8,6 +8,9 @@
 header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
 require_once 'config.env.php';
+if (file_exists(__DIR__ . '/secure-api-config.php')) {
+    require_once __DIR__ . '/secure-api-config.php';
+}
 
 $action = $_GET['action'] ?? 'current';
 
@@ -27,6 +30,18 @@ function isPlaceholderWeatherKey($key) {
 }
 
 function getConfiguredWeatherKey() {
+    // Prefer centralized secure resolver when available.
+    if (function_exists('getOpenWeatherApiKey')) {
+        try {
+            $key = trim((string)getOpenWeatherApiKey(true));
+            if (!isPlaceholderWeatherKey($key)) {
+                return $key;
+            }
+        } catch (Throwable $e) {
+            error_log('getOpenWeatherApiKey failed in weather-monitoring.php: ' . $e->getMessage());
+        }
+    }
+
     if (!function_exists('getSecureConfig')) {
         return null;
     }
@@ -56,12 +71,15 @@ function getDbWeatherKey($pdo) {
     }
     ensureIntegrationSettingsTable($pdo);
     try {
-        $stmt = $pdo->prepare("SELECT api_key FROM integration_settings WHERE source = 'pagasa' LIMIT 1");
-        $stmt->execute();
-        $result = $stmt->fetch();
-        $dbKey = trim((string)($result['api_key'] ?? ''));
-        if (!isPlaceholderWeatherKey($dbKey)) {
-            return $dbKey;
+        $sources = ['pagasa', 'openweather', 'open_weather', 'weather'];
+        foreach ($sources as $source) {
+            $stmt = $pdo->prepare("SELECT api_key FROM integration_settings WHERE source = ? LIMIT 1");
+            $stmt->execute([$source]);
+            $result = $stmt->fetch();
+            $dbKey = trim((string)($result['api_key'] ?? ''));
+            if (!isPlaceholderWeatherKey($dbKey)) {
+                return $dbKey;
+            }
         }
     } catch (PDOException $e) {
         error_log("Get PAGASA/OpenWeather key error: " . $e->getMessage());

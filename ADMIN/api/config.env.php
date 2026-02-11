@@ -20,8 +20,26 @@ function loadRootEnv() {
     }
     $loaded = true;
 
-    $rootEnvPath = dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . '.env';
-    if (!file_exists($rootEnvPath)) {
+    // Try common locations in priority order:
+    // 1) Explicit override via environment
+    // 2) Project root (.env beside ADMIN/ and USERS/)
+    // 3) Parent web root fallback (legacy)
+    $candidatePaths = [];
+    $explicitPath = getenv('EMERGENCY_ENV_PATH');
+    if ($explicitPath !== false && trim((string)$explicitPath) !== '') {
+        $candidatePaths[] = trim((string)$explicitPath);
+    }
+    $candidatePaths[] = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.env'; // <project>/.env
+    $candidatePaths[] = dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . '.env'; // parent fallback
+
+    $rootEnvPath = null;
+    foreach ($candidatePaths as $path) {
+        if (is_string($path) && $path !== '' && file_exists($path)) {
+            $rootEnvPath = $path;
+            break;
+        }
+    }
+    if ($rootEnvPath === null) {
         return;
     }
 
