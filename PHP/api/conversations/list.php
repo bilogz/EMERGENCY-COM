@@ -21,12 +21,20 @@ try {
     }
 
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Ensure numeric fields are returned as integers for Kotlin compatibility
+    foreach ($rows as &$row) {
+        if (isset($row['conversation_id'])) $row['conversation_id'] = (int)$row['conversation_id'];
+        if (isset($row['is_guest'])) $row['is_guest'] = (int)$row['is_guest'];
+        if (isset($row['assigned_to'])) $row['assigned_to'] = $row['assigned_to'] !== null ? (int)$row['assigned_to'] : null;
+    }
+
     apiResponse::success(['conversations' => $rows], 'OK');
 } catch (PDOException $e) {
     error_log('Conversations list DB error: ' . $e->getMessage());
-    apiResponse::error('A database error occurred.', 500, $e->getMessage());
+    apiResponse::error('A database error occurred: ' . $e->getMessage(), 500);
 } catch (Exception $e) {
     error_log('Conversations list error: ' . $e->getMessage());
-    apiResponse::error('An unexpected error occurred.', 500, $e->getMessage());
+    apiResponse::error('An unexpected error occurred: ' . $e->getMessage(), 500);
 }
 ?>
