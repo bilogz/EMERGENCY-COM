@@ -32,13 +32,13 @@ $input = file_get_contents('php://input');
 $data = json_decode($input, true);
 
 // 2. Validate Existence
-if (!isset($data['user_id'], $data['device_id'], $data['fcm_token'])) {
-    apiResponse::error('Missing required fields: user_id, device_id, fcm_token.', 400);
+if (!isset($data['user_id'], $data['device_id']) || (!isset($data['fcm_token']) && !isset($data['push_token']))) {
+    apiResponse::error('Missing required fields: user_id, device_id, fcm_token (or push_token).', 400);
 }
 
 $userId = $data['user_id'];
 $deviceId = $data['device_id'];
-$fcmToken = $data['fcm_token'];
+$fcmToken = $data['fcm_token'] ?? $data['push_token'];
 
 // 3. Validate Data Types & Format
 if (!is_numeric($userId)) {
