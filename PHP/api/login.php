@@ -9,7 +9,11 @@ require_once 'db_connect.php';
 function getAllowedGoogleClientIds() {
     $raw = getenv('GOOGLE_CLIENT_IDS');
     if ($raw === false || trim($raw) === '') {
-        return [];
+        // Fallback IDs for environments where PHP-FPM env propagation is not configured.
+        return [
+            '741992345972-4gmr2mdu5q3db5mr81gcd07vsal7s0dk.apps.googleusercontent.com',
+            '741992345972-jidu0oo2d7udq1u0424fd5ocla9f0not.apps.googleusercontent.com'
+        ];
     }
 
     $parts = array_map('trim', explode(',', $raw));
