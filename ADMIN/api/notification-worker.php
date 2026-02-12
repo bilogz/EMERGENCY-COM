@@ -9,7 +9,43 @@ require_once 'db_connect.php';
 // Batch size per run
 $batchSize = 100;
 
+/**
+ * Ensure queue table exists for worker runs on fresh deployments.
+ */
+function ensureNotificationQueueTableForWorker(PDO $pdo): bool {
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS notification_queue (
+                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                log_id BIGINT UNSIGNED NOT NULL,
+                recipient_id BIGINT UNSIGNED NULL,
+                recipient_type VARCHAR(40) NOT NULL DEFAULT 'unknown',
+                recipient_value VARCHAR(255) NOT NULL DEFAULT '',
+                channel VARCHAR(20) NOT NULL DEFAULT 'push',
+                title VARCHAR(255) NOT NULL DEFAULT '',
+                message TEXT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                delivery_status VARCHAR(20) NULL,
+                error_message TEXT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                processed_at DATETIME NULL,
+                delivered_at DATETIME NULL,
+                INDEX idx_queue_status_created (status, created_at),
+                INDEX idx_queue_log_id (log_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        return true;
+    } catch (PDOException $e) {
+        error_log("Worker queue table ensure failed: " . $e->getMessage());
+        return false;
+    }
+}
+
 try {
+    if (!ensureNotificationQueueTableForWorker($pdo)) {
+        throw new PDOException('notification_queue table is unavailable.');
+    }
+
     // Ensure minimal columns exist for progress tracking (best-effort, backward compatible)
     try {
         $logColsStmt = $pdo->query("SHOW COLUMNS FROM notification_logs");

@@ -95,6 +95,72 @@ function resolveRecipientLanguage(PDO $pdo, int $userId): string {
     return 'en';
 }
 
+/**
+ * Ensure notification_queue exists and has required columns.
+ * Backward compatible: only adds missing columns/indexes.
+ */
+function ensureNotificationQueueTable(PDO $pdo): void {
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS notification_queue (
+                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                log_id BIGINT UNSIGNED NOT NULL,
+                recipient_id BIGINT UNSIGNED NULL,
+                recipient_type VARCHAR(40) NOT NULL DEFAULT 'unknown',
+                recipient_value VARCHAR(255) NOT NULL DEFAULT '',
+                channel VARCHAR(20) NOT NULL DEFAULT 'push',
+                title VARCHAR(255) NOT NULL DEFAULT '',
+                message TEXT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                delivery_status VARCHAR(20) NULL,
+                error_message TEXT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                processed_at DATETIME NULL,
+                delivered_at DATETIME NULL,
+                INDEX idx_queue_status_created (status, created_at),
+                INDEX idx_queue_log_id (log_id),
+                INDEX idx_queue_channel_status (channel, status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (PDOException $e) {
+        throw new Exception('Unable to initialize notification queue table: ' . $e->getMessage());
+    }
+
+    $requiredColumns = [
+        'log_id' => "BIGINT UNSIGNED NOT NULL DEFAULT 0",
+        'recipient_id' => "BIGINT UNSIGNED NULL",
+        'recipient_type' => "VARCHAR(40) NOT NULL DEFAULT 'unknown'",
+        'recipient_value' => "VARCHAR(255) NOT NULL DEFAULT ''",
+        'channel' => "VARCHAR(20) NOT NULL DEFAULT 'push'",
+        'title' => "VARCHAR(255) NOT NULL DEFAULT ''",
+        'message' => "TEXT NULL",
+        'status' => "VARCHAR(20) NOT NULL DEFAULT 'pending'",
+        'delivery_status' => "VARCHAR(20) NULL",
+        'error_message' => "TEXT NULL",
+        'created_at' => "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        'processed_at' => "DATETIME NULL",
+        'delivered_at' => "DATETIME NULL"
+    ];
+
+    try {
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM notification_queue");
+        $existingCols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+    } catch (PDOException $e) {
+        throw new Exception('Unable to inspect notification queue schema: ' . $e->getMessage());
+    }
+
+    foreach ($requiredColumns as $name => $definition) {
+        if (in_array($name, $existingCols, true)) {
+            continue;
+        }
+        try {
+            $pdo->exec("ALTER TABLE notification_queue ADD COLUMN {$name} {$definition}");
+        } catch (PDOException $e) {
+            throw new Exception("Missing notification queue column '{$name}' and failed to add it: " . $e->getMessage());
+        }
+    }
+}
+
 try {
     require_once 'db_connect.php';
     require_once 'activity_logger.php';
@@ -182,6 +248,9 @@ try {
         if (empty($body)) $missing[] = "body";
         throw new Exception('Required fields missing: ' . implode(', ', $missing));
     }
+
+    // Ensure queue schema exists before we insert dispatch jobs.
+    ensureNotificationQueueTable($pdo);
 
     // 5. Build Recipient Query
     $baseSelect = "SELECT u.id, u.name, u.email, u.phone, d.fcm_token";
