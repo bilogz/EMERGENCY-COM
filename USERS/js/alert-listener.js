@@ -6,10 +6,44 @@
 (function() {
     let lastAlertId = localStorage.getItem('last_processed_alert_id') || 0;
     const pollInterval = 12000; // 12 seconds
+    let lastErrorLogAt = 0;
+
+    function detectAppBase() {
+        if (typeof window.APP_BASE_PATH === 'string') {
+            return window.APP_BASE_PATH;
+        }
+
+        const path = (window.location.pathname || '').replace(/\\/g, '/');
+        const adminIndex = path.toLowerCase().indexOf('/admin/');
+        const usersIndex = path.toLowerCase().indexOf('/users/');
+        const cutAt = adminIndex >= 0 ? adminIndex : usersIndex;
+        return cutAt >= 0 ? path.substring(0, cutAt) : '';
+    }
+
+    const appBase = detectAppBase();
+    const checkAlertsUrl = `${appBase}/USERS/api/check-new-alerts.php`;
+    const acknowledgeUrl = `${appBase}/USERS/api/acknowledge-alert.php`;
 
     function checkAlerts() {
-        fetch('/EMERGENCY-COM/USERS/api/check-new-alerts.php')
-            .then(response => response.json())
+        fetch(checkAlertsUrl, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+                'Accept': 'application/json'
+            }
+        })
+            .then(async (response) => {
+                const contentType = response.headers.get('content-type') || '';
+                if (!response.ok) {
+                    const body = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${body.slice(0, 120)}`);
+                }
+                if (!contentType.includes('application/json')) {
+                    const body = await response.text();
+                    throw new Error(`Invalid JSON response: ${body.slice(0, 120)}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (!data.success) return;
 
@@ -20,7 +54,13 @@
                     handleNewAlert(data.alert);
                 }
             })
-            .catch(err => console.error('Alert Polling Error:', err));
+            .catch(err => {
+                const now = Date.now();
+                if (now - lastErrorLogAt > 30000) {
+                    console.warn('Alert Polling Error:', err);
+                    lastErrorLogAt = now;
+                }
+            });
     }
 
     function updateBadges(count, severity) {
@@ -68,7 +108,7 @@
 
         const modalContent = document.createElement('div');
         modalContent.style = `
-            background: #white; width: 90%; max-width: 500px;
+            background: white; width: 90%; max-width: 500px;
             border-radius: 12px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4);
             animation: ${isCritical ? 'pulse-border 2s infinite' : 'slide-down 0.3s ease-out'};
             background: white; border: 3px solid ${getSeverityColor(alert.severity)};
@@ -124,7 +164,7 @@
     function acknowledgeAlert(id) {
         const formData = new FormData();
         formData.append('alert_id', id);
-        fetch('/EMERGENCY-COM/USERS/api/acknowledge-alert.php', {
+        fetch(acknowledgeUrl, {
             method: 'POST',
             body: formData
         });
