@@ -72,11 +72,11 @@ $currentDirForAssets = basename(dirname($_SERVER['PHP_SELF']));
 $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
 ?>
 
-<link rel="stylesheet" href="css/notification-modal.css">
-<link rel="stylesheet" href="css/message-modal.css">
-<link rel="stylesheet" href="css/message-content-modal.css">
+<link rel="stylesheet" href="<?php echo $headerBase; ?>css/notification-modal.css">
+<link rel="stylesheet" href="<?php echo $headerBase; ?>css/message-modal.css">
+<link rel="stylesheet" href="<?php echo $headerBase; ?>css/message-content-modal.css">
 <!-- Emergency Alert System -->
-<link rel="stylesheet" href="../header/css/emergency-alert.css">
+<link rel="stylesheet" href="<?php echo $headerBase; ?>../header/css/emergency-alert.css">
 
 
 <!-- Admin Header Component -->
@@ -971,7 +971,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- Emergency Alert System -->
-<script src="../header/js/emergency-alert.js"></script>
+<script src="<?php echo $headerBase; ?>../header/js/emergency-alert.js"></script>
 <!-- Replace browser alert() with themed modal -->
 <script src="<?php echo $headerBase; ?>../shared/js/ui-alert.js?v=<?php echo filemtime(__DIR__ . '/../../shared/js/ui-alert.js'); ?>"></script>
 <script src="<?php echo $headerBase; ?>../shared/js/module-analytics-strip.js?v=<?php echo filemtime(__DIR__ . '/../../shared/js/module-analytics-strip.js'); ?>"></script>
