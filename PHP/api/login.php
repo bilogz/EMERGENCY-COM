@@ -6,6 +6,87 @@ require_once 'db_connect.php';
 
 /** @var PDO $pdo */
 
+function getAllowedGoogleClientIds() {
+    $raw = getenv('GOOGLE_CLIENT_IDS');
+    if ($raw === false || trim($raw) === '') {
+        return [];
+    }
+
+    $parts = array_map('trim', explode(',', $raw));
+    return array_values(array_filter($parts, function ($v) {
+        return $v !== '';
+    }));
+}
+
+function verifyGoogleIdToken($idToken, $expectedGoogleId = '', $expectedEmail = '') {
+    if (empty($idToken)) {
+        return [false, 'Missing Google token.', null];
+    }
+
+    $allowedClientIds = getAllowedGoogleClientIds();
+    if (empty($allowedClientIds)) {
+        return [false, 'Google Sign-In is not configured on server.', null];
+    }
+
+    $url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' . rawurlencode($idToken);
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    $response = curl_exec($ch);
+
+    if ($response === false) {
+        $err = curl_error($ch);
+        curl_close($ch);
+        error_log('Google token verification cURL error: ' . $err);
+        return [false, 'Unable to verify Google token.', null];
+    }
+
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode >= 400) {
+        error_log('Google token verification failed with status ' . $httpCode . ': ' . $response);
+        return [false, 'Invalid Google token.', null];
+    }
+
+    $payload = json_decode($response, true);
+    if (!is_array($payload)) {
+        return [false, 'Invalid Google token payload.', null];
+    }
+
+    $iss = isset($payload['iss']) ? trim((string)$payload['iss']) : '';
+    $aud = isset($payload['aud']) ? trim((string)$payload['aud']) : '';
+    $sub = isset($payload['sub']) ? trim((string)$payload['sub']) : '';
+    $email = isset($payload['email']) ? trim((string)$payload['email']) : '';
+    $emailVerified = isset($payload['email_verified']) ? $payload['email_verified'] : false;
+    $exp = isset($payload['exp']) ? (int)$payload['exp'] : 0;
+
+    $validIssuer = ($iss === 'accounts.google.com' || $iss === 'https://accounts.google.com');
+    if (!$validIssuer || $sub === '' || $aud === '' || $exp <= time()) {
+        return [false, 'Invalid Google token claims.', null];
+    }
+
+    if (!in_array($aud, $allowedClientIds, true)) {
+        return [false, 'Google token audience is not allowed.', null];
+    }
+
+    $emailVerifiedBool = ($emailVerified === true || $emailVerified === 'true' || $emailVerified === 1 || $emailVerified === '1');
+    if (!$emailVerifiedBool) {
+        return [false, 'Google email is not verified.', null];
+    }
+
+    if ($expectedGoogleId !== '' && $expectedGoogleId !== $sub) {
+        return [false, 'Google ID does not match token.', null];
+    }
+
+    if ($expectedEmail !== '' && strcasecmp($expectedEmail, $email) !== 0) {
+        return [false, 'Email does not match token.', null];
+    }
+
+    return [true, 'OK', $payload];
+}
+
 $input = file_get_contents('php://input');
 $data = json_decode($input, true);
 
@@ -32,6 +113,19 @@ try {
     $authenticated = false;
 
     if ($isGoogleLogin) {
+        list($isValidGoogleToken, $googleTokenMessage, $googleClaims) = verifyGoogleIdToken(
+            (string)$data['google_token'],
+            $google_id,
+            $email
+        );
+        if (!$isValidGoogleToken) {
+            apiResponse::error($googleTokenMessage, 401);
+        }
+
+        // Always trust identity fields from verified token, not client-provided values.
+        $google_id = trim((string)($googleClaims['sub'] ?? $google_id));
+        $email = trim((string)($googleClaims['email'] ?? $email));
+
         // --- Google Login Flow ---
         // Find user by Google ID or Email
         $stmt = $pdo->prepare("SELECT * FROM users WHERE google_id = ? OR email = ? LIMIT 1");
@@ -40,7 +134,9 @@ try {
 
         if (!$user) {
             // Auto-Register new Google user
-            $name = isset($data['name']) ? trim($data['name']) : 'Google User';
+            $name = isset($googleClaims['name']) && trim((string)$googleClaims['name']) !== ''
+                ? trim((string)$googleClaims['name'])
+                : (isset($data['name']) ? trim($data['name']) : 'Google User');
 
             $insertStmt = $pdo->prepare("
                 INSERT INTO users (name, email, google_id, status, user_type) 
@@ -118,6 +214,7 @@ try {
     }
 
 } catch (PDOException $e) {
-    apiResponse::error("Database error.", 500, $e->getMessage());
+    error_log('Login DB Error: ' . $e->getMessage());
+    apiResponse::error("Database error.", 500);
 }
 ?>

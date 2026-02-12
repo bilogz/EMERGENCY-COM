@@ -7,8 +7,12 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
-// Enable Debug Mode to see specific database errors in the JSON response
-define('DEBUG_MODE', true);
+// Debug mode should be enabled only when explicitly configured.
+if (!defined('DEBUG_MODE')) {
+    $debugEnv = getenv('APP_DEBUG');
+    $isDebug = ($debugEnv === '1' || strtolower((string)$debugEnv) === 'true');
+    define('DEBUG_MODE', $isDebug);
+}
 
 // Try to include apiResponse helper if present (case-insensitive filesystems differ)
 if (file_exists(__DIR__ . '/apiResponse.php')) {
@@ -55,12 +59,11 @@ function send_db_error($msg, $ex = null) {
     // Log always
     error_log('DB CONNECT ERROR: ' . $msg . ($debug ? ' | ' . $debug : ''));
 
-    // Force JSON response with debug info to diagnose connection issues
-    // We bypass apiResponse class here to ensure the debug message is not suppressed by configuration
+    // Force JSON response while avoiding sensitive error leakage in production.
     if (ob_get_length()) ob_clean();
     http_response_code(500);
     $out = ['success' => false, 'message' => $msg];
-    if ($debug) {
+    if ($debug && DEBUG_MODE === true) {
         $out['debug'] = $debug;
     }
     header('Content-Type: application/json; charset=utf-8');

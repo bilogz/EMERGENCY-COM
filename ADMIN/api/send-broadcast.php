@@ -381,6 +381,20 @@ try {
     $aStmt->execute($alertVals);
     $alertId = (int)$pdo->lastInsertId();
 
+    // Optional topic broadcast via legacy FCM helper.
+    // Non-blocking: alert creation flow continues even if this fails.
+    $fcmHelperPath = dirname(__DIR__, 2) . '/PHP/api/fcm_helper.php';
+    if (file_exists($fcmHelperPath)) {
+        try {
+            require_once $fcmHelperPath;
+            if (function_exists('sendFCMNotification')) {
+                sendFCMNotification($title, $body);
+            }
+        } catch (Throwable $fcmEx) {
+            error_log('FCM topic send failed in send-broadcast.php: ' . $fcmEx->getMessage());
+        }
+    }
+
     // 8. Prepare translation service and recipient language map
     $translationHelper = null;
     if (file_exists(__DIR__ . '/alert-translation-helper.php')) {
