@@ -27,6 +27,121 @@ function normalizeAlertLanguage($language): string {
     return $lang;
 }
 
+/**
+ * Resolve a usable alert categories table name.
+ * Supports legacy fallback table used in some deployments.
+ */
+function mnResolveCategoriesTable(PDO $pdo): string {
+    $candidates = ['alert_categories', 'alert_categories_catalog'];
+    foreach ($candidates as $candidate) {
+        try {
+            $stmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($candidate));
+            if ($stmt && $stmt->fetch()) {
+                return $candidate;
+            }
+        } catch (PDOException $e) {
+            // Try next candidate.
+        }
+    }
+    return 'alert_categories';
+}
+
+/**
+ * Ensure categories table exists and has minimum schema + seed rows.
+ */
+function mnEnsureCategoriesSchema(PDO $pdo, string $tableName): void {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS {$tableName} (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(120) NOT NULL,
+            icon VARCHAR(120) NOT NULL DEFAULT 'fa-exclamation-triangle',
+            description TEXT DEFAULT NULL,
+            color VARCHAR(20) NOT NULL DEFAULT '#3a7675',
+            status VARCHAR(20) NOT NULL DEFAULT 'active',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $colsStmt = $pdo->query("SHOW COLUMNS FROM {$tableName}");
+    $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+    $missing = [];
+    if (!in_array('icon', $cols, true)) $missing['icon'] = "ALTER TABLE {$tableName} ADD COLUMN icon VARCHAR(120) NOT NULL DEFAULT 'fa-exclamation-triangle' AFTER name";
+    if (!in_array('description', $cols, true)) $missing['description'] = "ALTER TABLE {$tableName} ADD COLUMN description TEXT DEFAULT NULL AFTER icon";
+    if (!in_array('color', $cols, true)) $missing['color'] = "ALTER TABLE {$tableName} ADD COLUMN color VARCHAR(20) NOT NULL DEFAULT '#3a7675' AFTER description";
+    if (!in_array('status', $cols, true)) $missing['status'] = "ALTER TABLE {$tableName} ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active' AFTER color";
+    if (!in_array('created_at', $cols, true)) $missing['created_at'] = "ALTER TABLE {$tableName} ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP";
+    if (!in_array('updated_at', $cols, true)) $missing['updated_at'] = "ALTER TABLE {$tableName} ADD COLUMN updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP";
+
+    foreach ($missing as $sql) {
+        try {
+            $pdo->exec($sql);
+        } catch (PDOException $e) {
+            // Continue; read path below still works with partial schemas.
+        }
+    }
+
+    $count = (int)$pdo->query("SELECT COUNT(*) FROM {$tableName}")->fetchColumn();
+    if ($count === 0) {
+        $seed = [
+            ['Weather', 'fa-cloud-sun-rain', 'Weather advisories and rainfall alerts', '#3498db', 'active'],
+            ['Earthquake', 'fa-mountain', 'Earthquake and aftershock notifications', '#e74c3c', 'active'],
+            ['Fire', 'fa-fire', 'Fire incidents and evacuation notices', '#e67e22', 'active'],
+            ['Flood', 'fa-water', 'Flood warnings and water level updates', '#1abc9c', 'active'],
+            ['Bomb Threat', 'fa-bomb', 'Bomb threat and security alerts', '#9b59b6', 'active'],
+            ['Health', 'fa-heartbeat', 'Health advisories and public health notices', '#2ecc71', 'active'],
+            ['General', 'fa-bell', 'General advisories and announcements', '#3a7675', 'active'],
+        ];
+        $stmt = $pdo->prepare("
+            INSERT INTO {$tableName} (name, icon, description, color, status, created_at)
+            VALUES (?, ?, ?, ?, ?, NOW())
+        ");
+        foreach ($seed as $row) {
+            $stmt->execute($row);
+        }
+    }
+}
+
+/**
+ * Load normalized categories for the dispatch wizard.
+ */
+function mnGetCategoriesForOptions(PDO $pdo): array {
+    $tableName = mnResolveCategoriesTable($pdo);
+    mnEnsureCategoriesSchema($pdo, $tableName);
+
+    $colsStmt = $pdo->query("SHOW COLUMNS FROM {$tableName}");
+    $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN);
+    $hasIcon = in_array('icon', $cols, true);
+    $hasColor = in_array('color', $cols, true);
+    $hasDescription = in_array('description', $cols, true);
+    $hasStatus = in_array('status', $cols, true);
+
+    $selectParts = ['id', 'name'];
+    if ($hasIcon) $selectParts[] = 'icon';
+    if ($hasColor) $selectParts[] = 'color';
+    if ($hasDescription) $selectParts[] = 'description';
+
+    $sql = "SELECT " . implode(', ', $selectParts) . " FROM {$tableName}";
+    if ($hasStatus) {
+        $sql .= " WHERE status = 'active'";
+    }
+    $sql .= " ORDER BY name";
+
+    $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as &$c) {
+        if (!isset($c['icon']) || $c['icon'] === null || $c['icon'] === '') $c['icon'] = 'fa-exclamation-triangle';
+        if (!isset($c['color']) || $c['color'] === null || $c['color'] === '') $c['color'] = '#4c8a89';
+        if (!isset($c['description']) || $c['description'] === null) $c['description'] = '';
+    }
+    unset($c);
+
+    return [
+        'table' => $tableName,
+        'categories' => $rows
+    ];
+}
+
 $action = $_GET['action'] ?? 'send';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
@@ -483,38 +598,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         $bStmt = $pdo->query("SELECT DISTINCT barangay FROM users WHERE barangay IS NOT NULL AND barangay != '' ORDER BY barangay");
         $barangays = $bStmt->fetchAll(PDO::FETCH_COLUMN);
 
-        // Fetch Categories with visual metadata (backward compatible)
+        // Fetch Categories with auto-heal schema/seed
         $categories = [];
-        $hasAlertCategories = false;
+        $categoriesTable = null;
         try {
-            $tCheck = $pdo->query("SHOW TABLES LIKE 'alert_categories'");
-            $hasAlertCategories = $tCheck && $tCheck->rowCount() > 0;
-        } catch (PDOException $e) {
-            $hasAlertCategories = false;
-        }
-
-        if ($hasAlertCategories) {
-            $colsStmt = $pdo->query("SHOW COLUMNS FROM alert_categories");
-            $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN);
-            $hasIcon = in_array('icon', $cols, true);
-            $hasColor = in_array('color', $cols, true);
-            $hasDescription = in_array('description', $cols, true);
-
-            $selectParts = ['id', 'name'];
-            if ($hasIcon) $selectParts[] = 'icon';
-            if ($hasColor) $selectParts[] = 'color';
-            if ($hasDescription) $selectParts[] = 'description';
-
-            $cStmt = $pdo->query("SELECT " . implode(', ', $selectParts) . " FROM alert_categories ORDER BY name");
-            $categories = $cStmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // Normalize defaults if columns are missing or NULL
-            foreach ($categories as &$c) {
-                if (!isset($c['icon']) || $c['icon'] === null || $c['icon'] === '') $c['icon'] = 'fa-exclamation-triangle';
-                if (!isset($c['color']) || $c['color'] === null || $c['color'] === '') $c['color'] = '#4c8a89';
-                if (!isset($c['description']) || $c['description'] === null) $c['description'] = '';
-            }
-            unset($c);
+            $catResult = mnGetCategoriesForOptions($pdo);
+            $categories = $catResult['categories'] ?? [];
+            $categoriesTable = $catResult['table'] ?? null;
+        } catch (Throwable $e) {
+            error_log("Mass Notification get_options categories error: " . $e->getMessage());
+            $categories = [];
+            $categoriesTable = null;
         }
 
         // Fetch Templates (optional table)
@@ -528,9 +622,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         }
 
         if ($hasTemplates) {
-            // alert_categories join is optional too
-            if ($hasAlertCategories) {
-                $tStmt = $pdo->query("SELECT t.*, c.name as category_name FROM notification_templates t LEFT JOIN alert_categories c ON t.category_id = c.id ORDER BY t.created_at DESC");
+            // Category join is optional and table-name aware.
+            if (!empty($categoriesTable)) {
+                $tStmt = $pdo->query("SELECT t.*, c.name as category_name FROM notification_templates t LEFT JOIN {$categoriesTable} c ON t.category_id = c.id ORDER BY t.created_at DESC");
             } else {
                 $tStmt = $pdo->query("SELECT t.* FROM notification_templates t ORDER BY t.created_at DESC");
             }

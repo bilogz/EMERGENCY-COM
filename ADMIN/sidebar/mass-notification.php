@@ -1428,7 +1428,9 @@ $pageTitle = 'Mass Notification System';
                     if (data.success) {
                         // Populate Barangays
                         const bSel = document.getElementById('barangay');
-                        bSel.innerHTML = data.barangays.map(b => `<option value="${b}">${b}</option>`).join('');
+                        if (bSel && Array.isArray(data.barangays)) {
+                            bSel.innerHTML = data.barangays.map(b => `<option value="${b}">${b}</option>`).join('');
+                        }
                         
                         // Populate Categories with metadata
                         if (Array.isArray(data.categories) && data.categories.length > 0) {
@@ -1446,9 +1448,11 @@ $pageTitle = 'Mass Notification System';
 
                         // Populate Templates
                         const tSel = document.getElementById('template');
-                        templatesData = data.templates;
-                        tSel.innerHTML = '<option value="">-- Select a Template --</option>' + 
-                            data.templates.map(t => `<option value="${t.id}">${t.title} (${t.severity})</option>`).join('');
+                        templatesData = Array.isArray(data.templates) ? data.templates : [];
+                        if (tSel) {
+                            tSel.innerHTML = '<option value="">-- Select a Template --</option>' +
+                                templatesData.map(t => `<option value="${t.id}">${t.title} (${t.severity})</option>`).join('');
+                        }
 
                         // Re-apply any saved draft now that options are loaded (cookie/localStorage)
                         try { window.DraftPersist?.restoreForm(document.getElementById('dispatchForm')); } catch {}
@@ -1492,6 +1496,9 @@ $pageTitle = 'Mass Notification System';
                 })
                 .catch(err => {
                     console.error('Mass Notification: category fallback error:', err);
+                    const cSel = document.getElementById('category_id');
+                    if (cSel) cSel.innerHTML = '<option value="">-- No categories found --</option>';
+                    categoriesData = [];
                 });
         }
 
