@@ -6,6 +6,15 @@ require_once 'db_connect.php';
 
 /** @var PDO $pdo */
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    apiResponse::error("Method Not Allowed. Use POST.", 405);
+}
+
+$contentType = $_SERVER['CONTENT_TYPE'] ?? ($_SERVER['HTTP_CONTENT_TYPE'] ?? '');
+if (stripos((string)$contentType, 'application/json') === false) {
+    apiResponse::error("Invalid Content-Type. Use application/json.", 400);
+}
+
 function getAllowedGoogleClientIds() {
     $raw = getenv('GOOGLE_CLIENT_IDS');
     if ($raw === false || trim($raw) === '') {
