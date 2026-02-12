@@ -137,17 +137,17 @@ $pageTitle = 'Mass Notification System';
                     <div class="mn-templates" aria-label="Starter templates">
                         <div class="mn-templates-head">
                             <div class="mn-templates-title"><i class="fas fa-bolt" aria-hidden="true"></i> Starter Templates</div>
-                            <div class="mn-stat-sub">Click “Use Template” to auto-fill the wizard. You can still edit before sending.</div>
+                            <div class="mn-stat-sub">Click "Use Template" to auto-fill the wizard. You can still edit before sending.</div>
                         </div>
                         <div class="mn-template-grid">
                             <div class="mn-template">
                                 <div class="mn-template-name"><i class="fas fa-cloud-rain"></i> Weather Signal Alert</div>
-                                <div class="mn-template-desc">Sets a Weather category + Signal 1–5, then generates a QC-ready draft message.</div>
+                                <div class="mn-template-desc">Sets a Weather category + Signal 1-5, then generates a QC-ready draft message.</div>
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="mnApplyStarterTemplate('weather_signal')">Use Template</button>
                             </div>
                             <div class="mn-template">
                                 <div class="mn-template-name"><i class="fas fa-fire"></i> Fire Alert Level</div>
-                                <div class="mn-template-desc">Sets a Fire category + Level 1–3, then generates a QC-ready draft message.</div>
+                                <div class="mn-template-desc">Sets a Fire category + Level 1-3, then generates a QC-ready draft message.</div>
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="mnApplyStarterTemplate('fire_level')">Use Template</button>
                             </div>
                             <div class="mn-template">
@@ -184,7 +184,7 @@ $pageTitle = 'Mass Notification System';
                                                 <option value="role">Specific Role (Citizen, Responder, Admin)</option>
                                                 <option value="topic">Subscribed Topic Users</option>
                                             </select>
-                                            <div class="mn-help">Choose <strong>All</strong> for the fastest dispatch, or narrow to a Barangay/Role. “Topic” uses the category subscription.</div>
+                                            <div class="mn-help">Choose <strong>All</strong> for the fastest dispatch, or narrow to a Barangay/Role. "Topic" uses the category subscription.</div>
                                         </div>
                                         
                                         <div id="barangayFilter" class="form-group" style="display:none;">
@@ -289,7 +289,7 @@ $pageTitle = 'Mass Notification System';
                                             <select id="category_id" name="category_id" style="width: 100%;" required>
                                                 <option value="">Loading Categories...</option>
                                             </select>
-                                            <div class="mn-help">Category controls icons/colors in citizen feeds and determines “Topic” subscriptions.</div>
+                                            <div class="mn-help">Category controls icons/colors in citizen feeds and determines "Topic" subscriptions.</div>
                                         </div>
 
                                         <div class="form-group">
@@ -300,7 +300,7 @@ $pageTitle = 'Mass Notification System';
                                         </div>
 
                                         <div class="form-group" id="mnFireLevelWrap" style="display:none;">
-                                            <label for="mnFireLevel">Fire Alert Level (1â€“3)</label>
+                                            <label for="mnFireLevel">Fire Alert Level (1-3)</label>
                                             <select id="mnFireLevel" name="fire_level" class="form-control">
                                                 <option value="1">Level 1</option>
                                                 <option value="2">Level 2</option>
@@ -343,7 +343,7 @@ $pageTitle = 'Mass Notification System';
                                         </div>
 
                                         <div class="form-group" id="mnWeatherSignalWrap" style="display:none;">
-                                            <label for="mnWeatherSignal">Weather Signal (1–5)</label>
+                                            <label for="mnWeatherSignal">Weather Signal (1-5)</label>
                                             <select id="mnWeatherSignal" name="weather_signal" class="form-control">
                                                 <option value="1">Signal 1</option>
                                                 <option value="2">Signal 2</option>
@@ -357,7 +357,7 @@ $pageTitle = 'Mass Notification System';
                                         <div class="form-group">
                                             <label for="message_title">Title / Headline *</label>
                                             <input type="text" id="message_title" name="title" required placeholder="e.g., FLASH FLOOD WARNING">
-                                            <div class="mn-help">Keep it short and action-focused (e.g., “Evacuate now”).</div>
+                                            <div class="mn-help">Keep it short and action-focused (e.g., "Evacuate now").</div>
                                         </div>
 
                                         <div class="form-group">
@@ -473,7 +473,7 @@ $pageTitle = 'Mass Notification System';
     </div>
 
     <!-- Confirm Modal -->
-    <div class="mn-confirm-backdrop" id="mnConfirmBackdrop" aria-hidden="true">
+    <div class="mn-confirm-backdrop" id="mnConfirmBackdrop" aria-hidden="true" inert>
         <div class="mn-confirm" role="dialog" aria-modal="true" aria-label="Confirm action">
             <div class="mn-confirm-header">
                 <h3 class="mn-confirm-title" id="mnConfirmTitle">Confirm</h3>
@@ -582,6 +582,7 @@ $pageTitle = 'Mass Notification System';
         let mnQcBounds = null;
         let mnReverseGeocodeTimer = null;
         let mnReverseGeocodeSeq = 0;
+        let mnLastFocusedBeforeConfirm = null;
 
         function mnApiPath(path) {
             const clean = String(path || '').replace(/^\/+/, '');
@@ -765,8 +766,13 @@ $pageTitle = 'Mass Notification System';
             }
             okBtn.textContent = 'OK';
 
+            mnLastFocusedBeforeConfirm = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            backdrop.removeAttribute('inert');
             backdrop.classList.add('show');
             backdrop.setAttribute('aria-hidden', 'false');
+            setTimeout(() => {
+                try { okBtn.focus({ preventScroll: true }); } catch (e) { okBtn.focus(); }
+            }, 0);
         }
 
         function mnShowNotice(message, titleText = 'Notice') {
@@ -783,15 +789,35 @@ $pageTitle = 'Mass Notification System';
             okBtn.textContent = 'OK';
             if (cancelBtn) cancelBtn.style.display = 'none';
 
+            mnLastFocusedBeforeConfirm = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            backdrop.removeAttribute('inert');
             backdrop.classList.add('show');
             backdrop.setAttribute('aria-hidden', 'false');
+            setTimeout(() => {
+                try { okBtn.focus({ preventScroll: true }); } catch (e) { okBtn.focus(); }
+            }, 0);
         }
 
         function mnCloseConfirm() {
             const backdrop = document.getElementById('mnConfirmBackdrop');
             if (!backdrop) return;
+
+            const activeEl = document.activeElement;
+            if (activeEl && backdrop.contains(activeEl) && typeof activeEl.blur === 'function') {
+                activeEl.blur();
+            }
+
             backdrop.classList.remove('show');
             backdrop.setAttribute('aria-hidden', 'true');
+            backdrop.setAttribute('inert', '');
+
+            const fallbackFocus = (mnLastFocusedBeforeConfirm && document.contains(mnLastFocusedBeforeConfirm))
+                ? mnLastFocusedBeforeConfirm
+                : (document.getElementById('mnAiAssistBtn') || document.getElementById('audienceType'));
+            if (fallbackFocus && typeof fallbackFocus.focus === 'function') {
+                try { fallbackFocus.focus({ preventScroll: true }); } catch (e) { fallbackFocus.focus(); }
+            }
+            mnLastFocusedBeforeConfirm = null;
         }
 
         async function mnAiSuggestFromServer(ctx) {
@@ -1527,16 +1553,16 @@ $pageTitle = 'Mass Notification System';
             if (previewBody) {
                 if (previewMode === 'sms') {
                     previewBody.textContent = body;
-                    if (previewFooter) previewFooter.textContent = `SMS preview • ${Math.ceil((title.length + body.length) / 160)} part(s) approx.`;
+                    if (previewFooter) previewFooter.textContent = `SMS preview - ${Math.ceil((title.length + body.length) / 160)} part(s) approx.`;
                 } else if (previewMode === 'email') {
                     previewBody.textContent = body ? `Hi,\n\n${body}\n\n- Emergency Communication System` : '';
-                    if (previewFooter) previewFooter.textContent = 'Email preview • supports longer instructions.';
+                    if (previewFooter) previewFooter.textContent = 'Email preview - supports longer instructions.';
                 } else if (previewMode === 'push') {
                     previewBody.textContent = body ? body.slice(0, 140) + (body.length > 140 ? '...' : '') : '';
-                    if (previewFooter) previewFooter.textContent = 'Push preview • keep it short for lock screens.';
+                    if (previewFooter) previewFooter.textContent = 'Push preview - keep it short for lock screens.';
                 } else if (previewMode === 'pa') {
                     previewBody.textContent = body ? body.toUpperCase() : '';
-                    if (previewFooter) previewFooter.textContent = 'PA preview • uppercase for announcement clarity.';
+                    if (previewFooter) previewFooter.textContent = 'PA preview - uppercase for announcement clarity.';
                 } else {
                     previewBody.textContent = body;
                     if (previewFooter) previewFooter.textContent = '';
@@ -2111,7 +2137,7 @@ $pageTitle = 'Mass Notification System';
                     mnMapMarker = L.marker([mnMapSelected.lat, mnMapSelected.lng], { draggable: true }).addTo(mnMap);
                     mnMapMarker.on('dragend', () => {
                         const p = mnMapMarker.getLatLng();
-                        // Don’t allow dragging outside QC
+                        // Don't allow dragging outside QC
                         if (!mnQcGeojson || !mnGeojsonContainsPoint(mnQcGeojson, p.lat, p.lng)) {
                             alert('Pin must stay within Quezon City.');
                             mnMapMarker.setLatLng([mnMapSelected.lat, mnMapSelected.lng]);

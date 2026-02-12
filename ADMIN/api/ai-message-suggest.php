@@ -78,6 +78,27 @@ function aiBuildSuggestion(string $title, string $body): ?array {
     return ['title' => $title, 'body' => $body];
 }
 
+function aiDecodeNestedJsonObject(string $value): ?array {
+    $candidate = aiStripCodeFences($value);
+    if ($candidate === '') return null;
+
+    $decoded = json_decode($candidate, true);
+    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+        return $decoded;
+    }
+
+    // Sometimes the payload is a JSON-encoded string containing another JSON object.
+    $decodedString = json_decode($candidate, true);
+    if (json_last_error() === JSON_ERROR_NONE && is_string($decodedString)) {
+        $decodedAgain = json_decode($decodedString, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decodedAgain)) {
+            return $decodedAgain;
+        }
+    }
+
+    return null;
+}
+
 function aiExtractSuggestion(string $rawText): ?array {
     $clean = aiStripCodeFences($rawText);
     if ($clean === '') return null;
@@ -93,21 +114,59 @@ function aiExtractSuggestion(string $rawText): ?array {
 
     foreach ($candidates as $candidate) {
         $parsed = json_decode($candidate, true);
-        if (json_last_error() !== JSON_ERROR_NONE || !is_array($parsed)) {
+        if (json_last_error() !== JSON_ERROR_NONE) {
             continue;
         }
 
-        $title = trim((string)($parsed['title'] ?? ''));
-        $body = trim((string)($parsed['body'] ?? ''));
-
-        // Accept nested data format if model wrapped it.
-        if (($title === '' || $body === '') && isset($parsed['data']) && is_array($parsed['data'])) {
-            $title = trim((string)($parsed['data']['title'] ?? $title));
-            $body = trim((string)($parsed['data']['body'] ?? $body));
+        if (is_string($parsed)) {
+            $nested = aiDecodeNestedJsonObject($parsed);
+            if (is_array($nested)) {
+                $parsed = $nested;
+            } else {
+                $fallback = aiBuildSuggestion('', $parsed);
+                if ($fallback) return $fallback;
+                continue;
+            }
         }
 
-        $suggestion = aiBuildSuggestion($title, $body);
-        if ($suggestion) return $suggestion;
+        if (!is_array($parsed)) {
+            continue;
+        }
+
+        $arrayCandidates = [$parsed];
+        foreach (['data', 'response', 'result'] as $k) {
+            if (isset($parsed[$k]) && is_array($parsed[$k])) {
+                $arrayCandidates[] = $parsed[$k];
+            }
+        }
+
+        foreach ($arrayCandidates as $obj) {
+            $title = trim((string)($obj['title'] ?? ''));
+            $body = trim((string)($obj['body'] ?? ''));
+
+            if (($title === '' || $body === '') && isset($obj['message'])) {
+                $body = trim((string)$obj['message']);
+            }
+
+            // Handle escaped JSON dumped into title/body text.
+            if ($title !== '' && ($body === '' || strpos($title, '{') !== false)) {
+                $nested = aiDecodeNestedJsonObject($title);
+                if (is_array($nested)) {
+                    $title = trim((string)($nested['title'] ?? $title));
+                    $body = trim((string)($nested['body'] ?? $body));
+                }
+            }
+            if ($body !== '' && strpos($body, '{') !== false) {
+                $nested = aiDecodeNestedJsonObject($body);
+                if (is_array($nested)) {
+                    $title = trim((string)($nested['title'] ?? $title));
+                    $body = trim((string)($nested['body'] ?? $body));
+                }
+            }
+
+            $suggestion = aiBuildSuggestion($title, $body);
+            if ($suggestion) return $suggestion;
+        }
     }
 
     // Fallback parser for non-JSON responses such as:
