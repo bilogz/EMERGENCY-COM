@@ -28,6 +28,122 @@ set_error_handler(function ($errno, $errstr, $errfile, $errline) {
     throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
 });
 
+function aiStripCodeFences(string $text): string {
+    $clean = trim($text);
+    $clean = preg_replace('/^\s*```[a-zA-Z0-9_-]*\s*/', '', $clean);
+    $clean = preg_replace('/\s*```\s*$/', '', $clean);
+    return trim((string)$clean);
+}
+
+function aiCleanPlainText(string $text): string {
+    $text = aiStripCodeFences($text);
+    $text = str_replace(["\r\n", "\r"], "\n", $text);
+    // Remove markdown bullets and heading marks.
+    $text = preg_replace('/^\s*[-*#]+\s*/m', '', $text);
+    $text = preg_replace('/^\s*\d+\.\s*/m', '', $text);
+    // Collapse excessive whitespace.
+    $text = preg_replace('/[ \t]+/', ' ', $text);
+    $text = preg_replace('/\n{3,}/', "\n\n", $text);
+    return trim((string)$text);
+}
+
+function aiLimitTitleWords(string $title, int $maxWords = 8): string {
+    $title = trim($title, " \t\n\r\0\x0B\"'");
+    if ($title === '') return '';
+    $words = preg_split('/\s+/', $title);
+    if (!is_array($words)) return $title;
+    if (count($words) > $maxWords) {
+        $words = array_slice($words, 0, $maxWords);
+    }
+    return trim(implode(' ', $words));
+}
+
+function aiBuildSuggestion(string $title, string $body): ?array {
+    $title = aiLimitTitleWords(aiCleanPlainText($title), 8);
+    $body = aiCleanPlainText($body);
+
+    if ($title === '' && $body === '') return null;
+    if ($title === '') {
+        // Fallback: generate short title from body.
+        $title = aiLimitTitleWords($body, 8);
+    }
+    if ($body === '') {
+        $body = $title;
+    }
+
+    if (strlen($body) > 550) {
+        $body = trim(substr($body, 0, 550));
+    }
+
+    return ['title' => $title, 'body' => $body];
+}
+
+function aiExtractSuggestion(string $rawText): ?array {
+    $clean = aiStripCodeFences($rawText);
+    if ($clean === '') return null;
+
+    $candidates = [];
+    $candidates[] = $clean;
+
+    $start = strpos($clean, '{');
+    $end = strrpos($clean, '}');
+    if ($start !== false && $end !== false && $end > $start) {
+        $candidates[] = substr($clean, $start, $end - $start + 1);
+    }
+
+    foreach ($candidates as $candidate) {
+        $parsed = json_decode($candidate, true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($parsed)) {
+            continue;
+        }
+
+        $title = trim((string)($parsed['title'] ?? ''));
+        $body = trim((string)($parsed['body'] ?? ''));
+
+        // Accept nested data format if model wrapped it.
+        if (($title === '' || $body === '') && isset($parsed['data']) && is_array($parsed['data'])) {
+            $title = trim((string)($parsed['data']['title'] ?? $title));
+            $body = trim((string)($parsed['data']['body'] ?? $body));
+        }
+
+        $suggestion = aiBuildSuggestion($title, $body);
+        if ($suggestion) return $suggestion;
+    }
+
+    // Fallback parser for non-JSON responses such as:
+    // Title: ...
+    // Body: ...
+    $title = '';
+    $body = '';
+    if (preg_match('/^\s*(?:title|headline)\s*[:\-]\s*(.+)$/im', $clean, $m)) {
+        $title = trim((string)$m[1]);
+    }
+    if (preg_match('/^\s*(?:body|message|content)\s*[:\-]\s*([\s\S]+)$/im', $clean, $m)) {
+        $body = trim((string)$m[1]);
+    }
+
+    if ($title !== '' || $body !== '') {
+        $suggestion = aiBuildSuggestion($title, $body);
+        if ($suggestion) return $suggestion;
+    }
+
+    // Final fallback: derive title from first line/sentence and keep rest as body.
+    $normalized = aiCleanPlainText($clean);
+    if ($normalized === '') return null;
+
+    $parts = preg_split('/\n+/', $normalized);
+    if (!is_array($parts) || count($parts) === 0) return null;
+
+    $first = trim((string)$parts[0]);
+    $rest = trim(implode("\n", array_slice($parts, 1)));
+    if ($rest === '' && preg_match('/^(.{1,90}[.!?])\s+(.+)$/s', $normalized, $m)) {
+        $first = trim((string)$m[1]);
+        $rest = trim((string)$m[2]);
+    }
+
+    return aiBuildSuggestion($first, $rest !== '' ? $rest : $normalized);
+}
+
 try {
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -138,37 +254,22 @@ if ($text === '') {
     exit();
 }
 
-// Extract JSON from response (handle accidental extra text)
-$start = strpos($text, '{');
-$end = strrpos($text, '}');
-if ($start === false || $end === false || $end <= $start) {
+$suggestion = aiExtractSuggestion($text);
+if (!$suggestion) {
     http_response_code(200);
-    echo json_encode(['success' => false, 'message' => 'AI response not in JSON format']);
-    exit();
-}
-
-$json = substr($text, $start, $end - $start + 1);
-$data = json_decode($json, true);
-if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
-    http_response_code(200);
-    echo json_encode(['success' => false, 'message' => 'Failed to parse AI JSON response']);
-    exit();
-}
-
-$title = trim((string)($data['title'] ?? ''));
-$body = trim((string)($data['body'] ?? ''));
-
-if ($title === '' || $body === '') {
-    http_response_code(200);
-    echo json_encode(['success' => false, 'message' => 'AI response missing title/body']);
+    echo json_encode([
+        'success' => false,
+        'message' => 'AI response could not be converted to title/body',
+        'error_code' => 'ai_response_unusable'
+    ]);
     exit();
 }
 
 echo json_encode([
     'success' => true,
     'data' => [
-        'title' => $title,
-        'body' => $body
+        'title' => $suggestion['title'],
+        'body' => $suggestion['body']
     ],
     'model' => $model
 ]);

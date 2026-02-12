@@ -892,8 +892,21 @@ $pageTitle = 'Mass Notification System';
 
             if (btn) btn.classList.remove('is-loading');
             if (!aiResult || !aiResult.success || !aiResult.data) {
-                const reason = aiResult?.error ? `\n\nReason: ${aiResult.error}` : '';
-                mnShowNotice(`AI suggestion failed. Please check your API key or server logs, then try again.${reason}`);
+                const reasonText = String(aiResult?.error || '').trim();
+                let message = 'AI suggestion failed. Please try again.';
+
+                if (/quota|rate limit|too many requests|429/i.test(reasonText)) {
+                    message = 'AI request limit reached. Please wait a minute and try again.';
+                } else if (/api key|not configured|permission|unauth/i.test(reasonText)) {
+                    message = 'AI API key issue detected. Please check API settings.';
+                } else if (/json|format|title\/body|unusable/i.test(reasonText)) {
+                    message = 'AI returned an invalid format. Please retry.';
+                }
+
+                if (reasonText) {
+                    message += `\n\nReason: ${reasonText}`;
+                }
+                mnShowNotice(message);
                 return;
             }
             const suggestion = aiResult.data;
