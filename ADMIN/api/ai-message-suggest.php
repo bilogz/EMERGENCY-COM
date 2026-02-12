@@ -42,6 +42,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 require_once __DIR__ . '/secure-api-config.php';
 require_once __DIR__ . '/gemini-api-wrapper.php';
+// Load DB connection so key lookup can also use API key management tables.
+if (file_exists(__DIR__ . '/db_connect.php')) {
+    require_once __DIR__ . '/db_connect.php';
+}
 
 $apiKey = getGeminiApiKey('ai_message');
 if (empty($apiKey)) {
@@ -51,7 +55,8 @@ if (empty($apiKey)) {
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => 'AI API key not configured. Please set AI_API_KEY_AI_MESSAGE (or AI_API_KEY) in config.local.php.'
+        'message' => 'AI API key not configured. Please set AI_API_KEY_AI_MESSAGE (or AI_API_KEY) in config.local.php, or enable the key in API Key Management.',
+        'error_code' => 'missing_api_key'
     ]);
     exit();
 }
@@ -119,7 +124,9 @@ if (empty($result['success'])) {
     echo json_encode([
         'success' => false,
         'message' => 'AI request failed',
-        'error' => $result['error'] ?? 'Unknown error'
+        'error' => $result['error'] ?? 'Unknown error',
+        'error_code' => 'ai_request_failed',
+        'model' => $model
     ]);
     exit();
 }
@@ -170,6 +177,7 @@ echo json_encode([
     echo json_encode([
         'success' => false,
         'message' => 'AI request failed',
-        'error' => $e->getMessage()
+        'error' => $e->getMessage(),
+        'error_code' => 'exception'
     ]);
 }

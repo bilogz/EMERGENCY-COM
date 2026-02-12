@@ -761,12 +761,35 @@ $pageTitle = 'Mass Notification System';
                     body: JSON.stringify(ctx)
                 });
                 const json = await res.json().catch(() => null);
-                if (!res.ok || !json || !json.success || !json.data) return null;
-                if (!json.data.title || !json.data.body) return null;
-                return { title: String(json.data.title), body: String(json.data.body) };
+
+                if (!res.ok) {
+                    const message = (json && (json.error || json.message))
+                        ? String(json.error || json.message)
+                        : `HTTP ${res.status}`;
+                    return { success: false, error: message };
+                }
+
+                if (!json || !json.success || !json.data) {
+                    const message = (json && (json.error || json.message))
+                        ? String(json.error || json.message)
+                        : 'Invalid AI response.';
+                    return { success: false, error: message };
+                }
+
+                if (!json.data.title || !json.data.body) {
+                    return { success: false, error: 'AI response missing title/body.' };
+                }
+
+                return {
+                    success: true,
+                    data: {
+                        title: String(json.data.title),
+                        body: String(json.data.body)
+                    }
+                };
             } catch (err) {
                 console.warn('AI suggest failed:', err);
-                return null;
+                return { success: false, error: 'Unable to reach AI service.' };
             }
         }
 
@@ -832,13 +855,15 @@ $pageTitle = 'Mass Notification System';
             const btn = document.getElementById('mnAiAssistBtn');
             if (btn) btn.classList.add('is-loading');
 
-            let suggestion = await mnAiSuggestFromServer(ctx);
+            const aiResult = await mnAiSuggestFromServer(ctx);
 
             if (btn) btn.classList.remove('is-loading');
-            if (!suggestion) {
-                mnShowNotice('AI suggestion failed. Please check your API key or server logs, then try again.');
+            if (!aiResult || !aiResult.success || !aiResult.data) {
+                const reason = aiResult?.error ? `\n\nReason: ${aiResult.error}` : '';
+                mnShowNotice(`AI suggestion failed. Please check your API key or server logs, then try again.${reason}`);
                 return;
             }
+            const suggestion = aiResult.data;
 
             const titleEl = document.getElementById('message_title');
             const bodyEl = document.getElementById('message_body');
