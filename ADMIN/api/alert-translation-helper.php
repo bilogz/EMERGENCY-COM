@@ -4,8 +4,8 @@
  * Handles retrieval and auto-generation of alert translations
  */
 
-require_once 'db_connect.php';
-require_once 'ai-translation-service.php';
+require_once __DIR__ . '/db_connect.php';
+require_once __DIR__ . '/ai-translation-service.php';
 
 class AlertTranslationHelper {
     private $pdo;

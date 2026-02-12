@@ -6,7 +6,7 @@
 
 // Only require db_connect.php if $pdo is not already set
 if (!isset($pdo) || $pdo === null) {
-    require_once 'db_connect.php';
+    require_once __DIR__ . '/db_connect.php';
     // Ensure $pdo is in global scope after requiring db_connect.php
     if (isset($pdo) && $pdo !== null) {
         $GLOBALS['pdo'] = $pdo;
@@ -15,7 +15,7 @@ if (!isset($pdo) || $pdo === null) {
 
 // Only require activity_logger.php if not already loaded
 if (!function_exists('logAdminActivity')) {
-    require_once 'activity_logger.php';
+    require_once __DIR__ . '/activity_logger.php';
 }
 
 class AITranslationService {
