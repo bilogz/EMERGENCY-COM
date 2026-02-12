@@ -354,9 +354,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN);
 
         $selectParts = [];
-        foreach (['id', 'channel', 'message', 'recipients', 'status'] as $c) {
-            if (in_array($c, $cols, true)) $selectParts[] = $c;
+        $selectParts[] = in_array('id', $cols, true) ? 'id' : '0 as id';
+
+        // Channel can be stored as channel or channels in older schemas.
+        if (in_array('channel', $cols, true)) {
+            $selectParts[] = 'channel';
+        } elseif (in_array('channels', $cols, true)) {
+            $selectParts[] = 'channels as channel';
+        } else {
+            $selectParts[] = "'' as channel";
         }
+
+        // Message can be stored as message/content/body in older schemas.
+        if (in_array('message', $cols, true)) {
+            $selectParts[] = 'message';
+        } elseif (in_array('content', $cols, true)) {
+            $selectParts[] = 'content as message';
+        } elseif (in_array('body', $cols, true)) {
+            $selectParts[] = 'body as message';
+        } else {
+            $selectParts[] = "'' as message";
+        }
+
+        // Target can be stored as recipients or recipient.
+        if (in_array('recipients', $cols, true)) {
+            $selectParts[] = 'recipients';
+        } elseif (in_array('recipient', $cols, true)) {
+            $selectParts[] = 'recipient as recipients';
+        } else {
+            $selectParts[] = "'' as recipients";
+        }
+
+        $selectParts[] = in_array('status', $cols, true) ? 'status' : "'pending' as status";
 
         $hasSentAt = in_array('sent_at', $cols, true);
         $hasCreatedAt = in_array('created_at', $cols, true);

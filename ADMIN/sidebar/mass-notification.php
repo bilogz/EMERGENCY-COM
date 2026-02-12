@@ -2240,29 +2240,63 @@ $pageTitle = 'Mass Notification System';
             fetch('../api/mass-notification.php?action=list')
                 .then(r => r.json())
                 .then(data => {
-                    if (!data.success) return;
                     const tbody = document.querySelector('#notificationsTable tbody');
-                    tbody.innerHTML = data.notifications.map(n => {
+                    if (!tbody) return;
+                    if (!data.success) {
+                        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary-1);">Failed to load dispatch history.</td></tr>';
+                        return;
+                    }
+
+                    const rows = Array.isArray(data.notifications) ? data.notifications : [];
+                    if (rows.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary-1);">No dispatch history yet.</td></tr>';
+                        updateMnAnalytics([]);
+                        return;
+                    }
+
+                    tbody.innerHTML = rows.map(n => {
+                        const channelsRaw = (n.channel || '').toString();
+                        const channels = channelsRaw
+                            .split(',')
+                            .map(c => c.trim())
+                            .filter(Boolean);
+                        const channelIcons = channels.length > 0
+                            ? channels.map(c => `<i class="fas fa-${getIcon(c)}" title="${c}" style="color: var(--text-secondary-1); margin-right: 4px;"></i>`).join(' ')
+                            : '<small style="color: var(--text-secondary-1);">N/A</small>';
                         const progress = n.progress || 0;
                         const stats = n.stats || {sent: 0, failed: 0, total: 0};
+                        const status = (n.status || 'pending').toString().toLowerCase();
+                        const sentAt = n.sent_at || '-';
+                        const target = n.recipients || '-';
+                        const message = (n.message || '').toString();
+                        const successRate = (status === 'completed' && Number(stats.total) > 0)
+                            ? `<strong>${Math.round((Number(stats.sent) / Number(stats.total)) * 100)}%</strong> <br><small style="color: var(--text-secondary-1);">${stats.sent}/${stats.total}</small>`
+                            : '--';
                         return `
                             <tr>
                                 <td>#${n.id}</td>
-                                <td><small style="color: var(--text-secondary-1); font-weight: 500;">${n.recipients}</small></td>
-                                <td>${n.channel.split(',').map(c => `<i class="fas fa-${getIcon(c)}" title="${c}" style="color: var(--text-secondary-1); margin-right: 4px;"></i>`).join(' ')}</td>
-                                <td><div style="max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: 0.9rem;">${n.message}</div></td>
+                                <td><small style="color: var(--text-secondary-1); font-weight: 500;">${target}</small></td>
+                                <td>${channelIcons}</td>
+                                <td><div style="max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: 0.9rem;">${message}</div></td>
                                 <td>
-                                    <span class="badge ${n.status}">${n.status.toUpperCase()}</span>
+                                    <span class="badge ${status}">${status.toUpperCase()}</span>
                                     <div class="progress-container" title="${progress}% sent"><div class="progress-bar" style="width: ${progress}%"></div></div>
                                 </td>
-                                <td><small style="color: var(--text-secondary-1);">${n.sent_at}</small></td>
+                                <td><small style="color: var(--text-secondary-1);">${sentAt}</small></td>
                                 <td>
-                                    ${n.status === 'completed' ? `<strong>${Math.round((stats.sent/stats.total)*100)}%</strong> <br><small style="color: var(--text-secondary-1);">${stats.sent}/${stats.total}</small>` : '--'}
+                                    ${successRate}
                                 </td>
                             </tr>
                         `;
                     }).join('');
-                    updateMnAnalytics(data.notifications);
+                    updateMnAnalytics(rows);
+                })
+                .catch((error) => {
+                    console.error('Dispatch history load error:', error);
+                    const tbody = document.querySelector('#notificationsTable tbody');
+                    if (tbody) {
+                        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary-1);">Unable to load dispatch history.</td></tr>';
+                    }
                 });
         }
 
@@ -2320,7 +2354,7 @@ $pageTitle = 'Mass Notification System';
             });
         });
     </script>
-    <script src="../USERS/js/alert-listener.js"></script>
+    <script src="../../USERS/js/alert-listener.js"></script>
 </body>
 </html>
 

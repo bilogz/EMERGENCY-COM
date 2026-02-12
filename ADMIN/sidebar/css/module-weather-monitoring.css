@@ -262,6 +262,26 @@
                 background: linear-gradient(135deg, #1a1a2e 0%, #2d1b4e 100%);
                 border: 1px solid rgba(142, 68, 173, 0.5);
             }
+
+            /* Keep AI analysis readable on dark gradient cards */
+            .ai-analysis-card .ai-analysis-content,
+            .ai-analysis-card .ai-analysis-content *:not(button):not(i),
+            .ai-analysis-card .ai-result,
+            .ai-analysis-card .ai-result-section,
+            .ai-analysis-card .ai-result-title,
+            .ai-analysis-card .ai-result-content,
+            .ai-analysis-card .ai-alert-item,
+            .ai-analysis-card .ai-recommendation span {
+                color: rgba(255, 255, 255, 0.95) !important;
+            }
+
+            .ai-analysis-card .ai-result-title {
+                font-weight: 700;
+            }
+
+            .ai-analysis-card .ai-recommendation i {
+                color: #c8e6c9 !important;
+            }
             
             .ai-analyze-btn {
                 width: 100%;
