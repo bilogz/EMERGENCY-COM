@@ -503,16 +503,58 @@ $pageTitle = 'General Settings';
             // Test sound button
             if (testSoundBtn) {
                 testSoundBtn.addEventListener('click', function() {
-                    const soundPath = `sounds/${soundFile.value}.mp3`;
-                    const testSound = new Audio(soundPath);
-                    testSound.volume = soundVolume.value / 100;
-                    testSound.play().catch(err => {
-                        // Fallback to default
-                        const defaultSound = new Audio('sounds/default.mp3');
-                        defaultSound.volume = soundVolume.value / 100;
-                        defaultSound.play();
-                    });
+                    const volume = soundVolume ? soundVolume.value / 100 : 0.5;
+                    const type = soundFile ? soundFile.value : 'default';
+                    playPreviewTone(type, volume);
                 });
+            }
+
+            let _previewCtx = null;
+            function playPreviewTone(type, volume) {
+                try {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioCtx) return;
+                    if (!_previewCtx) _previewCtx = new AudioCtx();
+                    if (_previewCtx.state === 'suspended') {
+                        _previewCtx.resume();
+                    }
+
+                    const ctx = _previewCtx;
+                    const gain = ctx.createGain();
+                    gain.gain.value = Math.max(0, Math.min(1, volume));
+                    gain.connect(ctx.destination);
+
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sine';
+                    osc.connect(gain);
+
+                    const now = ctx.currentTime;
+                    const sequences = {
+                        default: [880, 0.12],
+                        bell: [660, 0.18],
+                        chime: [784, 0.12, 988, 0.12],
+                        notification: [880, 0.08, 880, 0.08, 880, 0.08],
+                        alert: [520, 0.12, 520, 0.12, 520, 0.12, 520, 0.12]
+                    };
+                    const seq = sequences[type] || sequences.default;
+
+                    let t = now;
+                    gain.gain.setValueAtTime(0, t);
+                    for (let i = 0; i < seq.length; i += 2) {
+                        const freq = seq[i];
+                        const dur = seq[i + 1] || 0.12;
+                        osc.frequency.setValueAtTime(freq, t);
+                        gain.gain.setValueAtTime(Math.max(0.08, volume), t);
+                        t += dur;
+                        gain.gain.setValueAtTime(0, t);
+                        t += 0.04;
+                    }
+
+                    osc.start(now);
+                    osc.stop(t);
+                } catch (e) {
+                    console.warn('Sound preview unavailable:', e);
+                }
             }
             
             function saveSoundSettings() {
