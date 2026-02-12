@@ -906,7 +906,18 @@ $pageTitle = 'Mass Notification System';
                 if (reasonText) {
                     message += `\n\nReason: ${reasonText}`;
                 }
-                mnShowNotice(message);
+
+                // Graceful fallback: keep workflow moving even if AI is temporarily unavailable.
+                const localSuggestion = mnGenerateDraft(ctx);
+                if (localSuggestion && localSuggestion.title && localSuggestion.body) {
+                    mnShowConfirm(
+                        `${message}\n\nUse built-in smart draft instead?`,
+                        () => mnSetDraftFields(localSuggestion, true),
+                        'AI Unavailable'
+                    );
+                } else {
+                    mnShowNotice(message);
+                }
                 return;
             }
             const suggestion = aiResult.data;
@@ -2422,7 +2433,7 @@ $pageTitle = 'Mass Notification System';
             });
         });
     </script>
-    <script src="../../USERS/js/alert-listener.js"></script>
+    <script src="../../USERS/js/alert-listener.js?v=<?php echo file_exists(__DIR__ . '/../../USERS/js/alert-listener.js') ? filemtime(__DIR__ . '/../../USERS/js/alert-listener.js') : time(); ?>"></script>
 </body>
 </html>
 
