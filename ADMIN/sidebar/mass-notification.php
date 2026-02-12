@@ -583,6 +583,47 @@ $pageTitle = 'Mass Notification System';
         let mnReverseGeocodeTimer = null;
         let mnReverseGeocodeSeq = 0;
 
+        function mnApiPath(path) {
+            const clean = String(path || '').replace(/^\/+/, '');
+            const base = (typeof window.API_BASE_PATH === 'string' ? window.API_BASE_PATH : '').replace(/\/+$/, '');
+            if (base) return `${base}/${clean}`;
+            return `../api/${clean}`;
+        }
+
+        async function mnFetchJson(path, options = {}) {
+            const clean = String(path || '').replace(/^\/+/, '');
+            const primary = mnApiPath(clean);
+            const fallback = `../api/${clean}`;
+            const urls = [...new Set([primary, fallback])];
+            let lastErr = null;
+
+            for (const url of urls) {
+                try {
+                    const res = await fetch(url, options);
+                    const text = await res.text();
+                    let json = null;
+                    try {
+                        json = JSON.parse(text);
+                    } catch (e) {}
+
+                    if (!res.ok) {
+                        const msg = json?.error || json?.message || `HTTP ${res.status}`;
+                        lastErr = new Error(String(msg));
+                        continue;
+                    }
+                    if (!json) {
+                        lastErr = new Error(`Invalid JSON from ${url}`);
+                        continue;
+                    }
+                    return json;
+                } catch (err) {
+                    lastErr = err;
+                }
+            }
+
+            throw (lastErr || new Error('Request failed'));
+        }
+
         function openDispatchWizard() {
             const backdrop = document.getElementById('mnDispatchWizardBackdrop');
             const host = document.getElementById('mnWizardHost');
@@ -755,19 +796,11 @@ $pageTitle = 'Mass Notification System';
 
         async function mnAiSuggestFromServer(ctx) {
             try {
-                const res = await fetch('../api/ai-message-suggest.php', {
+                const json = await mnFetchJson('ai-message-suggest.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(ctx)
                 });
-                const json = await res.json().catch(() => null);
-
-                if (!res.ok) {
-                    const message = (json && (json.error || json.message))
-                        ? String(json.error || json.message)
-                        : `HTTP ${res.status}`;
-                    return { success: false, error: message };
-                }
 
                 if (!json || !json.success || !json.data) {
                     const message = (json && (json.error || json.message))
@@ -1340,8 +1373,7 @@ $pageTitle = 'Mass Notification System';
         }
 
         function loadOptions() {
-            fetch('../api/mass-notification.php?action=get_options')
-                .then(r => r.json())
+            mnFetchJson('mass-notification.php?action=get_options')
                 .then(data => {
                     if (data.success) {
                         // Populate Barangays
@@ -1382,8 +1414,7 @@ $pageTitle = 'Mass Notification System';
         }
 
         function loadCategoriesFallback() {
-            fetch('../api/alert-categories.php?action=list')
-                .then(r => r.json())
+            mnFetchJson('alert-categories.php?action=list')
                 .then(data => {
                     if (!data || !data.success || !Array.isArray(data.categories)) {
                         console.error('Mass Notification: alert-categories list failed:', data?.message || data);
@@ -1711,7 +1742,7 @@ $pageTitle = 'Mass Notification System';
             // but the prompt says send as JSON or form data.
             // Using jQuery ajax for simple data object transmission as requested.
             $.ajax({
-                url: '../api/send-broadcast.php',
+                url: mnApiPath('send-broadcast.php'),
                 type: 'POST',
                 data: data,
                 dataType: 'json'
@@ -1735,7 +1766,7 @@ $pageTitle = 'Mass Notification System';
                     // Kick the worker once (local/dev friendly) so queued jobs actually send.
                     // Safe to ignore errors; deployments may run the worker via cron.
                     try {
-                        fetch('../api/notification-worker.php', { cache: 'no-store' })
+                        fetch(mnApiPath('notification-worker.php'), { cache: 'no-store' })
                             .then(() => setTimeout(loadNotifications, 800))
                             .catch(() => {});
                     } catch (e) {}
@@ -2262,8 +2293,7 @@ $pageTitle = 'Mass Notification System';
         });
 
         function loadNotifications() {
-            fetch('../api/mass-notification.php?action=list')
-                .then(r => r.json())
+            mnFetchJson('mass-notification.php?action=list')
                 .then(data => {
                     const tbody = document.querySelector('#notificationsTable tbody');
                     if (!tbody) return;

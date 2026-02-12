@@ -20,47 +20,74 @@
         return cutAt >= 0 ? path.substring(0, cutAt) : '';
     }
 
-    const appBase = detectAppBase();
-    const checkAlertsUrl = `${appBase}/USERS/api/check-new-alerts.php`;
-    const acknowledgeUrl = `${appBase}/USERS/api/acknowledge-alert.php`;
+    function buildUsersApiCandidates(endpoint) {
+        const cleanEndpoint = String(endpoint || '').replace(/^\/+/, '');
+        const appBase = detectAppBase().replace(/\/+$/, '');
+        const upper = `/USERS/api/${cleanEndpoint}`;
+        const lower = `/users/api/${cleanEndpoint}`;
+        const candidates = [];
 
-    function checkAlerts() {
-        fetch(checkAlertsUrl, {
-            method: 'GET',
-            cache: 'no-store',
-            headers: {
-                'Accept': 'application/json'
-            }
-        })
-            .then(async (response) => {
-                const contentType = response.headers.get('content-type') || '';
+        if (appBase) {
+            candidates.push(`${appBase}${upper}`);
+            candidates.push(`${appBase}${lower}`);
+        }
+        candidates.push(upper);
+        candidates.push(lower);
+
+        return Array.from(new Set(candidates));
+    }
+
+    const checkAlertsUrls = buildUsersApiCandidates('check-new-alerts.php');
+    const acknowledgeUrls = buildUsersApiCandidates('acknowledge-alert.php');
+
+    async function fetchJsonFromCandidates(urls, options) {
+        let lastErr = null;
+        for (const url of urls) {
+            try {
+                const response = await fetch(url, options);
+                const body = await response.text();
                 if (!response.ok) {
-                    const body = await response.text();
-                    throw new Error(`HTTP ${response.status}: ${body.slice(0, 120)}`);
+                    lastErr = new Error(`HTTP ${response.status} @ ${url}: ${body.slice(0, 120)}`);
+                    continue;
                 }
-                if (!contentType.includes('application/json')) {
-                    const body = await response.text();
-                    throw new Error(`Invalid JSON response: ${body.slice(0, 120)}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (!data.success) return;
 
-                // Update Badges
-                updateBadges(data.unread_count, data.alert ? data.alert.severity : null);
-
-                if (data.alert && data.alert.id != lastAlertId) {
-                    handleNewAlert(data.alert);
+                try {
+                    return JSON.parse(body);
+                } catch (e) {
+                    lastErr = new Error(`Invalid JSON @ ${url}: ${body.slice(0, 120)}`);
                 }
-            })
-            .catch(err => {
-                const now = Date.now();
-                if (now - lastErrorLogAt > 30000) {
-                    console.warn('Alert Polling Error:', err);
-                    lastErrorLogAt = now;
+            } catch (err) {
+                lastErr = err;
+            }
+        }
+        throw (lastErr || new Error('All alert endpoints failed'));
+    }
+
+    async function checkAlerts() {
+        try {
+            const data = await fetchJsonFromCandidates(checkAlertsUrls, {
+                method: 'GET',
+                cache: 'no-store',
+                headers: {
+                    'Accept': 'application/json'
                 }
             });
+
+            if (!data || !data.success) return;
+
+            // Update Badges
+            updateBadges(data.unread_count, data.alert ? data.alert.severity : null);
+
+            if (data.alert && data.alert.id != lastAlertId) {
+                handleNewAlert(data.alert);
+            }
+        } catch (err) {
+            const now = Date.now();
+            if (now - lastErrorLogAt > 30000) {
+                console.warn('Alert Polling Error:', err);
+                lastErrorLogAt = now;
+            }
+        }
     }
 
     function updateBadges(count, severity) {
@@ -162,12 +189,29 @@
     }
 
     function acknowledgeAlert(id) {
-        const formData = new FormData();
-        formData.append('alert_id', id);
-        fetch(acknowledgeUrl, {
-            method: 'POST',
-            body: formData
-        });
+        (async () => {
+            let lastErr = null;
+            for (const url of acknowledgeUrls) {
+                try {
+                    const formData = new FormData();
+                    formData.append('alert_id', id);
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    if (response.ok) return;
+                    lastErr = new Error(`HTTP ${response.status} @ ${url}`);
+                } catch (err) {
+                    lastErr = err;
+                }
+            }
+
+            const now = Date.now();
+            if (now - lastErrorLogAt > 30000) {
+                console.warn('Alert acknowledge error:', lastErr);
+                lastErrorLogAt = now;
+            }
+        })();
     }
 
     function getSeverityColor(sev) {
