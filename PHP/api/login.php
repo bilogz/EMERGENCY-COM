@@ -86,15 +86,15 @@ try {
         $deviceId   = isset($data['device_id'])   ? trim($data['device_id'])   : null;
         $deviceType = isset($data['device_type']) ? trim($data['device_type']) : 'android';
         $deviceName = isset($data['device_name']) ? trim($data['device_name']) : null;
-        $pushToken  = isset($data['push_token'])  ? trim($data['push_token'])  : null;
+        $fcmToken   = isset($data['fcm_token']) ? trim($data['fcm_token']) : (isset($data['push_token']) ? trim($data['push_token']) : null);
 
         if (!empty($deviceId)) {
             $deviceStmt = $pdo->prepare("
                 INSERT INTO user_devices 
-                (user_id, device_id, device_type, device_name, push_token, is_active, last_active)
+                (user_id, device_id, device_type, device_name, fcm_token, is_active, last_active)
                 VALUES (?, ?, ?, ?, ?, 1, NOW())
                 ON DUPLICATE KEY UPDATE 
-                    push_token = VALUES(push_token),
+                    fcm_token = VALUES(fcm_token),
                     device_name = VALUES(device_name),
                     is_active = 1,
                     last_active = NOW()
@@ -104,7 +104,7 @@ try {
                 $deviceId,
                 $deviceType,
                 $deviceName,
-                $pushToken
+                $fcmToken
             ]);
         }
 

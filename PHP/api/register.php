@@ -21,7 +21,7 @@ $shareLocation = isset($data['share_location']) ? (bool)$data['share_location'] 
 $deviceId   = isset($data['device_id'])   ? trim($data['device_id'])   : null;
 $deviceType = isset($data['device_type']) ? trim($data['device_type']) : 'android';
 $deviceName = isset($data['device_name']) ? trim($data['device_name']) : null;
-$pushToken  = isset($data['push_token'])  ? trim($data['push_token'])  : null;
+$fcmToken   = isset($data['fcm_token']) ? trim($data['fcm_token']) : (isset($data['push_token']) ? trim($data['push_token']) : null);
 
 $latitude  = isset($data['latitude'])  ? (float)$data['latitude']  : 0.0;
 $longitude = isset($data['longitude']) ? (float)$data['longitude'] : 0.0;
@@ -63,8 +63,8 @@ try {
 
     // 3. Device
     if (!empty($deviceId)) {
-        $deviceStmt = $pdo->prepare("INSERT INTO user_devices (user_id, device_id, device_type, device_name, push_token, is_active) VALUES (?, ?, ?, ?, ?, 1)");
-        $deviceStmt->execute([$userId, $deviceId, $deviceType, $deviceName, $pushToken]);
+        $deviceStmt = $pdo->prepare("INSERT INTO user_devices (user_id, device_id, device_type, device_name, fcm_token, is_active) VALUES (?, ?, ?, ?, ?, 1)");
+        $deviceStmt->execute([$userId, $deviceId, $deviceType, $deviceName, $fcmToken]);
     }
 
     // 4. Location
