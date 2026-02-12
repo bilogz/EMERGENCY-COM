@@ -385,17 +385,30 @@ $pageTitle = 'Automated Warning Integration';
         }
 
         function loadWarnings() {
+            if (!window.__warningsById) {
+                window.__warningsById = new Map();
+            }
+
             fetch('../api/automated-warnings.php?action=warnings')
                 .then(response => response.json())
                 .then(data => {
                     const tbody = document.querySelector('#warningsTable tbody');
                     tbody.innerHTML = '';
+                    window.__warningsById.clear();
                     
                     if (data.success && data.warnings) {
                         data.warnings.forEach(warning => {
+                            const warningId = Number(warning.id);
+                            const warningStatus = String(warning.status || '').toLowerCase();
+                            window.__warningsById.set(warningId, warning);
+
+                            const publishButton = warningStatus === 'published'
+                                ? `<button class="btn btn-sm btn-secondary" disabled title="Already published"><i class="fas fa-check"></i></button>`
+                                : `<button class="btn btn-sm btn-success" onclick="publishWarning(${warningId})" title="Publish warning"><i class="fas fa-paper-plane"></i></button>`;
+
                             const row = document.createElement('tr');
                             row.innerHTML = `
-                                <td>${warning.id}</td>
+                                <td>${warningId}</td>
                                 <td><span class="badge" style="background: rgba(58, 118, 117, 0.1); color: var(--primary-color-1); font-weight: 700;">${warning.source.toUpperCase()}</span></td>
                                 <td>${warning.type}</td>
                                 <td><strong>${warning.title}</strong></td>
@@ -403,18 +416,72 @@ $pageTitle = 'Automated Warning Integration';
                                 <td><span class="badge ${warning.status.toLowerCase()}">${warning.status}</span></td>
                                 <td><small>${warning.received_at}</small></td>
                                 <td>
-                                    <button class="btn btn-sm btn-primary" onclick="viewWarning(${warning.id})">
+                                    <button class="btn btn-sm btn-primary" onclick="viewWarning(${warningId})" title="View warning">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <button class="btn btn-sm btn-success" onclick="publishWarning(${warning.id})">
-                                        <i class="fas fa-paper-plane"></i>
-                                    </button>
+                                    ${publishButton}
                                 </td>
                             `;
                             tbody.appendChild(row);
                         });
                     }
                 });
+        }
+
+        function viewWarning(id) {
+            const warning = window.__warningsById ? window.__warningsById.get(Number(id)) : null;
+            if (!warning) {
+                alert('Warning details unavailable.');
+                return;
+            }
+
+            const details = [
+                `ID: ${warning.id}`,
+                `Source: ${warning.source || 'N/A'}`,
+                `Type: ${warning.type || 'N/A'}`,
+                `Severity: ${warning.severity || 'N/A'}`,
+                `Status: ${warning.status || 'N/A'}`,
+                `Received: ${warning.received_at || 'N/A'}`,
+                '',
+                `Title: ${warning.title || ''}`,
+                '',
+                `Content: ${warning.content || 'No content available.'}`
+            ].join('\n');
+
+            alert(details);
+        }
+
+        function publishWarning(id) {
+            const warning = window.__warningsById ? window.__warningsById.get(Number(id)) : null;
+            if (warning && String(warning.status || '').toLowerCase() === 'published') {
+                alert('This warning is already published.');
+                return;
+            }
+
+            if (!confirm('Publish this warning now?')) {
+                return;
+            }
+
+            fetch('../api/automated-warnings.php?action=publish', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: Number(id) })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message || 'Warning published successfully.');
+                    loadWarnings();
+                } else {
+                    alert('Error: ' + (data.message || 'Failed to publish warning.'));
+                }
+            })
+            .catch(error => {
+                console.error('Error publishing warning:', error);
+                alert('Error publishing warning: ' + error.message);
+            });
         }
 
         // Modal Functions

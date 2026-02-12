@@ -276,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         $stmt = $pdo->query("
-            SELECT id, source, type, title, severity, status, received_at
+            SELECT id, source, type, title, content, severity, status, received_at
             FROM automated_warnings
             ORDER BY received_at DESC
             LIMIT 100
@@ -296,6 +296,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (Exception $e) {
         ob_clean();
         error_log("Get Warnings Error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Error occurred: ' . $e->getMessage()]);
+    }
+} elseif ($action === 'publish' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        if ($pdo === null) {
+            throw new Exception('Database connection not available');
+        }
+
+        $payload = json_decode(file_get_contents('php://input'), true);
+        $warningId = (int)($payload['id'] ?? ($_POST['id'] ?? 0));
+        if ($warningId <= 0) {
+            throw new Exception('Invalid warning ID.');
+        }
+
+        $stmt = $pdo->prepare("SELECT id, status, title FROM automated_warnings WHERE id = ? LIMIT 1");
+        $stmt->execute([$warningId]);
+        $warning = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$warning) {
+            http_response_code(404);
+            ob_clean();
+            echo json_encode(['success' => false, 'message' => 'Warning not found.']);
+            exit();
+        }
+
+        if (strtolower((string)$warning['status']) === 'published') {
+            ob_clean();
+            echo json_encode([
+                'success' => true,
+                'message' => 'Warning is already published.'
+            ]);
+            exit();
+        }
+
+        $update = $pdo->prepare("UPDATE automated_warnings SET status = 'published' WHERE id = ?");
+        $update->execute([$warningId]);
+
+        $adminId = $_SESSION['admin_user_id'] ?? null;
+        if ($adminId && function_exists('logAdminActivity')) {
+            logAdminActivity($adminId, 'publish_warning', "Published automated warning ID {$warningId}: " . ($warning['title'] ?? ''));
+        }
+
+        ob_clean();
+        echo json_encode([
+            'success' => true,
+            'message' => 'Warning published successfully.'
+        ]);
+    } catch (PDOException $e) {
+        ob_clean();
+        error_log("Publish Warning Error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
+    } catch (Exception $e) {
+        ob_clean();
+        error_log("Publish Warning Error: " . $e->getMessage());
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Error occurred: ' . $e->getMessage()]);
     }

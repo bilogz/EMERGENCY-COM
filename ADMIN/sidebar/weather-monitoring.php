@@ -195,6 +195,7 @@ $pageTitle = 'Weather Monitoring';
         let temperatureEnabled = false;
         let windSpeedEnabled = false;
         let cloudsEnabled = false;
+        let aiAnalysisInProgress = false;
         
         // Weather layers
         let radarLayer = null;
@@ -1421,6 +1422,11 @@ $pageTitle = 'Weather Monitoring';
                     return;
                 }
             }
+
+            if (aiAnalysisInProgress) {
+                return;
+            }
+            aiAnalysisInProgress = true;
             
             statusBadge.textContent = 'Analyzing...';
             statusBadge.className = 'ai-status loading';
@@ -1475,6 +1481,9 @@ $pageTitle = 'Weather Monitoring';
                 
                 // If we get here, there was an error
                 if (!response.ok && !data.success) {
+                    if (response.status === 429 || data.error_code === 429) {
+                        throw new Error('Rate limit reached for AI analysis. Please retry in 30-60 seconds.');
+                    }
                     throw new Error(data.message || `API Error: ${response.status}`);
                 }
                 
@@ -1522,6 +1531,9 @@ $pageTitle = 'Weather Monitoring';
                 if (errorMessage.includes('expired') || errorMessage.includes('invalid') || errorMessage.includes('400')) {
                     errorMessage = 'API key expired or invalid';
                     errorDetails = 'Please update your Gemini API key in Automated Warnings → AI Warning Settings';
+                } else if (errorMessage.includes('429') || errorMessage.toLowerCase().includes('rate limit') || errorMessage.toLowerCase().includes('too many requests')) {
+                    errorMessage = 'AI service is temporarily rate-limited';
+                    errorDetails = 'Please wait 30-60 seconds, then click Retry.';
                 } else if (errorMessage.includes('404')) {
                     // Check if 404 error contains successful JSON response
                     const jsonMatch = errorMessage.match(/\{[\s\S]*"success":true[\s\S]*\}/);
@@ -1553,6 +1565,8 @@ $pageTitle = 'Weather Monitoring';
                         <i class="fas fa-cog"></i> Configure API Key
                     </a>
                 `;
+            } finally {
+                aiAnalysisInProgress = false;
             }
         }
         

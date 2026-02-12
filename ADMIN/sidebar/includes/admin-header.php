@@ -116,7 +116,7 @@ $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
             <div class="notification-item">
                 <button class="notification-btn" aria-label="Notifications">
                     <i class="fas fa-bell"></i>
-                    <span class="notification-badge">3</span>
+                    <span class="notification-badge" id="notificationBadge">0</span>
                 </button>
             </div>
             <?php endif; ?>
@@ -124,7 +124,7 @@ $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
             <div class="notification-item">
                 <button class="notification-btn" aria-label="Messages">
                     <i class="fas fa-envelope"></i>
-                    <span class="notification-badge">5</span>
+                    <span class="notification-badge" id="messageBadge">0</span>
                 </button>
             </div>
         </div>
@@ -474,6 +474,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     modal.classList.add('show');
                     this.classList.add('active');
                     document.body.style.overflow = '';
+                    localStorage.setItem('systemNotificationsLastRead', String(Date.now()));
+                    loadHeaderNotifications();
                 }
             } else if (ariaLabel === 'Messages') {
                 const modal = document.getElementById('messageModal');
@@ -767,6 +769,107 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load admin profile on page load
     loadAdminProfile();
+
+    // Header badges (notifications + messages)
+    function shouldShowHeaderBadges() {
+        return localStorage.getItem('showBadges') !== 'false';
+    }
+
+    function setHeaderBadgeCount(el, count) {
+        if (!el) return;
+        const safeCount = Math.max(0, parseInt(count || 0, 10));
+        const show = shouldShowHeaderBadges() && safeCount > 0;
+        el.textContent = String(safeCount);
+        el.style.display = show ? 'inline-flex' : 'none';
+    }
+
+    window.updateHeaderBadges = function updateHeaderBadges({ notifications, messages } = {}) {
+        const notificationBadge = document.getElementById('notificationBadge');
+        const messageBadge = document.getElementById('messageBadge');
+        if (typeof notifications !== 'undefined') setHeaderBadgeCount(notificationBadge, notifications);
+        if (typeof messages !== 'undefined') setHeaderBadgeCount(messageBadge, messages);
+    };
+
+    // Initialize badges as hidden unless counts are provided
+    window.updateHeaderBadges({ notifications: 0, messages: 0 });
+
+    // React to showBadges toggles
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'showBadges') {
+            const notificationBadge = document.getElementById('notificationBadge');
+            const messageBadge = document.getElementById('messageBadge');
+            if (notificationBadge) setHeaderBadgeCount(notificationBadge, notificationBadge.textContent);
+            if (messageBadge) setHeaderBadgeCount(messageBadge, messageBadge.textContent);
+        }
+    });
+
+    function formatTimeAgo(value) {
+        if (!value) return 'Recently';
+        const ts = typeof value === 'string' ? Date.parse(value) : Number(value);
+        if (!ts) return 'Recently';
+        const diff = Date.now() - ts;
+        if (diff < 60000) return 'Just now';
+        if (diff < 3600000) return Math.floor(diff / 60000) + ' minutes ago';
+        if (diff < 86400000) return Math.floor(diff / 3600000) + ' hours ago';
+        if (diff < 604800000) return Math.floor(diff / 86400000) + ' days ago';
+        return new Date(ts).toLocaleDateString();
+    }
+
+    function renderSystemNotifications(items) {
+        const body = document.querySelector('#notificationModal .modal-body');
+        if (!body) return;
+        if (!Array.isArray(items) || items.length === 0) {
+            body.innerHTML = '<div class="notification-item"><div class="notification-details"><div class="notification-title">No system notifications</div><div class="notification-text">You are all caught up.</div></div></div>';
+            return;
+        }
+        body.innerHTML = items.map(item => {
+            const channel = (item.channel || 'system').toUpperCase();
+            const status = (item.status || '').toUpperCase();
+            const title = `${channel} ${status ? '(' + status + ')' : ''}`.trim();
+            const message = (item.message || '').toString().slice(0, 140);
+            const timeText = formatTimeAgo(item.sent_at);
+            const icon = item.status === 'failed' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+            return `
+                <div class="notification-item">
+                    <div class="notification-icon">
+                        <i class="fas ${icon}"></i>
+                    </div>
+                    <div class="notification-details">
+                        <div class="notification-title">${title || 'System Notification'}</div>
+                        <div class="notification-text">${message || 'Notification sent.'}</div>
+                        <div class="notification-time">${timeText}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function loadHeaderNotifications() {
+        const bellBtn = document.querySelector('.notification-btn[aria-label="Notifications"]');
+        if (!bellBtn || !window.API_BASE_PATH) return;
+
+        const lastReadRaw = localStorage.getItem('systemNotificationsLastRead');
+        let lastRead = parseInt(lastReadRaw || '0', 10);
+        if (!lastReadRaw) {
+            lastRead = Date.now();
+            localStorage.setItem('systemNotificationsLastRead', String(lastRead));
+        }
+        const url = `${window.API_BASE_PATH}header-notifications.php?since=${lastRead}`;
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                if (!data || !data.success) return;
+                const activeAlerts = parseInt(data.active_alerts || 0, 10);
+                const systemUnread = parseInt(data.system_unread || 0, 10);
+                window.updateHeaderBadges({ notifications: activeAlerts + systemUnread });
+                renderSystemNotifications(data.system_notifications || []);
+            })
+            .catch(() => {});
+    }
+
+    // Initial fetch + refresh
+    loadHeaderNotifications();
+    setInterval(loadHeaderNotifications, 30000);
     
     // Global Chat Notification System - Redirects to Two-Way Communication
     function initGlobalChatNotifications() {
@@ -812,9 +915,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentPage = window.location.pathname;
             const isChatPage = currentPage.includes('two-way-communication') || currentPage.includes('chat-queue');
             
-            // Don't show notifications on chat pages
-            if (isChatPage) return;
-            
             // Verify Firebase is available
             if (typeof firebase === 'undefined') {
                 console.warn('Firebase not available, skipping chat notifications');
@@ -837,23 +937,34 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             const database = firebase.database();
             
-            // Listen for new chat queue items
+            // Listen for new chat queue items (toast notifications)
             const chatQueueRef = database.ref('chat_queue').orderByChild('status').equalTo('pending');
+            
+            // Keep message badge in sync with pending queue count
+            const messageBadge = document.getElementById('messageBadge');
+            const notificationBadge = document.getElementById('notificationBadge');
+            setHeaderBadgeCount(notificationBadge, notificationBadge ? notificationBadge.textContent : 0);
+            chatQueueRef.on('value', (snapshot) => {
+                const pendingCount = snapshot.numChildren ? snapshot.numChildren() : 0;
+                setHeaderBadgeCount(messageBadge, pendingCount);
+            });
             let lastNotificationTime = 0;
             const notificationCooldown = 5000; // 5 seconds between notifications
             
-            chatQueueRef.on('child_added', (snapshot) => {
-                const queueItem = snapshot.val();
-                const now = Date.now();
-                
-                // Prevent duplicate notifications
-                if (now - lastNotificationTime < notificationCooldown) {
-                    return;
-                }
-                
-                lastNotificationTime = now;
-                showChatNotification(queueItem);
-            });
+            if (!isChatPage) {
+                chatQueueRef.on('child_added', (snapshot) => {
+                    const queueItem = snapshot.val();
+                    const now = Date.now();
+                    
+                    // Prevent duplicate notifications
+                    if (now - lastNotificationTime < notificationCooldown) {
+                        return;
+                    }
+                    
+                    lastNotificationTime = now;
+                    showChatNotification(queueItem);
+                });
+            }
             
             console.log('✅ Chat notifications initialized successfully');
         } catch (error) {
