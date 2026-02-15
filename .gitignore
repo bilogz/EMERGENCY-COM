@@ -33,6 +33,12 @@ setup-*-key.php
 AIzaSy*
 
 # ===========================================
+# FIREBASE SERVICE ACCOUNT KEYS
+# ===========================================
+**/*firebase-adminsdk*.json
+**/FIREBASE SERVICE/*.json
+
+# ===========================================
 # DATABASE FILES
 # ===========================================
 

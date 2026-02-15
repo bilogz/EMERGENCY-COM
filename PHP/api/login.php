@@ -20,8 +20,9 @@ function getAllowedGoogleClientIds() {
     if ($raw === false || trim($raw) === '') {
         // Fallback IDs for environments where PHP-FPM env propagation is not configured.
         return [
-            '741992345972-4gmr2mdu5q3db5mr81gcd07vsal7s0dk.apps.googleusercontent.com',
-            '741992345972-jidu0oo2d7udq1u0424fd5ocla9f0not.apps.googleusercontent.com'
+            '16818035848-a6vccgc23l5gbpj294qqabc2ibl3oofb.apps.googleusercontent.com',
+            // Optional temporary migration audience (uncomment if needed):
+            // '16818035848-g5lohlj8kdqiq79o10qru7qh87tv6e7q.apps.googleusercontent.com',
         ];
     }
 
@@ -30,6 +31,23 @@ function getAllowedGoogleClientIds() {
         return $v !== '';
     }));
 }
+
+function getAllowedGoogleAuthorizedParties() {
+    $raw = getenv('GOOGLE_AUTHORIZED_PARTIES');
+    if ($raw === false || trim($raw) === '') {
+        // Allow BOTH debug + release Android oauth clients (azp)
+        return [
+            '16818035848-jldnbs48plpbls1n9o1uso5sloh51erk.apps.googleusercontent.com', // debug
+            '16818035848-v9u858c8pb8pvlro0ebfk2pn9js17rj6.apps.googleusercontent.com', // release
+        ];
+    }
+
+    $parts = array_map('trim', explode(',', $raw));
+    return array_values(array_filter($parts, function ($v) {
+        return $v !== '';
+    }));
+}
+
 
 function verifyGoogleIdToken($idToken, $expectedGoogleId = '', $expectedEmail = '') {
     if (empty($idToken)) {
@@ -70,6 +88,7 @@ function verifyGoogleIdToken($idToken, $expectedGoogleId = '', $expectedEmail = 
 
     $iss = isset($payload['iss']) ? trim((string)$payload['iss']) : '';
     $aud = isset($payload['aud']) ? trim((string)$payload['aud']) : '';
+    $azp = isset($payload['azp']) ? trim((string)$payload['azp']) : '';
     $sub = isset($payload['sub']) ? trim((string)$payload['sub']) : '';
     $email = isset($payload['email']) ? trim((string)$payload['email']) : '';
     $emailVerified = isset($payload['email_verified']) ? $payload['email_verified'] : false;
@@ -82,6 +101,11 @@ function verifyGoogleIdToken($idToken, $expectedGoogleId = '', $expectedEmail = 
 
     if (!in_array($aud, $allowedClientIds, true)) {
         return [false, 'Google token audience is not allowed.', null];
+    }
+
+    $allowedAuthorizedParties = getAllowedGoogleAuthorizedParties();
+    if ($azp !== '' && !empty($allowedAuthorizedParties) && !in_array($azp, $allowedAuthorizedParties, true)) {
+        return [false, 'Google token authorized party is not allowed.', null];
     }
 
     $emailVerifiedBool = ($emailVerified === true || $emailVerified === 'true' || $emailVerified === 1 || $emailVerified === '1');
