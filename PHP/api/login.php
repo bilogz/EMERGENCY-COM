@@ -35,9 +35,10 @@ function getAllowedGoogleClientIds() {
 function getAllowedGoogleAuthorizedParties() {
     $raw = getenv('GOOGLE_AUTHORIZED_PARTIES');
     if ($raw === false || trim($raw) === '') {
-        // Expected Android client in azp when present.
+        // Allow BOTH debug + release Android oauth clients (azp)
         return [
-            '16818035848-jldnbs48plpbls1n9o1uso5sloh51erk.apps.googleusercontent.com'
+            '16818035848-jldnbs48plpbls1n9o1uso5sloh51erk.apps.googleusercontent.com', // debug
+            '16818035848-v9u858c8pb8pvlro0ebfk2pn9js17rj6.apps.googleusercontent.com', // release
         ];
     }
 
@@ -46,6 +47,7 @@ function getAllowedGoogleAuthorizedParties() {
         return $v !== '';
     }));
 }
+
 
 function verifyGoogleIdToken($idToken, $expectedGoogleId = '', $expectedEmail = '') {
     if (empty($idToken)) {
