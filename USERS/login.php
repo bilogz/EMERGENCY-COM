@@ -666,146 +666,95 @@ $assetBase = '../ADMIN/header/';
             }
         });
 
-        // Facebook quick login (details-based flow)
+        // Facebook OAuth Login
         document.addEventListener('DOMContentLoaded', function() {
             const facebookLoginBtn = document.getElementById('facebookLoginBtn');
             if (!facebookLoginBtn) return;
 
-            const validateFacebookForm = (name, email, phone) => {
-                if (!name || name.length < 3) {
-                    return 'Please enter your full name.';
-                }
-                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                    return 'Please enter a valid email address.';
-                }
-                if (!phone || !/^9\d{9}$/.test(phone)) {
-                    return 'Enter a valid 10-digit mobile number (starts with 9).';
-                }
-                return '';
-            };
-
-            const attemptPhoneLogin = async (fullName, phoneWithPrefix) => {
-                const response = await fetch('api/login-with-phone.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: fullName, phone: phoneWithPrefix })
-                });
-                return response.json();
-            };
-
-            const registerThenLogin = async (fullName, email, phoneWithPrefix) => {
-                const registerResponse = await fetch('api/register.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: fullName,
-                        email: email,
-                        phone: phoneWithPrefix
-                    })
-                });
-                const registerData = await registerResponse.json();
-
-                if (!registerData.success) {
-                    throw new Error(registerData.message || 'Unable to create account for Facebook login.');
-                }
-
-                return attemptPhoneLogin(fullName, phoneWithPrefix);
-            };
-
-            const handleFacebookLogin = async () => {
-                const result = await Swal.fire({
-                    title: 'Facebook Login',
-                    html: `
-                        <div style="text-align: left;">
-                            <label for="fbNameInput" style="display:block; margin-bottom:6px; font-weight:600;">Full Name</label>
-                            <input id="fbNameInput" class="swal2-input" placeholder="Juan Dela Cruz" style="margin:0 0 12px 0; width:100%;">
-                            <label for="fbEmailInput" style="display:block; margin-bottom:6px; font-weight:600;">Email</label>
-                            <input id="fbEmailInput" class="swal2-input" type="email" placeholder="name@email.com" style="margin:0 0 12px 0; width:100%;">
-                            <label for="fbPhoneInput" style="display:block; margin-bottom:6px; font-weight:600;">Mobile Number</label>
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <span style="font-weight:700; min-width:44px;">+63</span>
-                                <input id="fbPhoneInput" class="swal2-input" inputmode="numeric" maxlength="10" placeholder="9XXXXXXXXX" style="margin:0; width:100%;">
-                            </div>
-                        </div>
-                    `,
-                    focusConfirm: false,
-                    showCancelButton: true,
-                    confirmButtonText: 'Continue',
-                    cancelButtonText: 'Cancel',
-                    preConfirm: () => {
-                        const fullName = (document.getElementById('fbNameInput')?.value || '').trim();
-                        const email = (document.getElementById('fbEmailInput')?.value || '').trim();
-                        const phone = ((document.getElementById('fbPhoneInput')?.value || '').replace(/\D/g, '')).trim();
-                        const validationMessage = validateFacebookForm(fullName, email, phone);
-
-                        if (validationMessage) {
-                            Swal.showValidationMessage(validationMessage);
-                            return false;
-                        }
-
-                        return { fullName, email, phone };
+            // Load Facebook App ID from config
+            fetch('api/get-facebook-config.php')
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.success && data.app_id) {
+                        window.facebookAppId = data.app_id;
+                        console.log('Facebook App ID loaded successfully');
+                    } else {
+                        console.error('Facebook App ID not found in config');
+                        showFacebookButtonError(data.message || 'Facebook OAuth is not configured.');
                     }
+                })
+                .catch(err => {
+                    console.error('Failed to load Facebook config:', err);
+                    showFacebookButtonError('Unable to load Facebook login configuration.');
                 });
 
-                if (!result.isConfirmed || !result.value) return;
-
-                const { fullName, email, phone } = result.value;
-                const phoneWithPrefix = `+63${phone}`;
-
-                try {
-                    let loginData = await attemptPhoneLogin(fullName, phoneWithPrefix);
-
-                    if (!loginData.success && /No user found/i.test(loginData.message || '')) {
-                        loginData = await registerThenLogin(fullName, email, phoneWithPrefix);
-                    }
-
-                    if (!loginData.success) {
-                        throw new Error(loginData.message || 'Facebook login failed.');
-                    }
-
-                    sessionStorage.setItem('user_name', loginData.user_name || fullName);
-                    sessionStorage.setItem('user_phone', phoneWithPrefix);
-                    sessionStorage.setItem('user_email', email);
-                    if (loginData.user_id) {
-                        sessionStorage.setItem('user_id', String(loginData.user_id));
-                    }
-
-                    // Best effort profile enrichment for accounts created via phone-only path.
-                    fetch('api/update-user-profile.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            name: fullName,
-                            email: email,
-                            phone: phoneWithPrefix
-                        })
-                    }).catch(() => {});
-
-                    await Swal.fire({
-                        icon: 'success',
-                        title: 'Login Successful',
-                        text: `Welcome, ${loginData.user_name || fullName}`,
-                        timer: 1500,
-                        showConfirmButton: false
+            function showFacebookButtonError(message) {
+                console.warn('Facebook OAuth:', message);
+                const btn = document.getElementById('facebookLoginBtn');
+                if (btn) {
+                    btn.style.opacity = '0.6';
+                    btn.title = message + ' Click to retry.';
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Facebook Login Unavailable',
+                            text: message,
+                            confirmButtonText: 'OK'
+                        });
                     });
+                }
+            }
 
-                    window.location.href = '../index.php';
-                } catch (error) {
+            const handleFacebookLogin = () => {
+                if (!window.facebookAppId) {
                     Swal.fire({
                         icon: 'error',
-                        title: 'Facebook Login Failed',
-                        text: error.message || 'Unable to continue Facebook login.'
+                        title: 'Configuration Error',
+                        text: 'Facebook login is not properly configured. Please try again later.'
                     });
+                    return;
                 }
+
+                // Build Facebook OAuth URL
+                const redirectUri = window.location.origin + '/EMERGENCY-COM/USERS/api/facebook-callback.php';
+                const scope = 'email,public_profile';
+                const state = btoa(JSON.stringify({
+                    timestamp: Date.now(),
+                    source: 'login'
+                }));
+
+                // Store state in session storage for verification
+                sessionStorage.setItem('facebook_oauth_state', state);
+
+                const fbAuthUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
+                    `client_id=${window.facebookAppId}` +
+                    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+                    `&scope=${encodeURIComponent(scope)}` +
+                    `&state=${encodeURIComponent(state)}` +
+                    `&response_type=code`;
+
+                // Redirect to Facebook OAuth
+                window.location.href = fbAuthUrl;
             };
 
             facebookLoginBtn.addEventListener('click', handleFacebookLogin);
 
+            // Check for Facebook errors in URL
             const queryParams = new URLSearchParams(window.location.search);
-            if (queryParams.get('method') === 'facebook') {
-                setTimeout(() => {
-                    facebookLoginBtn.click();
-                }, 250);
+            const fbError = queryParams.get('error');
+            if (fbError === 'facebook_denied') {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Login Cancelled',
+                    text: 'You cancelled the Facebook login. Please try again or use another login method.'
+                });
+            } else if (fbError === 'facebook_auth_failed') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Login Failed',
+                    text: 'Facebook authentication failed. Please try again or use another login method.'
+                });
             }
         });
 

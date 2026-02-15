@@ -641,143 +641,125 @@ $assetBase = '../ADMIN/header/';
 
     <!-- Facebook Sign Up Script -->
     <script>
-        // Facebook Sign Up Handler
+        // Facebook OAuth Sign Up
         document.addEventListener('DOMContentLoaded', function() {
             const facebookSignupBtn = document.getElementById('facebookSignupBtn');
             if (!facebookSignupBtn) return;
 
-            const validateFacebookForm = (name, email, phone) => {
-                if (!name || name.length < 3) {
-                    return 'Please enter your full name.';
-                }
-                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                    return 'Please enter a valid email address.';
-                }
-                if (!phone || !/^9\d{9}$/.test(phone)) {
-                    return 'Enter a valid 10-digit mobile number (starts with 9).';
-                }
-                return '';
-            };
-
-            const attemptPhoneLogin = async (fullName, phoneWithPrefix) => {
-                const response = await fetch('api/login-with-phone.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: fullName, phone: phoneWithPrefix })
-                });
-                return response.json();
-            };
-
-            const registerThenLogin = async (fullName, email, phoneWithPrefix, additionalData) => {
-                const registerResponse = await fetch('api/register.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: fullName,
-                        email: email,
-                        phone: phoneWithPrefix,
-                        ...additionalData
-                    })
-                });
-                const registerData = await registerResponse.json();
-
-                if (!registerData.success) {
-                    throw new Error(registerData.message || 'Unable to create account via Facebook sign up.');
-                }
-
-                return attemptPhoneLogin(fullName, phoneWithPrefix);
-            };
-
-            const handleFacebookSignup = async () => {
-                const result = await Swal.fire({
-                    title: 'Sign Up with Facebook',
-                    html: `
-                        <div style="text-align: left;">
-                            <label for="fbNameInput" style="display:block; margin-bottom:6px; font-weight:600;">Full Name</label>
-                            <input id="fbNameInput" class="swal2-input" placeholder="Juan Dela Cruz" style="margin:0 0 12px 0; width:100%;">
-                            <label for="fbEmailInput" style="display:block; margin-bottom:6px; font-weight:600;">Email</label>
-                            <input id="fbEmailInput" class="swal2-input" type="email" placeholder="name@email.com" style="margin:0 0 12px 0; width:100%;">
-                            <label for="fbPhoneInput" style="display:block; margin-bottom:6px; font-weight:600;">Mobile Number</label>
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <span style="font-weight:700; min-width:44px;">+63</span>
-                                <input id="fbPhoneInput" class="swal2-input" inputmode="numeric" maxlength="10" placeholder="9XXXXXXXXX" style="margin:0; width:100%;">
-                            </div>
-                        </div>
-                    `,
-                    focusConfirm: false,
-                    showCancelButton: true,
-                    confirmButtonText: 'Continue',
-                    cancelButtonText: 'Cancel',
-                    preConfirm: () => {
-                        const fullName = (document.getElementById('fbNameInput')?.value || '').trim();
-                        const email = (document.getElementById('fbEmailInput')?.value || '').trim();
-                        const phone = ((document.getElementById('fbPhoneInput')?.value || '').replace(/\D/g, '')).trim();
-                        const validationMessage = validateFacebookForm(fullName, email, phone);
-
-                        if (validationMessage) {
-                            Swal.showValidationMessage(validationMessage);
-                            return false;
-                        }
-
-                        return { fullName, email, phone };
+            // Load Facebook App ID from config
+            fetch('api/get-facebook-config.php')
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.success && data.app_id) {
+                        window.facebookAppId = data.app_id;
+                        console.log('Facebook App ID loaded successfully');
+                    } else {
+                        console.error('Facebook App ID not found in config');
+                        showFacebookButtonError(data.message || 'Facebook OAuth is not configured.');
                     }
+                })
+                .catch(err => {
+                    console.error('Failed to load Facebook config:', err);
+                    showFacebookButtonError('Unable to load Facebook sign up configuration.');
                 });
 
-                if (!result.isConfirmed || !result.value) return;
-
-                const { fullName, email, phone } = result.value;
-                const phoneWithPrefix = `+63${phone}`;
-
-                try {
-                    // Try to login first (in case user already exists)
-                    let loginData = await attemptPhoneLogin(fullName, phoneWithPrefix);
-
-                    // If user doesn't exist, register them
-                    if (!loginData.success && /No user found/i.test(loginData.message || '')) {
-                        loginData = await registerThenLogin(fullName, email, phoneWithPrefix, {});
-                    }
-
-                    if (!loginData.success) {
-                        throw new Error(loginData.message || 'Facebook sign up failed.');
-                    }
-
-                    sessionStorage.setItem('user_name', loginData.user_name || fullName);
-                    sessionStorage.setItem('user_phone', phoneWithPrefix);
-                    sessionStorage.setItem('user_email', email);
-                    if (loginData.user_id) {
-                        sessionStorage.setItem('user_id', String(loginData.user_id));
-                    }
-
-                    // Best effort profile enrichment
-                    fetch('api/update-user-profile.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            name: fullName,
-                            email: email,
-                            phone: phoneWithPrefix
-                        })
-                    }).catch(() => {});
-
-                    await Swal.fire({
-                        icon: 'success',
-                        title: 'Sign Up Successful!',
-                        text: `Welcome, ${loginData.user_name || fullName}`,
-                        timer: 1500,
-                        showConfirmButton: false
+            function showFacebookButtonError(message) {
+                console.warn('Facebook OAuth:', message);
+                const btn = document.getElementById('facebookSignupBtn');
+                if (btn) {
+                    btn.style.opacity = '0.6';
+                    btn.title = message + ' Click to retry.';
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Facebook Sign Up Unavailable',
+                            text: message,
+                            confirmButtonText: 'OK'
+                        });
                     });
+                }
+            }
 
-                    window.location.href = '../index.php';
-                } catch (error) {
+            const handleFacebookSignup = () => {
+                if (!window.facebookAppId) {
                     Swal.fire({
                         icon: 'error',
-                        title: 'Facebook Sign Up Failed',
-                        text: error.message || 'Unable to complete Facebook sign up.'
+                        title: 'Configuration Error',
+                        text: 'Facebook sign up is not properly configured. Please try again later.'
                     });
+                    return;
                 }
+
+                // Build Facebook OAuth URL
+                const redirectUri = window.location.origin + '/EMERGENCY-COM/USERS/api/facebook-callback.php';
+                const scope = 'email,public_profile';
+                const state = btoa(JSON.stringify({
+                    timestamp: Date.now(),
+                    source: 'signup'
+                }));
+
+                // Store state in session storage for verification
+                sessionStorage.setItem('facebook_oauth_state', state);
+
+                const fbAuthUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
+                    `client_id=${window.facebookAppId}` +
+                    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+                    `&scope=${encodeURIComponent(scope)}` +
+                    `&state=${encodeURIComponent(state)}` +
+                    `&response_type=code`;
+
+                // Redirect to Facebook OAuth
+                window.location.href = fbAuthUrl;
             };
 
             facebookSignupBtn.addEventListener('click', handleFacebookSignup);
+
+            // Check for Facebook errors in URL
+            const queryParams = new URLSearchParams(window.location.search);
+            const fbError = queryParams.get('error');
+            if (fbError === 'facebook_denied') {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Sign Up Cancelled',
+                    text: 'You cancelled the Facebook sign up. Please try again or use another sign up method.'
+                });
+            } else if (fbError === 'facebook_auth_failed') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Sign Up Failed',
+                    text: 'Facebook authentication failed. Please try again or use another sign up method.'
+                });
+            }
+
+            // Check if this is a Facebook signup completion
+            const facebookSignup = queryParams.get('facebook_signup');
+            if (facebookSignup === '1') {
+                // Pre-fill form with Facebook data if available
+                fetch('api/get-facebook-session-data.php')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success && data.user) {
+                            const nameInput = document.getElementById('full_name');
+                            const emailInput = document.getElementById('email');
+                            
+                            if (nameInput && data.user.name) {
+                                nameInput.value = data.user.name;
+                            }
+                            if (emailInput && data.user.email) {
+                                emailInput.value = data.user.email;
+                            }
+                            
+                            Swal.fire({
+                                icon: 'info',
+                                title: 'Complete Your Profile',
+                                text: 'Please fill in the remaining fields to complete your registration.',
+                                confirmButtonText: 'OK'
+                            });
+                        }
+                    })
+                    .catch(err => console.error('Error loading Facebook session data:', err));
+            }
         });
     </script>
 

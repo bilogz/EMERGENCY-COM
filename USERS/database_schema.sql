@@ -18,6 +18,11 @@ CREATE TABLE IF NOT EXISTS users (
     house_number VARCHAR(50) DEFAULT NULL COMMENT 'House or unit number',
     address TEXT DEFAULT NULL COMMENT 'Complete address',
     
+    -- OAuth Provider IDs
+    facebook_id VARCHAR(255) DEFAULT NULL COMMENT 'Facebook OAuth ID',
+    google_id VARCHAR(255) DEFAULT NULL COMMENT 'Google OAuth ID',
+    oauth_provider VARCHAR(20) DEFAULT NULL COMMENT 'facebook, google, or null for regular',
+    
     -- Account Status
     status VARCHAR(20) DEFAULT 'active' COMMENT 'active, inactive, suspended, banned',
     email_verified TINYINT(1) DEFAULT 0 COMMENT 'Email verification status',
@@ -46,9 +51,14 @@ CREATE TABLE IF NOT EXISTS users (
     -- Indexes
     UNIQUE KEY unique_phone (phone),
     UNIQUE KEY unique_email (email),
+    UNIQUE KEY unique_facebook_id (facebook_id),
+    UNIQUE KEY unique_google_id (google_id),
     INDEX idx_name (name),
     INDEX idx_phone (phone),
     INDEX idx_email (email),
+    INDEX idx_facebook_id (facebook_id),
+    INDEX idx_google_id (google_id),
+    INDEX idx_oauth_provider (oauth_provider),
     INDEX idx_status (status),
     INDEX idx_user_type (user_type),
     INDEX idx_created_at (created_at)
