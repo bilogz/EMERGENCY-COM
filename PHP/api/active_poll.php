@@ -16,8 +16,15 @@ if ($userId <= 0) {
 }
 
 try {
-    // Assumes you have a table that stores active polls; adjust table/columns to your schema.
-    // If you don't have polls yet, just always return null.
+    // Only query if the polls table exists; otherwise just return null.
+    $tableExistsStmt = $pdo->prepare("SHOW TABLES LIKE 'polls'");
+    $tableExistsStmt->execute();
+    $tableExists = (bool)$tableExistsStmt->fetchColumn();
+
+    if (!$tableExists) {
+        apiResponse::success(['poll' => null], 'No active poll.');
+    }
+
     $stmt = $pdo->prepare("
         SELECT id, title, message, created_at
         FROM polls
@@ -26,10 +33,11 @@ try {
         LIMIT 1
     ");
     $stmt->execute();
-    $poll = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
+    $poll = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     apiResponse::success(['poll' => $poll], $poll ? 'Active poll found.' : 'No active poll.');
-} catch (PDOException $e) {
-    error_log('Active poll DB error: ' . $e->getMessage());
-    apiResponse::error('Database error.', 500);
+} catch (Throwable $e) {
+    // Never break the app over polls; log and return safe null.
+    error_log('Active poll error: ' . $e->getMessage());
+    apiResponse::success(['poll' => null], 'No active poll.');
 }
