@@ -133,6 +133,12 @@
             background: var(--primary-color-1);
             border-color: var(--primary-color-1);
             color: white;
+            outline: none;
+        }
+        
+        .filter-btn:focus {
+            outline: none;
+            box-shadow: none;
         }
         
         /* Pagination Styles */

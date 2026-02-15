@@ -178,6 +178,34 @@ $assetBase = '../ADMIN/header/';
                             <i class="fas fa-exclamation-circle"></i>
                             <span id="errorText"></span>
                         </div>
+
+                        <!-- Data Privacy Consent Section -->
+                        <div class="form-group privacy-consent-section" style="margin-top: 1.5rem; padding: 1rem; background: rgba(76, 175, 80, 0.05); border: 1px solid rgba(76, 175, 80, 0.2); border-radius: 8px;">
+                            <div class="privacy-header" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                <i class="fas fa-shield-alt" style="color: #4caf50;"></i>
+                                <strong style="color: #2e7d32;">Consent to Collect and Process Personal Information</strong>
+                            </div>
+                            <div class="privacy-content" style="font-size: 0.85rem; color: var(--text-color, #333); line-height: 1.6; max-height: 200px; overflow-y: auto; padding: 0.75rem; background: var(--card-bg, #fff); border-radius: 6px; margin-bottom: 1rem;">
+                                <p>By providing my personal information, including my full name, contact number, address, and location, I hereby give my explicit consent to <strong>LGU #4 EMERGENCY COMMUNICATION SYSTEM</strong> to collect, store, and process my personal data in accordance with the <strong>Data Privacy Act of 2012 (Republic Act No. 10173)</strong>.</p>
+                                
+                                <p>I understand that the information I provide will be used solely for the purposes of emergency communication, public safety notifications, and other related services, and that it will be handled with strict confidentiality and security measures to prevent unauthorized access, disclosure, or misuse.</p>
+                                
+                                <p>I acknowledge that <strong>LGU #4 EMERGENCY COMMUNICATION SYSTEM</strong> will only collect the minimum amount of personal information necessary to provide its services and that my data will not be shared with any third party except as required by law or for the execution of emergency response protocols.</p>
+                                
+                                <p>I understand that I have the right to access my personal information at any time and request corrections to any inaccurate or incomplete data. I also have the right to request the deletion of my personal information if I no longer wish to participate in the system or withdraw my consent.</p>
+                                
+                                <p>I am aware that providing my personal information is voluntary, but that refusal to provide certain information may limit my ability to receive timely emergency alerts and notifications.</p>
+                                
+                                <p>I further acknowledge that I may withdraw my consent at any time by contacting the designated Data Protection Officer of <strong>LGU #4 EMERGENCY COMMUNICATION SYSTEM</strong> through the provided contact details, and that such withdrawal will not affect the legality of any data processing conducted prior to my withdrawal.</p>
+                            </div>
+                            <label class="privacy-checkbox-label" style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer; font-size: 0.9rem;">
+                                <input type="checkbox" id="privacyConsent" name="privacy_consent" style="margin-top: 0.2rem; width: 18px; height: 18px; accent-color: #4caf50; flex-shrink: 0;">
+                                <span>I consent to the collection, storage, and processing of my personal information by <strong>LGU #4 EMERGENCY COMMUNICATION SYSTEM</strong>.</span>
+                            </label>
+                            <div class="privacy-error" id="privacyError" style="display: none; color: #dc3545; font-size: 0.85rem; margin-top: 0.5rem;">
+                                <i class="fas fa-exclamation-circle"></i> You must consent to the data privacy terms to proceed.
+                            </div>
+                        </div>
                         
                         <div class="auth-actions">
                             <button type="submit" class="btn btn-primary" id="signupButton" data-no-translate>
@@ -193,19 +221,30 @@ $assetBase = '../ADMIN/header/';
                         <div class="auth-divider">
                             <span>OR</span>
                         </div>
-                        <button type="button" id="googleSignupBtn" class="btn btn-google" data-no-translate>
-                            <span class="google-logo-wrapper">
-                                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-                                    <g fill="#000" fill-rule="evenodd">
-                                        <path d="M9 3.48c1.69 0 2.83.73 3.48 1.34l2.54-2.48C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l2.91 2.26C4.6 5.05 6.62 3.48 9 3.48z" fill="#EA4335"/>
-                                        <path d="M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.96c-.21 1.18-.84 2.18-1.79 2.87l2.75 2.13c1.66-1.52 2.72-3.76 2.72-6.5z" fill="#4285F4"/>
-                                        <path d="M3.88 10.78A5.54 5.54 0 0 1 3.58 9c0-.62.11-1.22.29-1.78L.96 4.96A9.008 9.008 0 0 0 0 9c0 1.45.35 2.82.96 4.04l2.92-2.26z" fill="#FBBC05"/>
-                                        <path d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.75-2.13c-.76.53-1.78.9-3.21.9-2.38 0-4.4-1.57-5.12-3.74L.96 13.04C2.45 15.98 5.48 18 9 18z" fill="#34A853"/>
-                                    </g>
-                                </svg>
-                            </span>
-                            <span class="google-text">Sign up with Google</span>
-                        </button>
+                        <p style="text-align: center; color: var(--text-muted, #6b7280); font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem;">Or sign up with</p>
+                        <div class="alternative-login-buttons" style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                            <button type="button" id="googleSignupBtn" class="btn btn-google" data-no-translate style="flex: 1; min-width: 200px;">
+                                <span class="google-logo-wrapper">
+                                    <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                                        <g fill="#000" fill-rule="evenodd">
+                                            <path d="M9 3.48c1.69 0 2.83.73 3.48 1.34l2.54-2.48C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l2.91 2.26C4.6 5.05 6.62 3.48 9 3.48z" fill="#EA4335"/>
+                                            <path d="M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.96c-.21 1.18-.84 2.18-1.79 2.87l2.75 2.13c1.66-1.52 2.72-3.76 2.72-6.5z" fill="#4285F4"/>
+                                            <path d="M3.88 10.78A5.54 5.54 0 0 1 3.58 9c0-.62.11-1.22.29-1.78L.96 4.96A9.008 9.008 0 0 0 0 9c0 1.45.35 2.82.96 4.04l2.92-2.26z" fill="#FBBC05"/>
+                                            <path d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.75-2.13c-.76.53-1.78.9-3.21.9-2.38 0-4.4-1.57-5.12-3.74L.96 13.04C2.45 15.98 5.48 18 9 18z" fill="#34A853"/>
+                                        </g>
+                                    </svg>
+                                </span>
+                                <span class="google-text">Google</span>
+                            </button>
+
+                            <!-- Facebook Sign Up -->
+                            <button type="button" id="facebookSignupBtn" class="btn btn-facebook" data-no-translate style="flex: 1; min-width: 200px;">
+                                <span class="facebook-logo-wrapper">
+                                    <i class="fab fa-facebook-f"></i>
+                                </span>
+                                <span class="facebook-text">Facebook</span>
+                            </button>
+                        </div>
 
                         <div class="auth-switch">
                             <span>Already have an account?</span>
@@ -599,6 +638,149 @@ $assetBase = '../ADMIN/header/';
             }, 1000);
         });
     </script>
+
+    <!-- Facebook Sign Up Script -->
+    <script>
+        // Facebook Sign Up Handler
+        document.addEventListener('DOMContentLoaded', function() {
+            const facebookSignupBtn = document.getElementById('facebookSignupBtn');
+            if (!facebookSignupBtn) return;
+
+            const validateFacebookForm = (name, email, phone) => {
+                if (!name || name.length < 3) {
+                    return 'Please enter your full name.';
+                }
+                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    return 'Please enter a valid email address.';
+                }
+                if (!phone || !/^9\d{9}$/.test(phone)) {
+                    return 'Enter a valid 10-digit mobile number (starts with 9).';
+                }
+                return '';
+            };
+
+            const attemptPhoneLogin = async (fullName, phoneWithPrefix) => {
+                const response = await fetch('api/login-with-phone.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: fullName, phone: phoneWithPrefix })
+                });
+                return response.json();
+            };
+
+            const registerThenLogin = async (fullName, email, phoneWithPrefix, additionalData) => {
+                const registerResponse = await fetch('api/register.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: fullName,
+                        email: email,
+                        phone: phoneWithPrefix,
+                        ...additionalData
+                    })
+                });
+                const registerData = await registerResponse.json();
+
+                if (!registerData.success) {
+                    throw new Error(registerData.message || 'Unable to create account via Facebook sign up.');
+                }
+
+                return attemptPhoneLogin(fullName, phoneWithPrefix);
+            };
+
+            const handleFacebookSignup = async () => {
+                const result = await Swal.fire({
+                    title: 'Sign Up with Facebook',
+                    html: `
+                        <div style="text-align: left;">
+                            <label for="fbNameInput" style="display:block; margin-bottom:6px; font-weight:600;">Full Name</label>
+                            <input id="fbNameInput" class="swal2-input" placeholder="Juan Dela Cruz" style="margin:0 0 12px 0; width:100%;">
+                            <label for="fbEmailInput" style="display:block; margin-bottom:6px; font-weight:600;">Email</label>
+                            <input id="fbEmailInput" class="swal2-input" type="email" placeholder="name@email.com" style="margin:0 0 12px 0; width:100%;">
+                            <label for="fbPhoneInput" style="display:block; margin-bottom:6px; font-weight:600;">Mobile Number</label>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="font-weight:700; min-width:44px;">+63</span>
+                                <input id="fbPhoneInput" class="swal2-input" inputmode="numeric" maxlength="10" placeholder="9XXXXXXXXX" style="margin:0; width:100%;">
+                            </div>
+                        </div>
+                    `,
+                    focusConfirm: false,
+                    showCancelButton: true,
+                    confirmButtonText: 'Continue',
+                    cancelButtonText: 'Cancel',
+                    preConfirm: () => {
+                        const fullName = (document.getElementById('fbNameInput')?.value || '').trim();
+                        const email = (document.getElementById('fbEmailInput')?.value || '').trim();
+                        const phone = ((document.getElementById('fbPhoneInput')?.value || '').replace(/\D/g, '')).trim();
+                        const validationMessage = validateFacebookForm(fullName, email, phone);
+
+                        if (validationMessage) {
+                            Swal.showValidationMessage(validationMessage);
+                            return false;
+                        }
+
+                        return { fullName, email, phone };
+                    }
+                });
+
+                if (!result.isConfirmed || !result.value) return;
+
+                const { fullName, email, phone } = result.value;
+                const phoneWithPrefix = `+63${phone}`;
+
+                try {
+                    // Try to login first (in case user already exists)
+                    let loginData = await attemptPhoneLogin(fullName, phoneWithPrefix);
+
+                    // If user doesn't exist, register them
+                    if (!loginData.success && /No user found/i.test(loginData.message || '')) {
+                        loginData = await registerThenLogin(fullName, email, phoneWithPrefix, {});
+                    }
+
+                    if (!loginData.success) {
+                        throw new Error(loginData.message || 'Facebook sign up failed.');
+                    }
+
+                    sessionStorage.setItem('user_name', loginData.user_name || fullName);
+                    sessionStorage.setItem('user_phone', phoneWithPrefix);
+                    sessionStorage.setItem('user_email', email);
+                    if (loginData.user_id) {
+                        sessionStorage.setItem('user_id', String(loginData.user_id));
+                    }
+
+                    // Best effort profile enrichment
+                    fetch('api/update-user-profile.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: fullName,
+                            email: email,
+                            phone: phoneWithPrefix
+                        })
+                    }).catch(() => {});
+
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Sign Up Successful!',
+                        text: `Welcome, ${loginData.user_name || fullName}`,
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+
+                    window.location.href = '../index.php';
+                } catch (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Facebook Sign Up Failed',
+                        text: error.message || 'Unable to complete Facebook sign up.'
+                    });
+                }
+            };
+
+            facebookSignupBtn.addEventListener('click', handleFacebookSignup);
+        });
+    </script>
+
     <script>
         // Barangay data organized by district
         const barangaysByDistrict = {
@@ -822,27 +1004,106 @@ $assetBase = '../ADMIN/header/';
             const barangay = document.getElementById('barangay').value.trim();
             const houseNumber = document.getElementById('house_number').value.trim();
             const street = document.getElementById('street').value.trim();
+            const privacyConsent = document.getElementById('privacyConsent');
+            const privacyError = document.getElementById('privacyError');
             
-            // Validation
-            if (!fullName || !email || !phone || !nationality || !district || !barangay || !houseNumber || !street) {
-                showError('Please fill out all required fields.');
+            // Comprehensive Field Validation
+            const missingFields = [];
+            
+            if (!fullName) missingFields.push('Full Name');
+            if (!email) missingFields.push('Email Address');
+            if (!phone) missingFields.push('Mobile Number');
+            if (!nationality) missingFields.push('Nationality');
+            if (!district) missingFields.push('District');
+            if (!barangay) missingFields.push('Barangay');
+            if (!houseNumber) missingFields.push('House / Unit No.');
+            if (!street) missingFields.push('Street');
+            
+            if (missingFields.length > 0) {
+                showError('Please fill out the following required fields: ' + missingFields.join(', '));
+                // Scroll to first empty field
+                const firstEmptyField = document.getElementById(
+                    missingFields[0].toLowerCase().replace(/ /g, '_').replace('full_name', 'full_name').replace('email_address', 'email').replace('mobile_number', 'phone').replace('house_/_unit_no.', 'house_number')
+                );
+                if (firstEmptyField) firstEmptyField.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return;
             }
             
-            // Validate barangay is from selected district
+            // Validate Full Name (at least 2 words, minimum 3 characters each)
+            const nameWords = fullName.split(/\s+/).filter(w => w.length > 0);
+            if (nameWords.length < 2) {
+                showError('Please enter your full name (first and last name).');
+                document.getElementById('full_name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+            if (fullName.length < 5) {
+                showError('Full name must be at least 5 characters long.');
+                document.getElementById('full_name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+            
+            // Validate Email Address
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                showError('Please enter a valid email address (e.g., name@example.com).');
+                document.getElementById('email').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+            
+            // Validate Phone Number (should be 10 digits, starting with 9)
+            const phoneRegex = /^9\d{9}$/;
+            if (!phoneRegex.test(phone)) {
+                showError('Please enter a valid 10-digit mobile number starting with 9 (e.g., 9XXXXXXXXX).');
+                document.getElementById('phone').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+            
+            // Validate Nationality (minimum 2 characters)
+            if (nationality.length < 2) {
+                showError('Please enter a valid nationality.');
+                document.getElementById('nationality').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+            
+            // Validate District (must be 1-6)
+            if (!['1', '2', '3', '4', '5', '6'].includes(district)) {
+                showError('Please select a valid district (1-6).');
+                document.getElementById('district').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+            
+            // Validate Barangay is from selected district
             const districtBarangays = barangaysByDistrict[district] || [];
             const barangayLower = barangay.toLowerCase();
             const isValidBarangay = districtBarangays.some(b => b.toLowerCase() === barangayLower);
             
             if (!isValidBarangay) {
                 showError('Please select a valid barangay from District ' + district + '.');
+                document.getElementById('barangay').scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return;
             }
             
-            // Validate phone number (should be 10 digits)
-            if (phone.length !== 10 || !/^[1-9]\d{9}$/.test(phone)) {
-                showError('Please enter a valid 10-digit mobile number.');
+            // Validate House Number (minimum 1 character)
+            if (houseNumber.length < 1) {
+                showError('Please enter a valid house or unit number.');
+                document.getElementById('house_number').scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return;
+            }
+            
+            // Validate Street (minimum 2 characters)
+            if (street.length < 2) {
+                showError('Please enter a valid street name (at least 2 characters).');
+                document.getElementById('street').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+            
+            // Validate privacy consent checkbox
+            if (!privacyConsent.checked) {
+                privacyError.style.display = 'block';
+                privacyConsent.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            } else {
+                privacyError.style.display = 'none';
             }
             
             setLoading(true);
@@ -1076,4 +1337,151 @@ $assetBase = '../ADMIN/header/';
                 btn.querySelector('.btn-spinner').style.display = 'none';
             }
         }
+
+        // Real-time field validation with visual feedback
+        function validateField(input, isValid, errorMessage) {
+            const formGroup = input.closest('.form-group');
+            let feedbackEl = formGroup.querySelector('.field-feedback');
+            
+            if (!feedbackEl) {
+                feedbackEl = document.createElement('small');
+                feedbackEl.className = 'field-feedback';
+                feedbackEl.style.cssText = 'display: block; margin-top: 0.25rem; font-size: 0.8rem; transition: all 0.3s ease;';
+                formGroup.appendChild(feedbackEl);
+            }
+            
+            if (input.value.trim() === '') {
+                input.style.borderColor = '';
+                input.style.boxShadow = '';
+                feedbackEl.style.display = 'none';
+                return;
+            }
+            
+            if (isValid) {
+                input.style.borderColor = '#4caf50';
+                input.style.boxShadow = '0 0 0 3px rgba(76, 175, 80, 0.2)';
+                feedbackEl.style.color = '#4caf50';
+                feedbackEl.innerHTML = '<i class="fas fa-check-circle"></i> Valid';
+                feedbackEl.style.display = 'block';
+            } else {
+                input.style.borderColor = '#dc3545';
+                input.style.boxShadow = '0 0 0 3px rgba(220, 53, 69, 0.2)';
+                feedbackEl.style.color = '#dc3545';
+                feedbackEl.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + errorMessage;
+                feedbackEl.style.display = 'block';
+            }
+        }
+
+        // Add real-time validation to fields
+        document.addEventListener('DOMContentLoaded', function() {
+            // Full Name validation
+            const fullNameInput = document.getElementById('full_name');
+            if (fullNameInput) {
+                fullNameInput.addEventListener('blur', function() {
+                    const value = this.value.trim();
+                    const nameWords = value.split(/\s+/).filter(w => w.length > 0);
+                    const isValid = value.length >= 5 && nameWords.length >= 2;
+                    validateField(this, isValid, 'Enter first and last name (min 5 chars)');
+                });
+            }
+
+            // Email validation
+            const emailInput = document.getElementById('email');
+            if (emailInput) {
+                emailInput.addEventListener('blur', function() {
+                    const value = this.value.trim();
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    validateField(this, emailRegex.test(value), 'Enter a valid email address');
+                });
+            }
+
+            // Phone validation - only allow digits
+            const phoneInput = document.getElementById('phone');
+            if (phoneInput) {
+                phoneInput.addEventListener('input', function() {
+                    // Remove non-digits
+                    this.value = this.value.replace(/\D/g, '');
+                    // Limit to 10 digits
+                    if (this.value.length > 10) {
+                        this.value = this.value.slice(0, 10);
+                    }
+                });
+                
+                phoneInput.addEventListener('blur', function() {
+                    const value = this.value.trim();
+                    const phoneRegex = /^9\d{9}$/;
+                    validateField(this, phoneRegex.test(value), 'Must be 10 digits starting with 9');
+                });
+            }
+
+            // Nationality validation
+            const nationalityInput = document.getElementById('nationality');
+            if (nationalityInput) {
+                nationalityInput.addEventListener('blur', function() {
+                    const value = this.value.trim();
+                    validateField(this, value.length >= 2, 'Enter a valid nationality');
+                });
+            }
+
+            // District validation
+            const districtInput = document.getElementById('district');
+            if (districtInput) {
+                districtInput.addEventListener('change', function() {
+                    const value = this.value;
+                    const isValid = ['1', '2', '3', '4', '5', '6'].includes(value);
+                    if (isValid) {
+                        this.style.borderColor = '#4caf50';
+                        this.style.boxShadow = '0 0 0 3px rgba(76, 175, 80, 0.2)';
+                    }
+                });
+            }
+
+            // Barangay validation
+            const barangayInput = document.getElementById('barangay');
+            if (barangayInput) {
+                barangayInput.addEventListener('blur', function() {
+                    const value = this.value.trim();
+                    const district = document.getElementById('district').value;
+                    if (district && value) {
+                        const districtBarangays = barangaysByDistrict[district] || [];
+                        const isValid = districtBarangays.some(b => b.toLowerCase() === value.toLowerCase());
+                        validateField(this, isValid, 'Select a valid barangay from the list');
+                    }
+                });
+            }
+
+            // House Number validation
+            const houseNumberInput = document.getElementById('house_number');
+            if (houseNumberInput) {
+                houseNumberInput.addEventListener('blur', function() {
+                    const value = this.value.trim();
+                    validateField(this, value.length >= 1, 'Enter house/unit number');
+                });
+            }
+
+            // Street validation
+            const streetInput = document.getElementById('street');
+            if (streetInput) {
+                streetInput.addEventListener('blur', function() {
+                    const value = this.value.trim();
+                    validateField(this, value.length >= 2, 'Enter street name (min 2 chars)');
+                });
+            }
+
+            // Privacy consent validation
+            const privacyCheckbox = document.getElementById('privacyConsent');
+            if (privacyCheckbox) {
+                privacyCheckbox.addEventListener('change', function() {
+                    const privacyError = document.getElementById('privacyError');
+                    if (this.checked) {
+                        privacyError.style.display = 'none';
+                        this.closest('.privacy-consent-section').style.borderColor = '#4caf50';
+                        this.closest('.privacy-consent-section').style.boxShadow = '0 0 0 3px rgba(76, 175, 80, 0.2)';
+                    } else {
+                        this.closest('.privacy-consent-section').style.borderColor = '';
+                        this.closest('.privacy-consent-section').style.boxShadow = '';
+                    }
+                });
+            }
+        });
     </script>

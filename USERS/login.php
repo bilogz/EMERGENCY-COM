@@ -173,36 +173,7 @@ $assetBase = '../ADMIN/header/';
                         </button>
                     </form>
 
-                    <!-- Phone OTP Login Form (Hidden by default) -->
-                    <form class="auth-form" id="phoneOtpForm" style="display: none;">
-                        <div class="form-group">
-                            <label for="otp_phone">
-                                <i class="fas fa-phone"></i> <span data-translate="login.mobileNumber">Mobile Number</span>
-                            </label>
-                            <div class="input-with-prefix">
-                                <span class="prefix">+63</span>
-                                <input type="tel" id="otp_phone" name="otp_phone" pattern="[0-9]{10}" maxlength="10" placeholder="9XXXXXXXXX" required autocomplete="tel">
-                            </div>
-                            <small class="form-hint" data-translate="login.smsHint">We'll send you a verification code via SMS</small>
-                        </div>
-                        
-                        <div class="error-message" id="otpErrorMessage" style="display: none;">
-                            <i class="fas fa-exclamation-circle"></i>
-                            <span id="otpErrorText"></span>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary" id="sendOtpButton">
-                            <i class="fas fa-paper-plane"></i>
-                            <span class="btn-text" data-translate="login.sendOTP">Send OTP</span>
-                            <span class="btn-spinner" style="display: none;">
-                                <i class="fas fa-spinner fa-spin"></i>
-                            </span>
-                        </button>
-                        
-                        <button type="button" class="btn btn-secondary" id="backToRegularLogin" style="margin-top: 0.5rem;">
-                            <i class="fas fa-arrow-left"></i> <span data-translate="login.backToLogin">Back to Regular Login</span>
-                        </button>
-                    </form>
+
 
                     <!-- Email OTP Verification Modal for Login -->
                     <div id="emailOtpLoginModal" class="modal" aria-hidden="true" style="display:none;">
@@ -251,57 +222,11 @@ $assetBase = '../ADMIN/header/';
                         </div>
                     </div>
 
-                    <!-- Phone OTP Verification Modal for Login -->
-                    <div id="otpLoginModal" class="modal" aria-hidden="true" style="display:none;">
-                        <div class="modal-backdrop"></div>
-                        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="otpLoginModalTitle">
-                            <button class="modal-close" id="otpLoginModalClose" aria-label="Close">&times;</button>
-                            <h3 id="otpLoginModalTitle" data-translate="login.verifyPhone">Verify Your Phone</h3>
-                            <p class="modal-sub">We've sent a 6-digit verification code to <strong id="otpPhoneDisplay"></strong></p>
-
-                            <div id="otpLoginSentBanner" style="display:none; margin-bottom:0.75rem; padding:0.75rem; border-radius:6px; background: rgba(40,167,69,0.12); border:1px solid rgba(40,167,69,0.2); color: #28a745;">Verification code sent successfully.</div>
-                            <div id="otpLoginWarnBanner" style="display:none; margin-bottom:0.75rem; padding:0.75rem; border-radius:6px; background: rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.2); color: #856404;">Verification code generated but SMS delivery failed. Use the debug code below for testing.</div>
-                            <div id="otpLoginDebugCode" style="display:none; margin-bottom:1rem; padding:1rem; background: #fffacd; border:2px solid #ffd700; border-radius:6px; font-weight:700; text-align:center; font-size:1.2rem; color: #d4941e;"></div>
-
-                            <form id="otpLoginModalForm" class="auth-form">
-                                <div class="form-group">
-                                    <label for="otp_login_code">
-                                        <i class="fas fa-key"></i> Verification Code
-                                    </label>
-                                    <input type="text" id="otp_login_code" name="otp_login_code" placeholder="Enter 6-digit code" maxlength="6" pattern="[0-9]{6}" required autocomplete="one-time-code">
-                                    <small class="form-hint">Enter the 6-digit code sent to your phone</small>
-                                </div>
-
-                                <div class="error-message" id="otpLoginModalErrorMessage" style="display: none;">
-                                    <i class="fas fa-exclamation-circle"></i>
-                                    <span id="otpLoginModalErrorText"></span>
-                                </div>
-
-                                <div class="modal-actions">
-                                    <button type="submit" class="btn btn-primary" id="otpLoginVerifyButton">
-                                        <i class="fas fa-check-circle"></i>
-                                        <span class="btn-text">Verify & Login</span>
-                                        <span class="btn-spinner" style="display: none;">
-                                            <i class="fas fa-spinner fa-spin"></i>
-                                        </span>
-                                    </button>
-
-                                    <button type="button" class="btn-link" id="otpLoginResendButton">
-                                        <i class="fas fa-redo"></i> Resend Code
-                                    </button>
-
-                                    <button type="button" class="btn-link" id="otpLoginBackButton">
-                                        <i class="fas fa-arrow-left"></i> Back
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-
                     <!-- Alternative Login Options -->
                     <div class="auth-divider">
                         <span data-translate="login.or">OR</span>
                     </div>
+                    <p style="text-align: center; color: var(--text-muted, #6b7280); font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem;">Or log in with</p>
                     <div class="alternative-login-buttons" style="display: flex; gap: 1rem; flex-wrap: wrap;">
                         <!-- Google OAuth Login -->
                         <button type="button" id="googleLoginBtn" class="btn btn-google" data-no-translate style="flex: 1; min-width: 200px;">
@@ -315,19 +240,15 @@ $assetBase = '../ADMIN/header/';
                                     </g>
                                 </svg>
                             </span>
-                            <span class="google-text">Login with Google</span>
+                            <span class="google-text">Google</span>
                         </button>
 
                         <!-- Facebook Quick Login -->
                         <button type="button" id="facebookLoginBtn" class="btn btn-facebook" data-no-translate style="flex: 1; min-width: 200px;">
-                            <i class="fab fa-facebook-f"></i>
-                            <span>Login with Facebook</span>
-                        </button>
-
-                        <!-- Phone OTP Login -->
-                        <button type="button" id="phoneOtpLoginBtn" class="btn btn-phone-otp" style="flex: 1; min-width: 200px;">
-                            <i class="fas fa-mobile-alt"></i>
-                            <span data-translate="login.withPhone">Login with Phone Number (OTP)</span>
+                            <span class="facebook-logo-wrapper">
+                                <i class="fab fa-facebook-f"></i>
+                            </span>
+                            <span class="facebook-text">Facebook</span>
                         </button>
                     </div>
 
@@ -460,131 +381,6 @@ $assetBase = '../ADMIN/header/';
                         sendEmailOtpBtn.disabled = false;
                         sendEmailOtpBtn.querySelector('.btn-text').style.display = 'inline';
                         sendEmailOtpBtn.querySelector('.btn-spinner').style.display = 'none';
-                    }
-                });
-            }
-        });
-
-        // Phone OTP Login Handler
-        document.addEventListener('DOMContentLoaded', function() {
-            const phoneOtpBtn = document.getElementById('phoneOtpLoginBtn');
-            const phoneOtpForm = document.getElementById('phoneOtpForm');
-            const loginForm = document.getElementById('loginForm');
-            const backToRegularBtn = document.getElementById('backToRegularLogin');
-            const sendOtpBtn = document.getElementById('sendOtpButton');
-            const otpPhoneInput = document.getElementById('otp_phone');
-            const otpErrorMessage = document.getElementById('otpErrorMessage');
-            const otpErrorText = document.getElementById('otpErrorText');
-
-            // Show phone OTP form
-            if (phoneOtpBtn) {
-                phoneOtpBtn.addEventListener('click', function() {
-                    loginForm.style.display = 'none';
-                    phoneOtpForm.style.display = 'block';
-                    otpPhoneInput.focus();
-                });
-            }
-
-            // Back to regular login
-            if (backToRegularBtn) {
-                backToRegularBtn.addEventListener('click', function() {
-                    phoneOtpForm.style.display = 'none';
-                    loginForm.style.display = 'block';
-                    otpErrorMessage.style.display = 'none';
-                });
-            }
-
-            // Phone input validation
-            if (otpPhoneInput) {
-                otpPhoneInput.addEventListener('input', function () {
-                    this.value = this.value.replace(/\D/g, '');
-                    if (this.value.length === 1 && this.value === '0') {
-                        this.value = '';
-                    }
-                    otpErrorMessage.style.display = 'none';
-                });
-            }
-
-            // Send OTP handler
-            if (phoneOtpForm) {
-                phoneOtpForm.addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    otpErrorMessage.style.display = 'none';
-
-                    const phone = otpPhoneInput.value.trim();
-                    
-                    if (!phone || phone.length !== 10) {
-                        otpErrorText.textContent = 'Please enter a valid 10-digit mobile number.';
-                        otpErrorMessage.style.display = 'flex';
-                        return;
-                    }
-
-                    // Disable button and show loading
-                    sendOtpBtn.disabled = true;
-                    sendOtpBtn.querySelector('.btn-text').style.display = 'none';
-                    sendOtpBtn.querySelector('.btn-spinner').style.display = 'inline-block';
-
-                    try {
-                        const phoneWithPrefix = '+63' + phone;
-                        const response = await fetch('api/send-otp.php', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ phone: phoneWithPrefix })
-                        });
-
-                        const data = await response.json();
-
-                        if (data.success) {
-                            // Store phone for OTP verification
-                            window.otpPhoneNumber = phoneWithPrefix;
-                            
-                            // Show appropriate banner
-                            const sentBanner = document.getElementById('otpLoginSentBanner');
-                            const warnBanner = document.getElementById('otpLoginWarnBanner');
-                            const debugCode = document.getElementById('otpLoginDebugCode');
-                            
-                            sentBanner.style.display = 'none';
-                            warnBanner.style.display = 'none';
-                            debugCode.style.display = 'none';
-
-                            if (data.otp_sent === true) {
-                                sentBanner.textContent = 'Verification code sent successfully to ' + phoneWithPrefix + '.';
-                                sentBanner.style.display = 'block';
-                            } else {
-                                warnBanner.style.display = 'block';
-                                if (data.debug_otp) {
-                                    debugCode.innerHTML = '<strong>DEBUG OTP CODE:</strong><br>' + data.debug_otp;
-                                    debugCode.style.display = 'block';
-                                    console.log('DEBUG OTP:', data.debug_otp);
-                                }
-                            }
-                            
-                            // Show OTP verification modal
-                            document.getElementById('otpPhoneDisplay').textContent = phoneWithPrefix;
-                            openOtpLoginModal();
-                            startOtpResendCooldown(60);
-                            
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'OTP Sent!',
-                                text: 'A verification code has been sent to your phone. Please check your SMS.',
-                                showConfirmButton: false,
-                                timer: 2000
-                            });
-                        } else {
-                            otpErrorText.textContent = data.message || 'Failed to send OTP. Please try again.';
-                            otpErrorMessage.style.display = 'flex';
-                        }
-                    } catch (error) {
-                        console.error('Send OTP error:', error);
-                        otpErrorText.textContent = 'Connection error. Please check your internet connection.';
-                        otpErrorMessage.style.display = 'flex';
-                    } finally {
-                        sendOtpBtn.disabled = false;
-                        sendOtpBtn.querySelector('.btn-text').style.display = 'inline';
-                        sendOtpBtn.querySelector('.btn-spinner').style.display = 'none';
                     }
                 });
             }
@@ -742,162 +538,6 @@ $assetBase = '../ADMIN/header/';
         
         function setEmailOtpLoginLoading(isLoading) {
             const btn = emailOtpLoginVerifyButton;
-            if (isLoading) {
-                btn.disabled = true;
-                btn.querySelector('.btn-text').style.display = 'none';
-                btn.querySelector('.btn-spinner').style.display = 'inline-block';
-            } else {
-                btn.disabled = false;
-                btn.querySelector('.btn-text').style.display = 'inline';
-                btn.querySelector('.btn-spinner').style.display = 'none';
-            }
-        }
-
-        // Phone OTP Login Modal Functions
-        const otpLoginModal = document.getElementById('otpLoginModal');
-        const otpLoginModalForm = document.getElementById('otpLoginModalForm');
-        const otpLoginVerifyButton = document.getElementById('otpLoginVerifyButton');
-        const otpLoginModalErrorMessage = document.getElementById('otpLoginModalErrorMessage');
-        const otpLoginModalErrorText = document.getElementById('otpLoginModalErrorText');
-        const otpLoginResendButton = document.getElementById('otpLoginResendButton');
-        const otpLoginBackButton = document.getElementById('otpLoginBackButton');
-        const otpLoginModalClose = document.getElementById('otpLoginModalClose');
-
-        function openOtpLoginModal() {
-            otpLoginModal.style.display = 'flex';
-            otpLoginModal.setAttribute('aria-hidden', 'false');
-            document.getElementById('otp_login_code').value = '';
-            document.getElementById('otp_login_code').focus();
-        }
-
-        function closeOtpLoginModal() {
-            otpLoginModal.style.display = 'none';
-            otpLoginModal.setAttribute('aria-hidden', 'true');
-            otpLoginModalErrorMessage.style.display = 'none';
-        }
-
-        // Close modal buttons
-        if (otpLoginModalClose) otpLoginModalClose.addEventListener('click', closeOtpLoginModal);
-        if (otpLoginBackButton) otpLoginBackButton.addEventListener('click', function() {
-            closeOtpLoginModal();
-            phoneOtpForm.style.display = 'none';
-            loginForm.style.display = 'block';
-        });
-
-        // Resend cooldown timer
-        let otpResendCountdownTimer = null;
-        function startOtpResendCooldown(seconds) {
-            if (otpResendCountdownTimer) clearInterval(otpResendCountdownTimer);
-            let remaining = seconds;
-            otpLoginResendButton.disabled = true;
-            otpLoginResendButton.innerHTML = `<i class="fas fa-redo"></i> Resend Code (${remaining}s)`;
-
-            otpResendCountdownTimer = setInterval(() => {
-                remaining--;
-                if (remaining <= 0) {
-                    clearInterval(otpResendCountdownTimer);
-                    otpLoginResendButton.disabled = false;
-                    otpLoginResendButton.innerHTML = '<i class="fas fa-redo"></i> Resend Code';
-                } else {
-                    otpLoginResendButton.innerHTML = `<i class="fas fa-redo"></i> Resend Code (${remaining}s)`;
-                }
-            }, 1000);
-        }
-
-        // Resend OTP
-        if (otpLoginResendButton) {
-            otpLoginResendButton.addEventListener('click', async function() {
-                if (otpLoginResendButton.disabled) return;
-                
-                const phone = window.otpPhoneNumber;
-                if (!phone) {
-                    Swal.fire({ icon: 'error', title: 'Error', text: 'Phone number not found.' });
-                    return;
-                }
-                
-                try {
-                    const response = await fetch('api/send-otp.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ phone: phone, name: 'User' })
-                    });
-                    
-                    const data = await response.json();
-                    if (data.success) {
-                        Swal.fire({ icon: 'success', title: 'Code Resent', text: 'A new verification code has been sent to your phone.', timer: 1500, showConfirmButton: false });
-                        startOtpResendCooldown(60);
-                    } else {
-                        Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'Failed to resend code.' });
-                    }
-                } catch (error) {
-                    console.error('Resend OTP error:', error);
-                    Swal.fire({ icon: 'error', title: 'Error', text: 'A connection error occurred.' });
-                }
-            });
-        }
-
-        // Verify OTP and Login
-        if (otpLoginModalForm) {
-            otpLoginModalForm.addEventListener('submit', async function(e) {
-                e.preventDefault();
-                
-                const otp = document.getElementById('otp_login_code').value.trim();
-                
-                if (!otp || otp.length !== 6) {
-                    otpLoginModalErrorText.textContent = 'Please enter a valid 6-digit code.';
-                    otpLoginModalErrorMessage.style.display = 'flex';
-                    return;
-                }
-                
-                setOtpLoginLoading(true);
-                
-                try {
-                    const response = await fetch('api/verify-otp.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ otp: otp })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        // Store user info in sessionStorage for Firebase chat
-                        if (data.user_id) {
-                            sessionStorage.setItem('user_id', data.user_id);
-                        }
-                        if (data.user_name) {
-                            sessionStorage.setItem('user_name', data.user_name);
-                        }
-                        if (data.phone) {
-                            sessionStorage.setItem('user_phone', data.phone);
-                        }
-                        
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Login Successful!',
-                            text: 'Welcome, ' + (data.user_name || 'User'),
-                            showConfirmButton: false,
-                            timer: 1500
-                        }).then(() => {
-                            window.location.href = '../index.php';
-                        });
-                    } else {
-                        otpLoginModalErrorText.textContent = data.message || 'Invalid verification code.';
-                        otpLoginModalErrorMessage.style.display = 'flex';
-                    }
-                    
-                    setOtpLoginLoading(false);
-                } catch (error) {
-                    console.error('OTP verify error:', error);
-                    otpLoginModalErrorText.textContent = 'A connection error occurred. Please try again.';
-                    otpLoginModalErrorMessage.style.display = 'flex';
-                    setOtpLoginLoading(false);
-                }
-            });
-        }
-        
-        function setOtpLoginLoading(isLoading) {
-            const btn = otpLoginVerifyButton;
             if (isLoading) {
                 btn.disabled = true;
                 btn.querySelector('.btn-text').style.display = 'none';

@@ -25,7 +25,8 @@ $avatarUrl = 'https://ui-avatars.com/api/?name=' . urlencode($userName) . '&back
         </button>
         <div class="search-container">
             <i class="fas fa-search search-icon"></i>
-            <input type="text" class="search-input" placeholder="Search...">
+            <input type="text" class="search-input" id="headerSearchInput" placeholder="Search pages..." autocomplete="off">
+            <div class="search-dropdown" id="searchDropdown"></div>
         </div>
     </div>
 
@@ -51,20 +52,6 @@ $avatarUrl = 'https://ui-avatars.com/api/?name=' . urlencode($userName) . '&back
             <div class="notification-item">
                 <button class="notification-btn" id="headerLanguageBtn" aria-label="Language" title="Select Language">
                     <i class="fas fa-globe"></i>
-                </button>
-            </div>
-
-            <div class="notification-item">
-                <button class="notification-btn" aria-label="Notifications">
-                    <i class="fas fa-bell"></i>
-                    <span class="notification-badge">3</span>
-                </button>
-            </div>
-
-            <div class="notification-item">
-                <button class="notification-btn" aria-label="Messages">
-                    <i class="fas fa-envelope"></i>
-                    <span class="notification-badge">5</span>
                 </button>
             </div>
         </div>
@@ -103,6 +90,113 @@ document.addEventListener('DOMContentLoaded', function() {
     const lightModeBtn = document.getElementById('lightModeBtn');
     const darkModeBtn = document.getElementById('darkModeBtn');
     const headerLanguageBtn = document.getElementById('headerLanguageBtn');
+    const searchInput = document.getElementById('headerSearchInput');
+    const searchDropdown = document.getElementById('searchDropdown');
+
+    // Searchable pages configuration
+    const searchablePages = [
+        { name: 'Home', url: 'index.php', keywords: ['home', 'main', 'dashboard'] },
+        { name: 'Alerts', url: 'alerts.php', keywords: ['alerts', 'notifications', 'warnings'] },
+        { name: 'Support', url: 'support.php', keywords: ['support', 'help', 'contact'] },
+        { name: 'Weather Map', url: 'weather-map.php', keywords: ['weather', 'map', 'forecast'] },
+        { name: 'Weather Monitoring', url: 'weather-monitoring.php', keywords: ['weather', 'monitoring', 'forecast'] },
+        { name: 'Earthquake Monitoring', url: 'earthquake-monitoring.php', keywords: ['earthquake', 'seismic', 'quake'] },
+        { name: 'Emergency Call', url: 'emergency-call.php', keywords: ['emergency', 'call', 'hotline', '911'] },
+        { name: 'Profile', url: 'profile.php', keywords: ['profile', 'account', 'settings'] },
+        { name: 'Login', url: 'login.php', keywords: ['login', 'signin', 'auth'] },
+        { name: 'Signup', url: 'signup.php', keywords: ['signup', 'register', 'create account'] }
+    ];
+
+    // Realtime search functionality
+    if (searchInput && searchDropdown) {
+        let selectedIndex = -1;
+        let filteredResults = [];
+
+        searchInput.addEventListener('input', function() {
+            const query = this.value.trim().toLowerCase();
+            selectedIndex = -1;
+
+            if (query.length === 0) {
+                searchDropdown.style.display = 'none';
+                searchDropdown.innerHTML = '';
+                return;
+            }
+
+            // Filter pages based on query
+            filteredResults = searchablePages.filter(page => {
+                const matchName = page.name.toLowerCase().includes(query);
+                const matchKeywords = page.keywords.some(kw => kw.includes(query));
+                return matchName || matchKeywords;
+            });
+
+            if (filteredResults.length > 0) {
+                searchDropdown.innerHTML = filteredResults.map((page, index) => `
+                    <div class="search-result-item" data-url="${page.url}" data-index="${index}">
+                        <i class="fas fa-file-alt"></i>
+                        <span>${page.name}</span>
+                    </div>
+                `).join('');
+                searchDropdown.style.display = 'block';
+
+                // Add click handlers to results
+                searchDropdown.querySelectorAll('.search-result-item').forEach(item => {
+                    item.addEventListener('click', function() {
+                        const url = this.getAttribute('data-url');
+                        window.location.href = url;
+                    });
+                });
+            } else {
+                searchDropdown.innerHTML = '<div class="search-result-item no-results"><i class="fas fa-times-circle"></i><span>No results found</span></div>';
+                searchDropdown.style.display = 'block';
+            }
+        });
+
+        // Keyboard navigation
+        searchInput.addEventListener('keydown', function(e) {
+            const items = searchDropdown.querySelectorAll('.search-result-item:not(.no-results)');
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+                updateSelection(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIndex = Math.max(selectedIndex - 1, -1);
+                updateSelection(items);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (selectedIndex >= 0 && filteredResults[selectedIndex]) {
+                    window.location.href = filteredResults[selectedIndex].url;
+                } else if (filteredResults.length > 0) {
+                    window.location.href = filteredResults[0].url;
+                }
+            } else if (e.key === 'Escape') {
+                searchDropdown.style.display = 'none';
+                searchInput.blur();
+            }
+        });
+
+        function updateSelection(items) {
+            items.forEach((item, index) => {
+                item.classList.toggle('selected', index === selectedIndex);
+            });
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
+                searchDropdown.style.display = 'none';
+            }
+        });
+
+        // Focus search input on '/' key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === '/' && document.activeElement !== searchInput) {
+                e.preventDefault();
+                searchInput.focus();
+            }
+        });
+    }
 
     function updateHeaderTime() {
         const now = new Date();

@@ -230,67 +230,6 @@ $assetBase = 'ADMIN/header/';
             </div>
         </div>
 
-        <!-- Emergency Hotlines Section -->
-        <div class="main-container">
-            <div class="sub-container">
-                <section class="page-content emergency-hotlines-section">
-                    <h2 data-translate="home.hotlines.title">Quezon City Emergency Hotlines</h2>
-                    <p data-translate="home.hotlines.desc">Save these numbers for quick access during emergencies</p>
-                    <div class="cards-grid">
-                        <div class="card emergency-card">
-                            <div class="emergency-card-header">
-                                <h3 data-translate="home.hotlines.helpline">QC HELPLINE</h3>
-                            </div>
-                            <div class="emergency-number-large" data-translate="home.hotlines.dial">DIAL 122</div>
-                            <a href="tel:122" class="btn btn-primary" data-no-translate>
-                                <i class="fas fa-phone"></i> <span data-translate="home.hotlines.call122">Call 122</span>
-                            </a>
-                        </div>
-                        <div class="card emergency-card">
-                            <div class="emergency-card-header">
-                                <h3 data-translate="home.hotlines.eoc">Emergency Operations Center (EOC)</h3>
-                            </div>
-                            <div class="emergency-numbers">
-                                <p><strong>0977 031 2892</strong> (GLOBE)</p>
-                                <p><strong>0947 885 9929</strong> (SMART)</p>
-                                <p><strong>8988 4242</strong> local 7245</p>
-                            </div>
-                            <div class="action-buttons">
-                                <a href="tel:+639770312892" class="btn btn-primary" data-no-translate><span data-translate="home.hotlines.callGlobe">Call Globe</span></a>
-                                <a href="tel:+639478859929" class="btn btn-secondary" data-no-translate><span data-translate="home.hotlines.callSmart">Call Smart</span></a>
-                            </div>
-                        </div>
-                        <div class="card emergency-card">
-                            <div class="emergency-card-header">
-                                <h3 data-translate="home.hotlines.ems">Emergency Medical Services / Urban Search and Rescue</h3>
-                            </div>
-                            <div class="emergency-numbers">
-                                <p><strong>0947 884 7498</strong> (SMART)</p>
-                                <p><strong>8928 4396</strong></p>
-                            </div>
-                            <div class="action-buttons">
-                                <a href="tel:+639478847498" class="btn btn-primary" data-no-translate><span data-translate="home.hotlines.callEMS">Call EMS</span></a>
-                                <a href="tel:0289284396" class="btn btn-secondary" data-no-translate>Call 8928-4396</a>
-                            </div>
-                        </div>
-                        <div class="card emergency-card">
-                            <div class="emergency-card-header">
-                                <h3 data-translate="home.hotlines.landline">QCDRRMO Landline</h3>
-                            </div>
-                            <div class="emergency-numbers">
-                                <p><strong>8927-5914</strong></p>
-                                <p><strong>8928-4396</strong></p>
-                            </div>
-                            <div class="action-buttons">
-                                <a href="tel:0289275914" class="btn btn-primary" data-no-translate>Call 8927-5914</a>
-                                <a href="tel:0289284396" class="btn btn-secondary" data-no-translate>Call 8928-4396</a>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            </div>
-        </div>
-
         <div class="main-container">
             <div class="sub-container">
                 <section class="page-content">

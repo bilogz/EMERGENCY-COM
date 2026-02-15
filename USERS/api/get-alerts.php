@@ -189,7 +189,7 @@ $status = isset($_GET['status']) && $_GET['status'] !== '' ? trim($_GET['status'
 $limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 50;
 $lastId = isset($_GET['last_id']) ? max(0, (int)$_GET['last_id']) : 0;
 $category = isset($_GET['category']) && $_GET['category'] !== '' && $_GET['category'] !== 'all' ? trim($_GET['category']) : null;
-$timeFilter = isset($_GET['time_filter']) && in_array($_GET['time_filter'], ['recent', 'older', 'all'], true) ? $_GET['time_filter'] : 'recent';
+$timeFilter = isset($_GET['time_filter']) && in_array($_GET['time_filter'], ['24h', 'week', 'month', 'year', 'all'], true) ? $_GET['time_filter'] : '24h';
 $severityFilter = isset($_GET['severity_filter']) && in_array($_GET['severity_filter'], ['emergency_only', 'warnings_only'], true) ? $_GET['severity_filter'] : null;
 
 // Resolve requested language (user preference / device language)
@@ -223,10 +223,26 @@ if ($category) {
     $params[':category'] = $category;
 }
 
-if ($timeFilter === 'recent' && $lastId === 0) {
-    $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
-} elseif ($timeFilter === 'older' && $lastId === 0) {
-    $query .= " AND a.created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+// Apply time filter (only when not loading new alerts via last_id)
+if ($lastId === 0) {
+    switch ($timeFilter) {
+        case '24h':
+            $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+            break;
+        case 'week':
+            $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
+            break;
+        case 'month':
+            $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)";
+            break;
+        case 'year':
+            $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 1 YEAR)";
+            break;
+        case 'all':
+        default:
+            // No time restriction
+            break;
+    }
 }
 
 if ($severityFilter === 'emergency_only') {

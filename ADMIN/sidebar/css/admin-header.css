@@ -103,6 +103,63 @@
     color: var(--primary-color-1);
 }
 
+/* Search Dropdown */
+.search-dropdown {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    right: 0;
+    background-color: var(--card-bg-1);
+    border: 1px solid var(--border-color-1);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+}
+
+.search-result-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    border-bottom: 1px solid var(--border-color-1);
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.search-result-item:hover,
+.search-result-item.selected {
+    background-color: var(--sidebar-hover-bg-1);
+}
+
+.search-result-item i {
+    color: var(--primary-color-1);
+    font-size: 1rem;
+    width: 20px;
+    text-align: center;
+}
+
+.search-result-item span {
+    color: var(--text-color-1);
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.search-result-item.no-results {
+    cursor: default;
+    opacity: 0.6;
+}
+
+.search-result-item.no-results i {
+    color: var(--text-secondary-1);
+}
+
 /* Header Right Section */
 .admin-header-right {
     display: flex;

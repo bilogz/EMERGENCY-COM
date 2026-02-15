@@ -125,54 +125,65 @@ $current = 'alerts.php';
 
         <div class="main-container">
             <div class="sub-container content-main">
-                <!-- Time & Severity Filters -->
-                <div class="alert-filters" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                    <span style="font-weight: 600; color: var(--text-color, #1f2937); margin-right: 0.5rem;">Time:</span>
-                    <button class="filter-btn time-filter active" data-time-filter="recent" data-no-translate>
-                        <i class="fas fa-clock"></i> <span>Recent (24h)</span>
-                    </button>
-                    <button class="filter-btn time-filter" data-time-filter="older" data-no-translate>
-                        <i class="fas fa-history"></i> <span>Older</span>
-                    </button>
-                    <span style="font-weight: 600; color: var(--text-color, #1f2937); margin-left: 1rem; margin-right: 0.5rem;">Type:</span>
-                    <button class="filter-btn severity-filter" data-severity-filter="emergency_only" data-no-translate>
-                        <i class="fas fa-exclamation-circle"></i> <span>Emergency Only</span>
-                    </button>
-                    <button class="filter-btn severity-filter" data-severity-filter="warnings_only" data-no-translate>
-                        <i class="fas fa-exclamation-triangle"></i> <span>Warnings Only</span>
-                    </button>
-                    <button class="filter-btn severity-filter active" data-severity-filter="all" data-no-translate>
-                        <i class="fas fa-list"></i> <span>All Types</span>
-                    </button>
-                </div>
-                
-                <!-- Category Filters -->
-                <div class="alert-filters" style="margin-bottom: 2rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button class="filter-btn category-filter active" data-category="all" data-no-translate>
-                        <i class="fas fa-list"></i> <span>All Categories</span>
-                    </button>
-                    <button class="filter-btn category-filter" data-category="Weather" data-no-translate>
-                        <i class="fas fa-cloud-rain"></i> <span>Weather</span>
-                    </button>
-                    <button class="filter-btn category-filter" data-category="Earthquake" data-no-translate>
-                        <i class="fas fa-mountain"></i> <span>Earthquake</span>
-                    </button>
-                    <button class="filter-btn category-filter" data-category="Bomb Threat" data-no-translate>
-                        <i class="fas fa-bomb"></i> <span>Bomb Threat</span>
-                    </button>
-                    <button class="filter-btn category-filter" data-category="Fire" data-no-translate>
-                        <i class="fas fa-fire"></i> <span>Fire</span>
-                    </button>
-                    <button class="filter-btn category-filter" data-category="General" data-no-translate>
-                        <i class="fas fa-exclamation-triangle"></i> <span>General</span>
-                    </button>
-                </div>
-
-                <!-- Live Status Indicator -->
-                <div class="live-status" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; padding: 0.75rem 1rem; background: rgba(76, 175, 80, 0.1); border-radius: 8px; border-left: 4px solid #4caf50;">
-                    <span class="live-dot" style="width: 10px; height: 10px; background: #4caf50; border-radius: 50%; animation: pulse 2s infinite;"></span>
-                    <span style="font-weight: 600; color: #2e7d32;">Live Updates Active</span>
-                    <span id="lastUpdateTime" style="margin-left: auto; font-size: 0.875rem; color: #666;">Loading...</span>
+                <!-- Live Status Indicator with Filters -->
+                <div class="live-status" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; padding: 0.75rem 1rem; background: rgba(76, 175, 80, 0.1); border-radius: 8px; border-left: 4px solid #4caf50; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="live-dot" style="width: 10px; height: 10px; background: #4caf50; border-radius: 50%; animation: pulse 2s infinite;"></span>
+                        <span style="font-weight: 600; color: #2e7d32;">Live Updates Active</span>
+                    </div>
+                    
+                    <!-- Time Filter Dropdown -->
+                    <div class="filter-dropdown" style="position: relative;">
+                        <button class="filter-btn time-dropdown-toggle" id="timeDropdownToggle" data-no-translate style="padding: 0.5rem 0.75rem; font-size: 0.875rem; background: transparent; border: 1px solid rgba(76, 138, 137, 0.5); color: #2e7d32;">
+                            <i class="fas fa-filter"></i> <span id="timeDropdownLabel">24 Hours Ago</span> <i class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.75rem;"></i>
+                        </button>
+                        <div class="filter-dropdown-menu" id="timeDropdownMenu" style="display: none; position: absolute; top: 100%; right: 0; min-width: 180px; background: var(--card-bg, #fff); border: 1px solid var(--card-border, #d1d5db); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); z-index: 100; margin-top: 0.25rem;">
+                            <div class="filter-dropdown-item time-filter-option active" data-time-filter="24h" data-label="24 Hours Ago">
+                                <i class="fas fa-clock"></i> <span>24 Hours Ago</span>
+                            </div>
+                            <div class="filter-dropdown-item time-filter-option" data-time-filter="week" data-label="This Week">
+                                <i class="fas fa-calendar-week"></i> <span>This Week</span>
+                            </div>
+                            <div class="filter-dropdown-item time-filter-option" data-time-filter="month" data-label="This Month">
+                                <i class="fas fa-calendar-alt"></i> <span>This Month</span>
+                            </div>
+                            <div class="filter-dropdown-item time-filter-option" data-time-filter="year" data-label="This Year">
+                                <i class="fas fa-calendar"></i> <span>This Year</span>
+                            </div>
+                            <div class="filter-dropdown-item time-filter-option" data-time-filter="all" data-label="All Time">
+                                <i class="fas fa-infinity"></i> <span>All Time</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Category Filter Dropdown -->
+                    <div class="filter-dropdown" style="position: relative;">
+                        <button class="filter-btn category-dropdown-toggle" id="categoryDropdownToggle" data-no-translate style="padding: 0.5rem 0.75rem; font-size: 0.875rem; background: transparent; border: 1px solid rgba(76, 138, 137, 0.5); color: #2e7d32;">
+                            <i class="fas fa-filter"></i> <span id="categoryDropdownLabel">All Categories</span> <i class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.75rem;"></i>
+                        </button>
+                        <div class="filter-dropdown-menu" id="categoryDropdownMenu" style="display: none; position: absolute; top: 100%; right: 0; min-width: 180px; background: var(--card-bg, #fff); border: 1px solid var(--card-border, #d1d5db); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); z-index: 100; margin-top: 0.25rem;">
+                            <div class="filter-dropdown-item category-filter-option active" data-category="all" data-label="All Categories">
+                                <i class="fas fa-list"></i> <span>All Categories</span>
+                            </div>
+                            <div class="filter-dropdown-item category-filter-option" data-category="Weather" data-label="Weather">
+                                <i class="fas fa-cloud-rain"></i> <span>Weather</span>
+                            </div>
+                            <div class="filter-dropdown-item category-filter-option" data-category="Earthquake" data-label="Earthquake">
+                                <i class="fas fa-mountain"></i> <span>Earthquake</span>
+                            </div>
+                            <div class="filter-dropdown-item category-filter-option" data-category="Bomb Threat" data-label="Bomb Threat">
+                                <i class="fas fa-bomb"></i> <span>Bomb Threat</span>
+                            </div>
+                            <div class="filter-dropdown-item category-filter-option" data-category="Fire" data-label="Fire">
+                                <i class="fas fa-fire"></i> <span>Fire</span>
+                            </div>
+                            <div class="filter-dropdown-item category-filter-option" data-category="General" data-label="General">
+                                <i class="fas fa-exclamation-triangle"></i> <span>General</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <span id="lastUpdateTime" style="font-size: 0.875rem; color: #666; margin-left: auto;">Loading...</span>
                 </div>
 
                 <section class="page-content">
@@ -201,7 +212,7 @@ $current = 'alerts.php';
     <script>
         // Live Alerts System - Real-time Updates
         let currentCategory = 'all';
-        let currentTimeFilter = 'recent'; // recent, older, all
+        let currentTimeFilter = '24h'; // 24h, week, month, year, all
         let currentSeverityFilter = null; // null (all), emergency_only, warnings_only
         let lastAlertId = 0;
         let lastUpdateTime = null;
@@ -900,29 +911,99 @@ $current = 'alerts.php';
         }
         
         function setupFilters() {
-            // Category filters
-            const categoryFilters = document.querySelectorAll('.category-filter');
-            categoryFilters.forEach(btn => {
-                btn.addEventListener('click', function() {
-                    categoryFilters.forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    currentCategory = this.dataset.category;
-                    lastAlertId = 0;
-                    loadAlerts(false);
-                });
-            });
+            // Category dropdown functionality
+            const categoryDropdownToggle = document.getElementById('categoryDropdownToggle');
+            const categoryDropdownMenu = document.getElementById('categoryDropdownMenu');
+            const categoryDropdownLabel = document.getElementById('categoryDropdownLabel');
+            const categoryFilterOptions = document.querySelectorAll('.category-filter-option');
             
-            // Time filters
-            const timeFilters = document.querySelectorAll('.time-filter');
-            timeFilters.forEach(btn => {
-                btn.addEventListener('click', function() {
-                    timeFilters.forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    currentTimeFilter = this.dataset.timeFilter;
-                    lastAlertId = 0;
-                    loadAlerts(false);
+            if (categoryDropdownToggle && categoryDropdownMenu) {
+                // Toggle dropdown
+                categoryDropdownToggle.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const isOpen = categoryDropdownMenu.style.display === 'block';
+                    categoryDropdownMenu.style.display = isOpen ? 'none' : 'block';
+                    categoryDropdownToggle.classList.toggle('open', !isOpen);
                 });
-            });
+                
+                // Handle option selection
+                categoryFilterOptions.forEach(option => {
+                    option.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        
+                        // Update active state
+                        categoryFilterOptions.forEach(opt => opt.classList.remove('active'));
+                        this.classList.add('active');
+                        
+                        // Update filter value
+                        currentCategory = this.dataset.category;
+                        
+                        // Update toggle button label
+                        categoryDropdownLabel.textContent = this.dataset.label;
+                        
+                        // Close dropdown
+                        categoryDropdownMenu.style.display = 'none';
+                        categoryDropdownToggle.classList.remove('open');
+                        
+                        // Reload alerts
+                        lastAlertId = 0;
+                        loadAlerts(false);
+                    });
+                });
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', function() {
+                    categoryDropdownMenu.style.display = 'none';
+                    categoryDropdownToggle.classList.remove('open');
+                });
+            }
+            
+            // Time dropdown functionality
+            const timeDropdownToggle = document.getElementById('timeDropdownToggle');
+            const timeDropdownMenu = document.getElementById('timeDropdownMenu');
+            const timeDropdownLabel = document.getElementById('timeDropdownLabel');
+            const timeFilterOptions = document.querySelectorAll('.time-filter-option');
+            
+            if (timeDropdownToggle && timeDropdownMenu) {
+                // Toggle dropdown
+                timeDropdownToggle.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const isOpen = timeDropdownMenu.style.display === 'block';
+                    timeDropdownMenu.style.display = isOpen ? 'none' : 'block';
+                    timeDropdownToggle.classList.toggle('open', !isOpen);
+                });
+                
+                // Handle option selection
+                timeFilterOptions.forEach(option => {
+                    option.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        
+                        // Update active state
+                        timeFilterOptions.forEach(opt => opt.classList.remove('active'));
+                        this.classList.add('active');
+                        
+                        // Update filter value
+                        currentTimeFilter = this.dataset.timeFilter;
+                        
+                        // Update toggle button label
+                        timeDropdownLabel.textContent = this.dataset.label;
+                        
+                        // Close dropdown
+                        timeDropdownMenu.style.display = 'none';
+                        timeDropdownToggle.classList.remove('open');
+                        
+                        // Reload alerts
+                        lastAlertId = 0;
+                        loadAlerts(false);
+                    });
+                });
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', function() {
+                    timeDropdownMenu.style.display = 'none';
+                    timeDropdownToggle.classList.remove('open');
+                });
+            }
             
             // Severity filters
             const severityFilters = document.querySelectorAll('.severity-filter');
