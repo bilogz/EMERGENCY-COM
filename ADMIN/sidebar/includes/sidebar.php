@@ -115,7 +115,7 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
 
                     <!-- Automated Warnings -->
                     <?php 
-                    $isAutoWarningsActive = (basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' || basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php' || basename($_SERVER['PHP_SELF']) == 'earthquake-monitoring.php');
+                    $isAutoWarningsActive = (basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' || basename($_SERVER['PHP_SELF']) == 'automated-warnings-analytics.php' || basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php' || basename($_SERVER['PHP_SELF']) == 'earthquake-monitoring.php');
                     ?>
                     <li class="sidebar-menu-item">
                         <a href="<?php echo $sidebarBase; ?>automated-warnings.php" class="sidebar-link sidebar-submenu-toggle sidebar-accent-auto <?php echo $isAutoWarningsActive ? 'active' : ''; ?>">
@@ -128,6 +128,12 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                                 <a href="<?php echo $sidebarBase; ?>automated-warnings.php" class="sidebar-link sidebar-accent-auto <?php echo basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' ? 'active' : ''; ?>">
                                     <i class="fas fa-cog sidebar-icon" aria-hidden="true"></i>
                                     <span>Settings</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>automated-warnings-analytics.php" class="sidebar-link sidebar-accent-auto <?php echo basename($_SERVER['PHP_SELF']) == 'automated-warnings-analytics.php' ? 'active' : ''; ?>">
+                                    <i class="fas fa-chart-line sidebar-icon" aria-hidden="true"></i>
+                                    <span>Analytics</span>
                                 </a>
                             </li>
                             <li class="sidebar-menu-item">

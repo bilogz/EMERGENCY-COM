@@ -1,0 +1,162 @@
+/* Automated Warnings Analytics - synced with dashboard card language */
+:root {
+    --aw-border-soft: color-mix(in srgb, var(--border-color-1) 75%, transparent);
+}
+
+.aw-source-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.aw-source-card {
+    border: 1px solid var(--aw-border-soft);
+    border-radius: 14px;
+    background: var(--card-bg-1);
+    padding: 1rem;
+    box-shadow: 0 4px 14px rgba(10, 20, 30, 0.04);
+}
+
+.aw-source-header h3 {
+    margin: 0;
+    color: var(--text-color-1);
+    font-size: 1rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.aw-source-metrics {
+    margin-top: 0.9rem;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.aw-source-metrics div {
+    background: var(--bg-color-1);
+    border: 1px solid var(--aw-border-soft);
+    border-radius: 10px;
+    padding: 0.55rem 0.6rem;
+}
+
+.aw-source-metrics span {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-secondary-1);
+}
+
+.aw-source-metrics strong {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--text-color-1);
+    font-size: 1.05rem;
+}
+
+.aw-chart-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.aw-chart-card,
+.aw-table-card {
+    border: 1px solid var(--aw-border-soft);
+    border-radius: 14px;
+    background: var(--card-bg-1);
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(10, 20, 30, 0.04);
+}
+
+.aw-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid var(--aw-border-soft);
+    background: color-mix(in srgb, var(--bg-color-1) 85%, transparent);
+}
+
+.aw-card-header h3 {
+    margin: 0;
+    font-size: 0.96rem;
+    color: var(--text-color-1);
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.aw-refresh-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.aw-refresh-meta small {
+    color: var(--text-secondary-1);
+    font-size: 0.76rem;
+}
+
+.aw-chart-body {
+    padding: 0.85rem 1rem 1rem 1rem;
+    min-height: 210px;
+}
+
+.aw-table-wrap {
+    overflow-x: auto;
+    padding: 0.75rem 1rem 1rem 1rem;
+}
+
+.aw-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    border: 1px solid var(--aw-border-soft);
+    font-size: 0.72rem;
+    color: var(--text-secondary-1);
+}
+
+.aw-badge.weather {
+    background: rgba(42, 167, 255, 0.12);
+    border-color: rgba(42, 167, 255, 0.35);
+    color: #1d7ec0;
+}
+
+.aw-badge.quake {
+    background: rgba(249, 115, 22, 0.12);
+    border-color: rgba(249, 115, 22, 0.35);
+    color: #d06219;
+}
+
+@media (max-width: 1280px) {
+    .aw-chart-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .aw-chart-wide {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 900px) {
+    .aw-source-grid,
+    .aw-chart-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .aw-source-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .aw-refresh-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+    }
+}

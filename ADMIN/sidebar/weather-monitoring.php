@@ -46,7 +46,7 @@ $pageTitle = 'Weather Monitoring';
     <?php endif; ?>
     
 </head>
-<body class="<?php echo $publicView ? 'public-view' : ''; ?>">
+<body class="<?php echo $publicView ? 'public-view' : ''; ?>" data-disable-auto-darkmode="true">
     <?php if (!$publicView): ?>
         <?php include 'includes/sidebar.php'; ?>
         <?php include 'includes/admin-header.php'; ?>

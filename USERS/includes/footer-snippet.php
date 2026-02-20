@@ -156,3 +156,11 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<!-- Global Emergency Alert System (Citizen Pages) -->
+<?php
+$emergencyCss = $assetBase . 'css/emergency-alert.css';
+$emergencyJs = $assetBase . 'js/emergency-alert.js';
+?>
+<link rel="stylesheet" href="<?= htmlspecialchars($emergencyCss); ?>">
+<script src="<?= htmlspecialchars($emergencyJs); ?>?v=<?= file_exists(__DIR__ . '/../../ADMIN/header/js/emergency-alert.js') ? filemtime(__DIR__ . '/../../ADMIN/header/js/emergency-alert.js') : time(); ?>"></script>
+

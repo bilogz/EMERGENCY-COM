@@ -13,6 +13,11 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit();
 }
 
+// Avoid stale HTML when testing through tunnels/browsers.
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 $pageTitle = 'Automated Warning Integration';
 ?>
 <!DOCTYPE html>
@@ -143,6 +148,28 @@ $pageTitle = 'Automated Warning Integration';
                                 </div>
                                 <i class="fas fa-chevron-right" style="margin-left: auto; opacity: 0.3;"></i>
                             </div>
+                            <a class="settings-card" href="automated-warnings-analytics.php" style="text-decoration: none; color: inherit;">
+                                <div class="settings-icon"><i class="fas fa-chart-pie"></i></div>
+                                <div class="settings-info">
+                                    <h3>Warning Analytics</h3>
+                                    <p>View weather and earthquake trends</p>
+                                </div>
+                                <i class="fas fa-chevron-right" style="margin-left: auto; opacity: 0.3;"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="module-card">
+                        <div class="module-card-header">
+                            <h2><i class="fas fa-vial"></i> System Testing</h2>
+                        </div>
+                        <div style="padding: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+                            <button type="button" class="btn btn-warning" onclick="sendMockCriticalAlert('weather')" style="padding: 0.9rem 1rem; background: #f59e0b; border-color: #f59e0b; color: #fff;">
+                                <i class="fas fa-cloud-showers-heavy"></i> Mock Critical Weather
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="sendMockCriticalAlert('earthquake')" style="padding: 0.9rem 1rem; background: #dc2626; border-color: #dc2626; color: #fff;">
+                                <i class="fas fa-house-crack"></i> Mock Critical Earthquake
+                            </button>
                         </div>
                     </div>
 
@@ -481,6 +508,36 @@ $pageTitle = 'Automated Warning Integration';
             .catch(error => {
                 console.error('Error publishing warning:', error);
                 alert('Error publishing warning: ' + error.message);
+            });
+        }
+
+        function sendMockCriticalAlert(type) {
+            const pretty = type === 'earthquake' ? 'Earthquake' : 'Weather';
+            if (!confirm(`Send MOCK CRITICAL ${pretty.toUpperCase()} alert and queue broadcast to all active citizens?`)) {
+                return;
+            }
+
+            fetch('../api/automated-warnings.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'mock_alert',
+                    type: type
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    throw new Error(data.message || 'Failed to send mock alert.');
+                }
+                alert(data.message || 'Mock alert queued successfully.');
+                loadWarnings();
+            })
+            .catch(error => {
+                console.error('Mock alert error:', error);
+                alert('Mock alert failed: ' + error.message);
             });
         }
 

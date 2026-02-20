@@ -142,6 +142,49 @@ function mnGetCategoriesForOptions(PDO $pdo): array {
     ];
 }
 
+/**
+ * Resolve a writable notification logs table.
+ * Uses runtime fallback when primary table exists but is corrupted.
+ */
+function mnEnsureNotificationLogsTable(PDO $pdo, string $tableName): bool {
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
+        return false;
+    }
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS {$tableName} (
+                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                channel VARCHAR(64) NOT NULL DEFAULT '',
+                message TEXT NULL,
+                recipient VARCHAR(255) NULL,
+                recipients TEXT NULL,
+                priority VARCHAR(32) NOT NULL DEFAULT 'medium',
+                status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                sent_at DATETIME NULL,
+                sent_by VARCHAR(120) NULL,
+                ip_address VARCHAR(64) NULL,
+                response LONGTEXT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_status_sent_at (status, sent_at),
+                INDEX idx_channel (channel)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        $pdo->query("SELECT 1 FROM {$tableName} LIMIT 1");
+        return true;
+    } catch (Throwable $e) {
+        error_log("Mass Notification {$tableName} health check failed: " . $e->getMessage());
+        return false;
+    }
+}
+
+function mnResolveNotificationLogsTable(PDO $pdo): string {
+    if (mnEnsureNotificationLogsTable($pdo, 'notification_logs')) {
+        return 'notification_logs';
+    }
+    mnEnsureNotificationLogsTable($pdo, 'notification_logs_runtime');
+    return 'notification_logs_runtime';
+}
+
 $action = $_GET['action'] ?? 'send';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
@@ -464,8 +507,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
     }
 } elseif ($action === 'list') {
     try {
+        $logsTable = mnResolveNotificationLogsTable($pdo);
         // Backward compatible list: some installs may not have all columns (e.g., response)
-        $colsStmt = $pdo->query("SHOW COLUMNS FROM notification_logs");
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM {$logsTable}");
         $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN);
 
         $selectParts = [];
@@ -517,7 +561,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
 
         $stmt = $pdo->query("
             SELECT " . implode(', ', $selectParts) . "
-            FROM notification_logs
+            FROM {$logsTable}
             ORDER BY $orderBy DESC
             LIMIT 50
         ");
@@ -531,34 +575,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
                 // Check table exists (notification_queue)
                 $tCheck = $pdo->query("SHOW TABLES LIKE 'notification_queue'");
                 $hasQueue = $tCheck && $tCheck->rowCount() > 0;
+                if ($hasQueue) {
+                    $pdo->query("SELECT 1 FROM notification_queue LIMIT 1");
+                }
             } catch (PDOException $e) {
                 $hasQueue = false;
             }
 
             if (!empty($hasQueue)) {
-                $placeholders = implode(',', array_fill(0, count($logIds), '?'));
-                $qStmt = $pdo->prepare("
-                    SELECT log_id, status, COUNT(*) as cnt
-                    FROM notification_queue
-                    WHERE log_id IN ($placeholders)
-                    GROUP BY log_id, status
-                ");
-                $qStmt->execute($logIds);
-                while ($row = $qStmt->fetch(PDO::FETCH_ASSOC)) {
-                    $lid = (string)$row['log_id'];
-                    if (!isset($queueStatsByLog[$lid])) {
-                        $queueStatsByLog[$lid] = ['pending' => 0, 'sent' => 0, 'failed' => 0, 'total' => 0, 'progress' => 0];
+                try {
+                    $placeholders = implode(',', array_fill(0, count($logIds), '?'));
+                    $qStmt = $pdo->prepare("
+                        SELECT log_id, status, COUNT(*) as cnt
+                        FROM notification_queue
+                        WHERE log_id IN ($placeholders)
+                        GROUP BY log_id, status
+                    ");
+                    $qStmt->execute($logIds);
+                    while ($row = $qStmt->fetch(PDO::FETCH_ASSOC)) {
+                        $lid = (string)$row['log_id'];
+                        if (!isset($queueStatsByLog[$lid])) {
+                            $queueStatsByLog[$lid] = ['pending' => 0, 'sent' => 0, 'failed' => 0, 'total' => 0, 'progress' => 0];
+                        }
+                        $st = $row['status'] ?? 'pending';
+                        $cnt = (int)($row['cnt'] ?? 0);
+                        if (!isset($queueStatsByLog[$lid][$st])) $queueStatsByLog[$lid][$st] = 0;
+                        $queueStatsByLog[$lid][$st] += $cnt;
                     }
-                    $st = $row['status'] ?? 'pending';
-                    $cnt = (int)($row['cnt'] ?? 0);
-                    if (!isset($queueStatsByLog[$lid][$st])) $queueStatsByLog[$lid][$st] = 0;
-                    $queueStatsByLog[$lid][$st] += $cnt;
+                    foreach ($queueStatsByLog as $lid => &$st) {
+                        $st['total'] = (int)($st['pending'] + $st['sent'] + $st['failed']);
+                        $st['progress'] = $st['total'] > 0 ? (int)round((($st['sent'] + $st['failed']) / $st['total']) * 100) : 0;
+                    }
+                    unset($st);
+                } catch (Throwable $qe) {
+                    $queueStatsByLog = [];
+                    error_log("Mass Notification queue stats degraded mode: " . $qe->getMessage());
                 }
-                foreach ($queueStatsByLog as $lid => &$st) {
-                    $st['total'] = (int)($st['pending'] + $st['sent'] + $st['failed']);
-                    $st['progress'] = $st['total'] > 0 ? (int)round((($st['sent'] + $st['failed']) / $st['total']) * 100) : 0;
-                }
-                unset($st);
             }
         }
         
@@ -586,17 +638,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         
         echo json_encode([
             'success' => true,
-            'notifications' => $notifications
+            'notifications' => $notifications,
+            'meta' => ['table' => $logsTable]
         ]);
     } catch (PDOException $e) {
         error_log("List Notifications Error: " . $e->getMessage());
-        echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
+        // Degraded mode: keep UI functional even when notification_logs table is unhealthy.
+        echo json_encode([
+            'success' => true,
+            'notifications' => [],
+            'warning' => 'Dispatch history is temporarily unavailable due to database table health issues.'
+        ]);
     }
 } elseif ($action === 'get_options') {
     try {
-        // Fetch Barangays
-        $bStmt = $pdo->query("SELECT DISTINCT barangay FROM users WHERE barangay IS NOT NULL AND barangay != '' ORDER BY barangay");
-        $barangays = $bStmt->fetchAll(PDO::FETCH_COLUMN);
+        // Fetch Barangays (graceful fallback when users table is unavailable/corrupted)
+        $barangays = [];
+        $optionWarnings = [];
+        try {
+            $bStmt = $pdo->query("SELECT DISTINCT barangay FROM users WHERE barangay IS NOT NULL AND barangay != '' ORDER BY barangay");
+            $barangays = $bStmt ? $bStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        } catch (Throwable $e) {
+            $barangays = [];
+            $optionWarnings[] = 'Barangay list is temporarily unavailable.';
+            error_log("Mass Notification get_options barangay query error: " . $e->getMessage());
+        }
 
         // Fetch Categories with auto-heal schema/seed
         $categories = [];
@@ -635,10 +701,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             'success' => true,
             'barangays' => $barangays,
             'categories' => $categories,
-            'templates' => $templates
+            'templates' => $templates,
+            'warnings' => $optionWarnings
         ]);
     } catch (PDOException $e) {
-        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        error_log("Mass Notification get_options fatal error: " . $e->getMessage());
+        // Degraded mode: return minimal payload to avoid frontend hard-failure.
+        echo json_encode([
+            'success' => true,
+            'barangays' => [],
+            'categories' => [],
+            'templates' => [],
+            'warnings' => ['Options are temporarily unavailable due to database table health issues.']
+        ]);
     }
 } else {
     echo json_encode(['success' => false, 'message' => 'Invalid action.']);
