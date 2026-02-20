@@ -48,32 +48,48 @@ try {
         apiResponse::error('This email address is already registered.', 409);
     }
 
+    // Core registration must succeed atomically.
     $pdo->beginTransaction();
 
     // 1. Insert user
     $hashedPassword = password_hash($plainPassword, PASSWORD_DEFAULT);
     $userStmt = $pdo->prepare("INSERT INTO users (name, email, password, phone) VALUES (?, ?, ?, ?)");
     $userStmt->execute([$name, $email, $hashedPassword, $phone]);
-    
     $userId = $pdo->lastInsertId();
 
     // 2. Preferences
     $prefsStmt = $pdo->prepare("INSERT INTO user_preferences (user_id, share_location) VALUES (?, ?)");
     $prefsStmt->execute([$userId, (int)$shareLocation]);
 
-    // 3. Device
-    if (!empty($deviceId)) {
-        $deviceStmt = $pdo->prepare("INSERT INTO user_devices (user_id, device_id, device_type, device_name, fcm_token, is_active) VALUES (?, ?, ?, ?, ?, 1)");
-        $deviceStmt->execute([$userId, $deviceId, $deviceType, $deviceName, $fcmToken]);
-    }
-
-    // 4. Location
-    if ($latitude != 0 && $longitude != 0) {
-        $locStmt = $pdo->prepare("INSERT INTO user_locations (user_id, latitude, longitude, address, is_current) VALUES (?, ?, ?, ?, 1)");
-        $locStmt->execute([$userId, $latitude, $longitude, $address]);
-    }
-
     $pdo->commit();
+
+    // 3. Device (best-effort; do not fail registration)
+    if (!empty($deviceId)) {
+        try {
+            $deviceSql = "INSERT INTO user_devices (user_id, device_id, device_type, device_name, fcm_token, is_active)
+                          VALUES (?, ?, ?, ?, ?, 1)
+                          ON DUPLICATE KEY UPDATE
+                              user_id = VALUES(user_id),
+                              device_type = VALUES(device_type),
+                              device_name = VALUES(device_name),
+                              fcm_token = VALUES(fcm_token),
+                              is_active = 1";
+            $deviceStmt = $pdo->prepare($deviceSql);
+            $deviceStmt->execute([$userId, $deviceId, $deviceType, $deviceName, $fcmToken]);
+        } catch (Exception $deviceEx) {
+            error_log("Non-fatal Device Link Error: " . $deviceEx->getMessage());
+        }
+    }
+
+    // 4. Location (best-effort; do not fail registration)
+    if ($latitude != 0 && $longitude != 0) {
+        try {
+            $locStmt = $pdo->prepare("INSERT INTO user_locations (user_id, latitude, longitude, address, is_current) VALUES (?, ?, ?, ?, 1)");
+            $locStmt->execute([$userId, $latitude, $longitude, $address]);
+        } catch (Exception $locEx) {
+            error_log("Non-fatal Location Save Error: " . $locEx->getMessage());
+        }
+    }
 
     apiResponse::success(['user_id' => (int)$userId], 'Registration successful!', 201);
 
