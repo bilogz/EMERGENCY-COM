@@ -347,6 +347,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const menuToggle = document.getElementById('menuToggle');
     const lightModeBtn = document.getElementById('lightModeBtn');
     const darkModeBtn = document.getElementById('darkModeBtn');
+    const disableAutoDarkMode = document.body && document.body.getAttribute('data-disable-auto-darkmode') === 'true';
     
     // Initialize theme
     function initTheme() {
@@ -354,10 +355,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const html = document.documentElement;
         
         // If system theme, detect preference
-        if (savedTheme === 'system') {
+        if (savedTheme === 'system' && !disableAutoDarkMode) {
             const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             html.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
             updateThemeButtons(prefersDark ? 'dark' : 'light');
+        } else if (savedTheme === 'system' && disableAutoDarkMode) {
+            // Page-level override: keep light theme when auto-system theme is disabled.
+            html.setAttribute('data-theme', 'light');
+            updateThemeButtons('light');
         } else {
             html.setAttribute('data-theme', savedTheme);
             updateThemeButtons(savedTheme);
@@ -398,7 +403,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Listen for system theme changes
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if (localStorage.getItem('theme') === 'system') {
+        if (localStorage.getItem('theme') === 'system' && !disableAutoDarkMode) {
             initTheme();
         }
     });

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $assetBase = '../ADMIN/header/';
 $current = 'alerts.php';
 ?>
@@ -284,7 +284,7 @@ $current = 'alerts.php';
                 // Set language preference if not already set or if it was English
                 if (!existingPreference || existingPreference === 'en') {
                     localStorage.setItem('preferredLanguage', detectedLang);
-                    console.log(`🌍 Auto-detected device language: ${deviceLang} -> ${detectedLang}`);
+                    console.log(`ðŸŒ Auto-detected device language: ${deviceLang} -> ${detectedLang}`);
                     return detectedLang;
                 }
             }
@@ -412,7 +412,7 @@ $current = 'alerts.php';
                         });
                     }
                     if (!data.translation_applied && data.debug) {
-                        console.warn('⚠️ Translations not applied. Check:', {
+                        console.warn('âš ï¸ Translations not applied. Check:', {
                             ai_service_available: data.debug.ai_service_available,
                             translation_attempted: data.debug.translation_attempted,
                             translation_success: data.debug.translation_success
@@ -526,13 +526,16 @@ $current = 'alerts.php';
             let severityColor = config.color;
             let severityBgColor = config.bgColor || config.color + '15';
             
-            if (alert.category === 'Emergency Alert') {
-                // EXTREME severity → red
+            const severityRaw = String(alert.severity || '').toLowerCase();
+            const isCriticalSeverity = severityRaw === 'critical' || severityRaw === 'extreme';
+
+            if (alert.category === 'Emergency Alert' || isCriticalSeverity) {
+                // EXTREME severity â†’ red
                 severityColor = '#e74c3c';
                 severityBgColor = 'rgba(231, 76, 60, 0.1)';
                 card.style.borderLeft = '4px solid #e74c3c';
             } else if (alert.category === 'Warning') {
-                // MODERATE severity → yellow
+                // MODERATE severity â†’ yellow
                 severityColor = '#f39c12';
                 severityBgColor = 'rgba(243, 156, 18, 0.1)';
                 card.style.borderLeft = '4px solid #f39c12';
@@ -548,12 +551,20 @@ $current = 'alerts.php';
             }
             
             // Determine severity/urgency based on category or severity category
-            const isUrgent = alert.category === 'Emergency Alert' || ['Bomb Threat', 'Fire', 'Earthquake'].includes(alert.category_name);
+            const isUrgent = isCriticalSeverity || alert.category === 'Emergency Alert' || ['Bomb Threat', 'Fire', 'Earthquake'].includes(alert.category_name);
             const urgencyBadge = isUrgent ? '<span class="urgent-badge" style="background: #e74c3c; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; margin-left: 0.5rem;">URGENT</span>' : '';
             
             // Read/unread indicator
             const readIndicator = isRead ? '' : '<span class="unread-indicator" style="width: 8px; height: 8px; background: #4caf50; border-radius: 50%; display: inline-block; margin-right: 0.5rem; animation: pulse 2s infinite;"></span>';
             
+            const messageText = String(alert.message || '').trim();
+            const contentText = String(alert.content || '').trim();
+            const normalizedMessage = messageText.replace(/\s+/g, ' ').trim();
+            const normalizedContent = contentText.replace(/\s+/g, ' ').trim();
+            const isDuplicateBody = !!normalizedMessage && !!normalizedContent && normalizedMessage === normalizedContent;
+            const previewRaw = messageText || contentText || '';
+            const previewText = previewRaw.length > 280 ? (previewRaw.slice(0, 277) + '...') : previewRaw;
+
             card.innerHTML = `
                 <div class="alert-header" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
                     <div class="alert-category-badge" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: ${severityBgColor}; border-radius: 20px; color: ${severityColor}; font-weight: 600; font-size: 0.875rem;">
@@ -569,8 +580,8 @@ $current = 'alerts.php';
                     </span>
                 </div>
                 <h4 style="margin: 0 0 0.5rem 0; color: #1f2937; font-size: 1.25rem; font-weight: ${isRead ? '600' : '700'};">${escapeHtml(alert.title)}</h4>
-                <p style="margin: 0 0 1rem 0; color: #4b5563; line-height: 1.6;">${escapeHtml(alert.message)}</p>
-                ${alert.content ? `<div class="alert-content" style="margin-bottom: 1rem; padding: 1rem; background: ${severityBgColor}; border-radius: 8px; color: #374151; border-left: 3px solid ${severityColor};">${formatAlertContent(alert.content)}</div>` : ''}
+                <p style="margin: 0 0 1rem 0; color: #4b5563; line-height: 1.6;">${escapeHtml(previewText).replace(/\n/g, '<br>')}</p>
+                ${(alert.content && !isDuplicateBody) ? `<div class="alert-content" style="margin-bottom: 1rem; padding: 1rem; background: ${severityBgColor}; border-radius: 8px; color: #374151; border-left: 3px solid ${severityColor};">${formatAlertContent(alert.content)}</div>` : ''}
                 <div class="alert-actions" style="display: flex; gap: 0.5rem;">
                     <button class="btn btn-primary btn-sm" onclick="viewAlertDetails(${alert.id})" data-no-translate>
                         <i class="fas fa-info-circle"></i> <span>View Details</span>
@@ -673,7 +684,7 @@ $current = 'alerts.php';
                 
                 // Call translation API
                 const apiPath = getApiPathForAlerts(`api/translate-alert-text.php`);
-                console.log(`🔄 Translating alert #${alert.id} to ${currentLang}...`);
+                console.log(`ðŸ”„ Translating alert #${alert.id} to ${currentLang}...`);
                 
                 const response = await fetch(apiPath, {
                     method: 'POST',
@@ -694,7 +705,7 @@ $current = 'alerts.php';
                 if (response.ok) {
                     try {
                         const data = JSON.parse(responseText);
-                        console.log(`🔍 Translation response for alert #${alert.id}:`, {
+                        console.log(`ðŸ” Translation response for alert #${alert.id}:`, {
                             success: data.success,
                             translations: data.translations,
                             target_language: data.target_language,
@@ -704,7 +715,7 @@ $current = 'alerts.php';
                         
                         // Log errors if any
                         if (data.errors && Object.keys(data.errors).length > 0) {
-                            console.error(`❌ Translation errors for alert #${alert.id}:`, data.errors);
+                            console.error(`âŒ Translation errors for alert #${alert.id}:`, data.errors);
                             console.error(`   Message: ${data.message || 'No details available'}`);
                         }
                         
@@ -717,13 +728,13 @@ $current = 'alerts.php';
                                 const translatedText = data.translations.title.trim();
                                 if (translatedText !== originalText && translatedText.length > 0) {
                                     titleElement.textContent = translatedText;
-                                    console.log(`  ✓ Title translated: "${originalText}" → "${translatedText}"`);
+                                    console.log(`  âœ“ Title translated: "${originalText}" â†’ "${translatedText}"`);
                                     translationsApplied++;
                                 } else {
-                                    console.warn(`  ⚠️ Title translation skipped: same as original or empty`);
+                                    console.warn(`  âš ï¸ Title translation skipped: same as original or empty`);
                                 }
                             } else if (titleElement) {
-                                console.warn(`  ⚠️ Title element found but no translation for 'title' key`);
+                                console.warn(`  âš ï¸ Title element found but no translation for 'title' key`);
                             }
                             
                             if (messageElement && data.translations.message) {
@@ -731,13 +742,13 @@ $current = 'alerts.php';
                                 const translatedText = data.translations.message.trim();
                                 if (translatedText !== originalText && translatedText.length > 0) {
                                     messageElement.textContent = translatedText;
-                                    console.log(`  ✓ Message translated: "${originalText.substring(0, 50)}..." → "${translatedText.substring(0, 50)}..."`);
+                                    console.log(`  âœ“ Message translated: "${originalText.substring(0, 50)}..." â†’ "${translatedText.substring(0, 50)}..."`);
                                     translationsApplied++;
                                 } else {
-                                    console.warn(`  ⚠️ Message translation skipped: same as original or empty`);
+                                    console.warn(`  âš ï¸ Message translation skipped: same as original or empty`);
                                 }
                             } else if (messageElement) {
-                                console.warn(`  ⚠️ Message element found but no translation for 'message' key`);
+                                console.warn(`  âš ï¸ Message element found but no translation for 'message' key`);
                             }
                             
                             if (contentElement && data.translations.content) {
@@ -763,22 +774,22 @@ $current = 'alerts.php';
                                 if (textNodes.length > 0) {
                                     textNodes[0].textContent = data.translations.content;
                                     contentElement.innerHTML = tempDiv.innerHTML;
-                                    console.log(`  ✓ Content translated`);
+                                    console.log(`  âœ“ Content translated`);
                                     translationsApplied++;
                                 }
                             } else if (contentElement) {
-                                console.warn(`  ⚠️ Content element found but no translation for 'content' key`);
+                                console.warn(`  âš ï¸ Content element found but no translation for 'content' key`);
                             }
                             
                             // Mark as translated
                             card.dataset.translated = 'true';
-                            console.log(`✓ Translated alert card #${alert.id} to ${currentLang} (${translationsApplied} translations applied)`);
+                            console.log(`âœ“ Translated alert card #${alert.id} to ${currentLang} (${translationsApplied} translations applied)`);
                         } else {
-                            console.warn(`⚠️ Translation API returned success=false for alert #${alert.id}:`, data.message || 'Unknown error');
+                            console.warn(`âš ï¸ Translation API returned success=false for alert #${alert.id}:`, data.message || 'Unknown error');
                             console.warn(`  Response data:`, data);
                         }
                     } catch (parseError) {
-                        console.error(`✗ Failed to parse translation response for alert #${alert.id}:`, parseError);
+                        console.error(`âœ— Failed to parse translation response for alert #${alert.id}:`, parseError);
                         console.error(`  Response:`, responseText.substring(0, 200));
                     }
                 } else {
@@ -787,7 +798,7 @@ $current = 'alerts.php';
                     try {
                         const errorData = JSON.parse(responseText);
                         errorMessage = errorData.message || errorData.error || errorMessage;
-                        console.error(`✗ Translation API error for alert #${alert.id}:`, errorMessage);
+                        console.error(`âœ— Translation API error for alert #${alert.id}:`, errorMessage);
                         if (errorData.error) {
                             console.error(`  Details:`, errorData.error);
                         }
@@ -796,13 +807,13 @@ $current = 'alerts.php';
                         }
                     } catch (e) {
                         // If JSON parsing fails, show raw response
-                        console.error(`✗ Translation API error for alert #${alert.id}: ${errorMessage}`);
+                        console.error(`âœ— Translation API error for alert #${alert.id}: ${errorMessage}`);
                         console.error(`  Response:`, responseText.substring(0, 300));
                     }
                 }
             } catch (error) {
                 // Log error but don't break the UI
-                console.error(`✗ Translation failed for alert #${alert.id}:`, error.message || error);
+                console.error(`âœ— Translation failed for alert #${alert.id}:`, error.message || error);
             } finally {
                 // Remove from translating set
                 translatingCards.delete(cardId);
@@ -883,23 +894,23 @@ $current = 'alerts.php';
                 const trimmed = line.trim();
                 if (!trimmed) return ''; // Skip empty lines
                 
-                // Check if line is a bullet point (starts with •, -, or *)
-                if (trimmed.startsWith('•')) {
+                // Check if line is a bullet point (starts with â€¢, -, or *)
+                if (trimmed.startsWith('â€¢')) {
                     const content = trimmed.substring(1).trim();
                     return content ? `<div style="margin: 0.4rem 0; padding-left: 1.25rem; position: relative; line-height: 1.6;">
-                        <span style="position: absolute; left: 0.5rem; color: #374151;">•</span>
+                        <span style="position: absolute; left: 0.5rem; color: #374151;">â€¢</span>
                         <span>${content}</span>
                     </div>` : '';
                 } else if (trimmed.startsWith('-') && trimmed.length > 1 && trimmed[1] === ' ') {
                     const content = trimmed.substring(2).trim();
                     return content ? `<div style="margin: 0.4rem 0; padding-left: 1.25rem; position: relative; line-height: 1.6;">
-                        <span style="position: absolute; left: 0.5rem; color: #374151;">•</span>
+                        <span style="position: absolute; left: 0.5rem; color: #374151;">â€¢</span>
                         <span>${content}</span>
                     </div>` : '';
                 } else if (trimmed.startsWith('* ') && trimmed.length > 2) {
                     const content = trimmed.substring(2).trim();
                     return content ? `<div style="margin: 0.4rem 0; padding-left: 1.25rem; position: relative; line-height: 1.6;">
-                        <span style="position: absolute; left: 0.5rem; color: #374151;">•</span>
+                        <span style="position: absolute; left: 0.5rem; color: #374151;">â€¢</span>
                         <span>${content}</span>
                     </div>` : '';
                 } else {
@@ -1071,7 +1082,7 @@ $current = 'alerts.php';
                 },
                 'es': {
                     alert: count === 1 ? 'Nueva Alerta' : 'Nuevas Alertas',
-                    update: 'Actualización en tiempo real de Quezon City'
+                    update: 'ActualizaciÃ³n en tiempo real de Quezon City'
                 },
                 'fil': {
                     alert: count === 1 ? 'Bagong Alert' : 'Bagong mga Alert',
@@ -1299,4 +1310,5 @@ $current = 'alerts.php';
     </script>
 </body>
 </html>
+
 

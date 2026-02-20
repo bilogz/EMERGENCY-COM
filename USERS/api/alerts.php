@@ -30,6 +30,68 @@ function detectMobileBrowserLanguage(): string {
     return $lang !== '' ? $lang : 'en';
 }
 
+function usersAlertsHasReadableTable(PDO $pdo, string $tableName): bool {
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
+        return false;
+    }
+    try {
+        $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($tableName));
+        if (!$exists || !$exists->fetch()) {
+            return false;
+        }
+        $pdo->query("SELECT 1 FROM {$tableName} LIMIT 1");
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function usersResolveAlertsSourceTable(PDO $pdo): string {
+    if (usersAlertsHasReadableTable($pdo, 'alerts')) {
+        return 'alerts';
+    }
+    return usersAlertsHasReadableTable($pdo, 'alerts_runtime') ? 'alerts_runtime' : 'alerts';
+}
+
+function usersAlertsTableHasColumn(PDO $pdo, string $tableName, string $column): bool {
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName) || !preg_match('/^[a-zA-Z0-9_]+$/', $column)) {
+        return false;
+    }
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM {$tableName} LIKE " . $pdo->quote($column));
+        return $stmt && $stmt->rowCount() > 0;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function normalizeMobileAlertMeta(array $alert): array {
+    $title = strtolower((string)($alert['title'] ?? ''));
+    $source = strtolower((string)($alert['source'] ?? ''));
+    $type = strtolower((string)($alert['type'] ?? ''));
+    $severity = strtolower((string)($alert['severity'] ?? ''));
+    $categoryName = (string)($alert['category_name'] ?? 'General');
+
+    if ($categoryName === '' || strtolower($categoryName) === 'general') {
+        if (strpos($title, 'earthquake') !== false || $source === 'phivolcs' || $type === 'earthquake') {
+            $categoryName = 'Earthquake';
+        } elseif (strpos($title, 'weather') !== false || $source === 'pagasa' || $type === 'weather') {
+            $categoryName = 'Weather';
+        } else {
+            $categoryName = 'General';
+        }
+    }
+
+    if (in_array($severity, ['critical', 'extreme'], true)) {
+        $alert['category'] = 'Emergency Alert';
+        $alert['category_color'] = '#e74c3c';
+        $alert['category_icon'] = 'fas fa-triangle-exclamation';
+    }
+
+    $alert['category_name'] = $categoryName;
+    return $alert;
+}
+
 // Use admin database connection to ensure we get alerts from the same source
 if (file_exists(__DIR__ . '/../../ADMIN/api/db_connect.php')) {
     require_once __DIR__ . '/../../ADMIN/api/db_connect.php';
@@ -49,6 +111,12 @@ try {
     
     // Get user_id from query parameter (mobile app sends this)
     $userId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : null;
+    $alertsTable = usersResolveAlertsSourceTable($pdo);
+    $hasCategoryTable = usersAlertsHasReadableTable($pdo, 'alert_categories');
+    $hasSeverityCol = usersAlertsTableHasColumn($pdo, $alertsTable, 'severity');
+    $hasSourceCol = usersAlertsTableHasColumn($pdo, $alertsTable, 'source');
+    $hasTypeCol = usersAlertsTableHasColumn($pdo, $alertsTable, 'type');
+    $hasCategoryCol = usersAlertsTableHasColumn($pdo, $alertsTable, 'category');
     
     // Build base query - get alerts from admin database
     $query = "
@@ -57,16 +125,32 @@ try {
             a.title,
             a.message,
             a.content,
+            " . ($hasSeverityCol ? "a.severity" : "'' AS severity") . ",
+            " . ($hasSourceCol ? "a.source" : "'' AS source") . ",
+            " . ($hasTypeCol ? "a.type" : "'' AS type") . ",
+            " . ($hasCategoryCol ? "a.category" : "'' AS category") . ",
             a.status,
             a.created_at,
             a.updated_at,
+    ";
+    if ($hasCategoryTable) {
+        $query .= "
             COALESCE(ac.name, 'General') as category_name,
             COALESCE(ac.icon, 'fa-exclamation-triangle') as category_icon,
             COALESCE(ac.color, '#95a5a6') as category_color
-        FROM alerts a
+        FROM {$alertsTable} a
         LEFT JOIN alert_categories ac ON a.category_id = ac.id
         WHERE a.status = 'active'
     ";
+    } else {
+        $query .= "
+            COALESCE(a.category, 'General') as category_name,
+            'fa-exclamation-triangle' as category_icon,
+            '#95a5a6' as category_color
+        FROM {$alertsTable} a
+        WHERE a.status = 'active'
+    ";
+    }
     
     $params = [];
     
@@ -90,12 +174,16 @@ try {
             // Build category filter
             $categoryConditions = [];
             foreach ($categories as $cat) {
-                $categoryConditions[] = "ac.name = ?";
+                $categoryConditions[] = $hasCategoryTable ? "ac.name = ?" : "a.category = ?";
                 $params[] = ucfirst(strtolower($cat));
             }
             
             if (!empty($categoryConditions)) {
-                $query .= " AND (" . implode(' OR ', $categoryConditions) . " OR ac.name IS NULL)";
+                if ($hasCategoryTable) {
+                    $query .= " AND (" . implode(' OR ', $categoryConditions) . " OR ac.name IS NULL)";
+                } else {
+                    $query .= " AND (" . implode(' OR ', $categoryConditions) . ")";
+                }
             }
         }
     }
@@ -174,6 +262,7 @@ try {
     
     // Format timestamps
     foreach ($alerts as &$alert) {
+        $alert = normalizeMobileAlertMeta($alert);
         $alert['timestamp'] = $alert['created_at'];
         $alert['time_ago'] = getTimeAgo($alert['created_at']);
     }

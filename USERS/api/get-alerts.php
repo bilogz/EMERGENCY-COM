@@ -163,6 +163,98 @@ function getTimeAgo($datetime): string {
     return date('M d, Y', $timestamp);
 }
 
+function usersHasReadableTable(PDO $pdo, string $tableName): bool {
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
+        return false;
+    }
+    try {
+        $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($tableName));
+        if (!$exists || !$exists->fetch()) {
+            return false;
+        }
+        $pdo->query("SELECT 1 FROM {$tableName} LIMIT 1");
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function usersResolveAlertsTable(PDO $pdo): string {
+    if (usersHasReadableTable($pdo, 'alerts')) {
+        return 'alerts';
+    }
+
+    // Runtime fallback used by admin degraded mode.
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS alerts_runtime (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                category_id INT(11) DEFAULT NULL,
+                incident_id INT(11) DEFAULT NULL,
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                content TEXT DEFAULT NULL,
+                category VARCHAR(100) DEFAULT NULL,
+                area VARCHAR(255) DEFAULT NULL,
+                location VARCHAR(255) DEFAULT NULL,
+                latitude DECIMAL(10,8) DEFAULT NULL,
+                longitude DECIMAL(11,8) DEFAULT NULL,
+                source VARCHAR(100) DEFAULT NULL,
+                severity VARCHAR(20) DEFAULT NULL,
+                status VARCHAR(20) DEFAULT 'active',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP(),
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
+                PRIMARY KEY (id),
+                KEY idx_status (status),
+                KEY idx_created_at (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (Throwable $e) {
+        // Ignore create failure; read attempt below will decide.
+    }
+
+    return usersHasReadableTable($pdo, 'alerts_runtime') ? 'alerts_runtime' : 'alerts';
+}
+
+function usersTableHasColumn(PDO $pdo, string $tableName, string $column): bool {
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName) || !preg_match('/^[a-zA-Z0-9_]+$/', $column)) {
+        return false;
+    }
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM {$tableName} LIKE " . $pdo->quote($column));
+        return $stmt && $stmt->rowCount() > 0;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function usersNormalizeAlertMeta(array $alert): array {
+    $title = strtolower((string)($alert['title'] ?? ''));
+    $source = strtolower((string)($alert['source'] ?? ''));
+    $type = strtolower((string)($alert['type'] ?? ''));
+    $severity = strtolower((string)($alert['severity'] ?? ''));
+    $categoryName = (string)($alert['category_name'] ?? 'General');
+
+    if ($categoryName === '' || strtolower($categoryName) === 'general') {
+        if (strpos($title, 'earthquake') !== false || $source === 'phivolcs' || $type === 'earthquake') {
+            $categoryName = 'Earthquake';
+        } elseif (strpos($title, 'weather') !== false || $source === 'pagasa' || $type === 'weather') {
+            $categoryName = 'Weather';
+        } else {
+            $categoryName = 'General';
+        }
+    }
+
+    if (in_array($severity, ['critical', 'extreme'], true)) {
+        $alert['category'] = 'Emergency Alert';
+        $alert['category_color'] = '#e74c3c';
+        $alert['category_icon'] = 'fas fa-triangle-exclamation';
+    }
+
+    $alert['category_name'] = $categoryName;
+    return $alert;
+}
+
 // Database connection
 try {
     if (file_exists(__DIR__ . '/../../ADMIN/api/db_connect.php')) {
@@ -197,6 +289,12 @@ $targetLanguage = resolveTargetLanguage($pdo);
 $translationHelperAvailable = false;
 $translationAttempted = false;
 $translationSuccessCount = 0;
+$alertsTable = usersResolveAlertsTable($pdo);
+$hasCategoryTable = usersHasReadableTable($pdo, 'alert_categories');
+$hasSeverityCol = usersTableHasColumn($pdo, $alertsTable, 'severity');
+$hasSourceCol = usersTableHasColumn($pdo, $alertsTable, 'source');
+$hasTypeCol = usersTableHasColumn($pdo, $alertsTable, 'type');
+$hasCategoryCol = usersTableHasColumn($pdo, $alertsTable, 'category');
 
 // Base query
 $query = "
@@ -205,21 +303,41 @@ $query = "
         a.title,
         a.message,
         a.content,
+        " . ($hasSeverityCol ? "a.severity" : "'' AS severity") . ",
+        " . ($hasSourceCol ? "a.source" : "'' AS source") . ",
+        " . ($hasTypeCol ? "a.type" : "'' AS type") . ",
+        " . ($hasCategoryCol ? "a.category" : "'' AS category") . ",
         a.status,
         a.created_at,
         a.updated_at,
+";
+if ($hasCategoryTable) {
+    $query .= "
         COALESCE(ac.name, 'General') as category_name,
         COALESCE(ac.icon, 'fa-exclamation-triangle') as category_icon,
         COALESCE(ac.color, '#95a5a6') as category_color
-    FROM alerts a
+    FROM {$alertsTable} a
     LEFT JOIN alert_categories ac ON a.category_id = ac.id
     WHERE a.status = :status
 ";
+} else {
+    $query .= "
+        COALESCE(a.category, 'General') as category_name,
+        'fa-exclamation-triangle' as category_icon,
+        '#95a5a6' as category_color
+    FROM {$alertsTable} a
+    WHERE a.status = :status
+";
+}
 
 $params = [':status' => $status];
 
 if ($category) {
-    $query .= " AND (ac.name = :category OR a.category = :category)";
+    if ($hasCategoryTable) {
+        $query .= " AND (ac.name = :category OR a.category = :category)";
+    } else {
+        $query .= " AND a.category = :category";
+    }
     $params[':category'] = $category;
 }
 
@@ -313,6 +431,7 @@ if ($translationHelper && $targetLanguage !== 'en' && !empty($alerts)) {
 
 // Format timestamps
 foreach ($alerts as &$alert) {
+    $alert = usersNormalizeAlertMeta($alert);
     $alert['timestamp'] = $alert['created_at'] ?? '';
     $alert['time_ago'] = getTimeAgo($alert['created_at'] ?? '');
 }

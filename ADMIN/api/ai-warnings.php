@@ -729,12 +729,7 @@ function sendTestWarning() {
     $content = "This is a test warning from the AI Auto Warning System. If you receive this, the system is working correctly.";
 
     try {
-        // Insert into automated_warnings
-        $stmt = $pdo->prepare("INSERT INTO automated_warnings
-            (source, type, title, content, severity, status)
-            VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute(['ai', 'test', $title, $content, 'high', 'published']);
-        $warningId = $pdo->lastInsertId();
+        $warningId = insertAutomatedWarningRecord($pdo, 'ai', 'test', $title, $content, 'high', 'published');
 
         // Log admin activity
         if ($adminId && function_exists('logAdminActivity')) {
@@ -802,19 +797,15 @@ function checkAndSendWarnings() {
             continue;
         }
 
-        // Insert into automated_warnings
-        $stmt = $pdo->prepare("INSERT INTO automated_warnings
-            (source, type, title, content, severity, status)
-            VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([
+        $warningId = insertAutomatedWarningRecord(
+            $pdo,
             'ai',
             $warning['type'],
             $warning['title'],
             $warning['content'],
             $warning['severity'],
             'published'
-        ]);
-        $warningId = $pdo->lastInsertId();
+        );
         $alertIds[] = $warningId;
 
         // Create alert entry for translation
@@ -837,9 +828,13 @@ function checkAndSendWarnings() {
         ]);
         $alertId = $pdo->lastInsertId();
 
-        // Send notifications to subscribed users
-        $sent = sendNotificationsToSubscribers($alertId, $warning, $settings);
-        $sentCount += $sent;
+        // Critical weather/earthquake: broadcast to all active citizens.
+        if (shouldBroadcastCriticalToAllCitizens($warning)) {
+            $sentCount += queueCriticalWarningToAllCitizens($warning, $alertId, $settings, $adminId);
+        } else {
+            // Non-critical or non-weather/earthquake: subscriber-only distribution.
+            $sentCount += sendNotificationsToSubscribers($alertId, $warning, $settings);
+        }
     }
 
     // Log activity if warnings were generated
@@ -2006,5 +2001,200 @@ function checkFloodingLandslideRisks($settings) {
     }
 
     return $warnings;
+}
+
+/**
+ * Insert automated warning into primary table, with runtime fallback when primary is corrupted/unavailable.
+ */
+function insertAutomatedWarningRecord(PDO $pdo, string $source, string $type, string $title, string $content, string $severity, string $status): int {
+    $table = resolveAutomatedWarningsWriteTable($pdo);
+    $stmt = $pdo->prepare("
+        INSERT INTO {$table} (source, type, title, content, severity, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ");
+    $stmt->execute([$source, $type, $title, $content, $severity, $status]);
+    return (int)$pdo->lastInsertId();
+}
+
+function resolveAutomatedWarningsWriteTable(PDO $pdo): string {
+    if (ensureAutomatedWarningsWriteTable($pdo, 'automated_warnings')) {
+        return 'automated_warnings';
+    }
+
+    ensureAutomatedWarningsWriteTable($pdo, 'automated_warnings_runtime');
+    return 'automated_warnings_runtime';
+}
+
+function ensureAutomatedWarningsWriteTable(PDO $pdo, string $tableName): bool {
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
+        return false;
+    }
+
+    try {
+        $pdo->query("SELECT 1 FROM {$tableName} LIMIT 1");
+        return true;
+    } catch (PDOException $e) {
+        // Continue to create/recreate below.
+    }
+
+    $sql = "
+        CREATE TABLE IF NOT EXISTS {$tableName} (
+            id INT(11) NOT NULL AUTO_INCREMENT,
+            source VARCHAR(50) NOT NULL COMMENT 'pagasa, phivolcs, ai',
+            type VARCHAR(100) DEFAULT NULL,
+            title VARCHAR(255) NOT NULL,
+            content TEXT NOT NULL,
+            severity VARCHAR(20) DEFAULT 'medium',
+            status VARCHAR(20) DEFAULT 'pending',
+            received_at DATETIME DEFAULT CURRENT_TIMESTAMP(),
+            published_at DATETIME DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_source (source),
+            KEY idx_status (status),
+            KEY idx_received_at (received_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ";
+
+    try {
+        $pdo->exec($sql);
+        return true;
+    } catch (PDOException $e) {
+        error_log("Failed to ensure {$tableName}: " . $e->getMessage());
+        return false;
+    }
+}
+
+function shouldBroadcastCriticalToAllCitizens(array $warning): bool {
+    $severity = strtolower(trim((string)($warning['severity'] ?? '')));
+    if ($severity !== 'critical') {
+        return false;
+    }
+
+    $type = strtolower(trim((string)($warning['type'] ?? '')));
+    $autoAllTypes = [
+        'earthquake', 'tsunami',
+        'weather', 'typhoon', 'heavy_rain', 'strong_winds', 'thunderstorm', 'flooding', 'landslide'
+    ];
+    return in_array($type, $autoAllTypes, true);
+}
+
+function ensureNotificationQueueTableForAI(PDO $pdo): void {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS notification_queue (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            log_id BIGINT UNSIGNED NOT NULL,
+            recipient_id BIGINT UNSIGNED NULL,
+            recipient_type VARCHAR(40) NOT NULL DEFAULT 'unknown',
+            recipient_value VARCHAR(255) NOT NULL DEFAULT '',
+            channel VARCHAR(20) NOT NULL DEFAULT 'push',
+            title VARCHAR(255) NOT NULL DEFAULT '',
+            message TEXT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            delivery_status VARCHAR(20) NULL,
+            error_message TEXT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            processed_at DATETIME NULL,
+            delivered_at DATETIME NULL,
+            INDEX idx_queue_status_created (status, created_at),
+            INDEX idx_queue_log_id (log_id),
+            INDEX idx_queue_channel_status (channel, status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
+
+function queueCriticalWarningToAllCitizens(array $warning, int $alertId, array $settings, $adminId = null): int {
+    global $pdo;
+    if (!isset($pdo) || !$pdo) {
+        return 0;
+    }
+
+    ensureNotificationQueueTableForAI($pdo);
+
+    $channels = explode(',', (string)($settings['ai_channels'] ?? 'sms,email,push,pa'));
+    $channels = array_values(array_intersect(array_map('trim', array_map('strtolower', $channels)), ['sms', 'email', 'push', 'pa']));
+    if (empty($channels)) {
+        $channels = ['sms', 'email', 'push', 'pa'];
+    }
+
+    $title = (string)($warning['title'] ?? 'Critical Alert');
+    $message = formatCriticalBroadcastMessage($warning);
+    $severity = strtolower((string)($warning['severity'] ?? 'critical'));
+
+    $recipientsStmt = $pdo->query("
+        SELECT u.id, u.email, u.phone, d.fcm_token
+        FROM users u
+        LEFT JOIN user_devices d ON d.user_id = u.id AND d.is_active = 1
+        WHERE u.status = 'active'
+    ");
+    $recipients = $recipientsStmt ? $recipientsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
+    $logStmt = $pdo->prepare("
+        INSERT INTO notification_logs (channel, message, recipients, priority, status, sent_at, sent_by, ip_address)
+        VALUES (?, ?, 'all_active_citizens', ?, 'pending', NOW(), ?, ?)
+    ");
+    $logStmt->execute([
+        implode(',', $channels),
+        $message,
+        $severity,
+        $adminId ? ('admin_' . $adminId) : 'ai_system',
+        $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'
+    ]);
+    $logId = (int)$pdo->lastInsertId();
+
+    $queued = 0;
+    foreach ($recipients as $recipient) {
+        $recipientId = (int)($recipient['id'] ?? 0);
+        foreach ($channels as $channel) {
+            $recipientType = '';
+            $recipientValue = '';
+            if ($channel === 'sms' && !empty($recipient['phone'])) {
+                $recipientType = 'phone';
+                $recipientValue = (string)$recipient['phone'];
+            } elseif ($channel === 'email' && !empty($recipient['email'])) {
+                $recipientType = 'email';
+                $recipientValue = (string)$recipient['email'];
+            } elseif ($channel === 'push' && !empty($recipient['fcm_token'])) {
+                $recipientType = 'fcm_token';
+                $recipientValue = (string)$recipient['fcm_token'];
+            } else {
+                continue;
+            }
+
+            $qStmt = $pdo->prepare("
+                INSERT INTO notification_queue (log_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+            ");
+            $qStmt->execute([$logId, $recipientId, $recipientType, $recipientValue, $channel, $title, $message]);
+            $queued++;
+        }
+    }
+
+    if (in_array('pa', $channels, true)) {
+        $qStmt = $pdo->prepare("
+            INSERT INTO notification_queue (log_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
+            VALUES (?, NULL, 'system', 'pa_system', 'pa', ?, ?, 'pending')
+        ");
+        $qStmt->execute([$logId, $title, $message]);
+        $queued++;
+    }
+
+    $pdo->prepare("UPDATE notification_logs SET status = 'sent' WHERE id = ?")->execute([$logId]);
+    return $queued;
+}
+
+function formatCriticalBroadcastMessage(array $warning): string {
+    $type = strtolower(trim((string)($warning['type'] ?? 'general')));
+    $content = trim((string)($warning['content'] ?? 'Critical conditions detected.'));
+    $header = "EMERGENCY BULLETIN\n";
+
+    if (in_array($type, ['earthquake', 'tsunami'], true)) {
+        $header .= "Type: Earthquake Emergency\n";
+        $actions = "Actions: DROP, COVER, HOLD; after shaking, evacuate unsafe structures and monitor official advisories.";
+    } else {
+        $header .= "Type: Severe Weather Emergency\n";
+        $actions = "Actions: avoid flood-prone zones, keep emergency kit ready, and follow LGU evacuation guidance.";
+    }
+
+    return $header . "\n" . $content . "\n\n" . $actions;
 }
 
