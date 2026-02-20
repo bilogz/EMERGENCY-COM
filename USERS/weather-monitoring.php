@@ -97,12 +97,7 @@ $pageTitle = 'Weather Monitoring';
     
 </head>
 <body class="user-admin-ui">
-    <?php include 'includes/sidebar.php'; ?>
-    <?php include 'includes/admin-style-header.php'; ?>
-
-    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
-        <i class="fas fa-bars"></i>
-    </button>
+    <?php include 'includes/user-global-header.php'; ?>
     
     <div class="main-content">
         <div class="main-container">

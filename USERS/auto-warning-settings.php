@@ -4,7 +4,8 @@
  * Allows users to control AI-powered automatic warnings
  */
 
-session_start();
+// Include centralized session configuration - MUST be first
+require_once __DIR__ . '/../session-config.php';
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {

@@ -1,4 +1,7 @@
 <?php
+// Include centralized session configuration - MUST be first
+require_once __DIR__ . '/../session-config.php';
+
 $assetBase = '../ADMIN/header/';
 ?>
 <!DOCTYPE html>
@@ -13,6 +16,7 @@ $assetBase = '../ADMIN/header/';
     <link rel="stylesheet" href="../ADMIN/sidebar/css/global.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/sidebar.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/content.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/admin-header.css">
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -99,14 +103,10 @@ $assetBase = '../ADMIN/header/';
         }
     </style>
 </head>
-<body>
-    <?php include 'includes/sidebar.php'; ?>
+<body class="user-admin-header">
+    <?php include 'includes/user-global-header.php'; ?>
 
-    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
-        <i class="fas fa-bars"></i>
-    </button>
-
-    <main class="main-content">
+    <main class="main-content" style="padding-top: 60px;">
         <div class="main-container">
             <div class="sub-container content-main">
                 <a href="javascript:history.back()" class="back-btn">

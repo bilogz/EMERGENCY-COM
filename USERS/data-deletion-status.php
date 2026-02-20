@@ -44,6 +44,7 @@ if ($confirmationCode) {
     <link rel="stylesheet" href="../ADMIN/sidebar/css/global.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/sidebar.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/content.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/admin-header.css">
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -124,12 +125,8 @@ if ($confirmationCode) {
         }
     </style>
 </head>
-<body>
-    <?php include 'includes/sidebar.php'; ?>
-
-    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
-        <i class="fas fa-bars"></i>
-    </button>
+<body class="user-admin-header">
+    <?php include 'includes/user-global-header.php'; ?>
 
     <main class="main-content">
         <div class="main-container">

@@ -1,4 +1,7 @@
 <?php
+// Include centralized session configuration - MUST be first
+require_once __DIR__ . '/../session-config.php';
+
 $assetBase = '../ADMIN/header/';
 $current = 'weather-map.php';
 ?>
@@ -15,6 +18,7 @@ $current = 'weather-map.php';
     <link rel="stylesheet" href="../ADMIN/sidebar/css/global.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/sidebar.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/content.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/admin-header.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/buttons.css">
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -57,14 +61,10 @@ $current = 'weather-map.php';
         })();
     </script>
 </head>
-<body>
-    <?php include 'includes/sidebar.php'; ?>
+<body class="user-admin-header">
+    <?php include 'includes/user-global-header.php'; ?>
 
-    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
-        <i class="fas fa-bars"></i>
-    </button>
-
-    <main class="main-content">
+    <main class="main-content" style="padding-top: 60px;">
         <div class="main-container">
             <div class="sub-container weather-map-card">
                 <div class="weather-map-header">

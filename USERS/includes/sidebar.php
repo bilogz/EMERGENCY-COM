@@ -15,14 +15,14 @@ if (!isset($isRootContext)) {
 $linkPrefix = $isRootContext ? 'USERS/' : '';
 $current = basename($_SERVER['PHP_SELF']);
 
-// Check if user is logged in and is a registered user (not guest)
-// Safely start session only if not already started and headers not sent
-if (session_status() === PHP_SESSION_NONE) {
-    if (!headers_sent()) {
+// Include centralized session configuration
+$sessionConfigPath = $isRootContext ? __DIR__ . '/../../session-config.php' : __DIR__ . '/../../session-config.php';
+if (file_exists($sessionConfigPath)) {
+    require_once $sessionConfigPath;
+} else {
+    // Fallback: start session manually
+    if (session_status() === PHP_SESSION_NONE) {
         session_start();
-    } else {
-        // Headers already sent, try to start session silently
-        @session_start();
     }
 }
 $isLoggedIn = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true;
@@ -174,7 +174,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
             </div>
         </div>
     <?php else: ?>
-        <a href="<?= $basePath ?><?= $linkPrefix ?>login.php?method=facebook" class="auth-icon-link" title="Login / Sign Up">
+        <a href="<?= $basePath ?><?= $linkPrefix ?>login.php" class="auth-icon-link" title="Login / Sign Up">
             <i class="fas fa-user-circle"></i>
         </a>
     <?php endif; ?>

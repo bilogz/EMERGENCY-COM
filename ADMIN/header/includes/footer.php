@@ -65,8 +65,8 @@
                     <ul class="footer-links">
                         <li><a href="#" class="footer-link">About Us</a></li>
                         <li><a href="#" class="footer-link">Careers</a></li>
-                        <li><a href="#" class="footer-link">Privacy Policy</a></li>
-                        <li><a href="#" class="footer-link">Terms of Service</a></li>
+                        <li><a href="../USERS/privacy-policy.php" class="footer-link">Privacy Policy</a></li>
+                        <li><a href="../USERS/terms-of-service.php" class="footer-link">Terms of Service</a></li>
                     </ul>
                 </div>
             </div>
@@ -78,9 +78,9 @@
                 </div>
                 
                 <div class="footer-legal">
-                    <a href="#" class="footer-link">Privacy Policy</a>
-                    <a href="#" class="footer-link">Terms of Service</a>
-                    <a href="#" class="footer-link">Cookie Policy</a>
+                    <a href="../USERS/privacy-policy.php" class="footer-link">Privacy Policy</a>
+                    <a href="../USERS/terms-of-service.php" class="footer-link">Terms of Service</a>
+                    <a href="../USERS/cookie-policy.php" class="footer-link">Cookie Policy</a>
                 </div>
                 
                 <div class="theme-toggle">

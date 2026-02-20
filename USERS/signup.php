@@ -1,4 +1,7 @@
 <?php
+// Include centralized session configuration
+require_once __DIR__ . '/../session-config.php';
+
 $assetBase = '../ADMIN/header/';
 ?>
 <!DOCTYPE html>
@@ -14,6 +17,7 @@ $assetBase = '../ADMIN/header/';
     <link rel="stylesheet" href="../ADMIN/sidebar/css/global.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/sidebar.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/content.css">
+    <link rel="stylesheet" href="../ADMIN/sidebar/css/admin-header.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/buttons.css">
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -95,14 +99,10 @@ $assetBase = '../ADMIN/header/';
         });
     </script>
 </head>
-<body>
-    <?php include 'includes/sidebar.php'; ?>
+<body class="user-admin-header">
+    <?php include 'includes/user-global-header.php'; ?>
 
-    <button class="sidebar-toggle-btn" aria-label="Toggle menu" onclick="window.sidebarToggle()" data-no-translate>
-        <i class="fas fa-bars"></i>
-    </button>
-
-    <main class="main-content">
+    <main class="main-content" style="padding-top: 60px;">
         <div class="main-container">
             <div class="sub-container content-main">
                 <section class="page-content">
@@ -235,14 +235,6 @@ $assetBase = '../ADMIN/header/';
                                     </svg>
                                 </span>
                                 <span class="google-text">Google</span>
-                            </button>
-
-                            <!-- Facebook Sign Up -->
-                            <button type="button" id="facebookSignupBtn" class="btn btn-facebook" data-no-translate style="flex: 1; min-width: 200px;">
-                                <span class="facebook-logo-wrapper">
-                                    <i class="fab fa-facebook-f"></i>
-                                </span>
-                                <span class="facebook-text">Facebook</span>
                             </button>
                         </div>
 
@@ -636,130 +628,6 @@ $assetBase = '../ADMIN/header/';
                     console.log('Button opacity:', btn.style.opacity);
                 }
             }, 1000);
-        });
-    </script>
-
-    <!-- Facebook Sign Up Script -->
-    <script>
-        // Facebook OAuth Sign Up
-        document.addEventListener('DOMContentLoaded', function() {
-            const facebookSignupBtn = document.getElementById('facebookSignupBtn');
-            if (!facebookSignupBtn) return;
-
-            // Load Facebook App ID from config
-            fetch('api/get-facebook-config.php')
-                .then(res => res.json())
-                .then(data => {
-                    if (data && data.success && data.app_id) {
-                        window.facebookAppId = data.app_id;
-                        console.log('Facebook App ID loaded successfully');
-                    } else {
-                        console.error('Facebook App ID not found in config');
-                        showFacebookButtonError(data.message || 'Facebook OAuth is not configured.');
-                    }
-                })
-                .catch(err => {
-                    console.error('Failed to load Facebook config:', err);
-                    showFacebookButtonError('Unable to load Facebook sign up configuration.');
-                });
-
-            function showFacebookButtonError(message) {
-                console.warn('Facebook OAuth:', message);
-                const btn = document.getElementById('facebookSignupBtn');
-                if (btn) {
-                    btn.style.opacity = '0.6';
-                    btn.title = message + ' Click to retry.';
-                    btn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Facebook Sign Up Unavailable',
-                            text: message,
-                            confirmButtonText: 'OK'
-                        });
-                    });
-                }
-            }
-
-            const handleFacebookSignup = () => {
-                if (!window.facebookAppId) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Configuration Error',
-                        text: 'Facebook sign up is not properly configured. Please try again later.'
-                    });
-                    return;
-                }
-
-                // Build Facebook OAuth URL
-                const redirectUri = window.location.origin + '/EMERGENCY-COM/USERS/api/facebook-callback.php';
-                const scope = 'email,public_profile';
-                const state = btoa(JSON.stringify({
-                    timestamp: Date.now(),
-                    source: 'signup'
-                }));
-
-                // Store state in session storage for verification
-                sessionStorage.setItem('facebook_oauth_state', state);
-
-                const fbAuthUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
-                    `client_id=${window.facebookAppId}` +
-                    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-                    `&scope=${encodeURIComponent(scope)}` +
-                    `&state=${encodeURIComponent(state)}` +
-                    `&response_type=code`;
-
-                // Redirect to Facebook OAuth
-                window.location.href = fbAuthUrl;
-            };
-
-            facebookSignupBtn.addEventListener('click', handleFacebookSignup);
-
-            // Check for Facebook errors in URL
-            const queryParams = new URLSearchParams(window.location.search);
-            const fbError = queryParams.get('error');
-            if (fbError === 'facebook_denied') {
-                Swal.fire({
-                    icon: 'info',
-                    title: 'Sign Up Cancelled',
-                    text: 'You cancelled the Facebook sign up. Please try again or use another sign up method.'
-                });
-            } else if (fbError === 'facebook_auth_failed') {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Sign Up Failed',
-                    text: 'Facebook authentication failed. Please try again or use another sign up method.'
-                });
-            }
-
-            // Check if this is a Facebook signup completion
-            const facebookSignup = queryParams.get('facebook_signup');
-            if (facebookSignup === '1') {
-                // Pre-fill form with Facebook data if available
-                fetch('api/get-facebook-session-data.php')
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success && data.user) {
-                            const nameInput = document.getElementById('full_name');
-                            const emailInput = document.getElementById('email');
-                            
-                            if (nameInput && data.user.name) {
-                                nameInput.value = data.user.name;
-                            }
-                            if (emailInput && data.user.email) {
-                                emailInput.value = data.user.email;
-                            }
-                            
-                            Swal.fire({
-                                icon: 'info',
-                                title: 'Complete Your Profile',
-                                text: 'Please fill in the remaining fields to complete your registration.',
-                                confirmButtonText: 'OK'
-                            });
-                        }
-                    })
-                    .catch(err => console.error('Error loading Facebook session data:', err));
-            }
         });
     </script>
 

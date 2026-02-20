@@ -4,7 +4,9 @@
  * Handles Google OAuth authentication flow
  */
 
-session_start();
+// Include centralized session configuration
+require_once __DIR__ . '/../../session-config.php';
+
 header('Content-Type: application/json');
 
 // Include DB connection - try USERS first, then ADMIN
@@ -123,13 +125,13 @@ try {
                 }
             }
             
-            // Set session variables
-            session_start(); // Ensure session is started
+            // Set session variables - session already started by session-config.php
             $_SESSION['user_logged_in'] = true;
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['user_name'] = $user['name'];
             $_SESSION['user_email'] = $user['email'];
             $_SESSION['user_phone'] = $user['phone'] ?? null;
+            $_SESSION['user_picture'] = $picture;  // Save Google profile picture
             $_SESSION['user_type'] = 'registered';
             $_SESSION['login_method'] = 'google';
             $_SESSION['user_token'] = bin2hex(random_bytes(16));
@@ -238,13 +240,13 @@ try {
                 }
             }
             
-            // Set session variables
-            session_start(); // Ensure session is started
+            // Set session variables - session already started by session-config.php
             $_SESSION['user_logged_in'] = true;
             $_SESSION['user_id'] = $newUserId;
             $_SESSION['user_name'] = $name;
             $_SESSION['user_email'] = $email;
             $_SESSION['user_phone'] = null;
+            $_SESSION['user_picture'] = $picture;  // Save Google profile picture
             $_SESSION['user_type'] = 'registered';
             $_SESSION['login_method'] = 'google';
             $_SESSION['user_token'] = bin2hex(random_bytes(16));

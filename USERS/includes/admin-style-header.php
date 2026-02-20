@@ -11,11 +11,17 @@ if (session_status() === PHP_SESSION_NONE) {
 $isLoggedIn = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true;
 $currentPath = str_replace('\\', '/', $_SERVER['PHP_SELF'] ?? '');
 $isUsersPage = strpos($currentPath, '/USERS/') !== false;
-$loginHref = $isUsersPage ? 'login.php?method=facebook' : 'USERS/login.php?method=facebook';
+$loginHref = $isUsersPage ? 'login.php' : 'USERS/login.php';
 
 $userName = $_SESSION['user_name'] ?? ($isLoggedIn ? 'User' : 'Guest');
 $userRole = $isLoggedIn ? 'Resident' : 'Sign in';
-$avatarUrl = 'https://ui-avatars.com/api/?name=' . urlencode($userName) . '&background=4c8a89&color=fff&size=128';
+
+// Use profile picture from OAuth if available, otherwise generate avatar
+if ($isLoggedIn && !empty($_SESSION['user_picture'])) {
+    $avatarUrl = $_SESSION['user_picture'];
+} else {
+    $avatarUrl = 'https://ui-avatars.com/api/?name=' . urlencode($userName) . '&background=4c8a89&color=fff&size=128';
+}
 ?>
 
 <header class="admin-header">
@@ -70,7 +76,7 @@ $avatarUrl = 'https://ui-avatars.com/api/?name=' . urlencode($userName) . '&back
             <i class="fas fa-chevron-down dropdown-icon"></i>
         </div>
         <?php else: ?>
-        <a class="user-profile user-profile-login-link" href="<?php echo htmlspecialchars($loginHref); ?>" title="Login with Facebook or enter details">
+        <a class="user-profile user-profile-login-link" href="<?php echo htmlspecialchars($loginHref); ?>" title="Login">
             <div class="user-info">
                 <div class="user-name"><?php echo htmlspecialchars($userName); ?></div>
                 <div class="user-role"><?php echo htmlspecialchars($userRole); ?></div>

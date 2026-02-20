@@ -1,5 +1,9 @@
 <?php
 header('Content-Type: application/json');
+
+// Include centralized session configuration
+require_once __DIR__ . '/../../session-config.php';
+
 require_once 'db_connect.php';
 
 $response = ['success' => false, 'message' => ''];
@@ -47,8 +51,7 @@ try {
         error_log("Name mismatch for phone $phone: DB='{$user['full_name']}' vs Input='$name'");
     }
     
-    // Login successful - create session
-    session_start();
+    // Login successful - session already started by session-config.php
     $_SESSION['user_id'] = $user['user_id'];
     $_SESSION['user_name'] = $user['full_name'] ?? 'User';
     $_SESSION['phone'] = $phone;

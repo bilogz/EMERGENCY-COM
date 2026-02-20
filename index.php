@@ -1,6 +1,9 @@
 <?php
 // Dedicated Home page for the user portal
 $assetBase = 'ADMIN/header/';
+
+// Include centralized session configuration
+require_once __DIR__ . '/session-config.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
