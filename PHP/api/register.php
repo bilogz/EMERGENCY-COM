@@ -82,7 +82,7 @@ try {
         $pdo->rollBack();
     }
     error_log("Registration DB Error: " . $e->getMessage());
-    apiResponse::error('A database error occurred during registration.', 500, $e->getMessage());
+    apiResponse::error('DB Error: ' . $e->getMessage(), 500);
 } catch (Exception $e) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
