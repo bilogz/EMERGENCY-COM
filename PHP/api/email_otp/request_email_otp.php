@@ -19,27 +19,33 @@ if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/@gmai
 try {
     $pdo->beginTransaction();
 
-    // expire old pending OTPs
-    $exp = $pdo->prepare("UPDATE otp_verifications SET status='expired' WHERE status='pending' AND expires_at <= NOW()");
+    // Expire stale signup OTPs using DB time.
+    $exp = $pdo->prepare("
+        UPDATE otp_verifications
+        SET status='expired'
+        WHERE status='pending'
+          AND purpose='signup'
+          AND expires_at <= NOW()
+    ");
     $exp->execute();
 
     $cooldown = 60;
 
     // simple resend limit: 60s per email/purpose
     $last = $pdo->prepare("
-        SELECT created_at
+        SELECT TIMESTAMPDIFF(SECOND, created_at, NOW()) AS elapsed_seconds
         FROM otp_verifications
         WHERE email = ? AND purpose = 'signup'
         ORDER BY id DESC
         LIMIT 1
     ");
     $last->execute([$email]);
-    $lastCreated = $last->fetchColumn();
+    $elapsedSeconds = $last->fetchColumn();
 
-    if ($lastCreated) {
-        $elapsed = time() - strtotime($lastCreated);
+    if ($elapsedSeconds !== false && $elapsedSeconds !== null) {
+        $elapsed = (int)$elapsedSeconds;
         if ($elapsed < $cooldown) {
-            $retryAfter = $cooldown - $elapsed;
+            $retryAfter = max(1, $cooldown - $elapsed);
             $pdo->rollBack();
             if (ob_get_length()) {
                 ob_clean();
@@ -65,15 +71,14 @@ try {
     $inv->execute([$email]);
 
     $otp = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-    $expiresAt = date('Y-m-d H:i:s', time() + 300); // 5 mins
 
     $ins = $pdo->prepare("
         INSERT INTO otp_verifications
             (email, otp_code, purpose, status, expires_at, attempts, ip_address, created_at)
         VALUES
-            (?, ?, 'signup', 'pending', ?, 0, ?, NOW())
+            (?, ?, 'signup', 'pending', DATE_ADD(NOW(), INTERVAL 5 MINUTE), 0, ?, NOW())
     ");
-    $ins->execute([$email, $otp, $expiresAt, $ip]);
+    $ins->execute([$email, $otp, $ip]);
 
     $pdo->commit();
 
