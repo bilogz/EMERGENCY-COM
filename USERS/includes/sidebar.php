@@ -184,7 +184,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
     <div class="chat-modal-content">
         <div class="chat-modal-header">
             <h3 data-translate="chat.title">Quick Assistance</h3>
-            <button class="chat-close-btn" id="chatCloseBtn" aria-label="Close chat">
+            <button class="chat-close-btn" id="chatModalCloseBtn" aria-label="Close chat">
                 <i class="fas fa-times"></i>
             </button>
         </div>
@@ -204,12 +204,30 @@ include __DIR__ . '/guest-monitoring-notice.php';
                     <div class="chat-form-group">
                         <label for="userLocationSearch"><span data-translate="chat.location">Location</span> <span class="required-asterisk">*</span></label>
                         <div class="searchable-select-wrapper">
-                            <input type="text" id="userLocationSearch" class="chat-form-input searchable-select-input" data-translate-placeholder="form.select" placeholder="Search barangay..." autocomplete="off" aria-label="Location">
+                            <input type="text" id="userLocationSearch" class="chat-form-input searchable-select-input" data-translate-placeholder="form.select" placeholder="Search barangay, type manually, or use map..." autocomplete="off" aria-label="Location">
                             <input type="hidden" id="userLocationInput" name="location" required>
                             <div class="searchable-select-dropdown" id="locationDropdown" style="display: none;">
                                 <div class="searchable-select-list">
                                 </div>
                             </div>
+                        </div>
+                        <div class="chat-location-tools">
+                            <button type="button" class="chat-location-tool-btn" id="chatUseCurrentLocationBtn">
+                                <i class="fas fa-location-crosshairs"></i> Use Current Location
+                            </button>
+                            <button type="button" class="chat-location-tool-btn" id="chatPinOnMapBtn">
+                                <i class="fas fa-map-pin"></i> Pin on Map
+                            </button>
+                        </div>
+                        <div class="chat-location-map-wrap" id="chatLocationMapWrap" style="display: none;">
+                            <div class="chat-location-map-header">
+                                <span><i class="fas fa-map-marked-alt"></i> Select Location on Map</span>
+                                <button type="button" class="chat-location-tool-btn compact" id="chatHideMapBtn">
+                                    Hide Map
+                                </button>
+                            </div>
+                            <div id="chatLocationMap" class="chat-location-map"></div>
+                            <small id="chatLocationMapHint" class="chat-location-map-hint">Click map to pin your location.</small>
                         </div>
                     </div>
                     <div class="chat-form-group">
@@ -246,7 +264,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
                 <div class="chat-input-row" id="chatForm">
                     <input type="text" id="chatInput" placeholder="Type your message..." autocomplete="off">
                     <button type="button" id="chatSendBtn" class="btn btn-primary">Send</button>
-                    <button type="button" id="chatCloseBtn" class="btn btn-secondary" style="margin-left: 0.5rem;" title="Close this conversation">
+                    <button type="button" id="chatEndConversationBtn" class="btn btn-secondary" style="margin-left: 0.5rem;" title="Close this conversation">
                         <i class="fas fa-times"></i> Close Chat
                     </button>
                     <button type="button" id="startNewConversationBtn" class="btn btn-primary" style="margin-left: 0.5rem; display: none;" title="Start a new conversation">
@@ -269,7 +287,7 @@ include __DIR__ . '/guest-monitoring-notice.php';
         </div>
         <div class="conversation-closed-modal-body">
             <p id="conversationClosedMessage">
-                The chat was closed by the administrator. If there's another concern, please start a new chat.
+                This conversation was closed. If there's another concern, please start a new chat.
             </p>
         </div>
         <div class="conversation-closed-modal-footer">
@@ -278,6 +296,21 @@ include __DIR__ . '/guest-monitoring-notice.php';
     </div>
 </div>
 
+<!-- Chat Notice Modal -->
+<div class="chat-notice-modal" id="chatNoticeModal" style="display: none;">
+    <div class="chat-notice-modal-content">
+        <div class="chat-notice-modal-header">
+            <div class="chat-notice-icon"><i class="fas fa-info-circle"></i></div>
+            <h3 id="chatNoticeTitle">Notice</h3>
+        </div>
+        <div class="chat-notice-modal-body">
+            <p id="chatNoticeMessage">Message</p>
+        </div>
+        <div class="chat-notice-modal-footer">
+            <button type="button" class="chat-notice-btn" id="chatNoticeOkBtn">OK</button>
+        </div>
+    </div>
+</div>
 <!-- MySQL Chat System -->
 <script>
 // Determine correct path for chat-mysql.js based on current location
@@ -424,10 +457,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const sidebarOverlay = document.getElementById('sidebarOverlay');
     const chatFab = document.getElementById('chatFab');
     const chatModal = document.getElementById('chatModal');
-    const chatCloseBtn = document.getElementById('chatCloseBtn');
+    const chatModalCloseBtn = document.getElementById('chatModalCloseBtn');
     const chatForm = document.getElementById('chatForm');
     const chatInput = document.getElementById('chatInput');
     const chatMessages = document.querySelector('.chat-messages');
+    const chatNoticeModal = document.getElementById('chatNoticeModal');
+    const chatNoticeTitle = document.getElementById('chatNoticeTitle');
+    const chatNoticeMessage = document.getElementById('chatNoticeMessage');
+    const chatNoticeOkBtn = document.getElementById('chatNoticeOkBtn');
     
     // Function to ensure chat-mysql.js is loaded
     function ensureChatScriptLoaded() {
@@ -454,6 +491,443 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }, 100);
         });
+    }
+
+    function showChatNoticeModal(message, title = 'Notice') {
+        if (!chatNoticeModal || !chatNoticeMessage || !chatNoticeTitle) {
+            alert(message);
+            return;
+        }
+
+        chatNoticeTitle.textContent = title;
+        chatNoticeMessage.textContent = message;
+        chatNoticeModal.style.display = 'flex';
+        setTimeout(() => chatNoticeModal.classList.add('show'), 10);
+    }
+
+    function hideChatNoticeModal() {
+        if (!chatNoticeModal) return;
+        chatNoticeModal.classList.remove('show');
+        setTimeout(() => {
+            if (!chatNoticeModal.classList.contains('show')) {
+                chatNoticeModal.style.display = 'none';
+            }
+        }, 220);
+    }
+
+    if (chatNoticeOkBtn && !chatNoticeOkBtn.hasAttribute('data-notice-bound')) {
+        chatNoticeOkBtn.setAttribute('data-notice-bound', 'true');
+        chatNoticeOkBtn.addEventListener('click', hideChatNoticeModal);
+    }
+    if (chatNoticeModal && !chatNoticeModal.hasAttribute('data-notice-backdrop-bound')) {
+        chatNoticeModal.setAttribute('data-notice-backdrop-bound', 'true');
+        chatNoticeModal.addEventListener('click', function(e) {
+            if (e.target === chatNoticeModal) hideChatNoticeModal();
+        });
+    }
+    function resolveUserChatApiPath(endpointFile) {
+        const path = window.location.pathname || '';
+        const candidates = [];
+
+        if (path.includes('/USERS/') && !path.includes('/includes/')) {
+            candidates.push(`api/${endpointFile}`);
+        } else if (path.includes('/USERS/includes/')) {
+            candidates.push(`../api/${endpointFile}`);
+        } else {
+            candidates.push(`USERS/api/${endpointFile}`);
+        }
+
+        candidates.push(`USERS/api/${endpointFile}`);
+        candidates.push(`api/${endpointFile}`);
+        candidates.push(`../USERS/api/${endpointFile}`);
+        candidates.push(`../api/${endpointFile}`);
+
+        const unique = [];
+        candidates.forEach((c) => {
+            if (!unique.includes(c)) unique.push(c);
+        });
+        return unique;
+    }
+
+    function resolveReverseGeocodePath() {
+        const path = window.location.pathname || '';
+        const candidates = [];
+
+        if (path.includes('/USERS/') && !path.includes('/includes/')) {
+            candidates.push('../ADMIN/api/reverse-geocode.php');
+        } else if (path.includes('/USERS/includes/')) {
+            candidates.push('../../ADMIN/api/reverse-geocode.php');
+        } else {
+            candidates.push('ADMIN/api/reverse-geocode.php');
+        }
+
+        candidates.push('ADMIN/api/reverse-geocode.php');
+        candidates.push('../ADMIN/api/reverse-geocode.php');
+        candidates.push('../../ADMIN/api/reverse-geocode.php');
+        return [...new Set(candidates)];
+    }
+
+    function resolveQcGeoJsonPath() {
+        const path = window.location.pathname || '';
+        const candidates = [];
+
+        if (path.includes('/USERS/') && !path.includes('/includes/')) {
+            candidates.push('../ADMIN/api/quezon-city.geojson');
+        } else if (path.includes('/USERS/includes/')) {
+            candidates.push('../../ADMIN/api/quezon-city.geojson');
+        } else {
+            candidates.push('ADMIN/api/quezon-city.geojson');
+        }
+
+        candidates.push('ADMIN/api/quezon-city.geojson');
+        candidates.push('../ADMIN/api/quezon-city.geojson');
+        candidates.push('../../ADMIN/api/quezon-city.geojson');
+        return [...new Set(candidates)];
+    }
+
+    let chatLocationMap = null;
+    let chatLocationMarker = null;
+    let chatLeafletLoadingPromise = null;
+    let chatQcGeoJsonData = null;
+    let chatQcBoundaryLayer = null;
+    let chatQcBounds = null;
+
+    async function ensureLeafletLoaded() {
+        if (window.L && typeof window.L.map === 'function') {
+            return true;
+        }
+
+        if (chatLeafletLoadingPromise) {
+            return chatLeafletLoadingPromise;
+        }
+
+        chatLeafletLoadingPromise = new Promise((resolve, reject) => {
+            const cssHref = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            if (!document.querySelector(`link[href="${cssHref}"]`)) {
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = cssHref;
+                document.head.appendChild(link);
+            }
+
+            const existingScript = document.querySelector('script[data-chat-leaflet="true"]');
+            if (existingScript) {
+                const waiter = setInterval(() => {
+                    if (window.L && typeof window.L.map === 'function') {
+                        clearInterval(waiter);
+                        resolve(true);
+                    }
+                }, 100);
+                setTimeout(() => {
+                    clearInterval(waiter);
+                    if (window.L && typeof window.L.map === 'function') {
+                        resolve(true);
+                    } else {
+                        reject(new Error('Leaflet failed to initialize.'));
+                    }
+                }, 7000);
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            script.dataset.chatLeaflet = 'true';
+            script.onload = () => resolve(true);
+            script.onerror = () => reject(new Error('Unable to load Leaflet library.'));
+            document.head.appendChild(script);
+        });
+
+        return chatLeafletLoadingPromise;
+    }
+
+    function setUserLocationValue(locationText) {
+        const locationSearch = document.getElementById('userLocationSearch');
+        const locationInput = document.getElementById('userLocationInput');
+        if (locationSearch) locationSearch.value = locationText || '';
+        if (locationInput) {
+            locationInput.value = locationText || '';
+            locationInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    async function reverseGeocodeLocation(lat, lng) {
+        const paths = resolveReverseGeocodePath();
+        let lastError = null;
+
+        for (const path of paths) {
+            try {
+                const res = await fetch(`${path}?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`);
+                const data = await res.json();
+                if (res.ok && data && data.success && data.address) {
+                    return data.address;
+                }
+                lastError = new Error(data && data.error ? data.error : `HTTP ${res.status}`);
+            } catch (err) {
+                lastError = err;
+            }
+        }
+
+        throw lastError || new Error('Reverse geocoding failed.');
+    }
+
+    async function loadQcGeoJson() {
+        if (chatQcGeoJsonData) return chatQcGeoJsonData;
+
+        const paths = resolveQcGeoJsonPath();
+        let lastError = null;
+        for (const path of paths) {
+            try {
+                const res = await fetch(path);
+                const data = await res.json();
+                if (res.ok && data && (data.type === 'FeatureCollection' || data.type === 'Feature')) {
+                    chatQcGeoJsonData = data;
+                    return data;
+                }
+                lastError = new Error(`Failed to load QC geojson from ${path}`);
+            } catch (err) {
+                lastError = err;
+            }
+        }
+        throw lastError || new Error('QC GeoJSON unavailable.');
+    }
+
+    function pointInRing(lng, lat, ringCoords) {
+        let inside = false;
+        for (let i = 0, j = ringCoords.length - 1; i < ringCoords.length; j = i++) {
+            const xi = ringCoords[i][0], yi = ringCoords[i][1];
+            const xj = ringCoords[j][0], yj = ringCoords[j][1];
+            const intersects = ((yi > lat) !== (yj > lat)) &&
+                (lng < (xj - xi) * (lat - yi) / ((yj - yi) || 1e-12) + xi);
+            if (intersects) inside = !inside;
+        }
+        return inside;
+    }
+
+    function pointInPolygonCoords(lng, lat, polygonCoords) {
+        if (!polygonCoords || !polygonCoords.length) return false;
+        if (!pointInRing(lng, lat, polygonCoords[0])) return false;
+        for (let i = 1; i < polygonCoords.length; i++) {
+            if (pointInRing(lng, lat, polygonCoords[i])) return false;
+        }
+        return true;
+    }
+
+    function pointInGeoJson(lng, lat, geojson) {
+        if (!geojson) return false;
+        const features = geojson.type === 'FeatureCollection' ? geojson.features : [geojson];
+
+        for (const feature of features) {
+            if (!feature || !feature.geometry) continue;
+            const geom = feature.geometry;
+
+            if (geom.type === 'Polygon' && pointInPolygonCoords(lng, lat, geom.coordinates)) {
+                return true;
+            }
+
+            if (geom.type === 'MultiPolygon') {
+                for (const poly of geom.coordinates) {
+                    if (pointInPolygonCoords(lng, lat, poly)) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function isPointInsideQc(lat, lng) {
+        if (!chatQcGeoJsonData) return true;
+        return pointInGeoJson(lng, lat, chatQcGeoJsonData);
+    }
+
+    function applyPinnedLocation(lat, lng, addressText = '') {
+        const mapHint = document.getElementById('chatLocationMapHint');
+        const locationText = addressText && addressText.trim() !== ''
+            ? addressText
+            : `Pinned location (${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)})`;
+
+        setUserLocationValue(locationText);
+
+        if (mapHint) {
+            mapHint.textContent = `Pinned: ${locationText}`;
+        }
+    }
+
+    async function initChatLocationMap() {
+        const mapWrap = document.getElementById('chatLocationMapWrap');
+        const mapEl = document.getElementById('chatLocationMap');
+        if (!mapWrap || !mapEl) return;
+
+        mapWrap.style.display = 'block';
+        await ensureLeafletLoaded();
+
+        if (!chatLocationMap) {
+            chatLocationMap = L.map('chatLocationMap').setView([14.676, 121.0437], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+                        }).addTo(chatLocationMap);
+
+            try {
+                const qcGeoJson = await loadQcGeoJson();
+                chatQcBoundaryLayer = L.geoJSON(qcGeoJson, {
+                    style: function() {
+                        return {
+                            color: '#0ea5e9',
+                            weight: 2,
+                            opacity: 0.95,
+                            fillColor: '#7dd3fc',
+                            fillOpacity: 0.12
+                        };
+                    }
+                }).addTo(chatLocationMap);
+
+                chatQcBounds = chatQcBoundaryLayer.getBounds();
+                if (chatQcBounds && chatQcBounds.isValid()) {
+                    chatLocationMap.fitBounds(chatQcBounds, { padding: [16, 16] });
+                    chatLocationMap.setMaxBounds(chatQcBounds.pad(0.12));
+                    chatLocationMap.setMinZoom(11);
+                }
+            } catch (qcErr) {
+                console.warn('QC GeoJSON not loaded for chat map:', qcErr);
+            }
+
+            chatLocationMap.on('click', async function(e) {
+                const { lat, lng } = e.latlng;
+                if (!isPointInsideQc(lat, lng)) {
+                    const mapHint = document.getElementById('chatLocationMapHint');
+                    if (mapHint) {
+                        mapHint.textContent = 'Please pin a location inside Quezon City only.';
+                    }
+                    return;
+                }
+
+                if (!chatLocationMarker) {
+                    chatLocationMarker = L.marker([lat, lng], { draggable: true }).addTo(chatLocationMap);
+                    chatLocationMarker.on('dragend', async function(evt) {
+                        const markerPos = evt.target.getLatLng();
+                        if (!isPointInsideQc(markerPos.lat, markerPos.lng)) {
+                            const fallback = chatQcBounds && chatQcBounds.isValid()
+                                ? chatQcBounds.getCenter()
+                                : { lat: 14.676, lng: 121.0437 };
+                            evt.target.setLatLng([fallback.lat, fallback.lng]);
+                            const mapHint = document.getElementById('chatLocationMapHint');
+                            if (mapHint) {
+                                mapHint.textContent = 'Pinned location must stay within Quezon City.';
+                            }
+                            return;
+                        }
+                        try {
+                            const address = await reverseGeocodeLocation(markerPos.lat, markerPos.lng);
+                            applyPinnedLocation(markerPos.lat, markerPos.lng, address);
+                        } catch (err) {
+                            applyPinnedLocation(markerPos.lat, markerPos.lng);
+                        }
+                    });
+                } else {
+                    chatLocationMarker.setLatLng([lat, lng]);
+                }
+
+                try {
+                    const address = await reverseGeocodeLocation(lat, lng);
+                    applyPinnedLocation(lat, lng, address);
+                } catch (err) {
+                    applyPinnedLocation(lat, lng);
+                }
+            });
+        }
+
+        setTimeout(() => {
+            if (chatLocationMap) chatLocationMap.invalidateSize();
+            if (chatLocationMap && chatQcBounds && chatQcBounds.isValid()) {
+                chatLocationMap.fitBounds(chatQcBounds, { padding: [16, 16] });
+            }
+        }, 80);
+    }
+
+    async function closeConversationEndToEnd() {
+        const endBtn = document.getElementById('chatEndConversationBtn');
+        const activeConversationId = sessionStorage.getItem('conversation_id') || window.currentConversationId;
+
+        if (!activeConversationId) {
+            alert('No active conversation to close.');
+            return false;
+        }
+
+        if (!confirm('Are you sure you want to close this conversation? This will close the conversation on both your side and the admin side.')) {
+            return false;
+        }
+
+        const originalBtnHtml = endBtn ? endBtn.innerHTML : '';
+        if (endBtn) {
+            endBtn.disabled = true;
+            endBtn.textContent = 'Closing...';
+        }
+
+        let closeResult = null;
+        let lastError = null;
+
+        try {
+            const apiCandidates = resolveUserChatApiPath('chat-close.php');
+            for (const apiUrl of apiCandidates) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ conversationId: activeConversationId })
+                    });
+
+                    const data = await response.json();
+                    if (response.ok && data && data.success) {
+                        closeResult = data;
+                        break;
+                    }
+
+                    lastError = new Error((data && data.message) ? data.message : `HTTP ${response.status}`);
+                } catch (candidateError) {
+                    lastError = candidateError;
+                }
+            }
+
+            if (!closeResult) {
+                throw lastError || new Error('Failed to close conversation.');
+            }
+
+            if (window.stopChatPolling) {
+                window.stopChatPolling();
+            }
+            if (window.handleConversationClosed) {
+                window.handleConversationClosed('Citizen/User', 'citizen');
+            } else {
+                sessionStorage.removeItem('conversation_id');
+                window.currentConversationId = null;
+                const chatInterface = document.getElementById('chatInterface');
+                const userInfoForm = document.getElementById('chatUserInfoForm');
+                if (chatInterface) chatInterface.style.display = 'none';
+                if (userInfoForm) userInfoForm.style.display = 'block';
+            }
+            return true;
+        } catch (error) {
+            console.error('Close conversation failed:', error);
+            alert('Failed to close conversation: ' + (error && error.message ? error.message : 'Unknown error'));
+            if (endBtn) {
+                endBtn.disabled = false;
+                endBtn.innerHTML = originalBtnHtml || '<i class="fas fa-times"></i> Close Chat';
+            }
+            return false;
+        }
+    }
+
+    // Capture-phase delegated handler: survives DOM cloning/rebinding of the close button.
+    if (!document.body.hasAttribute('data-chat-close-e2e-bound')) {
+        document.body.setAttribute('data-chat-close-e2e-bound', 'true');
+        document.addEventListener('click', async function(e) {
+            const clickedClose = e.target && (e.target.id === 'chatEndConversationBtn' || e.target.closest('#chatEndConversationBtn'));
+            if (!clickedClose) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            await closeConversationEndToEnd();
+        }, true);
     }
     
     // Global event delegation for send button as ultimate fallback
@@ -1018,6 +1492,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const hiddenInput = document.getElementById('userLocationInput');
         const dropdown = document.getElementById('locationDropdown');
         const dropdownList = dropdown ? dropdown.querySelector('.searchable-select-list') : null;
+        const useCurrentBtn = document.getElementById('chatUseCurrentLocationBtn');
+        const pinMapBtn = document.getElementById('chatPinOnMapBtn');
+        const hideMapBtn = document.getElementById('chatHideMapBtn');
+        const mapWrap = document.getElementById('chatLocationMapWrap');
         
         if (!searchInput || !hiddenInput || !dropdown || !dropdownList) {
             // Retry after a short delay if elements aren't ready
@@ -1094,9 +1572,19 @@ document.addEventListener('DOMContentLoaded', function() {
         searchInput.addEventListener('input', function(e) {
             const term = e.target.value;
             if (term.trim()) {
+                hiddenInput.value = term.trim();
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
                 showDropdown();
             } else {
                 hiddenInput.value = '';
+            }
+        });
+
+        searchInput.addEventListener('blur', function() {
+            const typed = searchInput.value.trim();
+            if (typed && !hiddenInput.value.trim()) {
+                hiddenInput.value = typed;
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
             }
         });
         
@@ -1143,6 +1631,82 @@ document.addEventListener('DOMContentLoaded', function() {
                 hideDropdown();
             }
         });
+
+        if (useCurrentBtn && !useCurrentBtn.hasAttribute('data-handler-attached')) {
+            useCurrentBtn.setAttribute('data-handler-attached', 'true');
+            useCurrentBtn.addEventListener('click', function() {
+                if (!navigator.geolocation) {
+                    alert('Geolocation is not supported in this browser.');
+                    return;
+                }
+
+                useCurrentBtn.disabled = true;
+                useCurrentBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Getting location...';
+
+                navigator.geolocation.getCurrentPosition(async function(position) {
+                    try {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        if (!isPointInsideQc(lat, lng)) {
+                            showChatNoticeModal('Your current location appears outside Quezon City. Please pin or enter a Quezon City location.', 'Location Required');
+                            return;
+                        }
+                        const address = await reverseGeocodeLocation(lat, lng);
+                        setUserLocationValue(address);
+                        if (mapWrap) {
+                            await initChatLocationMap();
+                            if (chatLocationMap) chatLocationMap.setView([lat, lng], 15);
+                            if (!chatLocationMarker) {
+                                chatLocationMarker = L.marker([lat, lng], { draggable: true }).addTo(chatLocationMap);
+                            } else {
+                                chatLocationMarker.setLatLng([lat, lng]);
+                            }
+                        }
+                    } catch (err) {
+                        showChatNoticeModal('Unable to resolve your location address. You can still type it manually.', 'Location Notice');
+                    } finally {
+                        useCurrentBtn.disabled = false;
+                        useCurrentBtn.innerHTML = '<i class="fas fa-location-crosshairs"></i> Use Current Location';
+                    }
+                }, function(error) {
+                    let msg = 'Unable to get current location.';
+                    if (error && error.code === 1) msg = 'Location permission denied.';
+                    if (error && error.code === 2) msg = 'Location unavailable.';
+                    if (error && error.code === 3) msg = 'Location request timed out.';
+                    showChatNoticeModal(msg, 'Location Notice');
+                    useCurrentBtn.disabled = false;
+                    useCurrentBtn.innerHTML = '<i class="fas fa-location-crosshairs"></i> Use Current Location';
+                }, {
+                    enableHighAccuracy: true,
+                    timeout: 12000,
+                    maximumAge: 15000
+                });
+            });
+        }
+
+        if (pinMapBtn && !pinMapBtn.hasAttribute('data-handler-attached')) {
+            pinMapBtn.setAttribute('data-handler-attached', 'true');
+            pinMapBtn.addEventListener('click', async function() {
+                try {
+                    await initChatLocationMap();
+                    pinMapBtn.classList.add('active');
+                } catch (err) {
+                    alert('Unable to load map picker right now.');
+                }
+            });
+        }
+
+        if (hideMapBtn && !hideMapBtn.hasAttribute('data-handler-attached')) {
+            hideMapBtn.setAttribute('data-handler-attached', 'true');
+            hideMapBtn.addEventListener('click', function() {
+                if (mapWrap) {
+                    mapWrap.style.display = 'none';
+                }
+                if (pinMapBtn) {
+                    pinMapBtn.classList.remove('active');
+                }
+            });
+        }
     }
     
     // Setup form validation to enable/disable submit button
@@ -1474,8 +2038,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Also try to setup after a delay in case DOM wasn't ready
     setTimeout(setupChatButton, 1000);
 
-    if (chatCloseBtn) {
-        chatCloseBtn.addEventListener('click', closeChatWithFlag);
+    if (chatModalCloseBtn) {
+        chatModalCloseBtn.addEventListener('click', closeChatWithFlag);
     }
     
     // Add MutationObserver to prevent modal from closing unexpectedly
@@ -2427,7 +2991,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Function to attach close button handler
             function attachCloseButtonHandler() {
-                const closeBtn = document.getElementById('chatCloseBtn');
+                const closeBtn = document.getElementById('chatEndConversationBtn');
                 if (!closeBtn) {
                     console.log('Close button not found');
                     return false;
@@ -2436,7 +3000,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Remove old listeners by cloning
                 const newBtn = closeBtn.cloneNode(true);
                 closeBtn.parentNode.replaceChild(newBtn, closeBtn);
-                const freshBtn = document.getElementById('chatCloseBtn');
+                const freshBtn = document.getElementById('chatEndConversationBtn');
                 
                 if (!freshBtn) {
                     console.error('Failed to get fresh close button');
@@ -2457,90 +3021,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
-                    
-                    if (!confirm('Are you sure you want to close this conversation? This will close the conversation on both your side and the admin side. You will need to start a new conversation to continue chatting.')) {
-                        return false;
-                    }
-                    
-                    const conversationId = sessionStorage.getItem('conversation_id');
-                    if (!conversationId) {
-                        alert('No active conversation to close.');
-                        return false;
-                    }
-                    
-                    try {
-                        freshBtn.disabled = true;
-                        freshBtn.textContent = 'Closing...';
-                        
-                        const response = await fetch('../USERS/api/chat-close.php', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                conversationId: conversationId
-                            })
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                            alert('Conversation closed successfully. The conversation has been closed on both your side and the admin side. Please select a category to start a new conversation.');
-                            
-                            // Use the handleConversationClosed function to properly refresh and show form
-                            if (window.handleConversationClosed) {
-                                window.handleConversationClosed();
-                            } else {
-                                // Fallback: Show user info form
-                                const chatInterface = document.getElementById('chatInterface');
-                                const userInfoForm = document.getElementById('chatUserInfoForm');
-                                if (userInfoForm && chatInterface) {
-                                    chatInterface.style.display = 'none';
-                                    userInfoForm.style.display = 'block';
-                                    
-                                    // Initialize searchable barangay dropdown and form validation
-                                    setTimeout(() => {
-                                        initSearchableBarangay();
-                                        setupFormValidation();
-                                    }, 150);
-                                    
-                                    // Clear concern to force re-selection
-                                    localStorage.removeItem('guest_concern');
-                                    sessionStorage.removeItem('user_concern');
-                                    const concernSelect = document.getElementById('userConcernSelect');
-                                    if (concernSelect) {
-                                        concernSelect.value = '';
-                                    }
-                                }
-                                
-                                // Disable input and send button
-                                const chatInput = document.getElementById('chatInput');
-                                const chatSendBtn = document.getElementById('chatSendBtn');
-                                if (chatInput) {
-                                    chatInput.disabled = true;
-                                }
-                                if (chatSendBtn) {
-                                    chatSendBtn.disabled = true;
-                                }
-                                freshBtn.style.display = 'none';
-                            }
-                            
-                            // Stop polling
-                            if (window.stopChatPolling) {
-                                window.stopChatPolling();
-                            }
-                        } else {
-                            alert('Failed to close conversation: ' + (data.message || 'Unknown error'));
-                            freshBtn.disabled = false;
-                            freshBtn.innerHTML = '<i class="fas fa-times"></i> Close Chat';
-                        }
-                    } catch (error) {
-                        console.error('Error closing conversation:', error);
-                        alert('Error closing conversation. Please try again.');
-                        freshBtn.disabled = false;
-                        freshBtn.innerHTML = '<i class="fas fa-times"></i> Close Chat';
-                    }
-                    
+                    await closeConversationEndToEnd();
                     return false;
                 };
                 
@@ -2553,7 +3034,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Function to ensure close button is always available
             function ensureCloseButtonAvailable() {
-                const closeBtn = document.getElementById('chatCloseBtn');
+                const closeBtn = document.getElementById('chatEndConversationBtn');
                 if (closeBtn) {
                     // Always ensure button is visible and enabled
                     closeBtn.style.display = 'inline-flex';
@@ -2768,4 +3249,14 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 });
 </script>
+
+
+
+
+
+
+
+
+
+
 
