@@ -7,15 +7,52 @@ require_once 'db_connect.php';
 
 $data = json_decode(file_get_contents('php://input'), true);
 
+function b64url_decode($data) {
+    $pad = strlen($data) % 4;
+    if ($pad) {
+        $data .= str_repeat('=', 4 - $pad);
+    }
+    return base64_decode(strtr($data, '-_', '+/'));
+}
+
+function verify_token($token, $secret) {
+    $parts = explode('.', $token);
+    if (count($parts) !== 2) {
+        return null;
+    }
+
+    [$p, $s] = $parts;
+    $calc = hash_hmac('sha256', $p, $secret, true);
+    $sig = b64url_decode($s);
+    if (!$sig || !hash_equals($calc, $sig)) {
+        return null;
+    }
+
+    $payloadJson = b64url_decode($p);
+    $payload = json_decode($payloadJson, true);
+    if (!$payload || !isset($payload['email'], $payload['otp_id'], $payload['exp'])) {
+        return null;
+    }
+    if ((int)$payload['exp'] < time()) {
+        return null;
+    }
+
+    return $payload;
+}
+
 // --- Server-Side Validation ---
 if (!isset($data['name']) || !isset($data['email']) || !isset($data['password']) || !isset($data['phone'])) {
     apiResponse::error('Name, email, password, and phone are required.', 400);
+}
+if (!isset($data['email_verification_token'])) {
+    apiResponse::error('email_verification_token is required.', 400);
 }
 
 $name = trim($data['name']);
 $email = trim($data['email']);
 $phone = trim($data['phone']);
 $plainPassword = $data['password'];
+$emailVerificationToken = trim($data['email_verification_token']);
 $shareLocation = isset($data['share_location']) ? (bool)$data['share_location'] : false;
 
 $deviceId   = isset($data['device_id'])   ? trim($data['device_id'])   : null;
@@ -41,15 +78,45 @@ if (strlen($plainPassword) < 6) {
 
 // --- Database Operations ---
 try {
+    // Core registration must succeed atomically.
+    $pdo->beginTransaction();
+
+    $secret = getenv('OTP_TOKEN_SECRET');
+    if (!$secret) {
+        apiResponse::error('OTP token secret not configured.', 500);
+    }
+
+    $payload = verify_token($emailVerificationToken, $secret);
+    if (!$payload) {
+        apiResponse::error('Invalid or expired email verification token.', 401);
+    }
+    if (!hash_equals(strtolower($payload['email']), strtolower($email))) {
+        apiResponse::error('Verification token email mismatch.', 401);
+    }
+
+    $otpId = (int)$payload['otp_id'];
+    $otpStmt = $pdo->prepare("
+        SELECT id, status
+        FROM otp_verifications
+        WHERE id = ? AND email = ? AND purpose = 'signup'
+        LIMIT 1
+        FOR UPDATE
+    ");
+    $otpStmt->execute([$otpId, $email]);
+    $otpRow = $otpStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$otpRow || $otpRow['status'] !== 'verified') {
+        $pdo->rollBack();
+        apiResponse::error('OTP verification not found or already used.', 401);
+    }
+
     // Check if email already exists
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE email = ?");
     $stmt->execute([$email]);
     if ($stmt->fetchColumn() > 0) {
+        $pdo->rollBack();
         apiResponse::error('This email address is already registered.', 409);
     }
-
-    // Core registration must succeed atomically.
-    $pdo->beginTransaction();
 
     // 1. Insert user
     $hashedPassword = password_hash($plainPassword, PASSWORD_DEFAULT);
@@ -60,6 +127,9 @@ try {
     // 2. Preferences
     $prefsStmt = $pdo->prepare("INSERT INTO user_preferences (user_id, share_location) VALUES (?, ?)");
     $prefsStmt->execute([$userId, (int)$shareLocation]);
+
+    $consumeOtp = $pdo->prepare("UPDATE otp_verifications SET status='expired' WHERE id=?");
+    $consumeOtp->execute([$otpId]);
 
     $pdo->commit();
 
