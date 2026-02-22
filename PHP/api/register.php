@@ -7,6 +7,55 @@ require_once 'db_connect.php';
 
 $data = json_decode(file_get_contents('php://input'), true);
 
+function registerLoadDotEnvIfPresent() {
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+    $loaded = true;
+
+    $envPath = __DIR__ . '/.env';
+    if (!file_exists($envPath)) {
+        return;
+    }
+
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false) {
+        return;
+    }
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#') {
+            continue;
+        }
+
+        $parts = explode('=', $line, 2);
+        if (count($parts) !== 2) {
+            continue;
+        }
+
+        $key = trim($parts[0]);
+        $value = trim($parts[1]);
+        if ($key === '') {
+            continue;
+        }
+
+        $len = strlen($value);
+        $isDoubleQuoted = $len >= 2 && $value[0] === '"' && $value[$len - 1] === '"';
+        $isSingleQuoted = $len >= 2 && $value[0] === "'" && $value[$len - 1] === "'";
+        if ($isDoubleQuoted || $isSingleQuoted) {
+            $value = substr($value, 1, -1);
+        }
+
+        if (getenv($key) === false) {
+            putenv($key . '=' . $value);
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+        }
+    }
+}
+
 function b64url_decode($data) {
     $pad = strlen($data) % 4;
     if ($pad) {
@@ -81,6 +130,7 @@ try {
     // Core registration must succeed atomically.
     $pdo->beginTransaction();
 
+    registerLoadDotEnvIfPresent();
     $secret = getenv('OTP_TOKEN_SECRET');
     if (!$secret) {
         apiResponse::error('OTP token secret not configured.', 500);
