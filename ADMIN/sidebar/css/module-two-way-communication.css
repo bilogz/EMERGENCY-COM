@@ -509,6 +509,40 @@
             word-wrap: break-word;
         }
 
+        .message-text {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .message-attachment-link {
+            display: inline-block;
+            margin-top: 0.5rem;
+        }
+
+        .message-attachment-image {
+            display: block;
+            max-width: 240px;
+            max-height: 240px;
+            object-fit: cover;
+            border-radius: 10px;
+            border: 1px solid var(--border-color-1);
+            background: rgba(255, 255, 255, 0.85);
+        }
+
+        .message-attachment-file {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.45rem 0.65rem;
+            border-radius: 10px;
+            border: 1px solid var(--border-color-1);
+            background: rgba(255, 255, 255, 0.88);
+            color: var(--text-color-1);
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
         .message.user .message-content {
             background: var(--card-bg-1);
             color: var(--text-color-1);

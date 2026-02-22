@@ -111,16 +111,21 @@ if (!function_exists('twc_chat_storage_available')) {
 }
 
 if (!function_exists('twc_column_exists')) {
-    function twc_column_exists(PDO $pdo, string $tableName, string $columnName): bool {
+    function twc_column_exists(PDO $pdo, string $tableName, string $columnName, bool $refresh = false): bool {
         static $cache = [];
         $key = strtolower($tableName . '.' . $columnName);
-        if (array_key_exists($key, $cache)) {
+        if (!$refresh && array_key_exists($key, $cache)) {
             return $cache[$key];
         }
         try {
-            $stmt = $pdo->prepare("SHOW COLUMNS FROM `$tableName` LIKE ?");
-            $stmt->execute([$columnName]);
-            $cache[$key] = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt = $pdo->prepare(
+                'SELECT COUNT(*) FROM information_schema.columns
+                 WHERE table_schema = DATABASE()
+                   AND table_name = ?
+                   AND column_name = ?'
+            );
+            $stmt->execute([$tableName, $columnName]);
+            $cache[$key] = ((int)$stmt->fetchColumn()) > 0;
             return $cache[$key];
         } catch (Throwable $e) {
             $cache[$key] = false;
@@ -317,5 +322,380 @@ if (!function_exists('twc_status_for_db')) {
             return 'active';
         }
         return $desiredStatus;
+    }
+}
+
+if (!function_exists('twc_ensure_chat_attachment_columns')) {
+    /**
+     * Adds attachment columns to chat_messages if they do not exist yet.
+     */
+    function twc_ensure_chat_attachment_columns(PDO $pdo): bool {
+        if (!twc_table_exists($pdo, 'chat_messages')) {
+            return false;
+        }
+
+        $columns = [
+            'attachment_url' => "ALTER TABLE chat_messages ADD COLUMN attachment_url VARCHAR(512) NULL AFTER message_text",
+            'attachment_mime' => "ALTER TABLE chat_messages ADD COLUMN attachment_mime VARCHAR(100) NULL AFTER attachment_url",
+            'attachment_size' => "ALTER TABLE chat_messages ADD COLUMN attachment_size INT UNSIGNED NULL AFTER attachment_mime",
+        ];
+
+        foreach ($columns as $name => $ddl) {
+            if (twc_column_exists($pdo, 'chat_messages', $name)) {
+                continue;
+            }
+            try {
+                $pdo->exec($ddl);
+                twc_column_exists($pdo, 'chat_messages', $name, true);
+            } catch (Throwable $e) {
+                error_log("TWC attachment column ensure warning ($name): " . $e->getMessage());
+            }
+        }
+
+        return twc_column_exists($pdo, 'chat_messages', 'attachment_url', true);
+    }
+}
+
+if (!function_exists('twc_chat_upload_dir')) {
+    function twc_chat_upload_dir(): string {
+        return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'USERS' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'chat';
+    }
+}
+
+if (!function_exists('twc_app_base_url')) {
+    function twc_app_base_url(): string {
+        $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+        if ($scriptName === '') {
+            return '';
+        }
+
+        foreach (['/USERS/api/', '/ADMIN/api/', '/PHP/api/'] as $marker) {
+            $pos = stripos($scriptName, $marker);
+            if ($pos !== false) {
+                return rtrim(substr($scriptName, 0, $pos), '/');
+            }
+        }
+
+        $dir = rtrim(dirname($scriptName), '/');
+        return $dir === '.' ? '' : $dir;
+    }
+}
+
+if (!function_exists('twc_chat_upload_url')) {
+    function twc_chat_upload_url(string $filename): string {
+        $base = twc_app_base_url();
+        return $base . '/USERS/uploads/chat/' . rawurlencode($filename);
+    }
+}
+
+if (!function_exists('twc_secure_cfg')) {
+    /**
+     * Config helper that works even when config.env.php is not explicitly loaded.
+     */
+    function twc_secure_cfg(string $key, $default = null) {
+        if (function_exists('getSecureConfig')) {
+            return getSecureConfig($key, $default);
+        }
+        $value = getenv($key);
+        if ($value !== false && $value !== '') {
+            return $value;
+        }
+        return $default;
+    }
+}
+
+if (!function_exists('twc_chat_image_storage_driver')) {
+    /**
+     * Supported values: filesystem (default), postgres.
+     */
+    function twc_chat_image_storage_driver(): string {
+        $raw = strtolower(trim((string)twc_secure_cfg('CHAT_IMAGE_STORAGE_DRIVER', 'filesystem')));
+        return in_array($raw, ['filesystem', 'postgres'], true) ? $raw : 'filesystem';
+    }
+}
+
+if (!function_exists('twc_postgres_image_storage_enabled')) {
+    function twc_postgres_image_storage_enabled(): bool {
+        return twc_chat_image_storage_driver() === 'postgres';
+    }
+}
+
+if (!function_exists('twc_postgres_image_pdo')) {
+    /**
+     * Returns a PostgreSQL PDO connection for image storage, or null when unavailable.
+     */
+    function twc_postgres_image_pdo(): ?PDO {
+        static $attempted = false;
+        static $pgPdo = null;
+
+        if ($attempted) {
+            return $pgPdo;
+        }
+        $attempted = true;
+
+        if (!twc_postgres_image_storage_enabled()) {
+            return null;
+        }
+        if (!extension_loaded('pdo_pgsql')) {
+            error_log('TWC PostgreSQL image storage disabled: pdo_pgsql extension not loaded');
+            return null;
+        }
+
+        $host = trim((string)twc_secure_cfg('PG_IMG_HOST', ''));
+        $port = (int)twc_secure_cfg('PG_IMG_PORT', 5432);
+        $dbName = trim((string)twc_secure_cfg('PG_IMG_DB', ''));
+        $user = trim((string)twc_secure_cfg('PG_IMG_USER', ''));
+        $pass = (string)twc_secure_cfg('PG_IMG_PASS', '');
+        $sslmode = trim((string)twc_secure_cfg('PG_IMG_SSLMODE', 'prefer'));
+        $channelBinding = trim((string)twc_secure_cfg('PG_IMG_CHANNEL_BINDING', ''));
+        $libpqOptions = trim((string)twc_secure_cfg('PG_IMG_OPTIONS', ''));
+
+        // Optional full URL override, e.g.:
+        // postgresql://user:pass@host:5432/dbname?sslmode=require&channel_binding=require
+        $pgUrl = trim((string)twc_secure_cfg('PG_IMG_URL', ''));
+        if ($pgUrl !== '') {
+            $parts = @parse_url($pgUrl);
+            if (is_array($parts)) {
+                if (!empty($parts['host'])) {
+                    $host = (string)$parts['host'];
+                }
+                if (!empty($parts['port'])) {
+                    $port = (int)$parts['port'];
+                }
+                if (!empty($parts['path'])) {
+                    $dbName = ltrim((string)$parts['path'], '/');
+                }
+                if (isset($parts['user'])) {
+                    $user = rawurldecode((string)$parts['user']);
+                }
+                if (isset($parts['pass'])) {
+                    $pass = rawurldecode((string)$parts['pass']);
+                }
+                if (!empty($parts['query'])) {
+                    $query = [];
+                    parse_str((string)$parts['query'], $query);
+                    if (!empty($query['sslmode'])) {
+                        $sslmode = (string)$query['sslmode'];
+                    }
+                    if (!empty($query['channel_binding'])) {
+                        $channelBinding = (string)$query['channel_binding'];
+                    }
+                    if (!empty($query['options'])) {
+                        $libpqOptions = (string)$query['options'];
+                    }
+                }
+            } else {
+                error_log('TWC PostgreSQL image storage: invalid PG_IMG_URL');
+            }
+        }
+
+        if ($host === '' || $dbName === '' || $user === '') {
+            error_log('TWC PostgreSQL image storage config incomplete (need PG_IMG_HOST, PG_IMG_DB, PG_IMG_USER)');
+            return null;
+        }
+
+        // Neon pooler + older libpq may require endpoint via options when SNI is unavailable.
+        if ($libpqOptions === '' && stripos($host, '-pooler.') !== false) {
+            $labels = explode('.', $host);
+            $endpointLabel = trim((string)($labels[0] ?? ''));
+            if ($endpointLabel !== '') {
+                if (substr($endpointLabel, -7) === '-pooler') {
+                    $endpointLabel = substr($endpointLabel, 0, -7);
+                }
+                if ($endpointLabel !== '') {
+                    $libpqOptions = 'endpoint=' . $endpointLabel;
+                }
+            }
+        }
+
+        $dsn = "pgsql:host={$host};port={$port};dbname={$dbName};sslmode={$sslmode}";
+        if ($libpqOptions !== '') {
+            $dsn .= ';options=' . $libpqOptions;
+        }
+        $normalizedChannelBinding = strtolower($channelBinding);
+        $dsnWithChannelBinding = $dsn;
+        if (in_array($normalizedChannelBinding, ['require', 'prefer', 'disable'], true)) {
+            $dsnWithChannelBinding .= ";channel_binding={$normalizedChannelBinding}";
+        }
+        $options = [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_TIMEOUT => 10,
+        ];
+
+        try {
+            $pgPdo = new PDO($dsnWithChannelBinding, $user, $pass, $options);
+            return $pgPdo;
+        } catch (Throwable $e) {
+            $message = $e->getMessage();
+            // Older libpq/PHP builds may not support channel_binding; retry without it.
+            if (
+                $dsnWithChannelBinding !== $dsn &&
+                stripos($message, 'invalid connection option "channel_binding"') !== false
+            ) {
+                try {
+                    $pgPdo = new PDO($dsn, $user, $pass, $options);
+                    return $pgPdo;
+                } catch (Throwable $retryError) {
+                    error_log('TWC PostgreSQL image storage retry without channel_binding failed: ' . $retryError->getMessage());
+                    $pgPdo = null;
+                    return null;
+                }
+            }
+            error_log('TWC PostgreSQL image storage connection failed: ' . $e->getMessage());
+            $pgPdo = null;
+            return null;
+        }
+    }
+}
+
+if (!function_exists('twc_postgres_image_table_ready')) {
+    function twc_postgres_image_table_ready(): bool {
+        static $ready = null;
+        if ($ready !== null) {
+            return $ready;
+        }
+
+        $pg = twc_postgres_image_pdo();
+        if (!$pg) {
+            $ready = false;
+            return $ready;
+        }
+
+        try {
+            $pg->exec("
+                CREATE TABLE IF NOT EXISTS chat_attachments (
+                    attachment_id VARCHAR(64) PRIMARY KEY,
+                    mime_type VARCHAR(100) NOT NULL,
+                    byte_size INTEGER NOT NULL,
+                    original_name TEXT NULL,
+                    image_data BYTEA NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            ");
+            $ready = true;
+            return $ready;
+        } catch (Throwable $e) {
+            error_log('TWC PostgreSQL image storage table ensure failed: ' . $e->getMessage());
+            $ready = false;
+            return $ready;
+        }
+    }
+}
+
+if (!function_exists('twc_postgres_attachment_url')) {
+    function twc_postgres_attachment_url(string $attachmentId): string {
+        $base = twc_app_base_url();
+        return $base . '/USERS/api/chat-attachment.php?id=' . rawurlencode($attachmentId);
+    }
+}
+
+if (!function_exists('twc_store_attachment_in_postgres')) {
+    /**
+     * Stores uploaded image bytes in PostgreSQL and returns attachment metadata.
+     */
+    function twc_store_attachment_in_postgres(string $tmpFile, string $mimeType, int $byteSize, ?string $originalName = null): ?array {
+        if (!twc_postgres_image_table_ready()) {
+            return null;
+        }
+
+        $pg = twc_postgres_image_pdo();
+        if (!$pg) {
+            return null;
+        }
+
+        $binary = @file_get_contents($tmpFile);
+        if ($binary === false) {
+            return null;
+        }
+
+        try {
+            $attachmentId = bin2hex(random_bytes(16));
+        } catch (Throwable $e) {
+            $attachmentId = sha1(uniqid('att_', true));
+        }
+
+        try {
+            $stmt = $pg->prepare("
+                INSERT INTO chat_attachments
+                (attachment_id, mime_type, byte_size, original_name, image_data, created_at)
+                VALUES (?, ?, ?, ?, ?, NOW())
+            ");
+            $stmt->bindValue(1, $attachmentId, PDO::PARAM_STR);
+            $stmt->bindValue(2, $mimeType, PDO::PARAM_STR);
+            $stmt->bindValue(3, $byteSize, PDO::PARAM_INT);
+            $stmt->bindValue(4, $originalName, PDO::PARAM_STR);
+            $stmt->bindValue(5, $binary, PDO::PARAM_LOB);
+            $stmt->execute();
+
+            return [
+                'id' => $attachmentId,
+                'url' => twc_postgres_attachment_url($attachmentId),
+                'mime' => $mimeType,
+                'size' => $byteSize,
+                'storage' => 'postgres',
+            ];
+        } catch (Throwable $e) {
+            error_log('TWC PostgreSQL image storage insert failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+}
+
+if (!function_exists('twc_fetch_attachment_from_postgres')) {
+    /**
+     * Fetches attachment bytes from PostgreSQL.
+     */
+    function twc_fetch_attachment_from_postgres(string $attachmentId): ?array {
+        if ($attachmentId === '' || !preg_match('/^[A-Za-z0-9_-]{12,80}$/', $attachmentId)) {
+            return null;
+        }
+        if (!twc_postgres_image_table_ready()) {
+            return null;
+        }
+
+        $pg = twc_postgres_image_pdo();
+        if (!$pg) {
+            return null;
+        }
+
+        try {
+            $stmt = $pg->prepare("
+                SELECT attachment_id, mime_type, byte_size, image_data
+                FROM chat_attachments
+                WHERE attachment_id = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$attachmentId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                return null;
+            }
+
+            $data = $row['image_data'];
+            if (is_resource($data)) {
+                $data = stream_get_contents($data);
+            }
+            if (!is_string($data) || $data === '') {
+                return null;
+            }
+            // Some PostgreSQL/PDO setups return BYTEA as hex string prefixed with \x
+            if (strpos($data, '\\x') === 0) {
+                $decoded = @hex2bin(substr($data, 2));
+                if ($decoded !== false) {
+                    $data = $decoded;
+                }
+            }
+
+            return [
+                'id' => (string)$row['attachment_id'],
+                'mime' => (string)$row['mime_type'],
+                'size' => (int)$row['byte_size'],
+                'data' => $data,
+            ];
+        } catch (Throwable $e) {
+            error_log('TWC PostgreSQL image storage fetch failed: ' . $e->getMessage());
+            return null;
+        }
     }
 }

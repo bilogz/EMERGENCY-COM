@@ -1013,11 +1013,63 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 hour12: true 
             });
             const fullStamp = `${msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} • ${timeStr}`;
+            const attachmentUrl = sanitizeAttachmentUrl(msg.imageUrl || msg.attachmentUrl || null);
+            const normalizedText = (msg.text || '').toString().trim();
+            const attachmentMimeRaw = (msg.attachmentMime || msg.attachment_mime || '').toString().trim().toLowerCase();
+            const attachmentMime = attachmentMimeRaw || null;
+            const isImageAttachment = !!(attachmentUrl && (
+                (attachmentMime && attachmentMime.indexOf('image/') === 0) ||
+                (!attachmentMime && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(attachmentUrl))
+            ));
+            const isVideoAttachment = !!(attachmentUrl && (
+                (attachmentMime && attachmentMime.indexOf('video/') === 0) ||
+                (!attachmentMime && /\.(mp4|webm|ogv|mov|avi|mkv)(\?|$)/i.test(attachmentUrl))
+            ));
+            const isEmailAttachment = !!(attachmentUrl && (
+                attachmentMime === 'message/rfc822' ||
+                attachmentMime === 'application/eml' ||
+                /\.eml(\?|$)/i.test(attachmentUrl)
+            ));
+            const hideAttachmentPlaceholder = attachmentUrl && /^\[(photo|video|email|attachment)\]/i.test(normalizedText);
+
+            let bodyHtml = '';
+            if (normalizedText && !hideAttachmentPlaceholder) {
+                bodyHtml += `<div class="message-text">${escapeHtml(normalizedText)}</div>`;
+            }
+            if (attachmentUrl) {
+                if (isVideoAttachment) {
+                    bodyHtml += `
+                        <a href="${attachmentUrl}" target="_blank" rel="noopener noreferrer" class="message-attachment-link">
+                            <video class="message-attachment-image" controls preload="metadata">
+                                <source src="${attachmentUrl}"${attachmentMime ? ` type="${attachmentMime}"` : ''}>
+                                Your browser does not support video playback.
+                            </video>
+                        </a>
+                    `;
+                } else if (isImageAttachment) {
+                    bodyHtml += `
+                        <a href="${attachmentUrl}" target="_blank" rel="noopener noreferrer" class="message-attachment-link">
+                            <img src="${attachmentUrl}" alt="Incident attachment" class="message-attachment-image">
+                        </a>
+                    `;
+                } else {
+                    const fileLabel = isEmailAttachment ? 'Open email attachment (.eml)' : 'Open attachment';
+                    const fileIcon = isEmailAttachment ? 'fa-envelope-open-text' : 'fa-paperclip';
+                    bodyHtml += `
+                        <a href="${attachmentUrl}" target="_blank" rel="noopener noreferrer" class="message-attachment-link">
+                            <span class="message-attachment-file"><i class="fas ${fileIcon}"></i> ${fileLabel}</span>
+                        </a>
+                    `;
+                }
+            }
+            if (!bodyHtml) {
+                bodyHtml = `<div class="message-text">${escapeHtml(normalizedText || 'Attachment')}</div>`;
+            }
             
             div.innerHTML = `
                 <img src="${avatar}" class="message-avatar" alt="">
                 <div class="message-content">
-                    ${escapeHtml(msg.text)}
+                    ${bodyHtml}
                     <div class="message-meta">
                         ${fullStamp}
                     </div>
@@ -1030,6 +1082,22 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function sanitizeAttachmentUrl(url) {
+            if (!url) return null;
+            const raw = String(url).trim();
+            if (!raw) return null;
+            if (raw.startsWith('/')) return raw;
+            try {
+                const parsed = new URL(raw, window.location.origin);
+                if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                    return parsed.href;
+                }
+            } catch (e) {
+                return null;
+            }
+            return null;
         }
         
         function scrollToBottom() {

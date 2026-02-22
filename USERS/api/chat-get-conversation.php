@@ -53,7 +53,7 @@ try {
     $hasAssignedToColumn = twc_column_exists($pdo, 'conversations', 'assigned_to');
     $statusOpen = twc_status_for_db($pdo, 'open');
 
-    if ($conversationId && !$userId) {
+    if ($conversationId) {
         $stmt = $pdo->prepare("SELECT conversation_id, status, last_message FROM conversations WHERE conversation_id = ?");
         $stmt->execute([$conversationId]);
         $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -109,7 +109,7 @@ try {
             FROM conversations
             WHERE user_id_string = ?
               AND status IN ($activeIn)
-            ORDER BY updated_at DESC
+            ORDER BY updated_at DESC, conversation_id DESC
             LIMIT 1
         ";
         $params = [$userId];
@@ -125,7 +125,7 @@ try {
                 FROM conversations
                 WHERE user_id = ?
                   AND status IN ($activeIn)
-                ORDER BY updated_at DESC
+                ORDER BY updated_at DESC, conversation_id DESC
                 LIMIT 1
             ";
             $params = [$userId];
@@ -143,7 +143,7 @@ try {
             WHERE ip_address = ?
               AND device_info = ?
               AND status IN ($activeIn)
-            ORDER BY updated_at DESC
+            ORDER BY updated_at DESC, conversation_id DESC
             LIMIT 1
         ";
         $params = [$ipAddress, $deviceInfo];

@@ -220,6 +220,10 @@ require_once __DIR__ . '/session-config.php';
                         <i class="fas fa-phone"></i>
                         <span data-translate="home.emergency.call">Call for Emergency</span>
                     </a>
+                    <button type="button" class="btn emergency-call-btn report-incident-btn" id="reportIncidentBtn" aria-label="Report incident">
+                        <i class="fas fa-triangle-exclamation"></i>
+                        <span>Report Incident</span>
+                    </button>
                     <?php $apkPath = __DIR__ . '/USERS/downloads/emergency-comms-app.apk'; $apkHref = 'USERS/downloads/emergency-comms-app.apk'; $apkVer = file_exists($apkPath) ? filemtime($apkPath) : time(); ?>
                     <a href="<?php echo $apkHref . '?v=' . $apkVer; ?>" class="app-download-btn" id="apkDownloadBtn" download="emergency-comms-app.apk" aria-label="Download APK">
                         <i class="fas fa-mobile-alt"></i>
@@ -277,6 +281,33 @@ require_once __DIR__ . '/session-config.php';
     <script src="<?= $assetBase ?>js/mobile-menu.js"></script>
     <script src="<?= $assetBase ?>js/theme-toggle.js"></script>
     <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const reportIncidentBtn = document.getElementById('reportIncidentBtn');
+            if (reportIncidentBtn && !reportIncidentBtn.hasAttribute('data-report-bound')) {
+                reportIncidentBtn.setAttribute('data-report-bound', 'true');
+                reportIncidentBtn.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    if (typeof window.disableChatAssistantMode === 'function') {
+                        window.disableChatAssistantMode();
+                    } else {
+                        window.chatAssistantMode = false;
+                    }
+                    if (typeof window.openChatForNewIncident === 'function') {
+                        window.openChatForNewIncident();
+                        return;
+                    }
+                    if (typeof window.openChat === 'function') {
+                        window.openChat();
+                        return;
+                    }
+                    const chatFab = document.getElementById('chatFab');
+                    if (chatFab) {
+                        chatFab.click();
+                    }
+                });
+            }
+        });
+
         // Enhanced language preference modal with improved design - Shows on landing page
         document.addEventListener('DOMContentLoaded', function () {
             // Function to get cookie value

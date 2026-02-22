@@ -31,7 +31,7 @@ try {
             SELECT conversation_id
             FROM conversations
             WHERE user_id = ? AND status IN (" . twc_placeholders($active) . ")
-            ORDER BY updated_at DESC
+            ORDER BY updated_at DESC, conversation_id DESC
             LIMIT 1
         ");
         $params = [$userId];
@@ -65,6 +65,12 @@ try {
 
     $hasReadAt = twc_column_exists($pdo, 'chat_messages', 'read_at');
     $messageSelectReadAt = $hasReadAt ? ', read_at' : ', NULL AS read_at';
+    $hasAttachmentUrl = twc_column_exists($pdo, 'chat_messages', 'attachment_url');
+    $hasAttachmentMime = twc_column_exists($pdo, 'chat_messages', 'attachment_mime');
+    $hasAttachmentSize = twc_column_exists($pdo, 'chat_messages', 'attachment_size');
+    $messageSelectAttachmentUrl = $hasAttachmentUrl ? ', attachment_url' : ', NULL AS attachment_url';
+    $messageSelectAttachmentMime = $hasAttachmentMime ? ', attachment_mime' : ', NULL AS attachment_mime';
+    $messageSelectAttachmentSize = $hasAttachmentSize ? ', attachment_size' : ', NULL AS attachment_size';
 
     if ($lastMessageId === 0) {
         $stmt = $pdo->prepare("
@@ -78,6 +84,9 @@ try {
                 created_at,
                 is_read
                 $messageSelectReadAt
+                $messageSelectAttachmentUrl
+                $messageSelectAttachmentMime
+                $messageSelectAttachmentSize
             FROM chat_messages
             WHERE conversation_id = ?
             ORDER BY message_id ASC
@@ -95,6 +104,9 @@ try {
                 created_at,
                 is_read
                 $messageSelectReadAt
+                $messageSelectAttachmentUrl
+                $messageSelectAttachmentMime
+                $messageSelectAttachmentSize
             FROM chat_messages
             WHERE conversation_id = ? AND message_id > ?
             ORDER BY message_id ASC
@@ -135,6 +147,10 @@ try {
             'read' => $isRead,
             'readAt' => !empty($msg['read_at']) ? strtotime((string)$msg['read_at']) * 1000 : null,
             'deliveryStatus' => $isRead ? 'delivered' : 'sent',
+            'imageUrl' => $msg['attachment_url'] ?? null,
+            'attachmentUrl' => $msg['attachment_url'] ?? null,
+            'attachmentMime' => $msg['attachment_mime'] ?? null,
+            'attachmentSize' => isset($msg['attachment_size']) ? (int)$msg['attachment_size'] : null,
         ];
     }, $messages);
 

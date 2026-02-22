@@ -33,6 +33,30 @@ return [
     'DB_FALLBACK_NAME' => 'emer_comm_test',
     'DB_FALLBACK_USER' => 'root',
     'DB_FALLBACK_PASS' => '',
+
+    // ===========================================
+    // CHAT IMAGE STORAGE
+    // ===========================================
+    // Storage driver for chat incident photos:
+    // - 'filesystem' (default): saves to USERS/uploads/chat
+    // - 'postgres': saves image bytes in PostgreSQL (table: chat_attachments)
+    'CHAT_IMAGE_STORAGE_DRIVER' => 'filesystem',
+
+    // PostgreSQL image storage settings (used when driver = 'postgres')
+    // You can set either:
+    // 1) PG_IMG_URL (full connection URL), OR
+    // 2) individual PG_IMG_* keys below.
+    'PG_IMG_URL' => '',
+    'PG_IMG_HOST' => '127.0.0.1',
+    'PG_IMG_PORT' => 5432,
+    'PG_IMG_DB' => 'emer_comm_images',
+    'PG_IMG_USER' => 'postgres',
+    'PG_IMG_PASS' => '',
+    'PG_IMG_SSLMODE' => 'prefer',
+    'PG_IMG_CHANNEL_BINDING' => '',
+    // Optional libpq options (example for Neon pooler/SNI fallback):
+    // 'endpoint=your-endpoint-id'
+    'PG_IMG_OPTIONS' => '',
     
     // ===========================================
     // AI/ANALYSIS API KEYS (not used for alert translation)
@@ -44,7 +68,14 @@ return [
     
     // API Keys (get from respective providers)
     'AI_API_KEY' => '',                 // Default AI key
+    'AI_API_KEY_AI_MESSAGE' => '',      // For AI message generation
+    'AI_API_KEY_CHATBOT' => '',         // For user chatbot assistant (fallback: AI_API_KEY_AI_MESSAGE)
     'AI_API_KEY_ANALYSIS' => '',        // For AI analysis only
+    'CHAT_ASSISTANT_ENABLED' => true,   // Enable floating-button AI assistant
+    'CHAT_ASSISTANT_MODEL' => 'gemini-2.5-flash',
+    'CHAT_ASSISTANT_EMERGENCY_CALL_URL' => 'http://localhost/EMERGENCY-COM/USERS/emergency-call.php', // Emergency call URL sent by AI assistant
+    'CHAT_ASSISTANT_EMERGENCY_NUMBER' => '122', // Emergency hotline number used by AI assistant (Quezon City)
+    'CHAT_ASSISTANT_SYSTEM_PROMPT' => '', // Optional override. Leave blank to use built-in QC emergency prompt.
     'OPENWEATHER_API_KEY' => '',        // OpenWeather key used by Weather Monitoring/PAGASA integration
     'PAGASA_API_KEY' => '',             // Optional alias of OPENWEATHER_API_KEY
     

@@ -277,10 +277,11 @@ $admin_username = $admin['username'] ?? 'Admin';
             if (placeholder) placeholder.remove();
             
             const messageDiv = document.createElement('div');
-            const isAdmin = msg.sender_type === 'admin';
+            const senderType = msg.senderType || msg.sender_type;
+            const isAdmin = senderType === 'admin';
             messageDiv.className = `message ${isAdmin ? 'admin' : 'user'}`;
             
-            const senderName = isAdmin ? ADMIN_USERNAME : (msg.sender_name || 'User');
+            const senderName = isAdmin ? ADMIN_USERNAME : (msg.senderName || msg.sender_name || 'User');
             const avatar = isAdmin ? ADMIN_AVATAR : `https://ui-avatars.com/api/?name=${encodeURIComponent(senderName)}&background=6c757d&color=fff&size=64`;
             
             const time = new Date(msg.timestamp).toLocaleTimeString('en-US', { 
@@ -288,11 +289,48 @@ $admin_username = $admin['username'] ?? 'Admin';
                 minute: '2-digit', 
                 hour12: true 
             });
+            const normalizedText = String(msg.text || '').trim();
+            const attachmentUrl = sanitizeAttachmentUrl(msg.imageUrl || msg.attachmentUrl || null);
+            const attachmentMimeRaw = (msg.attachmentMime || msg.attachment_mime || '').toString().trim().toLowerCase();
+            const attachmentMime = attachmentMimeRaw || null;
+            const isImageAttachment = !!(attachmentUrl && (
+                (attachmentMime && attachmentMime.indexOf('image/') === 0) ||
+                (!attachmentMime && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(attachmentUrl))
+            ));
+            const isVideoAttachment = !!(attachmentUrl && (
+                (attachmentMime && attachmentMime.indexOf('video/') === 0) ||
+                (!attachmentMime && /\.(mp4|webm|ogv|mov|avi|mkv)(\?|$)/i.test(attachmentUrl))
+            ));
+            const isEmailAttachment = !!(attachmentUrl && (
+                attachmentMime === 'message/rfc822' ||
+                attachmentMime === 'application/eml' ||
+                /\.eml(\?|$)/i.test(attachmentUrl)
+            ));
+            const hidePlaceholder = attachmentUrl && /^\[(photo|video|email|attachment)\]/i.test(normalizedText);
+
+            let bodyHtml = '';
+            if (normalizedText && !hidePlaceholder) {
+                bodyHtml += `<div>${htmlspecialchars(normalizedText)}</div>`;
+            }
+            if (attachmentUrl) {
+                if (isVideoAttachment) {
+                    bodyHtml += `<a href="${attachmentUrl}" target="_blank" rel="noopener noreferrer"><video controls preload="metadata" style="max-width:220px; max-height:220px; border-radius:10px; border:1px solid var(--border-color-1); margin-top:8px; object-fit:cover; display:block;"><source src="${attachmentUrl}"${attachmentMime ? ` type="${attachmentMime}"` : ''}>Your browser does not support video playback.</video></a>`;
+                } else if (isImageAttachment) {
+                    bodyHtml += `<a href="${attachmentUrl}" target="_blank" rel="noopener noreferrer"><img src="${attachmentUrl}" alt="Incident attachment" style="max-width:220px; max-height:220px; border-radius:10px; border:1px solid var(--border-color-1); margin-top:8px; object-fit:cover; display:block;"></a>`;
+                } else {
+                    const fileLabel = isEmailAttachment ? 'Open email attachment (.eml)' : 'Open attachment';
+                    const fileIcon = isEmailAttachment ? 'fa-envelope-open-text' : 'fa-paperclip';
+                    bodyHtml += `<a href="${attachmentUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; margin-top:8px; padding:8px 10px; border:1px solid var(--border-color-1); border-radius:10px; text-decoration:none;"><i class="fas ${fileIcon}"></i><span>${fileLabel}</span></a>`;
+                }
+            }
+            if (!bodyHtml) {
+                bodyHtml = `<div>${htmlspecialchars(normalizedText || 'Attachment')}</div>`;
+            }
             
             messageDiv.innerHTML = `
                 <div class="message-avatar" style="background-image: url('${avatar}'); background-size: cover; background-position: center;"></div>
                 <div class="message-content">
-                    <div>${htmlspecialchars(msg.text)}</div>
+                    ${bodyHtml}
                     <div class="message-meta">${senderName} • ${time}</div>
                 </div>
             `;
@@ -691,6 +729,22 @@ $admin_username = $admin['username'] ?? 'Admin';
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
+        }
+
+        function sanitizeAttachmentUrl(url) {
+            if (!url) return null;
+            const raw = String(url).trim();
+            if (!raw) return null;
+            if (raw.startsWith('/')) return raw;
+            try {
+                const parsed = new URL(raw, window.location.origin);
+                if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                    return parsed.href;
+                }
+            } catch (e) {
+                return null;
+            }
+            return null;
         }
         
         function playNotificationSound() {

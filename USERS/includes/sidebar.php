@@ -244,6 +244,28 @@ include __DIR__ . '/guest-monitoring-notice.php';
                             <option value="other" data-translate="chat.other">Other</option>
                         </select>
                     </div>
+                    <div class="chat-form-group">
+                        <label for="initialIncidentPhotoInput">Incident Photo or Video Proof <span class="required-asterisk">*</span></label>
+                        <input type="file" id="initialIncidentPhotoInput" accept="image/*,video/*" required style="display: none;">
+                        <div class="chat-initial-photo-row">
+                            <button type="button" id="initialIncidentPhotoBtn" class="btn btn-secondary" title="Upload incident photo or video proof">
+                                <i class="fas fa-camera"></i> Upload Proof
+                            </button>
+                            <small>Required before starting chat.</small>
+                        </div>
+                        <div class="chat-initial-photo-preview" id="initialIncidentPhotoPreview" style="display: none;">
+                            <img id="initialIncidentPhotoPreviewImg" alt="Incident proof preview">
+                            <video id="initialIncidentPhotoPreviewVideo" playsinline muted preload="metadata" style="display: none;"></video>
+                            <span id="initialIncidentPhotoPreviewIcon" class="chat-attachment-thumb-icon" style="display: none;"><i class="fas fa-file-video"></i></span>
+                            <div class="chat-attachment-meta">
+                                <strong>Incident Proof</strong>
+                                <span id="initialIncidentPhotoPreviewName"></span>
+                            </div>
+                            <button type="button" id="initialIncidentPhotoRemoveBtn" class="btn btn-secondary" title="Remove proof file">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
                     <button type="submit" class="chat-form-submit" disabled data-translate="chat.startChat">Start Chat</button>
                 </form>
             </div>
@@ -258,17 +280,31 @@ include __DIR__ . '/guest-monitoring-notice.php';
                 </div>
                 <div class="chat-messages" id="chatMessages">
                     <div class="chat-message chat-message-system">
-                        <strong>System:</strong> For life-threatening emergencies, call 911 or the Quezon City emergency hotlines immediately.
+                        <strong>System:</strong> For life-threatening emergencies, call Quezon City emergency hotline 122 immediately.
                     </div>
                 </div>
                 <div class="chat-input-row" id="chatForm">
                     <input type="text" id="chatInput" placeholder="Type your message..." autocomplete="off">
+                    <input type="file" id="chatPhotoInput" accept="image/*,video/*,.eml,message/rfc822,application/eml" style="display:none;">
+                    <button type="button" id="chatPhotoBtn" class="btn btn-secondary" title="Attach photo, video, or email file">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
                     <button type="button" id="chatSendBtn" class="btn btn-primary">Send</button>
                     <button type="button" id="chatEndConversationBtn" class="btn btn-secondary" style="margin-left: 0.5rem;" title="Close this conversation">
                         <i class="fas fa-times"></i> Close Chat
                     </button>
                     <button type="button" id="startNewConversationBtn" class="btn btn-primary" style="margin-left: 0.5rem; display: none;" title="Start a new conversation">
                         <i class="fas fa-plus"></i> Start New Conversation
+                    </button>
+                </div>
+                <div class="chat-attachment-preview" id="chatAttachmentPreview" style="display:none;">
+                    <div id="chatAttachmentThumb"></div>
+                    <div class="chat-attachment-meta">
+                        <strong id="chatAttachmentLabel">Attachment</strong>
+                        <span id="chatAttachmentName"></span>
+                    </div>
+                    <button type="button" id="chatAttachmentRemoveBtn" class="btn btn-secondary" title="Remove selected attachment">
+                        <i class="fas fa-times"></i>
                     </button>
                 </div>
             </div>
@@ -308,6 +344,23 @@ include __DIR__ . '/guest-monitoring-notice.php';
         </div>
         <div class="chat-notice-modal-footer">
             <button type="button" class="chat-notice-btn" id="chatNoticeOkBtn">OK</button>
+        </div>
+    </div>
+</div>
+
+<!-- Chat Confirm Modal -->
+<div class="chat-confirm-modal" id="chatConfirmModal" style="display: none;">
+    <div class="chat-confirm-modal-content">
+        <div class="chat-confirm-modal-header">
+            <div class="chat-confirm-icon"><i class="fas fa-circle-exclamation"></i></div>
+            <h3 id="chatConfirmTitle">Confirm Action</h3>
+        </div>
+        <div class="chat-confirm-modal-body">
+            <p id="chatConfirmMessage">Are you sure?</p>
+        </div>
+        <div class="chat-confirm-modal-footer">
+            <button type="button" class="chat-confirm-btn secondary" id="chatConfirmCancelBtn">Cancel</button>
+            <button type="button" class="chat-confirm-btn primary" id="chatConfirmOkBtn">Confirm</button>
         </div>
     </div>
 </div>
@@ -361,6 +414,17 @@ include __DIR__ . '/guest-monitoring-notice.php';
         tryFallback();
     };
     document.head.appendChild(script);
+
+    // Load AI assistant mode bootstrap for the floating chat button
+    const assistantScript = document.createElement('script');
+    assistantScript.src = scriptPath.replace('chat-mysql.js', 'chat-assistant-bootstrap.js');
+    assistantScript.onload = function() {
+        console.log('chat-assistant-bootstrap.js loaded from:', assistantScript.src);
+    };
+    assistantScript.onerror = function() {
+        console.warn('Failed to load chat-assistant-bootstrap.js from:', assistantScript.src);
+    };
+    document.head.appendChild(assistantScript);
 })();
 </script>
 <script>
@@ -465,7 +529,330 @@ document.addEventListener('DOMContentLoaded', function() {
     const chatNoticeTitle = document.getElementById('chatNoticeTitle');
     const chatNoticeMessage = document.getElementById('chatNoticeMessage');
     const chatNoticeOkBtn = document.getElementById('chatNoticeOkBtn');
+    const chatConfirmModal = document.getElementById('chatConfirmModal');
+    const chatConfirmTitle = document.getElementById('chatConfirmTitle');
+    const chatConfirmMessage = document.getElementById('chatConfirmMessage');
+    const chatConfirmOkBtn = document.getElementById('chatConfirmOkBtn');
+    const chatConfirmCancelBtn = document.getElementById('chatConfirmCancelBtn');
+    let chatConfirmResolver = null;
+    let closeConversationBusy = false;
+    const MAX_INITIAL_PROOF_BYTES = 100 * 1024 * 1024;
+    const INITIAL_PROOF_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    let selectedInitialIncidentPhotoFile = null;
+    let selectedInitialIncidentProofPreviewUrl = null;
+
+    const MAX_CHAT_ATTACHMENT_BYTES = 100 * 1024 * 1024;
+    const CHAT_ATTACHMENT_EMAIL_MIME_TYPES = ['message/rfc822', 'application/eml'];
+    let selectedChatAttachmentFile = null;
+
+    function refreshInitialIncidentPhotoElements() {
+        return {
+            input: document.getElementById('initialIncidentPhotoInput'),
+            button: document.getElementById('initialIncidentPhotoBtn'),
+            preview: document.getElementById('initialIncidentPhotoPreview'),
+            previewImg: document.getElementById('initialIncidentPhotoPreviewImg'),
+            previewVideo: document.getElementById('initialIncidentPhotoPreviewVideo'),
+            previewIcon: document.getElementById('initialIncidentPhotoPreviewIcon'),
+            previewName: document.getElementById('initialIncidentPhotoPreviewName'),
+            removeBtn: document.getElementById('initialIncidentPhotoRemoveBtn')
+        };
+    }
+
+    function clearInitialIncidentPhoto() {
+        selectedInitialIncidentPhotoFile = null;
+        if (selectedInitialIncidentProofPreviewUrl) {
+            URL.revokeObjectURL(selectedInitialIncidentProofPreviewUrl);
+            selectedInitialIncidentProofPreviewUrl = null;
+        }
+        const elements = refreshInitialIncidentPhotoElements();
+        if (elements.input) elements.input.value = '';
+        if (elements.preview) elements.preview.style.display = 'none';
+        if (elements.previewImg) {
+            elements.previewImg.style.display = 'none';
+            elements.previewImg.removeAttribute('src');
+        }
+        if (elements.previewVideo) {
+            elements.previewVideo.pause();
+            elements.previewVideo.style.display = 'none';
+            elements.previewVideo.removeAttribute('src');
+            elements.previewVideo.load();
+        }
+        if (elements.previewIcon) {
+            elements.previewIcon.style.display = 'none';
+            elements.previewIcon.innerHTML = '<i class="fas fa-file-video"></i>';
+        }
+        if (elements.previewName) elements.previewName.textContent = '';
+        if (typeof window.updateUserInfoSubmitState === 'function') {
+            window.updateUserInfoSubmitState();
+        }
+    }
+
+    function setInitialIncidentPhoto(file) {
+        if (!(file instanceof File)) {
+            clearInitialIncidentPhoto();
+            return;
+        }
+
+        const mime = (file.type || '').toLowerCase().trim();
+        const fileName = (file.name || '').toLowerCase().trim();
+        const isImageProof = (mime.indexOf('image/') === 0)
+            || (INITIAL_PROOF_IMAGE_MIME_TYPES.includes(mime))
+            || (/\.(jpe?g|png|webp|gif)$/i.test(fileName));
+        const isVideoProof = (mime.indexOf('video/') === 0)
+            || (/\.(mp4|webm|ogv|mov|avi|mkv)$/i.test(fileName));
+
+        if (!isImageProof && !isVideoProof) {
+            showChatNoticeModal('Only image or video proof files are allowed.', 'Unsupported Proof File');
+            clearInitialIncidentPhoto();
+            return;
+        }
+        if (file.size <= 0 || file.size > MAX_INITIAL_PROOF_BYTES) {
+            showChatNoticeModal('Proof file must be 100MB or smaller.', 'File Too Large');
+            clearInitialIncidentPhoto();
+            return;
+        }
+
+        selectedInitialIncidentPhotoFile = file;
+        const elements = refreshInitialIncidentPhotoElements();
+
+        if (elements.previewName) {
+            const kb = Math.max(1, Math.round(file.size / 1024));
+            elements.previewName.textContent = file.name + ' (' + kb + ' KB)';
+        }
+
+        if (selectedInitialIncidentProofPreviewUrl) {
+            URL.revokeObjectURL(selectedInitialIncidentProofPreviewUrl);
+            selectedInitialIncidentProofPreviewUrl = null;
+        }
+
+        if (elements.previewImg) {
+            elements.previewImg.style.display = 'none';
+            elements.previewImg.removeAttribute('src');
+        }
+        if (elements.previewVideo) {
+            elements.previewVideo.pause();
+            elements.previewVideo.style.display = 'none';
+            elements.previewVideo.removeAttribute('src');
+            elements.previewVideo.load();
+        }
+        if (elements.previewIcon) {
+            elements.previewIcon.style.display = 'none';
+            elements.previewIcon.innerHTML = '<i class="fas fa-file-video"></i>';
+        }
+
+        if (isImageProof && elements.previewImg) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                if (event && event.target && typeof event.target.result === 'string') {
+                    elements.previewImg.src = event.target.result;
+                    elements.previewImg.style.display = 'block';
+                }
+            };
+            reader.readAsDataURL(file);
+        } else if (isVideoProof && elements.previewVideo) {
+            const objectUrl = URL.createObjectURL(file);
+            selectedInitialIncidentProofPreviewUrl = objectUrl;
+            elements.previewVideo.src = objectUrl;
+            elements.previewVideo.style.display = 'block';
+            elements.previewVideo.muted = true;
+            elements.previewVideo.playsInline = true;
+            elements.previewVideo.preload = 'metadata';
+        } else if (elements.previewIcon) {
+            elements.previewIcon.style.display = 'inline-flex';
+            elements.previewIcon.innerHTML = '<i class="fas fa-file-video"></i>';
+        }
+
+        if (elements.preview) {
+            elements.preview.style.display = 'flex';
+        }
+
+        if (typeof window.updateUserInfoSubmitState === 'function') {
+            window.updateUserInfoSubmitState();
+        }
+    }
+
+    function bindInitialIncidentPhotoHandlers() {
+        const elements = refreshInitialIncidentPhotoElements();
+
+        if (elements.button && elements.input && !elements.button.hasAttribute('data-proof-photo-bound')) {
+            elements.button.setAttribute('data-proof-photo-bound', 'true');
+            elements.button.addEventListener('click', function() {
+                elements.input.click();
+            });
+        }
+
+        if (elements.input && !elements.input.hasAttribute('data-proof-photo-change-bound')) {
+            elements.input.setAttribute('data-proof-photo-change-bound', 'true');
+            elements.input.addEventListener('change', function() {
+                const file = elements.input.files && elements.input.files[0] ? elements.input.files[0] : null;
+                setInitialIncidentPhoto(file);
+            });
+        }
+
+        if (elements.removeBtn && !elements.removeBtn.hasAttribute('data-proof-photo-remove-bound')) {
+            elements.removeBtn.setAttribute('data-proof-photo-remove-bound', 'true');
+            elements.removeBtn.addEventListener('click', function() {
+                clearInitialIncidentPhoto();
+            });
+        }
+    }
     
+    function refreshChatAttachmentElements() {
+        return {
+            input: document.getElementById('chatPhotoInput'),
+            button: document.getElementById('chatPhotoBtn'),
+            preview: document.getElementById('chatAttachmentPreview'),
+            previewThumb: document.getElementById('chatAttachmentThumb'),
+            previewName: document.getElementById('chatAttachmentName'),
+            previewLabel: document.getElementById('chatAttachmentLabel'),
+            removeBtn: document.getElementById('chatAttachmentRemoveBtn')
+        };
+    }
+
+    function hasPendingChatAttachment() {
+        return selectedChatAttachmentFile instanceof File;
+    }
+
+    function clearChatAttachmentSelection() {
+        selectedChatAttachmentFile = null;
+        const elements = refreshChatAttachmentElements();
+        if (elements.input) elements.input.value = '';
+        if (elements.preview) elements.preview.style.display = 'none';
+        if (elements.previewThumb) elements.previewThumb.innerHTML = '';
+        if (elements.previewName) elements.previewName.textContent = '';
+        if (elements.previewLabel) elements.previewLabel.textContent = 'Attachment';
+    }
+
+    function formatAttachmentSize(bytes) {
+        const safeBytes = Number.isFinite(bytes) ? Math.max(0, bytes) : 0;
+        if (safeBytes >= 1024 * 1024) {
+            return (safeBytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        return Math.max(1, Math.round(safeBytes / 1024)) + ' KB';
+    }
+
+    function detectChatAttachmentKind(file) {
+        const mime = (file && file.type ? file.type : '').toLowerCase().trim();
+        const name = (file && file.name ? file.name : '').toLowerCase().trim();
+        if (mime.indexOf('image/') === 0) return 'image';
+        if (mime.indexOf('video/') === 0) return 'video';
+        if (CHAT_ATTACHMENT_EMAIL_MIME_TYPES.includes(mime) || /\.eml$/.test(name)) return 'email';
+        return 'file';
+    }
+
+    function isAllowedChatAttachment(file) {
+        if (!(file instanceof File)) return false;
+        const kind = detectChatAttachmentKind(file);
+        return kind === 'image' || kind === 'video' || kind === 'email';
+    }
+
+    function setChatAttachment(file) {
+        if (!(file instanceof File)) {
+            clearChatAttachmentSelection();
+            return;
+        }
+
+        if (file.size <= 0 || file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+            showChatNoticeModal('Attachment must be 100MB or smaller.', 'File Too Large');
+            clearChatAttachmentSelection();
+            return;
+        }
+
+        if (!isAllowedChatAttachment(file)) {
+            showChatNoticeModal('Only image, video, or .eml email attachments are allowed.', 'Unsupported Attachment');
+            clearChatAttachmentSelection();
+            return;
+        }
+
+        selectedChatAttachmentFile = file;
+        const elements = refreshChatAttachmentElements();
+        const kind = detectChatAttachmentKind(file);
+
+        if (elements.previewLabel) {
+            elements.previewLabel.textContent = kind === 'image'
+                ? 'Photo Attachment'
+                : (kind === 'video' ? 'Video Attachment' : 'Email Attachment');
+        }
+
+        if (elements.previewName) {
+            elements.previewName.textContent = file.name + ' (' + formatAttachmentSize(file.size) + ')';
+        }
+
+        if (elements.previewThumb) {
+            elements.previewThumb.innerHTML = '';
+            if (kind === 'image') {
+                const img = document.createElement('img');
+                const objectUrl = URL.createObjectURL(file);
+                img.src = objectUrl;
+                img.alt = 'Attachment preview';
+                img.onload = function() { URL.revokeObjectURL(objectUrl); };
+                img.onerror = function() { URL.revokeObjectURL(objectUrl); };
+                elements.previewThumb.appendChild(img);
+            } else if (kind === 'video') {
+                const video = document.createElement('video');
+                const source = document.createElement('source');
+                const objectUrl = URL.createObjectURL(file);
+                source.src = objectUrl;
+                if (file.type) {
+                    source.type = file.type;
+                }
+                video.preload = 'metadata';
+                video.muted = true;
+                video.playsInline = true;
+                video.appendChild(source);
+                video.onloadedmetadata = function() {
+                    URL.revokeObjectURL(objectUrl);
+                };
+                video.onerror = function() {
+                    URL.revokeObjectURL(objectUrl);
+                };
+                elements.previewThumb.appendChild(video);
+            } else {
+                const iconWrap = document.createElement('span');
+                iconWrap.className = 'chat-attachment-thumb-icon';
+                iconWrap.innerHTML = '<i class="fas fa-envelope-open-text"></i>';
+                elements.previewThumb.appendChild(iconWrap);
+            }
+        }
+
+        if (elements.preview) {
+            elements.preview.style.display = 'flex';
+        }
+    }
+
+    function bindChatAttachmentHandlers() {
+        const elements = refreshChatAttachmentElements();
+
+        if (elements.button && elements.input && !elements.button.hasAttribute('data-chat-attachment-bound')) {
+            elements.button.setAttribute('data-chat-attachment-bound', 'true');
+            elements.button.addEventListener('click', function() {
+                elements.input.click();
+            });
+        }
+
+        if (elements.input && !elements.input.hasAttribute('data-chat-attachment-change-bound')) {
+            elements.input.setAttribute('data-chat-attachment-change-bound', 'true');
+            elements.input.addEventListener('change', function() {
+                const file = elements.input.files && elements.input.files[0] ? elements.input.files[0] : null;
+                setChatAttachment(file);
+            });
+        }
+
+        if (elements.removeBtn && !elements.removeBtn.hasAttribute('data-chat-attachment-remove-bound')) {
+            elements.removeBtn.setAttribute('data-chat-attachment-remove-bound', 'true');
+            elements.removeBtn.addEventListener('click', function() {
+                clearChatAttachmentSelection();
+            });
+        }
+    }
+
+    window.getPendingChatAttachmentFile = function() {
+        return selectedChatAttachmentFile instanceof File ? selectedChatAttachmentFile : null;
+    };
+    window.hasPendingChatAttachment = hasPendingChatAttachment;
+    window.clearPendingChatAttachment = clearChatAttachmentSelection;
+
+    bindChatAttachmentHandlers();
     // Function to ensure chat-mysql.js is loaded
     function ensureChatScriptLoaded() {
         return new Promise((resolve) => {
@@ -525,6 +912,90 @@ document.addEventListener('DOMContentLoaded', function() {
             if (e.target === chatNoticeModal) hideChatNoticeModal();
         });
     }
+
+    function hideChatConfirmModal(confirmed = false) {
+        if (!chatConfirmModal) {
+            if (chatConfirmResolver) {
+                const resolver = chatConfirmResolver;
+                chatConfirmResolver = null;
+                resolver(Boolean(confirmed));
+            }
+            return;
+        }
+
+        chatConfirmModal.classList.remove('show');
+        setTimeout(() => {
+            if (!chatConfirmModal.classList.contains('show')) {
+                chatConfirmModal.style.display = 'none';
+            }
+        }, 220);
+
+        if (chatConfirmResolver) {
+            const resolver = chatConfirmResolver;
+            chatConfirmResolver = null;
+            resolver(Boolean(confirmed));
+        }
+    }
+
+    function showChatConfirmModal(message, title = 'Confirm Action', options = {}) {
+        if (!chatConfirmModal || !chatConfirmTitle || !chatConfirmMessage || !chatConfirmOkBtn || !chatConfirmCancelBtn) {
+            return Promise.resolve(window.confirm(message));
+        }
+
+        if (chatConfirmResolver) {
+            const pending = chatConfirmResolver;
+            chatConfirmResolver = null;
+            pending(false);
+        }
+
+        const confirmText = options && options.confirmText ? String(options.confirmText) : 'Confirm';
+        const cancelText = options && options.cancelText ? String(options.cancelText) : 'Cancel';
+
+        chatConfirmTitle.textContent = title;
+        chatConfirmMessage.textContent = message;
+        chatConfirmOkBtn.textContent = confirmText;
+        chatConfirmCancelBtn.textContent = cancelText;
+
+        chatConfirmModal.style.display = 'flex';
+        setTimeout(() => chatConfirmModal.classList.add('show'), 10);
+
+        return new Promise((resolve) => {
+            chatConfirmResolver = resolve;
+        });
+    }
+
+    if (chatConfirmOkBtn && !chatConfirmOkBtn.hasAttribute('data-confirm-ok-bound')) {
+        chatConfirmOkBtn.setAttribute('data-confirm-ok-bound', 'true');
+        chatConfirmOkBtn.addEventListener('click', function() {
+            hideChatConfirmModal(true);
+        });
+    }
+
+    if (chatConfirmCancelBtn && !chatConfirmCancelBtn.hasAttribute('data-confirm-cancel-bound')) {
+        chatConfirmCancelBtn.setAttribute('data-confirm-cancel-bound', 'true');
+        chatConfirmCancelBtn.addEventListener('click', function() {
+            hideChatConfirmModal(false);
+        });
+    }
+
+    if (chatConfirmModal && !chatConfirmModal.hasAttribute('data-confirm-backdrop-bound')) {
+        chatConfirmModal.setAttribute('data-confirm-backdrop-bound', 'true');
+        chatConfirmModal.addEventListener('click', function(e) {
+            if (e.target === chatConfirmModal) {
+                hideChatConfirmModal(false);
+            }
+        });
+    }
+
+    if (!document.body.hasAttribute('data-chat-confirm-esc-bound')) {
+        document.body.setAttribute('data-chat-confirm-esc-bound', 'true');
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && chatConfirmModal && chatConfirmModal.classList.contains('show')) {
+                hideChatConfirmModal(false);
+            }
+        });
+    }
+
     function resolveUserChatApiPath(endpointFile) {
         const path = window.location.pathname || '';
         const candidates = [];
@@ -547,6 +1018,71 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!unique.includes(c)) unique.push(c);
         });
         return unique;
+    }
+
+    function getOrCreateChatUserIdentity() {
+        let userId = sessionStorage.getItem('user_id');
+        let isGuest = false;
+
+        if (!userId || userId === 'null' || userId === 'undefined') {
+            let guestId = localStorage.getItem('guest_user_id');
+            if (!guestId) {
+                guestId = 'guest_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('guest_user_id', guestId);
+            }
+            userId = guestId;
+            sessionStorage.setItem('user_id', userId);
+            isGuest = true;
+        } else {
+            isGuest = userId.startsWith('guest_');
+        }
+
+        return { userId, isGuest };
+    }
+
+    async function sendInitialIncidentProof(userPayload, proofFile) {
+        const endpoints = resolveUserChatApiPath('chat-send.php');
+        let lastError = null;
+
+        for (const endpoint of endpoints) {
+            try {
+                const formData = new FormData();
+                formData.append('text', '');
+                formData.append('userId', userPayload.userId);
+                formData.append('userName', userPayload.userName || 'Guest User');
+                formData.append('userEmail', userPayload.userEmail || '');
+                formData.append('userPhone', userPayload.userPhone || '');
+                formData.append('userLocation', userPayload.userLocation || '');
+                formData.append('userConcern', userPayload.userConcern || '');
+                formData.append('isGuest', userPayload.isGuest ? '1' : '0');
+                formData.append('photo', proofFile);
+                formData.append('attachment', proofFile);
+                formData.append('forceNewConversation', '1');
+
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (parseErr) {
+                    data = null;
+                }
+
+                if (res.ok && data && data.success) {
+                    return data;
+                }
+
+                const errMsg = data && data.message ? data.message : ('HTTP ' + res.status);
+                lastError = new Error(errMsg);
+            } catch (err) {
+                lastError = err;
+            }
+        }
+
+        throw lastError || new Error('Failed to upload incident proof file.');
     }
 
     function resolveReverseGeocodePath() {
@@ -843,23 +1379,36 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 80);
     }
 
-    async function closeConversationEndToEnd() {
+    async function closeConversationEndToEnd(options = {}) {
         const endBtn = document.getElementById('chatEndConversationBtn');
         const activeConversationId = sessionStorage.getItem('conversation_id') || window.currentConversationId;
+        const shouldPrompt = !options || options.prompt !== false;
 
         if (!activeConversationId) {
-            alert('No active conversation to close.');
+            showChatNoticeModal('No active conversation to close.', 'No Active Conversation');
             return false;
         }
 
-        if (!confirm('Are you sure you want to close this conversation? This will close the conversation on both your side and the admin side.')) {
+        if (closeConversationBusy) {
             return false;
         }
 
+        if (shouldPrompt) {
+            const confirmed = await showChatConfirmModal(
+                'Are you sure you want to close this conversation? This will close the conversation on both your side and the admin side.',
+                'Close Conversation',
+                { confirmText: 'Close Chat', cancelText: 'Cancel' }
+            );
+            if (!confirmed) {
+                return false;
+            }
+        }
+
+        closeConversationBusy = true;
         const originalBtnHtml = endBtn ? endBtn.innerHTML : '';
         if (endBtn) {
             endBtn.disabled = true;
-            endBtn.textContent = 'Closing...';
+            endBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Closing...';
         }
 
         let closeResult = null;
@@ -894,25 +1443,46 @@ document.addEventListener('DOMContentLoaded', function() {
             if (window.stopChatPolling) {
                 window.stopChatPolling();
             }
+
             if (window.handleConversationClosed) {
                 window.handleConversationClosed('Citizen/User', 'citizen');
             } else {
                 sessionStorage.removeItem('conversation_id');
                 window.currentConversationId = null;
+                localStorage.removeItem('guest_concern');
+                sessionStorage.removeItem('user_concern');
+
                 const chatInterface = document.getElementById('chatInterface');
                 const userInfoForm = document.getElementById('chatUserInfoForm');
+                const concernSelect = document.getElementById('userConcernSelect');
+                const chatInputEl = document.getElementById('chatInput');
+                const chatSendBtnEl = document.getElementById('chatSendBtn');
+
                 if (chatInterface) chatInterface.style.display = 'none';
                 if (userInfoForm) userInfoForm.style.display = 'block';
+                if (concernSelect) concernSelect.value = '';
+                if (chatInputEl) {
+                    chatInputEl.value = '';
+                    chatInputEl.disabled = true;
+                }
+                if (chatSendBtnEl) {
+                    chatSendBtnEl.disabled = true;
+                }
             }
+
+            clearChatAttachmentSelection();
             return true;
         } catch (error) {
             console.error('Close conversation failed:', error);
-            alert('Failed to close conversation: ' + (error && error.message ? error.message : 'Unknown error'));
+            const errMessage = error && error.message ? error.message : 'Unknown error';
+            showChatNoticeModal('Failed to close conversation: ' + errMessage, 'Close Failed');
             if (endBtn) {
                 endBtn.disabled = false;
                 endBtn.innerHTML = originalBtnHtml || '<i class="fas fa-times"></i> Close Chat';
             }
             return false;
+        } finally {
+            closeConversationBusy = false;
         }
     }
 
@@ -948,12 +1518,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 e.stopPropagation();
                 
-                // Get input value
+                // Get input value and pending attachment
                 const input = document.getElementById('chatInput');
                 const text = input ? input.value.trim() : '';
-                
-                if (!text) {
-                    console.warn('GLOBAL HANDLER: No text to send');
+                const pendingAttachment = (typeof window.getPendingChatAttachmentFile === 'function')
+                    ? window.getPendingChatAttachmentFile()
+                    : null;
+                const hasAttachment = pendingAttachment instanceof File;
+
+                if (!text && !hasAttachment) {
+                    console.warn('GLOBAL HANDLER: No text or attachment to send');
                     return;
                 }
                 
@@ -983,7 +1557,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (initSuccess && window.sendChatMessageMySQL) {
                             console.log('GLOBAL HANDLER: Chat initialized, sending message');
                             sendBtn.textContent = 'Sending...';
-                            const success = await window.sendChatMessageMySQL(text);
+                            const success = await window.sendChatMessageMySQL(text, pendingAttachment);
                             if (success && input) {
                                 input.value = '';
                             }
@@ -1006,7 +1580,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     sendBtn.disabled = true;
                     sendBtn.textContent = 'Sending...';
                     try {
-                        const success = await window.sendChatMessageMySQL(text);
+                        const success = await window.sendChatMessageMySQL(text, pendingAttachment);
                         if (success && input) {
                             input.value = '';
                         }
@@ -1023,7 +1597,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     sendBtn.disabled = true;
                     sendBtn.textContent = 'Sending...';
                     try {
-                        await window.sendChatMessage();
+                        await window.sendChatMessage(text, pendingAttachment);
                         sendBtn.disabled = false;
                         sendBtn.textContent = 'Send';
                     } catch (err) {
@@ -1348,7 +1922,56 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, 150);
     }
+    async function openChatForNewIncident() {
+        if (typeof window.disableChatAssistantMode === 'function') {
+            window.disableChatAssistantMode();
+        } else {
+            window.chatAssistantMode = false;
+        }
 
+        // Fresh incident report flow: keep identity fields, reset concern/proof and thread state.
+        // Do not auto-close using the close button flow here.
+        // Previous active conversations are closed by the backend when starting a new incident
+        // via forceNewConversation=1 in the initial proof upload request.
+        if (typeof window.startNewConversation === 'function') {
+            window.startNewConversation();
+        } else if (typeof window.resetChatForNewConversation === 'function') {
+            window.resetChatForNewConversation();
+        } else {
+            sessionStorage.removeItem('conversation_id');
+            window.currentConversationId = null;
+            localStorage.removeItem('guest_concern');
+            sessionStorage.removeItem('user_concern');
+        }
+
+        window.formJustSubmitted = false;
+        window.conversationClosedHandled = false;
+
+        if (typeof clearInitialIncidentPhoto === 'function') {
+            clearInitialIncidentPhoto();
+        }
+        if (typeof window.clearPendingChatAttachment === 'function') {
+            window.clearPendingChatAttachment();
+        }
+
+        const concernSelect = document.getElementById('userConcernSelect');
+        if (concernSelect) {
+            concernSelect.value = '';
+        }
+
+        const chatInterface = document.getElementById('chatInterface');
+        const userInfoForm = document.getElementById('chatUserInfoForm');
+        if (chatInterface && userInfoForm) {
+            chatInterface.style.display = 'none';
+            userInfoForm.style.display = 'block';
+        }
+
+        if (typeof window.updateUserInfoSubmitState === 'function') {
+            window.updateUserInfoSubmitState();
+        }
+
+        openChat();
+    }
     function closeChat() {
         if (!chatModal) return;
         chatModal.classList.remove('chat-modal-open');
@@ -1391,6 +2014,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!userInfoForm || !chatInterface) {
             console.warn('User info form or chat interface not found');
+            return;
+        }
+
+        if (window.chatAssistantMode === true) {
+            userInfoForm.style.display = 'none';
+            chatInterface.style.display = 'block';
             return;
         }
         
@@ -1716,19 +2345,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const locationInput = document.getElementById('userLocationInput');
         const concernSelect = document.getElementById('userConcernSelect');
         const submitBtn = document.querySelector('.chat-form-submit');
-        
+
+        bindInitialIncidentPhotoHandlers();
+
         if (!nameInput || !contactInput || !locationInput || !concernSelect || !submitBtn) {
             setTimeout(setupFormValidation, 100);
             return;
         }
-        
+
         function validateForm() {
             const name = nameInput.value.trim();
             const contact = contactInput.value.trim();
             const location = locationInput.value.trim();
             const concern = concernSelect.value;
-            
-            if (name && contact && location && concern) {
+            const hasProofFile = selectedInitialIncidentPhotoFile instanceof File;
+
+            if (name && contact && location && concern && hasProofFile) {
                 submitBtn.disabled = false;
                 submitBtn.style.opacity = '1';
                 submitBtn.style.cursor = 'pointer';
@@ -1738,21 +2370,31 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitBtn.style.cursor = 'not-allowed';
             }
         }
-        
-        // Initial validation
+
+        window.updateUserInfoSubmitState = validateForm;
         validateForm();
-        
-        // Add event listeners
-        nameInput.addEventListener('input', validateForm);
-        contactInput.addEventListener('input', validateForm);
-        locationInput.addEventListener('change', validateForm);
-        concernSelect.addEventListener('change', validateForm);
-        
-        // Also listen to location search input changes
+
+        if (!nameInput.hasAttribute('data-validate-bound')) {
+            nameInput.setAttribute('data-validate-bound', 'true');
+            nameInput.addEventListener('input', validateForm);
+        }
+        if (!contactInput.hasAttribute('data-validate-bound')) {
+            contactInput.setAttribute('data-validate-bound', 'true');
+            contactInput.addEventListener('input', validateForm);
+        }
+        if (!locationInput.hasAttribute('data-validate-bound')) {
+            locationInput.setAttribute('data-validate-bound', 'true');
+            locationInput.addEventListener('change', validateForm);
+        }
+        if (!concernSelect.hasAttribute('data-validate-bound')) {
+            concernSelect.setAttribute('data-validate-bound', 'true');
+            concernSelect.addEventListener('change', validateForm);
+        }
+
         const locationSearch = document.getElementById('userLocationSearch');
-        if (locationSearch) {
+        if (locationSearch && !locationSearch.hasAttribute('data-validate-bound')) {
+            locationSearch.setAttribute('data-validate-bound', 'true');
             locationSearch.addEventListener('input', function() {
-                // Validate when location is selected
                 setTimeout(validateForm, 100);
             });
         }
@@ -1769,6 +2411,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         const freshForm = document.getElementById('userInfoForm');
+        clearInitialIncidentPhoto();
+        bindInitialIncidentPhotoHandlers();
         
         if (freshForm && !freshForm.hasAttribute('data-handler-attached')) {
             freshForm.setAttribute('data-handler-attached', 'true');
@@ -1777,98 +2421,151 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
-                
+
                 const name = document.getElementById('userNameInput').value.trim();
                 const contact = document.getElementById('userContactInput').value.trim();
                 const location = document.getElementById('userLocationInput').value.trim();
                 const concern = document.getElementById('userConcernSelect').value;
-                
+                const proofFile = selectedInitialIncidentPhotoFile;
+
                 if (!name || !contact || !location || !concern) {
-                    alert('Please fill in all required fields.');
+                    showChatNoticeModal('Please fill in all required fields.', 'Missing Required Fields');
                     return false;
                 }
-                
-                console.log('Form submitted:', { name, contact, location, concern });
-                
-                // Store user info in both sessionStorage and localStorage
-                sessionStorage.setItem('user_name', name);
-                sessionStorage.setItem('user_phone', contact);
-                sessionStorage.setItem('user_location', location);
-                sessionStorage.setItem('user_concern', concern);
-                
-                // Save to localStorage for persistence
-                localStorage.setItem('guest_info_provided', 'true');
-                localStorage.setItem('guest_name', name);
-                localStorage.setItem('guest_contact', contact);
-                localStorage.setItem('guest_location', location);
-                localStorage.setItem('guest_concern', concern);
-                
-                // Hide form and show chat interface
-                const userInfoForm = document.getElementById('chatUserInfoForm');
-                const chatInterface = document.getElementById('chatInterface');
-                if (userInfoForm && chatInterface) {
-                    userInfoForm.style.display = 'none';
-                    chatInterface.style.display = 'block';
-                }
-                
-                // Enable chat input and send button
-                const chatInput = document.getElementById('chatInput');
-                const chatSendBtn = document.getElementById('chatSendBtn');
-                if (chatInput) chatInput.disabled = false;
-                if (chatSendBtn) {
-                    chatSendBtn.disabled = false;
-                    chatSendBtn.textContent = 'Send';
-                }
-                
-                // Clear any old conversation ID before initializing new chat
-                sessionStorage.removeItem('conversation_id');
-                if (window.stopChatPolling) {
-                    window.stopChatPolling();
-                }
-                
-                // Reset chat initialization flags
-                if (window.chatInitialized !== undefined) {
-                    window.chatInitialized = false;
-                }
-                
-                // Set a flag to prevent form from showing again after submission
-                window.formJustSubmitted = true;
-                // Clear the closed handler flag since we're starting fresh
-                window.conversationClosedHandled = false;
-                
-                // Initialize MySQL chat with the provided info
-                if (window.initChatMySQL) {
-                    try {
-                        const success = await window.initChatMySQL();
-                        if (success) {
-                            console.log('Chat initialized after form submission - new conversation created');
-                            // Clear form submission flag after successful initialization
-                            setTimeout(() => {
-                                window.formJustSubmitted = false;
-                            }, 1000);
-                            // Attach send button handlers
-                            setTimeout(() => {
-                                if (window.attachSendButtonHandlers) {
-                                    window.attachSendButtonHandlers();
-                                }
-                                // Focus input after handlers are attached
-                                if (chatInput) {
-                                    chatInput.focus();
-                                }
-                            }, 200);
-                        } else {
-                            console.error('Failed to initialize chat');
-                            alert('Failed to initialize chat. Please try again.');
-                        }
-                    } catch (err) {
-                        console.error('Failed to initialize chat:', err);
-                        alert('Failed to initialize chat. Please try again.');
+
+                if (!(proofFile instanceof File)) {
+                    showChatNoticeModal('Please upload an incident photo or video proof before starting chat.', 'Proof Required');
+                    if (typeof window.updateUserInfoSubmitState === 'function') {
+                        window.updateUserInfoSubmitState();
                     }
-                } else {
-                    console.error('initChatMySQL function not available');
-                    alert('Chat system is not ready. Please refresh the page.');
+                    return false;
                 }
-                
+
+                const submitBtn = freshForm.querySelector('.chat-form-submit');
+                const submitBtnOriginalHtml = submitBtn ? submitBtn.innerHTML : '';
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting Chat...';
+                }
+
+                console.log('Form submitted:', { name, contact, location, concern, hasProofFile: true });
+
+                try {
+                    const identity = getOrCreateChatUserIdentity();
+                    const initialProofResult = await sendInitialIncidentProof({
+                        userId: identity.userId,
+                        userName: name,
+                        userEmail: sessionStorage.getItem('user_email') || '',
+                        userPhone: contact,
+                        userLocation: location,
+                        userConcern: concern,
+                        isGuest: identity.isGuest
+                    }, proofFile);
+
+                    if (initialProofResult && initialProofResult.conversationId) {
+                        const initialConversationId = String(initialProofResult.conversationId);
+                        sessionStorage.setItem('conversation_id', initialConversationId);
+                        window.currentConversationId = initialProofResult.conversationId;
+                    }
+
+                    // Store user info in both sessionStorage and localStorage
+                    sessionStorage.setItem('user_name', name);
+                    sessionStorage.setItem('user_phone', contact);
+                    sessionStorage.setItem('user_location', location);
+                    sessionStorage.setItem('user_concern', concern);
+
+                    // Save to localStorage for persistence
+                    localStorage.setItem('guest_info_provided', 'true');
+                    localStorage.setItem('guest_name', name);
+                    localStorage.setItem('guest_contact', contact);
+                    localStorage.setItem('guest_location', location);
+                    localStorage.setItem('guest_concern', concern);
+
+                    // Clear selected proof file from the form after successful upload
+                    clearInitialIncidentPhoto();
+
+                    // Hide form and show chat interface
+                    const userInfoForm = document.getElementById('chatUserInfoForm');
+                    const chatInterface = document.getElementById('chatInterface');
+                    if (userInfoForm && chatInterface) {
+                        userInfoForm.style.display = 'none';
+                        chatInterface.style.display = 'block';
+                    }
+
+                    // Enable chat input and send button
+                    const chatInput = document.getElementById('chatInput');
+                    const chatSendBtn = document.getElementById('chatSendBtn');
+                    if (chatInput) chatInput.disabled = false;
+                    if (chatSendBtn) {
+                        chatSendBtn.disabled = false;
+                        chatSendBtn.textContent = 'Send';
+                    }
+
+                    if (window.stopChatPolling) {
+                        window.stopChatPolling();
+                    }
+
+                    // Reset chat initialization flags
+                    if (window.chatInitialized !== undefined) {
+                        window.chatInitialized = false;
+                    }
+
+                    // Set a flag to prevent form from showing again after submission
+                    window.formJustSubmitted = true;
+                    // Clear the closed handler flag since we're starting fresh
+                    window.conversationClosedHandled = false;
+
+                    // Initialize MySQL chat with the provided info
+                    if (window.initChatMySQL) {
+                        try {
+                            const success = await window.initChatMySQL();
+                            if (success) {
+                                console.log('Chat initialized after form submission - conversation ready with initial proof file');
+                                // Clear form submission flag after successful initialization
+                                setTimeout(() => {
+                                    window.formJustSubmitted = false;
+                                }, 1000);
+                                // Attach send button handlers
+                                setTimeout(() => {
+                                    if (window.attachSendButtonHandlers) {
+                                        window.attachSendButtonHandlers();
+                                    }
+                                    // Focus input after handlers are attached
+                                    if (chatInput) {
+                                        chatInput.focus();
+                                    }
+                                }, 200);
+                            } else {
+                                console.error('Failed to initialize chat');
+                                showChatNoticeModal('Chat started but the interface could not be initialized. Please close and reopen chat.', 'Initialization Issue');
+                                window.formJustSubmitted = false;
+                            }
+                        } catch (err) {
+                            console.error('Failed to initialize chat:', err);
+                            showChatNoticeModal('Chat started but the interface could not be initialized. Please close and reopen chat.', 'Initialization Issue');
+                                window.formJustSubmitted = false;
+                        }
+                    } else {
+                        console.error('initChatMySQL function not available');
+                        showChatNoticeModal('Chat system is not ready. Please refresh the page.', 'System Not Ready');
+                        window.formJustSubmitted = false;
+                    }
+                } catch (err) {
+                    console.error('Failed to start chat with initial proof file:', err);
+                    const message = err && err.message
+                        ? err.message
+                        : 'Failed to upload incident proof file. Please try again.';
+                    showChatNoticeModal(message, 'Unable to Start Chat');
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = submitBtnOriginalHtml || 'Start Chat';
+                    }
+                    if (typeof window.updateUserInfoSubmitState === 'function') {
+                        window.updateUserInfoSubmitState();
+                    }
+                    return false;
+                }
+
                 return false;
             });
         }
@@ -1876,7 +2573,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Expose openChat globally so it can be called from other pages
     window.openChat = openChat;
+    window.openChatForNewIncident = openChatForNewIncident;
     window.closeChat = closeChatWithFlag;
+    window.closeConversationEndToEnd = closeConversationEndToEnd;
+    window.clearInitialIncidentPhotoSelection = clearInitialIncidentPhoto;
     
     // Also expose a simple test function
     window.testChatModal = function() {
@@ -2463,7 +3163,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const chatInput = document.getElementById('chatInput');
             
             // Function to send message using MySQL
-            async function sendChatMessage() {
+            async function sendChatMessage(textOverride = null, attachmentOverride = null) {
             // Anonymous mode - check if all required info is provided
             const hasStoredName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
             const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
@@ -2487,9 +3187,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            const text = chatInput ? chatInput.value.trim() : '';
-            if (!text) {
-                console.warn('Cannot send empty message');
+            const text = (typeof textOverride === 'string' ? textOverride : (chatInput ? chatInput.value : '')).trim();
+            const pendingAttachment = attachmentOverride instanceof File
+                ? attachmentOverride
+                : ((typeof window.getPendingChatAttachmentFile === 'function') ? window.getPendingChatAttachmentFile() : null);
+            const hasAttachment = pendingAttachment instanceof File;
+            if (!text && !hasAttachment) {
+                console.warn('Cannot send empty message without attachment');
                 return;
             }
             
@@ -2512,10 +3216,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     updateChatStatus('waiting');
                 }
                 
-                // Get text from input
+                // Get text from input and pending attachment
                 const text = chatInput ? chatInput.value.trim() : '';
-                if (!text) {
-                    console.warn('No text to send');
+                const pendingAttachment = (typeof window.getPendingChatAttachmentFile === 'function')
+                    ? window.getPendingChatAttachmentFile()
+                    : null;
+                const hasAttachment = pendingAttachment instanceof File;
+                if (!text && !hasAttachment) {
+                    console.warn('No text or attachment to send');
                     return;
                 }
                 
@@ -2525,7 +3233,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Add message to UI immediately
-                if (window.addMessageToChat) {
+                if (window.addMessageToChat && text) {
                     window.addMessageToChat(text, 'user', Date.now());
                 }
                 
@@ -2536,11 +3244,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 try {
                     if (window.sendChatMessageMySQL) {
                         console.log('Calling sendChatMessageMySQL with text:', text);
-                        success = await window.sendChatMessageMySQL(text);
+                        success = await window.sendChatMessageMySQL(text, pendingAttachment);
                         console.log('sendChatMessageMySQL result:', success);
                     } else if (window.sendMessage && typeof window.sendMessage === 'function') {
                         console.log('Calling sendMessage (fallback)');
-                        success = await window.sendMessage(text);
+                        success = await window.sendMessage(text, pendingAttachment);
                     } else {
                         console.error('MySQL chat system not available');
                         console.log('Available functions:', {
@@ -2569,7 +3277,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (messages.length > 0) {
                         const lastMessage = messages[messages.length - 1];
                         // Only remove if it's the message we just added
-                        if (lastMessage.textContent.includes(text)) {
+                        if (text && lastMessage.textContent.includes(text)) {
                             lastMessage.remove();
                         }
                     }
@@ -2637,7 +3345,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Make sendChatMessage available globally
             const originalSendChatMessage = sendChatMessage;
-            window.sendChatMessage = async function() {
+            window.sendChatMessage = async function(text = null, attachmentFile = null) {
                 // Check if user info is required and filled (for anonymous users)
                 const userId = sessionStorage.getItem('user_id');
                 const isLoggedIn = userId && 
@@ -2662,24 +3370,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Call original function
-                return await originalSendChatMessage();
+                return await originalSendChatMessage(text, attachmentFile);
             };
             
             // Also ensure sendChatMessageMySQL is available as an alias
             if (!window.sendChatMessageMySQL) {
-                window.sendChatMessageMySQL = async function(text) {
+                window.sendChatMessageMySQL = async function(text, attachmentFile = null) {
                     console.log('sendChatMessageMySQL wrapper called with text:', text);
-                    // If text is provided, use it; otherwise get from input
                     if (!text) {
                         const input = document.getElementById('chatInput');
                         text = input ? input.value.trim() : '';
                     }
-                    if (!text) {
-                        console.warn('No text to send');
+                    const pendingAttachment = attachmentFile instanceof File
+                        ? attachmentFile
+                        : ((typeof window.getPendingChatAttachmentFile === 'function') ? window.getPendingChatAttachmentFile() : null);
+                    const hasAttachment = pendingAttachment instanceof File;
+                    if (!text && !hasAttachment) {
+                        console.warn('No text or attachment to send');
                         return false;
                     }
                     // Call the sendChatMessage function which will handle validation
-                    return await window.sendChatMessage();
+                    return await window.sendChatMessage(text, pendingAttachment);
                 };
             }
             
@@ -2774,9 +3485,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     const input = document.getElementById('chatInput');
                     const text = input ? input.value.trim() : '';
-                    
-                    if (!text) {
-                        console.warn('No text to send');
+                    const pendingAttachment = (typeof window.getPendingChatAttachmentFile === 'function')
+                        ? window.getPendingChatAttachmentFile()
+                        : null;
+                    const hasAttachment = pendingAttachment instanceof File;
+
+                    if (!text && !hasAttachment) {
+                        console.warn('No text or attachment to send');
                         return false;
                     }
                     
@@ -2788,7 +3503,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Directly call sendChatMessageMySQL if available
                         if (window.sendChatMessageMySQL) {
                             console.log('Calling sendChatMessageMySQL with text:', text);
-                            const success = await window.sendChatMessageMySQL(text);
+                            const success = await window.sendChatMessageMySQL(text, pendingAttachment);
                             console.log('sendChatMessageMySQL result:', success);
                             
                             if (success) {
@@ -2808,7 +3523,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         } else if (window.sendChatMessage) {
                             console.log('Using sendChatMessage wrapper');
                             // Call the wrapper function
-                            await window.sendChatMessage();
+                            await window.sendChatMessage(text, pendingAttachment);
                         } else {
                             console.error('No send function available');
                             console.log('Available functions:', {
@@ -2904,16 +3619,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.log('Enter key pressed');
                         
                         const text = this.value.trim();
-                        if (!text) {
+                        const pendingAttachment = (typeof window.getPendingChatAttachmentFile === 'function')
+                            ? window.getPendingChatAttachmentFile()
+                            : null;
+                        const hasAttachment = pendingAttachment instanceof File;
+                        if (!text && !hasAttachment) {
                             return;
                         }
                         
                         // Try sendChatMessage first, then sendChatMessageMySQL
                         if (window.sendChatMessage) {
-                            window.sendChatMessage();
+                            window.sendChatMessage(text, pendingAttachment);
                         } else if (window.sendChatMessageMySQL) {
                             try {
-                                const success = await window.sendChatMessageMySQL(text);
+                                const success = await window.sendChatMessageMySQL(text, pendingAttachment);
                                 if (!success) {
                                     console.error('Failed to send message');
                                 }
@@ -2985,7 +3704,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     onclick: typeof freshBtn.onclick,
                     style: freshBtn.style.cssText
                 });
-                
+
                 return true;
             }
             
@@ -3070,7 +3789,17 @@ document.addEventListener('DOMContentLoaded', function() {
             // Initialize "Start New Conversation" button
             const startNewBtn = document.getElementById('startNewConversationBtn');
             if (startNewBtn) {
-                startNewBtn.onclick = function() {
+                startNewBtn.onclick = async function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const activeConversationId = sessionStorage.getItem('conversation_id') || window.currentConversationId;
+                    if (activeConversationId) {
+                        await closeConversationEndToEnd();
+                        return;
+                    }
+
+                    clearChatAttachmentSelection();
                     if (window.startNewConversation) {
                         window.startNewConversation();
                     } else if (window.resetChatForNewConversation) {
@@ -3088,6 +3817,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 // Retry after a short delay
                                 setTimeout(attachSendButtonHandlers, 200);
                             }
+                            bindChatAttachmentHandlers();
                             attachCloseButtonHandler();
                         }, 50);
                     }
@@ -3102,7 +3832,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     e.stopPropagation();
                     e.stopImmediatePropagation();
                     if (window.sendChatMessage) {
-                        window.sendChatMessage();
+                        const submitInput = document.getElementById('chatInput');
+                        const submitText = submitInput ? submitInput.value.trim() : '';
+                        const submitAttachment = (typeof window.getPendingChatAttachmentFile === 'function')
+                            ? window.getPendingChatAttachmentFile()
+                            : null;
+                        window.sendChatMessage(submitText, submitAttachment);
                     }
                     return false;
                 });
@@ -3169,6 +3904,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 window.attachCloseButtonHandler();
                             }, 100);
                         }
+                        break;
+                    case 'assistant_emergency':
+                        statusIndicator.style.display = 'flex';
+                        statusIndicator.style.background = 'rgba(220, 53, 69, 0.12)';
+                        statusIndicator.style.borderLeftColor = '#dc3545';
+                        statusIndicator.style.color = '#842029';
+                        statusText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Emergency detected. Call 122 immediately if life is at risk.';
                         break;
                     default:
                         statusIndicator.style.display = 'none';
@@ -3249,6 +3991,9 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 });
 </script>
+
+
+
 
 
 

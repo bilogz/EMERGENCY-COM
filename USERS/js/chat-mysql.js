@@ -34,15 +34,229 @@
     let lastMessageId = 0;
     let pollingInterval = null;
     let isInitialized = false;
+    let assistantHistory = [];
+
+    function isAssistantMode() {
+        return window.chatAssistantMode === true;
+    }
+
+    function setAttachmentButtonForMode(assistantMode) {
+        const attachmentBtn = document.getElementById('chatPhotoBtn');
+        if (!attachmentBtn) {
+            return;
+        }
+
+        if (assistantMode) {
+            attachmentBtn.disabled = true;
+            attachmentBtn.style.opacity = '0.55';
+            attachmentBtn.title = 'Attachments are disabled in AI Assistant mode';
+            if (typeof window.clearPendingChatAttachment === 'function') {
+                window.clearPendingChatAttachment();
+            }
+        } else {
+            attachmentBtn.disabled = false;
+            attachmentBtn.style.opacity = '1';
+            attachmentBtn.title = 'Attach photo, video, or email file';
+        }
+    }
+
+    function assistantApiCandidates() {
+        const candidates = [
+            API_BASE + 'chatbot-assistant.php',
+            'USERS/api/chatbot-assistant.php',
+            'api/chatbot-assistant.php',
+            '../USERS/api/chatbot-assistant.php',
+            '../api/chatbot-assistant.php'
+        ];
+        return [...new Set(candidates)];
+    }
+
+    function applyAssistantUiState() {
+        const chatInterface = document.getElementById('chatInterface');
+        const userInfoForm = document.getElementById('chatUserInfoForm');
+        if (chatInterface && userInfoForm) {
+            userInfoForm.style.display = 'none';
+            chatInterface.style.display = 'block';
+        }
+
+        const startNewBtn = document.getElementById('startNewConversationBtn');
+        if (startNewBtn) {
+            startNewBtn.style.display = 'none';
+        }
+
+        const closeBtn = document.getElementById('chatEndConversationBtn');
+        if (closeBtn) {
+            closeBtn.style.display = 'none';
+        }
+
+        const chatInput = document.getElementById('chatInput');
+        if (chatInput) {
+            chatInput.disabled = false;
+            chatInput.placeholder = 'Ask the AI assistant...';
+        }
+
+        const chatSendBtn = document.getElementById('chatSendBtn');
+        if (chatSendBtn) {
+            chatSendBtn.disabled = false;
+            chatSendBtn.textContent = 'Send';
+        }
+
+        const statusIndicator = document.getElementById('chatStatusIndicator');
+        const statusText = document.getElementById('chatStatusText');
+        if (statusIndicator && statusText) {
+            statusIndicator.style.display = 'flex';
+            statusIndicator.style.background = 'rgba(33, 150, 243, 0.1)';
+            statusIndicator.style.borderLeftColor = '#2196f3';
+            statusIndicator.style.color = '#1565c0';
+            statusText.innerHTML = '<i class="fas fa-robot"></i> AI Assistant is online';
+        }
+
+        setAttachmentButtonForMode(true);
+    }
+
+    async function requestAssistantReply(message) {
+        const payload = {
+            message: message,
+            history: assistantHistory.slice(-12),
+            locale: navigator.language || 'en-US'
+        };
+
+        let lastError = null;
+        for (const endpoint of assistantApiCandidates()) {
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const responseText = await response.text();
+                let data = null;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (_) {
+                    data = null;
+                }
+
+                if (response.ok && data && data.success && data.reply) {
+                    return {
+                        reply: String(data.reply),
+                        emergencyDetected: data.emergencyDetected === true,
+                        incidentType: typeof data.incidentType === 'string' ? data.incidentType : '',
+                        incidentLabel: typeof data.incidentLabel === 'string' ? data.incidentLabel : '',
+                        callLink: typeof data.callLink === 'string' ? data.callLink : ''
+                    };
+                }
+
+                const apiMessage = (data && data.message) ? data.message : `HTTP ${response.status}`;
+                lastError = new Error(apiMessage);
+            } catch (error) {
+                lastError = error;
+            }
+        }
+
+        throw lastError || new Error('Unable to reach AI assistant endpoint.');
+    }
+
+    function resetChatMessagesForFreshLoad() {
+        const chatMessages = document.querySelector('.chat-messages');
+        if (!chatMessages) {
+            return;
+        }
+
+        chatMessages.innerHTML = '';
+        const systemMsg = document.createElement('div');
+        systemMsg.className = 'chat-message chat-message-system';
+        systemMsg.innerHTML = '<strong>System:</strong> For life-threatening emergencies, call Quezon City emergency hotline 122 immediately.';
+        chatMessages.appendChild(systemMsg);
+    }
+
+    async function fetchConversationBootstrap(possiblePaths, queryParams) {
+        let lastError = null;
+
+        for (const basePath of possiblePaths) {
+            const apiUrl = basePath + 'chat-get-conversation.php?' + new URLSearchParams(queryParams);
+            console.log('Trying to fetch conversation from:', apiUrl);
+
+            try {
+                const response = await fetch(apiUrl);
+                console.log('Response status:', response.status, 'from:', apiUrl);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    API_BASE = basePath;
+                    console.log('API_BASE updated to:', API_BASE);
+                    return { data, basePath, apiUrl };
+                }
+
+                if (response.status === 404) {
+                    console.warn('404 error, trying next path...');
+                    continue;
+                }
+
+                const errorText = await response.text();
+                throw new Error(`HTTP error! status: ${response.status}${errorText ? `, message: ${errorText}` : ''}`);
+            } catch (fetchError) {
+                console.warn('Fetch error for', apiUrl, ':', fetchError.message);
+                lastError = fetchError;
+            }
+        }
+
+        if (lastError) {
+            throw lastError;
+        }
+        return null;
+    }
     
     // Initialize chat system
     async function initChat() {
+        const persistedConversationId = sessionStorage.getItem('conversation_id') || window.currentConversationId || null;
         if (isInitialized) {
-            console.log('Chat already initialized');
-            return true;
+            const activeConversationId = conversationId || sessionStorage.getItem('conversation_id') || null;
+            const sameConversation = activeConversationId && persistedConversationId
+                ? String(activeConversationId) === String(persistedConversationId)
+                : !persistedConversationId;
+            if (sameConversation) {
+                console.log('Chat already initialized');
+                return true;
+            }
+
+            // Conversation context changed (for example, after incident reset).
+            console.log('Detected conversation switch. Re-initializing chat runtime.');
+            stopPolling();
+            isInitialized = false;
+            window.chatInitialized = false;
+            lastMessageId = 0;
         }
         
         console.log('Initializing MySQL chat system...');
+
+        if (isAssistantMode()) {
+            console.log('Initializing AI assistant mode...');
+            stopPolling();
+            conversationId = null;
+            sessionStorage.removeItem('conversation_id');
+            window.currentConversationId = null;
+            lastMessageId = 0;
+            assistantHistory = [];
+
+            resetChatMessagesForFreshLoad();
+            applyAssistantUiState();
+
+            // Starter message for first open.
+            if (window.addMessageToChat) {
+                window.addMessageToChat(
+                    'Hello. I am your AI assistant. Describe your concern and I will guide you.',
+                    'admin',
+                    Date.now(),
+                    null,
+                    'AI Assistant'
+                );
+            }
+
+            isInitialized = true;
+            window.chatInitialized = true;
+            return true;
+        }
         
         // Get user info
         const userId = sessionStorage.getItem('user_id') || localStorage.getItem('guest_user_id') || 'guest_' + Date.now();
@@ -58,6 +272,8 @@
             console.log('Concern/category not provided - form should be shown');
             return false;
         }
+
+        setAttachmentButtonForMode(false);
         
         // Store user ID if not set
         if (!sessionStorage.getItem('user_id')) {
@@ -78,13 +294,37 @@
                 '../USERS/api/',
                 '../api/'
             ];
-            
-            let response = null;
-            let apiUrl = null;
-            let lastError = null;
-            
-            for (const basePath of possiblePaths) {
-                apiUrl = basePath + 'chat-get-conversation.php?' + new URLSearchParams({
+
+            let data = null;
+            const preferredConversationId = persistedConversationId ? String(persistedConversationId) : null;
+
+            // 1) Prefer explicit conversation ID from session (created during start-chat proof upload).
+            if (preferredConversationId) {
+                try {
+                    const preferredResult = await fetchConversationBootstrap(
+                        possiblePaths,
+                        { conversationId: preferredConversationId }
+                    );
+                    if (preferredResult && preferredResult.data && preferredResult.data.success) {
+                        if (preferredResult.data.status === 'closed') {
+                            console.log('Stored conversation is already closed. Clearing stale conversation_id.');
+                            sessionStorage.removeItem('conversation_id');
+                            if (window.currentConversationId && String(window.currentConversationId) === preferredConversationId) {
+                                window.currentConversationId = null;
+                            }
+                        } else {
+                            data = preferredResult.data;
+                            console.log('Using stored conversation ID:', preferredConversationId);
+                        }
+                    }
+                } catch (preferredError) {
+                    console.warn('Unable to validate stored conversation ID, falling back to user lookup:', preferredError.message);
+                }
+            }
+
+            // 2) Fallback: resolve by user profile (reuse active or create new).
+            if (!data) {
+                const fallbackResult = await fetchConversationBootstrap(possiblePaths, {
                     userId: userId,
                     userName: userName,
                     userEmail: userEmail || '',
@@ -93,56 +333,33 @@
                     userConcern: userConcern || '',
                     isGuest: isGuest ? '1' : '0'
                 });
-                
-                console.log('Trying to fetch conversation from:', apiUrl);
-                
-                try {
-                    response = await fetch(apiUrl);
-                    console.log('Response status:', response.status, 'from:', apiUrl);
-                    
-                    if (response.ok) {
-                        // Success! Update API_BASE for future calls
-                        API_BASE = basePath;
-                        console.log('API_BASE updated to:', API_BASE);
-                        break;
-                    } else if (response.status === 404) {
-                        // Try next path
-                        console.warn('404 error, trying next path...');
-                        continue;
-                    } else {
-                        // Other error, but path might be correct
-                        break;
-                    }
-                } catch (fetchError) {
-                    console.warn('Fetch error for', apiUrl, ':', fetchError.message);
-                    lastError = fetchError;
-                    continue;
+
+                if (!fallbackResult) {
+                    throw new Error('Failed to fetch conversation from all configured API paths.');
                 }
+                data = fallbackResult.data;
             }
-            
-            if (!response) {
-                throw new Error(`Failed to fetch from all API paths. Last error: ${lastError ? lastError.message : 'Unknown'}`);
-            }
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const data = await response.json();
+
             console.log('Conversation response:', data);
             
-            if (data.success) {
-                conversationId = data.conversationId;
+            if (data && data.success) {
+                const resolvedConversationId = data.conversationId ? String(data.conversationId) : null;
+                if (!resolvedConversationId) {
+                    throw new Error('Conversation API returned success without a conversation ID.');
+                }
+
+                conversationId = resolvedConversationId;
                 sessionStorage.setItem('conversation_id', conversationId);
                 window.currentConversationId = conversationId;
                 
-                // Clear closed handler flag since we have a new active conversation
+                // Clear closed handler flag since we have an active conversation
                 window.conversationClosedHandled = false;
                 
                 console.log('Conversation ready:', conversationId);
                 
-                // Reset lastMessageId for initial load to get all messages
+                // Reset state for initial load to avoid carrying messages from previous threads.
                 lastMessageId = 0;
+                resetChatMessagesForFreshLoad();
                 
                 // Load existing messages (initial load)
                 await loadMessages(true);
@@ -181,10 +398,10 @@
                 }
                 
                 return true;
-            } else {
-                console.error('Failed to get/create conversation:', data.message);
-                return false;
             }
+
+            console.error('Failed to get/create conversation:', data ? data.message : 'Unknown response');
+            return false;
         } catch (error) {
             console.error('Error initializing chat:', error);
             alert('Failed to initialize chat: ' + error.message);
@@ -194,6 +411,10 @@
     
     // Load messages
     async function loadMessages(isInitialLoad = false) {
+        if (isAssistantMode()) {
+            return;
+        }
+
         if (!conversationId) {
             conversationId = sessionStorage.getItem('conversation_id');
             if (!conversationId) {
@@ -256,7 +477,18 @@
                                 // Pass admin name if available (for admin messages)
                                 const adminName = (msg.senderType === 'admin' && msg.senderName) ? msg.senderName : null;
                                 console.log(`Adding message: ${msg.senderType} - "${msg.text}" (ID: ${msg.id}, Admin: ${adminName || 'N/A'})`);
-                                window.addMessageToChat(msg.text, msg.senderType, msg.timestamp, msg.id, adminName);
+                                window.addMessageToChat(
+                                    msg.text,
+                                    msg.senderType,
+                                    msg.timestamp,
+                                    msg.id,
+                                    adminName,
+                                    {
+                                        imageUrl: msg.imageUrl,
+                                        attachmentMime: msg.attachmentMime || null,
+                                        attachmentSize: msg.attachmentSize || null
+                                    }
+                                );
                             } else {
                                 console.warn('addMessageToChat function not available');
                             }
@@ -315,6 +547,10 @@
     
     // Check conversation status directly
     async function checkConversationStatus() {
+        if (isAssistantMode()) {
+            return;
+        }
+
         if (!conversationId) {
             conversationId = sessionStorage.getItem('conversation_id');
             if (!conversationId) {
@@ -474,7 +710,7 @@
                 // Add only system message
                 const systemMsg = document.createElement('div');
                 systemMsg.className = 'chat-message chat-message-system';
-                systemMsg.innerHTML = '<strong>System:</strong> For life-threatening emergencies, call 911 or the Quezon City emergency hotlines immediately.';
+                systemMsg.innerHTML = '<strong>System:</strong> For life-threatening emergencies, call Quezon City emergency hotline 122 immediately.';
                 chatMessages.appendChild(systemMsg);
             }
             
@@ -507,6 +743,10 @@
             const concernSelect = document.getElementById('userConcernSelect');
             if (concernSelect) {
                 concernSelect.value = '';
+            }
+
+            if (typeof window.clearInitialIncidentPhotoSelection === 'function') {
+                window.clearInitialIncidentPhotoSelection();
             }
             
             // Optionally clear all fields to force complete re-entry
@@ -552,6 +792,10 @@
         if (chatSendBtn) {
             chatSendBtn.disabled = true;
         }
+
+        if (typeof window.updateUserInfoSubmitState === 'function') {
+            window.updateUserInfoSubmitState();
+        }
         
         // Allow modal to be closed after refresh - enable header close button
         const chatModal = document.getElementById('chatModal');
@@ -593,78 +837,81 @@
     
     // Start new conversation
     function startNewConversation() {
-        // Clear the closed handler flag
+        // Ensure previous thread is fully discarded before any new chat starts.
         window.conversationClosedHandled = false;
-        
-        // Clear conversation ID
         conversationId = null;
         sessionStorage.removeItem('conversation_id');
         window.currentConversationId = null;
-        
-        // Reset last message ID
         lastMessageId = 0;
-        
-        // Reset initialization flags
         isInitialized = false;
         window.chatInitialized = false;
-        
-        // Clear chat messages (except system message)
+
+        // Force new concern + new proof-photo flow.
+        localStorage.removeItem('guest_concern');
+        sessionStorage.removeItem('user_concern');
+
+        const concernSelect = document.getElementById('userConcernSelect');
+        if (concernSelect) {
+            concernSelect.value = '';
+        }
+
+        if (typeof window.clearInitialIncidentPhotoSelection === 'function') {
+            window.clearInitialIncidentPhotoSelection();
+        }
+
         const chatMessages = document.querySelector('.chat-messages');
         if (chatMessages) {
-            // Remove all messages except system message
-            const messages = chatMessages.querySelectorAll('.chat-message:not(.chat-message-system)');
-            messages.forEach(msg => msg.remove());
-            
-            // Remove closed message if exists
-            const closedMsg = chatMessages.querySelector('.chat-message-closed');
-            if (closedMsg) {
-                closedMsg.remove();
-            }
-            
-            // Ensure system message exists
-            const systemMsg = chatMessages.querySelector('.chat-message-system');
-            if (!systemMsg) {
-                const systemMsgDiv = document.createElement('div');
-                systemMsgDiv.className = 'chat-message chat-message-system';
-                systemMsgDiv.innerHTML = '<strong>System:</strong> For life-threatening emergencies, call 911 or the Quezon City emergency hotlines immediately.';
-                chatMessages.appendChild(systemMsgDiv);
-            }
+            chatMessages.innerHTML = '';
+            const systemMsgDiv = document.createElement('div');
+            systemMsgDiv.className = 'chat-message chat-message-system';
+            systemMsgDiv.innerHTML = '<strong>System:</strong> For life-threatening emergencies, call Quezon City emergency hotline 122 immediately.';
+            chatMessages.appendChild(systemMsgDiv);
         }
-        
-        // Hide "Start New Conversation" button and show close button
+
+        const statusIndicator = document.getElementById('chatStatusIndicator');
+        const statusText = document.getElementById('chatStatusText');
+        if (statusIndicator) {
+            statusIndicator.style.display = 'none';
+        }
+        if (statusText) {
+            statusText.textContent = '';
+        }
+
+        const chatInterface = document.getElementById('chatInterface');
+        const userInfoForm = document.getElementById('chatUserInfoForm');
+        if (chatInterface && userInfoForm) {
+            chatInterface.style.display = 'none';
+            userInfoForm.style.display = 'block';
+        }
+
         const startNewBtn = document.getElementById('startNewConversationBtn');
         const chatCloseBtn = document.getElementById('chatEndConversationBtn');
         if (startNewBtn) {
             startNewBtn.style.display = 'none';
         }
         if (chatCloseBtn) {
-            chatCloseBtn.style.display = 'inline-flex';
+            chatCloseBtn.style.display = 'none';
         }
-        
-        // Re-enable input and send button
+
         const chatInput = document.getElementById('chatInput');
         const chatSendBtn = document.getElementById('chatSendBtn');
         if (chatInput) {
-            chatInput.disabled = false;
+            chatInput.disabled = true;
             chatInput.placeholder = 'Type your message...';
             chatInput.value = '';
         }
         if (chatSendBtn) {
-            chatSendBtn.disabled = false;
+            chatSendBtn.disabled = true;
+            chatSendBtn.textContent = 'Send';
         }
-        
-        // Reset initialization flag
-        isInitialized = false;
-        window.chatInitialized = false;
-        
-        // Re-initialize chat to create new conversation
-        initChat().then((success) => {
-            if (success) {
-                console.log('New conversation started');
-            }
-        });
-        
-        console.log('Starting new conversation');
+
+        if (typeof window.updateUserInfoSubmitState === 'function') {
+            window.updateUserInfoSubmitState();
+        }
+
+        setAttachmentButtonForMode(false);
+
+        console.log('Prepared fresh conversation state; waiting for new form submission.');
     }
     
     // Reset chat for new conversation (kept for backward compatibility)
@@ -673,10 +920,63 @@
     }
     
     // Send message
-    async function sendMessage(text) {
-        if (!text || !text.trim()) {
-            console.warn('Cannot send empty message');
+    async function sendMessage(text, attachmentFile = null) {
+        const normalizedText = typeof text === 'string' ? text.trim() : '';
+        const pendingAttachment = (typeof window.getPendingChatAttachmentFile === 'function')
+            ? window.getPendingChatAttachmentFile()
+            : null;
+        const fileToSend = attachmentFile instanceof File
+            ? attachmentFile
+            : (pendingAttachment instanceof File ? pendingAttachment : null);
+        const hasAttachment = fileToSend instanceof File;
+        if (!normalizedText && !hasAttachment) {
+            console.warn('Cannot send empty message without attachment');
             return false;
+        }
+
+        if (isAssistantMode()) {
+            if (hasAttachment) {
+                throw new Error('Attachments are not supported in AI Assistant mode.');
+            }
+
+            if (window.addMessageToChat) {
+                window.addMessageToChat(normalizedText, 'user', Date.now());
+            }
+
+            assistantHistory.push({ role: 'user', content: normalizedText });
+            if (assistantHistory.length > 20) {
+                assistantHistory = assistantHistory.slice(-20);
+            }
+
+            const replyPayload = await requestAssistantReply(normalizedText);
+            const assistantReply = (replyPayload && replyPayload.reply != null ? String(replyPayload.reply) : '').trim();
+            if (!assistantReply) {
+                throw new Error('AI assistant returned an empty response.');
+            }
+
+            assistantHistory.push({ role: 'assistant', content: assistantReply });
+            if (assistantHistory.length > 20) {
+                assistantHistory = assistantHistory.slice(-20);
+            }
+
+            if (window.addMessageToChat) {
+                window.addMessageToChat(
+                    assistantReply,
+                    'admin',
+                    Date.now(),
+                    null,
+                    'AI Assistant'
+                );
+            }
+            if (window.updateChatStatus) {
+                if (replyPayload && replyPayload.emergencyDetected) {
+                    window.updateChatStatus('assistant_emergency');
+                } else {
+                    window.updateChatStatus('admin');
+                }
+            }
+
+            return true;
         }
         
         // Check if we need to reset for new conversation (if previous was closed)
@@ -716,11 +1016,17 @@
         const userConcern = sessionStorage.getItem('user_concern') || null;
         const isGuest = !sessionStorage.getItem('user_id') || userId.startsWith('guest_');
         
-        console.log('Sending message:', { text, conversationId, userId, userName });
+        console.log('Sending message:', {
+            text: normalizedText,
+            hasAttachment,
+            conversationId,
+            userId,
+            userName
+        });
         
         try {
             const formData = new FormData();
-            formData.append('text', text.trim());
+            formData.append('text', normalizedText);
             formData.append('userId', userId);
             formData.append('userName', userName);
             formData.append('userEmail', userEmail || '');
@@ -729,11 +1035,17 @@
             formData.append('userConcern', userConcern || '');
             formData.append('isGuest', isGuest ? '1' : '0');
             formData.append('conversationId', conversationId);
+            if (hasAttachment) {
+                // Keep backward compatibility with the existing backend field.
+                formData.append('attachment', fileToSend);
+                formData.append('photo', fileToSend);
+            }
             
             const apiUrl = API_BASE + 'chat-send.php';
             console.log('Sending to:', apiUrl);
-            console.log('FormData contents:', {
-                text: text.trim(),
+                console.log('FormData contents:', {
+                text: normalizedText,
+                hasAttachment,
                 userId: userId,
                 userName: userName,
                 conversationId: conversationId
@@ -783,10 +1095,25 @@
                 // Immediately add the sent message to the chat UI
                 if (window.addMessageToChat) {
                     const timestamp = new Date().toISOString();
-                    window.addMessageToChat(text.trim(), 'user', timestamp, data.messageId);
+                    window.addMessageToChat(
+                        normalizedText,
+                        'user',
+                        timestamp,
+                        data.messageId,
+                        null,
+                        {
+                            imageUrl: data.imageUrl || (data.attachment && data.attachment.url) || null,
+                            attachmentMime: data.attachment ? data.attachment.mime : null,
+                            attachmentSize: data.attachment ? data.attachment.size : null
+                        }
+                    );
                     console.log('Message added to chat UI immediately');
                 } else {
                     console.warn('addMessageToChat function not available, message will appear after polling');
+                }
+
+                if (hasAttachment && typeof window.clearPendingChatAttachment === 'function') {
+                    window.clearPendingChatAttachment();
                 }
                 
                 // After sending, do a quick reload to get any admin messages that might have arrived
@@ -809,6 +1136,11 @@
     
     // Start polling for new messages
     function startPolling() {
+        if (isAssistantMode()) {
+            stopPolling();
+            return;
+        }
+
         if (pollingInterval) {
             clearInterval(pollingInterval);
         }
@@ -838,7 +1170,7 @@
     }
     
     // Add message to chat UI (this will be called from sidebar.php)
-    function addMessageToChat(text, senderType, timestamp, messageId = null, senderName = null) {
+    function addMessageToChat(text, senderType, timestamp, messageId = null, senderName = null, attachment = null) {
         const chatMessages = document.querySelector('.chat-messages');
         if (!chatMessages) {
             console.warn('Chat messages container not found');
@@ -880,12 +1212,112 @@
             div.textContent = str;
             return div.innerHTML;
         };
-        
-        msg.innerHTML = `<strong style="color: var(--text-color) !important;">${escapeHtml(displayName)}:</strong> <span style="color: var(--text-color) !important;">${escapeHtml(text)}</span> <small style="display: block; font-size: 0.8em; opacity: 0.7; margin-top: 0.25rem; color: var(--text-muted) !important;">${time}</small>`;
+
+        // Render plain URLs as safe clickable links inside message text.
+        const linkifyMessageText = (rawText) => {
+            const input = rawText == null ? '' : String(rawText);
+            if (!input) return '';
+
+            const urlRegex = /(https?:\/\/[^\s]+)/gi;
+            let output = '';
+            let lastIndex = 0;
+            let match = null;
+
+            while ((match = urlRegex.exec(input)) !== null) {
+                const matchedUrl = match[0];
+                output += escapeHtml(input.slice(lastIndex, match.index)).replace(/\n/g, '<br>');
+
+                let urlText = matchedUrl;
+                let trailing = '';
+                while (urlText && /[.,!?)]$/.test(urlText)) {
+                    trailing = urlText.slice(-1) + trailing;
+                    urlText = urlText.slice(0, -1);
+                }
+
+                const safeUrl = sanitizeAttachmentUrl(urlText);
+                if (safeUrl) {
+                    output += `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="chat-inline-link" style="text-decoration: underline; word-break: break-all;">${escapeHtml(urlText)}</a>`;
+                } else {
+                    output += escapeHtml(matchedUrl);
+                }
+
+                if (trailing) {
+                    output += escapeHtml(trailing);
+                }
+
+                lastIndex = match.index + matchedUrl.length;
+            }
+
+            output += escapeHtml(input.slice(lastIndex)).replace(/\n/g, '<br>');
+            return output;
+        };
+
+        const sanitizeAttachmentUrl = (url) => {
+            if (!url) return null;
+            const raw = String(url).trim();
+            if (!raw) return null;
+            if (raw.startsWith('/')) return raw;
+            try {
+                const parsed = new URL(raw, window.location.origin);
+                if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                    return parsed.href;
+                }
+            } catch (_) {
+                return null;
+            }
+            return null;
+        };
+
+        const normalizedText = (text == null ? '' : String(text)).trim();
+        const attachmentUrl = sanitizeAttachmentUrl(attachment && (attachment.imageUrl || attachment.url));
+        const attachmentMimeValue = attachment ? (attachment.attachmentMime || attachment.mime || '') : '';
+        const attachmentMimeRaw = String(attachmentMimeValue == null ? '' : attachmentMimeValue).trim().toLowerCase();
+        const attachmentMime = attachmentMimeRaw || null;
+        const isImageAttachment = !!(attachmentUrl && (
+            (attachmentMime && attachmentMime.indexOf('image/') === 0) ||
+            (!attachmentMime && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(attachmentUrl))
+        ));
+        const isVideoAttachment = !!(attachmentUrl && (
+            (attachmentMime && attachmentMime.indexOf('video/') === 0) ||
+            (!attachmentMime && /\.(mp4|webm|ogv|mov|avi|mkv)(\?|$)/i.test(attachmentUrl))
+        ));
+        const isEmailAttachment = !!(attachmentUrl && (
+            attachmentMime === 'message/rfc822' ||
+            attachmentMime === 'application/eml' ||
+            /\.eml(\?|$)/i.test(attachmentUrl)
+        ));
+        const hidePlaceholder = attachmentUrl && /^\[(photo|video|email|attachment)\]/i.test(normalizedText);
+
+        const htmlParts = [];
+        htmlParts.push(`<strong style="color: var(--text-color) !important;">${escapeHtml(displayName)}:</strong>`);
+        if (normalizedText && !hidePlaceholder) {
+            htmlParts.push(`<span style="color: var(--text-color) !important;">${linkifyMessageText(normalizedText)}</span>`);
+        }
+        if (attachmentUrl) {
+            if (isVideoAttachment) {
+                htmlParts.push(`<a href="${attachmentUrl}" target="_blank" rel="noopener noreferrer" class="chat-message-video-link"><video class="chat-message-video" controls preload="metadata"><source src="${attachmentUrl}"${attachmentMime ? ` type="${attachmentMime}"` : ''}>Your browser does not support video playback.</video></a>`);
+            } else if (isImageAttachment) {
+                htmlParts.push(`<a href="${attachmentUrl}" target="_blank" rel="noopener noreferrer" class="chat-message-image-link"><img src="${attachmentUrl}" class="chat-message-image" alt="Incident attachment"></a>`);
+            } else {
+                const fileLabel = isEmailAttachment ? 'Open email attachment (.eml)' : 'Open attachment';
+                const fileIcon = isEmailAttachment ? 'fa-envelope-open-text' : 'fa-paperclip';
+                htmlParts.push(`<a href="${attachmentUrl}" target="_blank" rel="noopener noreferrer" class="chat-message-file-link"><i class="fas ${fileIcon}"></i> ${fileLabel}</a>`);
+            }
+        }
+        htmlParts.push(`<small style="display: block; font-size: 0.8em; opacity: 0.7; margin-top: 0.25rem; color: var(--text-muted) !important;">${time}</small>`);
+
+        msg.innerHTML = htmlParts.join(' ');
         chatMessages.appendChild(msg);
         chatMessages.scrollTop = chatMessages.scrollHeight;
         
-        console.log('Message added to UI:', { text, senderType, messageId, senderName: displayName });
+        console.log('Message added to UI:', {
+            text: normalizedText,
+            senderType,
+            messageId,
+            senderName: displayName,
+            attachmentUrl,
+            attachmentMime
+        });
     }
     
     // Expose functions globally
@@ -896,6 +1328,22 @@
     window.resetChatForNewConversation = resetChatForNewConversation;
     window.startNewConversation = startNewConversation;
     window.handleConversationClosed = handleConversationClosed;
+    window.enableChatAssistantMode = function () {
+        window.chatAssistantMode = true;
+        stopPolling();
+        conversationId = null;
+        sessionStorage.removeItem('conversation_id');
+        window.currentConversationId = null;
+        window.chatInitialized = false;
+        isInitialized = false;
+    };
+    window.disableChatAssistantMode = function () {
+        window.chatAssistantMode = false;
+        assistantHistory = [];
+        setAttachmentButtonForMode(false);
+        window.chatInitialized = false;
+        isInitialized = false;
+    };
     
     // Auto-initialize when DOM is ready
     if (document.readyState === 'loading') {
