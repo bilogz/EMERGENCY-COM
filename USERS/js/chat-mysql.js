@@ -162,7 +162,7 @@
                 }
                 
                 // Ensure close button is always visible and enabled
-                const chatCloseBtn = document.getElementById('chatCloseBtn');
+                const chatCloseBtn = document.getElementById('chatEndConversationBtn');
                 if (chatCloseBtn) {
                     chatCloseBtn.style.display = 'inline-flex';
                     chatCloseBtn.style.visibility = 'visible';
@@ -351,8 +351,8 @@
         }
     }
     
-    // Handle conversation closed by admin
-    function handleConversationClosed(closedByAdmin = null) {
+    // Handle conversation closed by admin or citizen/user.
+    function handleConversationClosed(closedByActor = null, closedByType = null) {
         // Prevent multiple calls
         if (window.conversationClosedHandled) {
             console.log('Conversation close already handled, skipping');
@@ -391,11 +391,20 @@
         const closedMessage = document.getElementById('conversationClosedMessage');
         const closedOkBtn = document.getElementById('conversationClosedOkBtn');
         
+        const actorRaw = (closedByActor || '').toString().trim();
+        const actorKey = actorRaw.toLowerCase();
+        const inferredType = closedByType || (
+            actorKey.includes('citizen') || actorKey.includes('user') || actorKey.includes('guest') || actorKey === 'you'
+                ? 'citizen'
+                : 'admin'
+        );
+        const closedLabel = inferredType === 'citizen' ? 'citizen/user' : 'administrator';
+
         if (closedModal && closedMessage) {
             // Set message text
-            let messageText = 'The chat was closed by the administrator.';
-            if (closedByAdmin) {
-                messageText = `The chat was closed by the administrator: <strong>${escapeHtml(closedByAdmin)}</strong>.`;
+            let messageText = `The chat was closed by the ${closedLabel}.`;
+            if (actorRaw) {
+                messageText = `The chat was closed by the ${closedLabel}: <strong>${escapeHtml(actorRaw)}</strong>.`;
             }
             messageText += ' If there\'s another concern, please start a new chat.';
             
@@ -444,10 +453,10 @@
             };
             document.addEventListener('keydown', escapeHandler);
         } else {
-            // Fallback: if modal doesn't exist, show alert and continue
-            let alertMessage = 'The chat was closed by the administrator.';
-            if (closedByAdmin) {
-                alertMessage = `The chat was closed by the administrator: ${closedByAdmin}.`;
+            // Fallback: if modal doesn't exist, show alert and continue.
+            let alertMessage = `The chat was closed by the ${closedLabel}.`;
+            if (actorRaw) {
+                alertMessage = `The chat was closed by the ${closedLabel}: ${actorRaw}.`;
             }
             alertMessage += ' If there\'s another concern, please start a new chat.';
             alert(alertMessage);
@@ -483,7 +492,7 @@
         const chatInterface = document.getElementById('chatInterface');
         const userInfoForm = document.getElementById('chatUserInfoForm');
         const startNewBtn = document.getElementById('startNewConversationBtn');
-        const chatCloseBtn = document.getElementById('chatCloseBtn');
+        const chatCloseBtn = document.getElementById('chatEndConversationBtn');
         
         // Hide chat interface and show user info form
         if (userInfoForm && chatInterface) {
@@ -624,7 +633,7 @@
         
         // Hide "Start New Conversation" button and show close button
         const startNewBtn = document.getElementById('startNewConversationBtn');
-        const chatCloseBtn = document.getElementById('chatCloseBtn');
+        const chatCloseBtn = document.getElementById('chatEndConversationBtn');
         if (startNewBtn) {
             startNewBtn.style.display = 'none';
         }
