@@ -23,6 +23,8 @@ try {
     $exp = $pdo->prepare("UPDATE otp_verifications SET status='expired' WHERE status='pending' AND expires_at <= NOW()");
     $exp->execute();
 
+    $cooldown = 60;
+
     // simple resend limit: 60s per email/purpose
     $last = $pdo->prepare("
         SELECT created_at
@@ -30,14 +32,28 @@ try {
         WHERE email = ? AND purpose = 'signup'
         ORDER BY id DESC
         LIMIT 1
-        FOR UPDATE
     ");
     $last->execute([$email]);
     $lastCreated = $last->fetchColumn();
 
-    if ($lastCreated && (time() - strtotime($lastCreated) < 60)) {
-        $pdo->rollBack();
-        apiResponse::error('Please wait before requesting another OTP.', 429);
+    if ($lastCreated) {
+        $elapsed = time() - strtotime($lastCreated);
+        if ($elapsed < $cooldown) {
+            $retryAfter = $cooldown - $elapsed;
+            $pdo->rollBack();
+            if (ob_get_length()) {
+                ob_clean();
+            }
+            header('Content-Type: application/json; charset=utf-8');
+            header('Retry-After: ' . $retryAfter);
+            http_response_code(429);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Please wait before requesting another OTP.',
+                'retry_after' => $retryAfter
+            ]);
+            exit();
+        }
     }
 
     // invalidate previous pending OTPs for this email/purpose
