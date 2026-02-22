@@ -96,39 +96,6 @@ try {
     ");
     $exp->execute();
 
-    $cooldown = 60;
-
-    // simple resend limit: 60s per email/purpose
-    $last = $pdo->prepare("
-        SELECT TIMESTAMPDIFF(SECOND, created_at, NOW()) AS elapsed_seconds
-        FROM otp_verifications
-        WHERE email = ? AND purpose = 'signup'
-        ORDER BY id DESC
-        LIMIT 1
-    ");
-    $last->execute([$email]);
-    $elapsedSeconds = $last->fetchColumn();
-
-    if ($elapsedSeconds !== false && $elapsedSeconds !== null) {
-        $elapsed = (int)$elapsedSeconds;
-        if ($elapsed < $cooldown) {
-            $retryAfter = max(1, $cooldown - $elapsed);
-            $pdo->rollBack();
-            if (ob_get_length()) {
-                ob_clean();
-            }
-            header('Content-Type: application/json; charset=utf-8');
-            header('Retry-After: ' . $retryAfter);
-            http_response_code(429);
-            echo json_encode([
-                'success' => false,
-                'message' => 'Please wait before requesting another OTP.',
-                'retry_after' => $retryAfter
-            ]);
-            exit();
-        }
-    }
-
     // invalidate previous pending OTPs for this email/purpose
     $inv = $pdo->prepare("
         UPDATE otp_verifications
@@ -152,6 +119,12 @@ try {
     $smtpUser = otpEnv(['GMAIL_SMTP_USER', 'SMTP_USER', 'SMTP_USERNAME', 'MAIL_USERNAME']);
     $smtpPass = otpEnv(['GMAIL_SMTP_APP_PASSWORD', 'GMAIL_APP_PASSWORD', 'SMTP_PASS', 'SMTP_PASSWORD', 'MAIL_PASSWORD']);
     if (!$smtpUser || !$smtpPass) {
+        $envPath = __DIR__ . '/../.env';
+        error_log(
+            'OTP mailer config missing. env_file=' . (file_exists($envPath) ? 'present' : 'missing') .
+            ' smtp_user=' . ($smtpUser ? 'set' : 'empty') .
+            ' smtp_pass=' . ($smtpPass ? 'set' : 'empty')
+        );
         apiResponse::error('OTP mailer not configured.', 500);
     }
 
