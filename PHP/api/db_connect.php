@@ -19,24 +19,82 @@
         require_once __DIR__ . '/apiResponse.php';
     }
 
+    // Load key=value pairs from PHP/api/.env if present.
+    // Existing process-level env vars are preserved and take priority.
+    function db_load_dotenv_if_present() {
+        static $loaded = false;
+        if ($loaded) {
+            return;
+        }
+        $loaded = true;
+
+        $envPath = __DIR__ . '/.env';
+        if (!file_exists($envPath)) {
+            return;
+        }
+
+        $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if ($lines === false) {
+            return;
+        }
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '' || $line[0] === '#') {
+                continue;
+            }
+
+            $parts = explode('=', $line, 2);
+            if (count($parts) !== 2) {
+                continue;
+            }
+
+            $key = trim($parts[0]);
+            $value = trim($parts[1]);
+            if ($key === '') {
+                continue;
+            }
+
+            $len = strlen($value);
+            $isDoubleQuoted = $len >= 2 && $value[0] === '"' && $value[$len - 1] === '"';
+            $isSingleQuoted = $len >= 2 && $value[0] === "'" && $value[$len - 1] === "'";
+            if ($isDoubleQuoted || $isSingleQuoted) {
+                $value = substr($value, 1, -1);
+            }
+
+            if (getenv($key) === false) {
+                putenv($key . '=' . $value);
+                $_ENV[$key] = $value;
+            }
+        }
+    }
+
+    function db_env($key, $default = '') {
+        $value = getenv($key);
+        if ($value === false) {
+            return $default;
+        }
+        return $value;
+    }
+
+    db_load_dotenv_if_present();
+
     // --- Define Credentials ---
 
-    // 1. Online (Hostinger) Credentials
-    // vvv  REPLACE THESE WITH YOUR ACTUAL HOSTINGER CREDENTIALS vvv
+    // 1. Primary DB credentials (production/staging)
     $online_creds = [
-        'host' => 'localhost',
-        'db'   => 'emer_comm_test',
-        'user' => 'root',
-        'pass' => 'YsqnXk6q#145'
+        'host' => db_env('DB_HOST', 'localhost'),
+        'db'   => db_env('DB_NAME', 'emer_comm_test'),
+        'user' => db_env('DB_USER', 'root'),
+        'pass' => db_env('DB_PASS', '')
     ];
-    // ^^^ REPLACE THESE WITH YOUR ACTUAL HOSTINGER CREDENTIALS ^^^
 
-    // 2. Local (XAMPP) Credentials
+    // 2. Local fallback DB credentials (for dev)
     $local_creds = [
-        'host' => '127.0.0.1',
-        'db'   => 'emer_comm_test',
-        'user' => 'root',
-        'pass' => ''
+        'host' => db_env('DB_LOCAL_HOST', '127.0.0.1'),
+        'db'   => db_env('DB_LOCAL_NAME', $online_creds['db']),
+        'user' => db_env('DB_LOCAL_USER', 'root'),
+        'pass' => db_env('DB_LOCAL_PASS', '')
     ];
 
     $charset = 'utf8mb4';
