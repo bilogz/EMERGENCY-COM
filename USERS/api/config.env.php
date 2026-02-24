@@ -96,8 +96,25 @@ function getSecureConfig($key, $default = null) {
         }
 
         // Merge so USERS overrides ADMIN when keys overlap.
-        // This ensures missing DB_* keys in USERS config still come from ADMIN config.
-        $localConfig = array_merge($adminLocal, $userLocal);
+        // Keep ADMIN values for critical chat storage keys when USERS-side override is blank.
+        $localConfig = $adminLocal;
+        $noBlankOverrideKeys = [
+            'CHAT_IMAGE_STORAGE_DRIVER',
+            'PG_IMG_URL',
+            'PG_IMG_HOST',
+            'PG_IMG_DB',
+            'PG_IMG_USER',
+        ];
+        foreach ($userLocal as $cfgKey => $cfgValue) {
+            if (
+                in_array($cfgKey, $noBlankOverrideKeys, true) &&
+                is_string($cfgValue) &&
+                (trim($cfgValue) === '' || strcasecmp(trim($cfgValue), 'null') === 0)
+            ) {
+                continue;
+            }
+            $localConfig[$cfgKey] = $cfgValue;
+        }
     }
     
     if (isset($localConfig[$key])) {

@@ -179,7 +179,8 @@ try {
         }
 
         $storageDriver = twc_chat_image_storage_driver();
-        if ($storageDriver === 'postgres') {
+        $postgresOnlyMode = ($storageDriver === 'postgres');
+        if ($postgresOnlyMode) {
             $stored = twc_store_attachment_in_postgres(
                 $tmpFile,
                 $detectedMime,
@@ -191,8 +192,7 @@ try {
                 $attachmentSize = isset($stored['size']) ? (int)$stored['size'] : $attachmentSize;
                 $attachmentUrl = (string)$stored['url'];
             } else {
-                error_log('chat-send: PostgreSQL attachment storage unavailable, falling back to filesystem storage.');
-                $storageDriver = 'filesystem';
+                throw new RuntimeException('PostgreSQL attachment storage failed while CHAT_IMAGE_STORAGE_DRIVER=postgres; filesystem fallback is disabled.');
             }
         }
 
