@@ -1056,7 +1056,9 @@ function chatbot_mysql_pdo(): ?PDO {
     $attempted = true;
 
     try {
-        require __DIR__ . '/../../ADMIN/api/db_connect.php';
+        // Use USERS DB bootstrap here to avoid cross-loading ADMIN config
+        // helpers that redeclare function names and can trigger HTTP 500.
+        require_once __DIR__ . '/db_connect.php';
         if (isset($pdo) && $pdo instanceof PDO) {
             $mysqlPdo = $pdo;
         }

@@ -9,6 +9,21 @@
     // Get API base path - try to detect the correct path
     let API_BASE = 'api/';
     const pathname = window.location.pathname;
+    const APP_BASE_PATH = (() => {
+        const safePath = String(pathname || '').replace(/\\/g, '/');
+        const lower = safePath.toLowerCase();
+        const markers = ['/users/', '/admin/', '/php/'];
+        for (const marker of markers) {
+            const idx = lower.indexOf(marker);
+            if (idx === 0) {
+                return '';
+            }
+            if (idx > 0) {
+                return safePath.slice(0, idx).replace(/\/+$/, '');
+            }
+        }
+        return '';
+    })();
     
     // Determine correct API path based on current location
     if (pathname.includes('/USERS/') && !pathname.includes('/includes/')) {
@@ -61,12 +76,12 @@
     }
 
     function assistantApiCandidates() {
+        const appPrefix = APP_BASE_PATH || '';
         const candidates = [
             API_BASE + 'chatbot-assistant.php',
-            'USERS/api/chatbot-assistant.php',
-            'api/chatbot-assistant.php',
-            '../USERS/api/chatbot-assistant.php',
-            '../api/chatbot-assistant.php'
+            appPrefix + '/USERS/api/chatbot-assistant.php',
+            appPrefix + '/api/chatbot-assistant.php',
+            '/USERS/api/chatbot-assistant.php'
         ];
         return [...new Set(candidates)];
     }
