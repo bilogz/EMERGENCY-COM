@@ -269,7 +269,23 @@ try {
                     $debugContext['phpWarning'] = $lastUploadWarning['message'];
                 }
                 error_log('chat-send: attachment save failure context: ' . json_encode($debugContext));
-                throw new RuntimeException('Failed to save uploaded attachment.');
+                if (!is_writable($uploadDir)) {
+                    throw new RuntimeException('Upload directory is not writable on server.');
+                }
+                if (!extension_loaded('pdo_pgsql')) {
+                    throw new RuntimeException('Server missing pdo_pgsql extension; attachment fallback storage is unavailable.');
+                }
+                if (
+                    trim((string)twc_secure_cfg('PG_IMG_URL', '')) === '' &&
+                    (
+                        trim((string)twc_secure_cfg('PG_IMG_HOST', '')) === '' ||
+                        trim((string)twc_secure_cfg('PG_IMG_DB', '')) === '' ||
+                        trim((string)twc_secure_cfg('PG_IMG_USER', '')) === ''
+                    )
+                ) {
+                    throw new RuntimeException('PostgreSQL attachment config is missing (PG_IMG_URL or PG_IMG_HOST/PG_IMG_DB/PG_IMG_USER).');
+                }
+                throw new RuntimeException('Failed to save uploaded attachment (filesystem + PostgreSQL fallback both failed).');
             }
 
             $attachmentMime = $detectedMime !== '' ? $detectedMime : 'application/octet-stream';
