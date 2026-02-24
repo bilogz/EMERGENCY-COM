@@ -251,7 +251,17 @@ try {
     $statusInProgress = twc_status_for_db($pdo, 'in_progress');
 
     if ($attachmentUrl !== null && !$hasAttachmentColumns) {
-        throw new RuntimeException('Chat attachments are not available in this database.');
+        // Production fallback: if DB user cannot alter chat_messages, keep chat flow working.
+        // Preserve proof by embedding URL into message text until schema is updated.
+        $inlineAttachmentNote = trim($attachmentPreviewTag . ' ' . $attachmentUrl);
+        if ($text !== '') {
+            $storedMessageText = $text . PHP_EOL . $inlineAttachmentNote;
+            $lastMessagePreview = $text . ' ' . $attachmentPreviewTag;
+        } else {
+            $storedMessageText = $attachmentPreviewText . ' ' . $attachmentUrl;
+            $lastMessagePreview = $attachmentPreviewText;
+        }
+        error_log('chat-send: attachment columns missing; stored attachment URL inline in message_text');
     }
 
     if (!empty($conversationId)) {

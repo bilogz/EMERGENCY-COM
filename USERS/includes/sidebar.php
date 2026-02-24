@@ -1076,11 +1076,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 const errMsg = data && data.message ? data.message : ('HTTP ' + res.status);
-                if (res.status !== 404) {
-                    throw new Error(errMsg);
+                const endpointError = new Error(errMsg);
+                endpointError.status = res.status;
+                endpointError.endpoint = endpoint;
+
+                if (res.status === 404) {
+                    lastError = endpointError;
+                    continue;
                 }
-                lastError = new Error(errMsg);
+
+                // Non-404 means endpoint exists but request failed; do not hide with later fallback paths.
+                throw endpointError;
             } catch (err) {
+                if (err && err.status && err.status !== 404) {
+                    throw err;
+                }
                 lastError = err;
             }
         }
@@ -3994,6 +4004,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 });
 </script>
+
 
 
 
