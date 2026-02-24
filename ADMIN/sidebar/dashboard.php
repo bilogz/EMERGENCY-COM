@@ -71,6 +71,47 @@ $pageTitle = 'Dashboard';
                         </button>
                     </section>
 
+                    <section class="module-analytics-strip dashboard-analytics-strip" aria-label="Dynamic dashboard analytics">
+                        <div class="module-analytics-title">Dashboard Analytics</div>
+                        <div class="dashboard-analytics-grid">
+                            <article class="dashboard-analytics-card analytics-tone-subs">
+                                <div class="dashboard-analytics-head">
+                                    <span class="dashboard-analytics-label">Total Subscribers</span>
+                                    <span class="dashboard-analytics-icon"><i class="fas fa-users"></i></span>
+                                </div>
+                                <div class="dashboard-analytics-value" id="analyticsTotalSubscribers">0</div>
+                                <div class="dashboard-analytics-sub" id="analyticsSubscribersSub">Registered citizens</div>
+                            </article>
+
+                            <article class="dashboard-analytics-card analytics-tone-notif">
+                                <div class="dashboard-analytics-head">
+                                    <span class="dashboard-analytics-label">Notifications Today</span>
+                                    <span class="dashboard-analytics-icon"><i class="fas fa-bell"></i></span>
+                                </div>
+                                <div class="dashboard-analytics-value" id="analyticsNotificationsToday">0</div>
+                                <div class="dashboard-analytics-sub" id="analyticsNotificationsSub">Alerts sent today</div>
+                            </article>
+
+                            <article class="dashboard-analytics-card analytics-tone-pending">
+                                <div class="dashboard-analytics-head">
+                                    <span class="dashboard-analytics-label">Pending Messages</span>
+                                    <span class="dashboard-analytics-icon"><i class="fas fa-comments"></i></span>
+                                </div>
+                                <div class="dashboard-analytics-value" id="analyticsPendingMessages">0</div>
+                                <div class="dashboard-analytics-sub" id="analyticsPendingSub">Need response</div>
+                            </article>
+
+                            <article class="dashboard-analytics-card analytics-tone-success">
+                                <div class="dashboard-analytics-head">
+                                    <span class="dashboard-analytics-label">Success Rate</span>
+                                    <span class="dashboard-analytics-icon"><i class="fas fa-chart-line"></i></span>
+                                </div>
+                                <div class="dashboard-analytics-value" id="analyticsSuccessRate">0%</div>
+                                <div class="dashboard-analytics-sub" id="analyticsSuccessSub">Delivery health</div>
+                            </article>
+                        </div>
+                    </section>
+
                     <div class="info-box">
                         <i class="fas fa-info-circle"></i>
                         <strong>How to use this view:</strong> Module Operations Monitor is now the primary KPI strip, styled as the dashboard's main analytics surface.

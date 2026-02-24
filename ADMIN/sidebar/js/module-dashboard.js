@@ -9,6 +9,18 @@
         charts: Object.create(null),
     };
 
+    const moduleThemeByKey = {
+        mass_notification: 'theme-sunset',
+        two_way_communication: 'theme-rose',
+        automated_warnings: 'theme-emerald',
+        weather_monitoring: 'theme-ocean',
+        earthquake_monitoring: 'theme-amber',
+        citizen_subscriptions: 'theme-violet',
+        multilingual_support: 'theme-teal',
+        admin_approvals: 'theme-coral',
+        audit_trail: 'theme-indigo',
+    };
+
     function byId(id) {
         return document.getElementById(id);
     }
@@ -20,6 +32,15 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    function toNumber(value) {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    function formatInt(value) {
+        return toNumber(value).toLocaleString();
     }
 
     function setText(id, value, fallback) {
@@ -68,6 +89,52 @@
         return raw;
     }
 
+    function renderAnalytics(stats) {
+        const payload = stats || {};
+        const totalSubscribers = toNumber(payload.total_subscribers);
+        const subscriberChange = toNumber(payload.subscriber_change);
+        const notificationsToday = toNumber(payload.notifications_today);
+        const successRate = Math.max(0, Math.min(100, toNumber(payload.success_rate)));
+        const pendingMessages = toNumber(payload.pending_messages);
+
+        setText('analyticsTotalSubscribers', formatInt(totalSubscribers), '0');
+        setText('analyticsNotificationsToday', formatInt(notificationsToday), '0');
+        setText('analyticsPendingMessages', formatInt(pendingMessages), '0');
+        setText('analyticsSuccessRate', successRate + '%', '0%');
+
+        setText(
+            'analyticsSubscribersSub',
+            (subscriberChange >= 0 ? '+' : '') + formatInt(subscriberChange) + ' this week',
+            'Registered citizens'
+        );
+
+        if (notificationsToday === 0) {
+            setText('analyticsNotificationsSub', 'No alerts sent yet', 'Alerts sent today');
+        } else if (successRate >= 95) {
+            setText('analyticsNotificationsSub', 'All delivered', 'Alerts sent today');
+        } else if (successRate >= 80) {
+            setText('analyticsNotificationsSub', 'Minor delivery issues', 'Alerts sent today');
+        } else {
+            setText('analyticsNotificationsSub', 'Delivery issues detected', 'Alerts sent today');
+        }
+
+        if (pendingMessages === 0) {
+            setText('analyticsPendingSub', 'Queue clear', 'Need response');
+        } else if (pendingMessages <= 5) {
+            setText('analyticsPendingSub', 'Monitor response SLA', 'Need response');
+        } else {
+            setText('analyticsPendingSub', 'Backlog requires action', 'Need response');
+        }
+
+        if (successRate >= 95) {
+            setText('analyticsSuccessSub', 'Excellent delivery health', 'Delivery health');
+        } else if (successRate >= 80) {
+            setText('analyticsSuccessSub', 'Stable but watch retries', 'Delivery health');
+        } else {
+            setText('analyticsSuccessSub', 'Needs reliability fixes', 'Delivery health');
+        }
+    }
+
     function renderModuleStatus(modules) {
         const container = byId('moduleStatusGrid');
         if (!container) return;
@@ -85,9 +152,11 @@
             const route = sanitizeRoute(module && module.route ? module.route : '#');
             const icon = module && module.icon ? module.icon : 'fa-cube';
             const name = module && module.name ? module.name : 'Module';
+            const key = module && module.key ? String(module.key) : '';
+            const themeClass = moduleThemeByKey[key] || 'theme-fallback';
 
             return (
-                '<article class="module-status-card status-' + escapeHtml(status) + '">' +
+                '<article class="module-status-card status-' + escapeHtml(status) + ' ' + escapeHtml(themeClass) + '">' +
                     '<div class="module-status-head">' +
                         '<div class="module-status-name">' + escapeHtml(name) + '</div>' +
                         '<div class="module-status-icon"><i class="fas ' + escapeHtml(icon) + '"></i></div>' +
@@ -294,6 +363,7 @@
                 throw new Error((data && data.message) || 'Dashboard payload error');
             }
 
+            renderAnalytics(data.stats);
             renderCharts(data.charts);
             renderRecentActivity(data.activity);
             renderModuleStatus(data.modules);
