@@ -405,6 +405,25 @@ if (!function_exists('twc_normalize_public_url')) {
             return $raw;
         }
 
+        $raw = str_replace('\\', '/', $raw);
+
+        // Compatibility for legacy attachment URL shapes seen in older rows:
+        // - chat-attachment.php?id=...
+        // - /.../chat-attachment.php/<attachment_id>
+        // - raw attachment_id only
+        if (preg_match('/^[A-Za-z0-9_-]{24,80}$/', $raw) === 1) {
+            $raw = '/USERS/api/chat-attachment.php?id=' . rawurlencode($raw);
+        } else {
+            $rawPath = parse_url($raw, PHP_URL_PATH);
+            if (is_string($rawPath) && stripos($rawPath, 'chat-attachment.php') !== false) {
+                $rawQuery = (string)(parse_url($raw, PHP_URL_QUERY) ?? '');
+                if ($rawQuery === '' && preg_match('#chat-attachment\\.php/([A-Za-z0-9_-]{12,80})/?$#i', $rawPath, $m) === 1) {
+                    $rawQuery = 'id=' . rawurlencode($m[1]);
+                }
+                $raw = '/USERS/api/chat-attachment.php' . ($rawQuery !== '' ? ('?' . $rawQuery) : '');
+            }
+        }
+
         $base = trim((string)twc_app_base_url());
         if ($base === '' || $base === '/') {
             return $raw;

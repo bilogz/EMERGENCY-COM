@@ -1124,6 +1124,17 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 }
             }
 
+            if (/^[A-Za-z0-9_-]{24,80}$/.test(raw)) {
+                return (appBasePath ? appBasePath : '') + '/USERS/api/chat-attachment.php?id=' + encodeURIComponent(raw);
+            }
+            if (!/^https?:\/\//i.test(raw) && /chat-attachment\.php/i.test(raw)) {
+                const idFromPathMatch = raw.match(/chat-attachment\.php\/([A-Za-z0-9_-]{12,80})\/?$/i);
+                const queryIndex = raw.indexOf('?');
+                const queryText = queryIndex >= 0 ? raw.slice(queryIndex + 1).trim() : '';
+                const query = queryText || (idFromPathMatch ? ('id=' + encodeURIComponent(idFromPathMatch[1])) : '');
+                return (appBasePath ? appBasePath : '') + '/USERS/api/chat-attachment.php' + (query ? ('?' + query) : '');
+            }
+
             if (raw.startsWith('/')) {
                 if (
                     appBasePath &&
@@ -1360,7 +1371,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     const LOCAL_SOCKET_PORT = 3000;
     const SIGNALING_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
     const SIGNALING_URL = IS_LOCAL ? `${window.location.protocol}//${SIGNALING_HOST}` + ':' + LOCAL_SOCKET_PORT : null;
-    const SOCKET_HEALTH_URL = IS_LOCAL ? `${window.location.protocol}//${SIGNALING_HOST}:${LOCAL_SOCKET_PORT}/health` : null;
+    const SOCKET_HEALTH_URL = IS_LOCAL
+        ? `${window.location.protocol}//${SIGNALING_HOST}:${LOCAL_SOCKET_PORT}/health`
+        : `${window.location.origin}${SOCKET_IO_PATH}/?EIO=4&transport=polling`;
     const room = "emergency-room";
 
     let socket = null;
@@ -1368,8 +1381,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let notificationSound = 'siren';
     let socketRetryCount = 0;
     const MAX_SOCKET_RETRIES = 5;
-    let socketServerChecked = !IS_LOCAL;
-    let socketServerAvailable = !IS_LOCAL;
+    let socketServerChecked = false;
+    let socketServerAvailable = false;
     let socketServerCheckPromise = null;
     let socketServerLastCheckAt = 0;
     let socketUnavailableNoticeShown = false;
@@ -1399,8 +1412,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     })();
 
     async function checkSocketServerAvailability(force = false) {
-        if (!IS_LOCAL) return true;
-
         const now = Date.now();
         if (!force && socketServerChecked && socketServerAvailable) {
             return true;
@@ -1457,7 +1468,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             console.error('[socket] Socket.IO library not loaded');
             return null;
         }
-        if (IS_LOCAL && !socketServerAvailable) {
+        if (!socketServerAvailable) {
             // Probe in the background and avoid noisy websocket errors while server is down.
             checkSocketServerAvailability();
             return null;
@@ -1472,7 +1483,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         
         const socketOptions = {
             path: SOCKET_IO_PATH,
-            transports: ['websocket', 'polling'],
+            // Prefer polling transport to avoid websocket upgrade failures behind strict proxies.
+            transports: ['polling'],
             // In local mode we retry manually after health checks to avoid noisy browser errors.
             reconnection: !IS_LOCAL,
             reconnectionAttempts: IS_LOCAL ? 0 : MAX_SOCKET_RETRIES,
@@ -1507,34 +1519,23 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         socket.on('connect_error', (error) => {
             console.error('[socket] Connection error:', error);
-            if (IS_LOCAL) {
-                socketServerAvailable = false;
-                socketServerChecked = true;
-                socketServerLastCheckAt = Date.now();
+            socketServerAvailable = false;
+            socketServerChecked = true;
+            socketServerLastCheckAt = Date.now();
 
-                if (socket) {
-                    socket.disconnect();
-                    socket = null;
-                    socketBound = false;
-                    callSocketListenersBoundFor = null;
-                }
-
-                if (callId) {
-                    setStatus('Call signaling unavailable (socket server offline).');
-                }
-                return;
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                socketBound = false;
+                callSocketListenersBoundFor = null;
             }
 
-            socketRetryCount++;
-            if (socketRetryCount >= MAX_SOCKET_RETRIES) {
-                console.error('[socket] Max retries reached. Giving up.');
-                if (callId) {
+            if (callId) {
+                socketRetryCount++;
+                if (socketRetryCount >= MAX_SOCKET_RETRIES) {
                     setStatus('Connection failed. Please refresh the page.');
                     setEndEnabled(true);
-                }
-            } else {
-                console.log(`[socket] Retry ${socketRetryCount}/${MAX_SOCKET_RETRIES}`);
-                if (callId) {
+                } else {
                     setStatus(`Connecting... (attempt ${socketRetryCount}/${MAX_SOCKET_RETRIES})`);
                 }
             }
@@ -2319,24 +2320,23 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         });
     }
 
-    if (IS_LOCAL) {
-        checkSocketServerAvailability(true).then((available) => {
+    checkSocketServerAvailability(true).then((available) => {
+        if (available) {
+            bindCallSocketListeners();
+        } else {
+            setStatus('Call signaling unavailable (socket server offline).');
+        }
+    });
+
+    // Keep trying quietly so page can recover if socket server starts later.
+    setInterval(() => {
+        if (socket && socket.connected) return;
+        checkSocketServerAvailability().then((available) => {
             if (available) {
                 bindCallSocketListeners();
-            } else {
-                setStatus('Call signaling unavailable (socket server offline).');
             }
         });
-
-        // Keep trying quietly so page can recover if socket server starts later.
-        setInterval(() => {
-            if (socket && socket.connected) return;
-            checkSocketServerAvailability();
-            bindCallSocketListeners();
-        }, 7000);
-    } else {
-        bindCallSocketListeners();
-    }
+    }, 7000);
 </script>
 
 </body>

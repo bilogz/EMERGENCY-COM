@@ -246,7 +246,8 @@ $assetBase = '../ADMIN/header/';
 
             const socketOptions = {
                 path: SOCKET_IO_PATH,
-                transports: ['websocket', 'polling'],
+                // Prefer polling transport to avoid websocket upgrade failures behind strict proxies.
+                transports: ['polling'],
                 reconnection: true,
                 reconnectionAttempts: MAX_SOCKET_RETRIES,
                 reconnectionDelayMax: 2000,

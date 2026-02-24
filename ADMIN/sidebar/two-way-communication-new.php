@@ -379,7 +379,8 @@ $admin_username = $admin['username'] ?? 'Admin';
         function initCallSystem() {
             const socketOptions = {
                 path: SOCKET_IO_PATH,
-                transports: ['websocket', 'polling'],
+                // Prefer polling transport to avoid websocket upgrade failures behind strict proxies.
+                transports: ['polling'],
                 reconnection: true,
                 timeout: 8000
 
@@ -769,6 +770,17 @@ $admin_username = $admin['username'] ?? 'Admin';
                 if (dir && dir !== '/') {
                     appBasePath = dir.replace(/\/+$/, '');
                 }
+            }
+
+            if (/^[A-Za-z0-9_-]{24,80}$/.test(raw)) {
+                return (appBasePath ? appBasePath : '') + '/USERS/api/chat-attachment.php?id=' + encodeURIComponent(raw);
+            }
+            if (!/^https?:\/\//i.test(raw) && /chat-attachment\.php/i.test(raw)) {
+                const idFromPathMatch = raw.match(/chat-attachment\.php\/([A-Za-z0-9_-]{12,80})\/?$/i);
+                const queryIndex = raw.indexOf('?');
+                const queryText = queryIndex >= 0 ? raw.slice(queryIndex + 1).trim() : '';
+                const query = queryText || (idFromPathMatch ? ('id=' + encodeURIComponent(idFromPathMatch[1])) : '');
+                return (appBasePath ? appBasePath : '') + '/USERS/api/chat-attachment.php' + (query ? ('?' + query) : '');
             }
 
             if (raw.startsWith('/')) {
