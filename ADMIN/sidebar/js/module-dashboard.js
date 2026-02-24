@@ -13,11 +13,6 @@
         return document.getElementById(id);
     }
 
-    function toNumber(value) {
-        const n = Number(value);
-        return Number.isFinite(n) ? n : 0;
-    }
-
     function escapeHtml(value) {
         return String(value ?? '')
             .replace(/&/g, '&amp;')
@@ -25,10 +20,6 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
-    }
-
-    function formatInt(value) {
-        return toNumber(value).toLocaleString();
     }
 
     function setText(id, value, fallback) {
@@ -60,55 +51,6 @@
 
     function updateGeneratedAt(value) {
         setText('dashboardGeneratedAt', formatGeneratedAt(value), 'Unavailable');
-    }
-
-    function updateAlertStatus(elementId, count, activeLabel) {
-        const el = byId(elementId);
-        if (!el) return;
-        if (toNumber(count) > 0) {
-            el.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span class="status-danger">' + escapeHtml(activeLabel) + '</span>';
-            return;
-        }
-        el.innerHTML = '<i class="fas fa-info-circle"></i> No active alerts';
-    }
-
-    function renderStats(stats) {
-        const payload = stats || {};
-        const totalSubscribers = toNumber(payload.total_subscribers);
-        const subscriberChange = toNumber(payload.subscriber_change);
-        const notificationsToday = toNumber(payload.notifications_today);
-        const successRate = toNumber(payload.success_rate);
-        const weatherAlerts = toNumber(payload.weather_alerts);
-        const earthquakeAlerts = toNumber(payload.earthquake_alerts);
-        const pendingMessages = toNumber(payload.pending_messages);
-
-        setText('totalSubscribers', formatInt(totalSubscribers), '0');
-        setText(
-            'subscriberChange',
-            (subscriberChange >= 0 ? '+' : '') + formatInt(subscriberChange) + ' this week',
-            '+0 this week'
-        );
-        setText('notificationsToday', formatInt(notificationsToday), '0');
-        setText('successRate', Math.max(0, Math.min(100, successRate)) + '%', '0%');
-        setText('weatherAlerts', formatInt(weatherAlerts), '0');
-        setText('earthquakeAlerts', formatInt(earthquakeAlerts), '0');
-        setText('pendingMessages', formatInt(pendingMessages), '0');
-
-        const notificationStatus = byId('notificationStatus');
-        if (notificationStatus) {
-            if (notificationsToday === 0) {
-                notificationStatus.textContent = 'No notifications sent';
-            } else if (successRate >= 95) {
-                notificationStatus.textContent = 'All delivered';
-            } else if (successRate >= 80) {
-                notificationStatus.textContent = 'Minor delivery issues';
-            } else {
-                notificationStatus.textContent = 'Delivery issues detected';
-            }
-        }
-
-        updateAlertStatus('weatherStatus', weatherAlerts, 'Active weather alerts');
-        updateAlertStatus('earthquakeStatus', earthquakeAlerts, 'Active seismic alerts');
     }
 
     function sanitizeModuleStatus(status) {
@@ -147,14 +89,16 @@
             return (
                 '<article class="module-status-card status-' + escapeHtml(status) + '">' +
                     '<div class="module-status-head">' +
+                        '<div class="module-status-name">' + escapeHtml(name) + '</div>' +
                         '<div class="module-status-icon"><i class="fas ' + escapeHtml(icon) + '"></i></div>' +
-                        '<span class="module-status-chip">' + escapeHtml(status.toUpperCase()) + '</span>' +
                     '</div>' +
-                    '<div class="module-status-name">' + escapeHtml(name) + '</div>' +
                     '<div class="module-status-metric">' + escapeHtml(metric) + '</div>' +
                     '<div class="module-status-label">' + escapeHtml(metricLabel) + '</div>' +
                     '<div class="module-status-secondary">' + escapeHtml(secondary) + '</div>' +
-                    '<a href="' + escapeHtml(route) + '" class="module-status-link">Open module</a>' +
+                    '<div class="module-status-footer">' +
+                        '<span class="module-status-chip">' + escapeHtml(status.toUpperCase()) + '</span>' +
+                        '<a href="' + escapeHtml(route) + '" class="module-status-link">Open module</a>' +
+                    '</div>' +
                 '</article>'
             );
         }).join('');
@@ -350,7 +294,6 @@
                 throw new Error((data && data.message) || 'Dashboard payload error');
             }
 
-            renderStats(data.stats);
             renderCharts(data.charts);
             renderRecentActivity(data.activity);
             renderModuleStatus(data.modules);

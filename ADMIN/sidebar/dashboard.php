@@ -71,68 +71,9 @@ $pageTitle = 'Dashboard';
                         </button>
                     </section>
 
-                    <section class="module-analytics-strip" aria-label="System analytics overview">
-                        <div class="module-analytics-title">System Analytics</div>
-                        <div class="module-analytics-grid">
-                            <article class="module-analytics-card tone-a">
-                                <div class="module-analytics-head">
-                                    <span class="module-analytics-label">Total Subscribers</span>
-                                    <span class="module-analytics-icon"><i class="fas fa-users"></i></span>
-                                </div>
-                                <div class="module-analytics-value" id="totalSubscribers">0</div>
-                                <div class="module-analytics-sub"><span id="subscriberChange">+0 this week</span></div>
-                            </article>
-
-                            <article class="module-analytics-card tone-c">
-                                <div class="module-analytics-head">
-                                    <span class="module-analytics-label">Notifications Sent Today</span>
-                                    <span class="module-analytics-icon"><i class="fas fa-bell"></i></span>
-                                </div>
-                                <div class="module-analytics-value" id="notificationsToday">0</div>
-                                <div class="module-analytics-sub"><span id="notificationStatus">All delivered</span></div>
-                            </article>
-
-                            <article class="module-analytics-card tone-d">
-                                <div class="module-analytics-head">
-                                    <span class="module-analytics-label">Success Rate</span>
-                                    <span class="module-analytics-icon"><i class="fas fa-chart-line"></i></span>
-                                </div>
-                                <div class="module-analytics-value" id="successRate">0%</div>
-                                <div class="module-analytics-sub">Delivery reliability</div>
-                            </article>
-
-                            <article class="module-analytics-card tone-b">
-                                <div class="module-analytics-head">
-                                    <span class="module-analytics-label">Weather Alerts</span>
-                                    <span class="module-analytics-icon"><i class="fas fa-cloud-rain"></i></span>
-                                </div>
-                                <div class="module-analytics-value" id="weatherAlerts">0</div>
-                                <div class="module-analytics-sub" id="weatherStatus"><i class="fas fa-info-circle"></i> No active alerts</div>
-                            </article>
-
-                            <article class="module-analytics-card tone-c">
-                                <div class="module-analytics-head">
-                                    <span class="module-analytics-label">Earthquake Alerts</span>
-                                    <span class="module-analytics-icon"><i class="fas fa-mountain"></i></span>
-                                </div>
-                                <div class="module-analytics-value" id="earthquakeAlerts">0</div>
-                                <div class="module-analytics-sub" id="earthquakeStatus"><i class="fas fa-info-circle"></i> No active alerts</div>
-                            </article>
-
-                            <article class="module-analytics-card tone-a">
-                                <div class="module-analytics-head">
-                                    <span class="module-analytics-label">Pending Messages</span>
-                                    <span class="module-analytics-icon"><i class="fas fa-comments"></i></span>
-                                </div>
-                                <div class="module-analytics-value" id="pendingMessages">0</div>
-                                <div class="module-analytics-sub"><a href="two-way-communication.php" class="dashboard-inline-link">View conversations</a></div>
-                            </article>
-                        </div>
-                    </section>
-
                     <div class="info-box">
                         <i class="fas fa-info-circle"></i>
-                        <strong>How to use this view:</strong> Metrics and graphs refresh only when requested for a stable, easier-to-review operational snapshot.
+                        <strong>How to use this view:</strong> Module Operations Monitor is now the primary KPI strip, styled as the dashboard's main analytics surface.
                     </div>
 
                     <div class="module-monitor-container">
