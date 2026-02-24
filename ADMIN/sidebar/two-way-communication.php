@@ -59,6 +59,18 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 <p>Interactive communication platform allowing administrators and citizens to exchange messages in real-time.</p>
             </div>
 
+            <div class="twc-primary-switch" id="twcPrimarySwitch" aria-label="Two-way communication views">
+                <button type="button" class="twc-primary-chip active" data-twc-view="conversations">
+                    <i class="fas fa-comments"></i>
+                    <span>Conversations</span>
+                </button>
+                <button type="button" class="twc-primary-chip" data-twc-view="chatbotLogs">
+                    <i class="fas fa-robot"></i>
+                    <span>Chatbot Logs</span>
+                </button>
+            </div>
+
+            <div id="twcConversationsShell">
             <div class="department-top-nav" id="departmentTopNav" aria-label="Department Navigation">
                 <button type="button" class="dept-nav-chip active" data-dept="all">
                     <i class="fas fa-layer-group"></i>
@@ -203,6 +215,148 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     </div>
                 </div>
             </div>
+            </div>
+
+            <div class="twc-chatbot-logs-shell" id="twcChatbotLogsShell" hidden>
+                <div class="twc-logs-intro">
+                    <h3><i class="fas fa-robot"></i> Chatbot Interaction Logs</h3>
+                    <p>Review what the AI assistant received, how it responded, and whether emergency routing was triggered.</p>
+                </div>
+
+                <div class="twc-logs-summary" id="twcChatbotLogsSummary">
+                    <div class="twc-logs-stat">
+                        <div class="twc-logs-stat-label">Total Logs</div>
+                        <div class="twc-logs-stat-value" id="twcLogsStatTotal">0</div>
+                    </div>
+                    <div class="twc-logs-stat twc-logs-stat--danger">
+                        <div class="twc-logs-stat-label">Emergency Detected</div>
+                        <div class="twc-logs-stat-value" id="twcLogsStatEmergency">0</div>
+                    </div>
+                    <div class="twc-logs-stat">
+                        <div class="twc-logs-stat-label">Last 24 Hours</div>
+                        <div class="twc-logs-stat-value" id="twcLogsStatLast24h">0</div>
+                    </div>
+                    <div class="twc-logs-stat">
+                        <div class="twc-logs-stat-label">Rule Fallback</div>
+                        <div class="twc-logs-stat-value" id="twcLogsStatFallback">0</div>
+                    </div>
+                </div>
+
+                <div class="twc-logs-filters">
+                    <div class="twc-logs-filter twc-logs-filter--search">
+                        <label for="twcLogsSearch">Search</label>
+                        <input type="text" id="twcLogsSearch" placeholder="Search request, response, user, conversation..." autocomplete="off">
+                    </div>
+                    <div class="twc-logs-filter">
+                        <label for="twcLogsIncidentType">Incident Type</label>
+                        <select id="twcLogsIncidentType">
+                            <option value="all">All Incident Types</option>
+                        </select>
+                    </div>
+                    <div class="twc-logs-filter">
+                        <label for="twcLogsLanguage">Language</label>
+                        <select id="twcLogsLanguage">
+                            <option value="all">All Languages</option>
+                        </select>
+                    </div>
+                    <div class="twc-logs-filter">
+                        <label for="twcLogsEmergency">Emergency</label>
+                        <select id="twcLogsEmergency">
+                            <option value="all">All</option>
+                            <option value="yes">Emergency Only</option>
+                            <option value="no">Non-Emergency</option>
+                        </select>
+                    </div>
+                    <div class="twc-logs-filter">
+                        <label for="twcLogsScope">QC Scope</label>
+                        <select id="twcLogsScope">
+                            <option value="all">All</option>
+                            <option value="qc">QC</option>
+                            <option value="outside_qc">Outside QC</option>
+                            <option value="unknown">Unknown</option>
+                        </select>
+                    </div>
+                    <div class="twc-logs-filter">
+                        <label for="twcLogsDateFrom">Date From</label>
+                        <input type="date" id="twcLogsDateFrom">
+                    </div>
+                    <div class="twc-logs-filter">
+                        <label for="twcLogsDateTo">Date To</label>
+                        <input type="date" id="twcLogsDateTo">
+                    </div>
+                    <div class="twc-logs-filter twc-logs-filter--actions">
+                        <button type="button" class="btn btn-secondary" id="twcLogsResetBtn">
+                            <i class="fas fa-rotate-left"></i> Reset
+                        </button>
+                        <button type="button" class="btn btn-primary" id="twcLogsRefreshBtn">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="twc-logs-table-shell">
+                    <div class="twc-logs-table-head">
+                        <strong>Recent Chatbot Responses</strong>
+                        <span id="twcLogsMeta">Showing 0 logs</span>
+                    </div>
+                    <div class="twc-logs-table-wrap">
+                        <table class="twc-logs-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Incident</th>
+                                    <th>User / Conversation</th>
+                                    <th>Request</th>
+                                    <th>Response</th>
+                                    <th>Flags</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="twcChatbotLogsBody">
+                                <tr>
+                                    <td colspan="7" class="twc-logs-empty">Loading chatbot logs...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="twc-logs-pagination">
+                        <button type="button" class="btn btn-secondary btn-sm" id="twcLogsPrevBtn">
+                            <i class="fas fa-chevron-left"></i> Prev
+                        </button>
+                        <span id="twcLogsPageLabel">Page 1 of 1</span>
+                        <button type="button" class="btn btn-secondary btn-sm" id="twcLogsNextBtn">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="twc-log-modal" id="twcLogModal" hidden>
+        <div class="twc-log-modal-backdrop" id="twcLogModalBackdrop"></div>
+        <div class="twc-log-modal-card" role="dialog" aria-modal="true" aria-labelledby="twcLogModalTitle">
+            <div class="twc-log-modal-head">
+                <h4 id="twcLogModalTitle">Chatbot Log Detail</h4>
+                <button type="button" class="twc-log-modal-close" id="twcLogModalClose" aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="twc-log-modal-body">
+                <div class="twc-log-modal-meta" id="twcLogModalMeta"></div>
+                <div class="twc-log-modal-block">
+                    <label>User Request</label>
+                    <pre id="twcLogModalRequest"></pre>
+                </div>
+                <div class="twc-log-modal-block">
+                    <label>Assistant Response</label>
+                    <pre id="twcLogModalResponse"></pre>
+                </div>
+                <div class="twc-log-modal-block" id="twcLogModalMetadataWrap">
+                    <label>Metadata</label>
+                    <pre id="twcLogModalMetadata"></pre>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -227,6 +381,25 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         let hasUnreadBaseline = false;
         let topicSet = new Set();
         let currentPriority = 'all';
+        let currentMainView = 'conversations';
+        let chatbotLogsSearchTimer = null;
+        const chatbotLogsState = {
+            page: 1,
+            pageSize: 20,
+            total: 0,
+            totalPages: 1,
+            items: [],
+            filterOptionsLoaded: false,
+            filters: {
+                search: '',
+                incidentType: 'all',
+                language: 'all',
+                emergency: 'all',
+                scope: 'all',
+                dateFrom: '',
+                dateTo: ''
+            }
+        };
         const DEPARTMENT_KEYS = [
             'incident_nlp',
             'traffic_transport',
@@ -267,6 +440,392 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             document.getElementById('communicationContainer').classList.remove('chat-active');
             // Allow polling to refresh list again if needed, but keep current ID active in background
         }
+
+        function updateMainViewQueryParam(view) {
+            const url = new URL(window.location.href);
+            if (view === 'chatbotLogs') {
+                url.searchParams.set('view', 'chatbotLogs');
+            } else {
+                url.searchParams.delete('view');
+            }
+            window.history.replaceState({}, '', url.toString());
+        }
+
+        function setPrimaryView(view, updateUrl = true) {
+            const normalized = view === 'chatbotLogs' ? 'chatbotLogs' : 'conversations';
+            currentMainView = normalized;
+
+            const conversationShell = document.getElementById('twcConversationsShell');
+            const chatbotLogsShell = document.getElementById('twcChatbotLogsShell');
+            if (conversationShell) {
+                conversationShell.hidden = normalized !== 'conversations';
+            }
+            if (chatbotLogsShell) {
+                chatbotLogsShell.hidden = normalized !== 'chatbotLogs';
+            }
+
+            document.querySelectorAll('.twc-primary-chip').forEach((chip) => {
+                chip.classList.toggle('active', chip.getAttribute('data-twc-view') === normalized);
+            });
+
+            if (updateUrl) {
+                updateMainViewQueryParam(normalized);
+            }
+
+            if (normalized === 'chatbotLogs') {
+                loadChatbotLogs(false);
+            }
+        }
+
+        function formatChatbotLogDate(rawValue) {
+            const date = new Date(rawValue);
+            if (Number.isNaN(date.getTime())) {
+                return 'Unknown date';
+            }
+            return date.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        function chatbotLogTypeLabel(value) {
+            const raw = String(value || '').trim();
+            if (!raw) return 'General';
+            return raw.replace(/[_-]+/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+        }
+
+        function chatbotLogTrim(value, maxLen = 120) {
+            const text = String(value || '').replace(/\s+/g, ' ').trim();
+            if (text.length <= maxLen) return text;
+            return text.slice(0, Math.max(0, maxLen - 3)) + '...';
+        }
+
+        function chatbotLogBadge(text, variant) {
+            const safeText = escapeHtml(String(text || '').trim());
+            const cls = variant ? ` twc-log-badge--${variant}` : ' twc-log-badge--neutral';
+            return `<span class="twc-log-badge${cls}">${safeText}</span>`;
+        }
+
+        function renderChatbotLogsLoading() {
+            const body = document.getElementById('twcChatbotLogsBody');
+            if (!body) return;
+            body.innerHTML = '<tr><td colspan="7" class="twc-logs-empty">Loading chatbot logs...</td></tr>';
+        }
+
+        function renderChatbotLogsEmpty(message) {
+            const body = document.getElementById('twcChatbotLogsBody');
+            if (!body) return;
+            body.innerHTML = `<tr><td colspan="7" class="twc-logs-empty">${escapeHtml(message || 'No chatbot logs found for the selected filters.')}</td></tr>`;
+        }
+
+        function updateChatbotLogsMeta(total, page, totalPages, note) {
+            const meta = document.getElementById('twcLogsMeta');
+            if (!meta) return;
+            const safeTotal = Number.isFinite(total) ? total : 0;
+            const safePage = Number.isFinite(page) ? page : 1;
+            const safeTotalPages = Number.isFinite(totalPages) ? totalPages : 1;
+            const base = `Showing ${safeTotal} log${safeTotal === 1 ? '' : 's'} | Page ${safePage}/${Math.max(1, safeTotalPages)}`;
+            meta.textContent = note ? `${base} | ${note}` : base;
+        }
+
+        function updateChatbotLogsSummary(summary) {
+            const safe = summary || {};
+            const map = {
+                twcLogsStatTotal: safe.total || 0,
+                twcLogsStatEmergency: safe.emergency || 0,
+                twcLogsStatLast24h: safe.last24h || 0,
+                twcLogsStatFallback: safe.ruleFallback || 0
+            };
+            Object.keys(map).forEach((id) => {
+                const node = document.getElementById(id);
+                if (node) node.textContent = String(map[id]);
+            });
+        }
+
+        function setChatbotSelectOptions(selectId, values, defaultLabel, formatter) {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+
+            const currentValue = String(select.value || 'all');
+            const uniqueValues = Array.from(new Set((values || []).map((value) => String(value || '').trim()).filter(Boolean)));
+            let optionsHtml = `<option value="all">${escapeHtml(defaultLabel)}</option>`;
+            uniqueValues.forEach((value) => {
+                const label = formatter ? formatter(value) : value;
+                optionsHtml += `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
+            });
+            select.innerHTML = optionsHtml;
+
+            if (currentValue !== 'all' && uniqueValues.includes(currentValue)) {
+                select.value = currentValue;
+            } else if (chatbotLogsState.filters && chatbotLogsState.filters[selectId === 'twcLogsIncidentType' ? 'incidentType' : 'language']) {
+                const fallback = chatbotLogsState.filters[selectId === 'twcLogsIncidentType' ? 'incidentType' : 'language'];
+                if (fallback !== 'all' && uniqueValues.includes(fallback)) {
+                    select.value = fallback;
+                }
+            }
+        }
+
+        function renderChatbotLogsRows(items) {
+            const body = document.getElementById('twcChatbotLogsBody');
+            if (!body) return;
+
+            if (!Array.isArray(items) || items.length === 0) {
+                renderChatbotLogsEmpty('No chatbot logs found for the selected filters.');
+                return;
+            }
+
+            const rowsHtml = items.map((item) => {
+                const requestText = String(item.requestText || '');
+                const responseText = String(item.responseText || '');
+                const incidentType = String(item.incidentType || '');
+                const incidentLabel = String(item.incidentLabel || '');
+                const languageCode = String(item.languageCode || '');
+                const userId = String(item.userId || '');
+                const conversationId = String(item.conversationId || '');
+                const scope = String(item.qcScope || 'unknown');
+
+                const badges = [
+                    item.emergencyDetected
+                        ? chatbotLogBadge('Emergency', 'danger')
+                        : chatbotLogBadge('Non-Emergency', 'ok'),
+                    chatbotLogBadge(languageCode || 'n/a', 'neutral'),
+                    chatbotLogBadge(scope || 'unknown', 'neutral')
+                ];
+                if (item.usedRuleFallback) {
+                    badges.push(chatbotLogBadge('Rule Fallback', 'warn'));
+                }
+
+                const safeId = Number(item.id || 0);
+                const incidentPrimary = incidentLabel || chatbotLogTypeLabel(incidentType);
+
+                return `
+                    <tr class="twc-logs-row">
+                        <td>
+                            ${escapeHtml(formatChatbotLogDate(item.createdAt))}
+                            <div class="twc-logs-meta-small">${escapeHtml(item.modelUsed || 'model:n/a')}</div>
+                        </td>
+                        <td>
+                            <strong>${escapeHtml(incidentPrimary)}</strong>
+                            <div class="twc-logs-meta-small">${escapeHtml(incidentType || 'general')}</div>
+                        </td>
+                        <td>
+                            <strong>${escapeHtml(userId || 'anonymous')}</strong>
+                            <div class="twc-logs-meta-small">conv: ${escapeHtml(conversationId || 'n/a')}</div>
+                        </td>
+                        <td>
+                            <div class="twc-logs-snippet" title="${escapeHtml(chatbotLogTrim(requestText, 320))}">${escapeHtml(chatbotLogTrim(requestText, 130))}</div>
+                        </td>
+                        <td>
+                            <div class="twc-logs-snippet" title="${escapeHtml(chatbotLogTrim(responseText, 320))}">${escapeHtml(chatbotLogTrim(responseText, 130))}</div>
+                        </td>
+                        <td>${badges.join('')}</td>
+                        <td>
+                            <button type="button" class="btn btn-secondary btn-sm twc-log-open-btn" data-log-id="${safeId}">
+                                View
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            body.innerHTML = rowsHtml;
+        }
+
+        function updateChatbotLogsPagination() {
+            const prevBtn = document.getElementById('twcLogsPrevBtn');
+            const nextBtn = document.getElementById('twcLogsNextBtn');
+            const label = document.getElementById('twcLogsPageLabel');
+            const page = chatbotLogsState.page;
+            const totalPages = Math.max(1, chatbotLogsState.totalPages || 1);
+
+            if (label) {
+                label.textContent = `Page ${page} of ${totalPages}`;
+            }
+            if (prevBtn) {
+                prevBtn.disabled = page <= 1;
+            }
+            if (nextBtn) {
+                nextBtn.disabled = page >= totalPages;
+            }
+        }
+
+        function readChatbotLogsFiltersFromUi() {
+            const searchInput = document.getElementById('twcLogsSearch');
+            const incidentTypeInput = document.getElementById('twcLogsIncidentType');
+            const languageInput = document.getElementById('twcLogsLanguage');
+            const emergencyInput = document.getElementById('twcLogsEmergency');
+            const scopeInput = document.getElementById('twcLogsScope');
+            const dateFromInput = document.getElementById('twcLogsDateFrom');
+            const dateToInput = document.getElementById('twcLogsDateTo');
+
+            chatbotLogsState.filters = {
+                search: searchInput ? String(searchInput.value || '').trim() : '',
+                incidentType: incidentTypeInput ? String(incidentTypeInput.value || 'all') : 'all',
+                language: languageInput ? String(languageInput.value || 'all') : 'all',
+                emergency: emergencyInput ? String(emergencyInput.value || 'all') : 'all',
+                scope: scopeInput ? String(scopeInput.value || 'all') : 'all',
+                dateFrom: dateFromInput ? String(dateFromInput.value || '') : '',
+                dateTo: dateToInput ? String(dateToInput.value || '') : ''
+            };
+        }
+
+        function fillChatbotLogsFiltersUi() {
+            const filters = chatbotLogsState.filters;
+            const pairs = [
+                ['twcLogsSearch', filters.search],
+                ['twcLogsIncidentType', filters.incidentType],
+                ['twcLogsLanguage', filters.language],
+                ['twcLogsEmergency', filters.emergency],
+                ['twcLogsScope', filters.scope],
+                ['twcLogsDateFrom', filters.dateFrom],
+                ['twcLogsDateTo', filters.dateTo]
+            ];
+
+            pairs.forEach((pair) => {
+                const node = document.getElementById(pair[0]);
+                if (node && typeof pair[1] !== 'undefined') {
+                    node.value = pair[1];
+                }
+            });
+        }
+
+        function applyChatbotLogsFilters(resetPage = true) {
+            readChatbotLogsFiltersFromUi();
+            if (resetPage) {
+                chatbotLogsState.page = 1;
+            }
+            loadChatbotLogs(false);
+        }
+
+        function resetChatbotLogsFilters() {
+            chatbotLogsState.filters = {
+                search: '',
+                incidentType: 'all',
+                language: 'all',
+                emergency: 'all',
+                scope: 'all',
+                dateFrom: '',
+                dateTo: ''
+            };
+            chatbotLogsState.page = 1;
+            fillChatbotLogsFiltersUi();
+            loadChatbotLogs(false);
+        }
+
+        async function loadChatbotLogs(forceResetPage) {
+            if (forceResetPage) {
+                chatbotLogsState.page = 1;
+            }
+            readChatbotLogsFiltersFromUi();
+            renderChatbotLogsLoading();
+
+            const params = new URLSearchParams({
+                page: String(chatbotLogsState.page),
+                pageSize: String(chatbotLogsState.pageSize)
+            });
+            const filters = chatbotLogsState.filters || {};
+            if (filters.search) params.set('search', filters.search);
+            if (filters.incidentType && filters.incidentType !== 'all') params.set('incidentType', filters.incidentType);
+            if (filters.language && filters.language !== 'all') params.set('language', filters.language);
+            if (filters.emergency && filters.emergency !== 'all') params.set('emergency', filters.emergency);
+            if (filters.scope && filters.scope !== 'all') params.set('scope', filters.scope);
+            if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+            if (filters.dateTo) params.set('dateTo', filters.dateTo);
+
+            let note = '';
+            try {
+                const response = await fetch(`${API_BASE}chatbot-logs.php?${params.toString()}`);
+                const data = await response.json();
+                if (!data || !data.success) {
+                    throw new Error((data && data.message) ? data.message : 'Failed to load chatbot logs.');
+                }
+
+                chatbotLogsState.page = Number(data.page || chatbotLogsState.page || 1);
+                chatbotLogsState.total = Number(data.total || 0);
+                chatbotLogsState.totalPages = Math.max(1, Number(data.totalPages || 1));
+                chatbotLogsState.items = Array.isArray(data.items) ? data.items : [];
+
+                updateChatbotLogsSummary(data.summary || {});
+                renderChatbotLogsRows(chatbotLogsState.items);
+                updateChatbotLogsPagination();
+
+                setChatbotSelectOptions('twcLogsIncidentType', data.incidentTypes || [], 'All Incident Types', chatbotLogTypeLabel);
+                setChatbotSelectOptions('twcLogsLanguage', data.languages || [], 'All Languages', function (value) {
+                    return String(value || '').toUpperCase();
+                });
+
+                if (data.message) {
+                    note = String(data.message);
+                }
+            } catch (error) {
+                console.error('Error loading chatbot logs:', error);
+                renderChatbotLogsEmpty(error && error.message ? error.message : 'Failed to load chatbot logs.');
+                updateChatbotLogsPagination();
+                note = 'Request failed';
+            }
+
+            updateChatbotLogsMeta(chatbotLogsState.total, chatbotLogsState.page, chatbotLogsState.totalPages, note);
+        }
+
+        function openChatbotLogModalById(logId) {
+            const safeId = Number(logId || 0);
+            if (!safeId) return;
+            const item = (chatbotLogsState.items || []).find((entry) => Number(entry.id || 0) === safeId);
+            if (!item) return;
+
+            const modal = document.getElementById('twcLogModal');
+            const meta = document.getElementById('twcLogModalMeta');
+            const request = document.getElementById('twcLogModalRequest');
+            const response = document.getElementById('twcLogModalResponse');
+            const metadataWrap = document.getElementById('twcLogModalMetadataWrap');
+            const metadata = document.getElementById('twcLogModalMetadata');
+            if (!modal || !meta || !request || !response || !metadataWrap || !metadata) return;
+
+            const metaParts = [
+                `Time: ${formatChatbotLogDate(item.createdAt)}`,
+                `Incident: ${item.incidentLabel || chatbotLogTypeLabel(item.incidentType)}`,
+                `Emergency: ${item.emergencyDetected ? 'Yes' : 'No'}`,
+                `Language: ${item.languageCode || 'n/a'}`,
+                `Scope: ${item.qcScope || 'unknown'}`,
+                `User: ${item.userId || 'anonymous'}`,
+                `Conversation: ${item.conversationId || 'n/a'}`,
+                `Model: ${item.modelUsed || 'n/a'}`
+            ];
+            if (item.usedRuleFallback) {
+                metaParts.push('Routing: Rule fallback used');
+            }
+            if (item.qcBarangays) {
+                metaParts.push(`Matched barangays: ${item.qcBarangays}`);
+            }
+
+            meta.textContent = metaParts.join(' | ');
+            request.textContent = String(item.requestText || '').trim() || '(empty request)';
+            response.textContent = String(item.responseText || '').trim() || '(empty response)';
+
+            if (item.metadata && typeof item.metadata === 'object') {
+                metadataWrap.style.display = '';
+                metadata.textContent = JSON.stringify(item.metadata, null, 2);
+            } else {
+                metadataWrap.style.display = 'none';
+                metadata.textContent = '';
+            }
+
+            modal.hidden = false;
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeChatbotLogModal() {
+            const modal = document.getElementById('twcLogModal');
+            if (!modal) return;
+            modal.hidden = true;
+            document.body.style.overflow = '';
+        }
+
+        window.openChatbotLogModalById = openChatbotLogModalById;
 
         // --- Data Loading ---
 
@@ -639,6 +1198,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     });
                 }
             } catch (e) {}
+
+            if (currentMainView !== 'conversations') {
+                return;
+            }
 
             // 2. Silent list refresh for first page only (stable re-render, no manual DOM shuffling)
             const listEl = document.getElementById('scrollableList');
@@ -1215,6 +1778,103 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         document.addEventListener('DOMContentLoaded', () => {
             const deptFilter = document.getElementById('deptFilter');
             const deptTopNav = document.getElementById('departmentTopNav');
+            const primarySwitch = document.getElementById('twcPrimarySwitch');
+            if (primarySwitch) {
+                primarySwitch.addEventListener('click', (event) => {
+                    const chip = event.target.closest('.twc-primary-chip');
+                    if (!chip) return;
+                    const view = chip.getAttribute('data-twc-view') || 'conversations';
+                    setPrimaryView(view);
+                });
+            }
+
+            fillChatbotLogsFiltersUi();
+
+            const logsSearch = document.getElementById('twcLogsSearch');
+            if (logsSearch) {
+                logsSearch.addEventListener('input', () => {
+                    if (chatbotLogsSearchTimer) {
+                        clearTimeout(chatbotLogsSearchTimer);
+                    }
+                    chatbotLogsSearchTimer = setTimeout(() => {
+                        applyChatbotLogsFilters(true);
+                    }, 320);
+                });
+            }
+
+            [
+                'twcLogsIncidentType',
+                'twcLogsLanguage',
+                'twcLogsEmergency',
+                'twcLogsScope',
+                'twcLogsDateFrom',
+                'twcLogsDateTo'
+            ].forEach((id) => {
+                const node = document.getElementById(id);
+                if (!node) return;
+                node.addEventListener('change', () => {
+                    applyChatbotLogsFilters(true);
+                });
+            });
+
+            const logsResetBtn = document.getElementById('twcLogsResetBtn');
+            if (logsResetBtn) {
+                logsResetBtn.addEventListener('click', resetChatbotLogsFilters);
+            }
+
+            const logsRefreshBtn = document.getElementById('twcLogsRefreshBtn');
+            if (logsRefreshBtn) {
+                logsRefreshBtn.addEventListener('click', () => {
+                    loadChatbotLogs(false);
+                });
+            }
+
+            const logsPrevBtn = document.getElementById('twcLogsPrevBtn');
+            if (logsPrevBtn) {
+                logsPrevBtn.addEventListener('click', () => {
+                    if (chatbotLogsState.page <= 1) return;
+                    chatbotLogsState.page -= 1;
+                    loadChatbotLogs(false);
+                });
+            }
+
+            const logsNextBtn = document.getElementById('twcLogsNextBtn');
+            if (logsNextBtn) {
+                logsNextBtn.addEventListener('click', () => {
+                    if (chatbotLogsState.page >= chatbotLogsState.totalPages) return;
+                    chatbotLogsState.page += 1;
+                    loadChatbotLogs(false);
+                });
+            }
+
+            const logsBody = document.getElementById('twcChatbotLogsBody');
+            if (logsBody) {
+                logsBody.addEventListener('click', (event) => {
+                    const button = event.target.closest('.twc-log-open-btn');
+                    if (!button) return;
+                    const logId = Number(button.getAttribute('data-log-id') || 0);
+                    if (logId > 0) {
+                        openChatbotLogModalById(logId);
+                    }
+                });
+            }
+
+            const modalCloseBtn = document.getElementById('twcLogModalClose');
+            if (modalCloseBtn) {
+                modalCloseBtn.addEventListener('click', closeChatbotLogModal);
+            }
+
+            const modalBackdrop = document.getElementById('twcLogModalBackdrop');
+            if (modalBackdrop) {
+                modalBackdrop.addEventListener('click', closeChatbotLogModal);
+            }
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    closeChatbotLogModal();
+                }
+            });
+
             if (deptFilter) {
                 const urlDept = new URLSearchParams(window.location.search).get('dept');
                 if (urlDept && Array.from(deptFilter.options).some(o => o.value === urlDept)) {
@@ -1257,6 +1917,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     currentPriority = priorityFilter.value || 'all';
                     resetConversationsAndReload();
                 });
+            }
+
+            const initialView = new URLSearchParams(window.location.search).get('view');
+            if (initialView === 'chatbotLogs') {
+                setPrimaryView('chatbotLogs', false);
+            } else {
+                setPrimaryView('conversations', false);
             }
 
             loadConversations(true);

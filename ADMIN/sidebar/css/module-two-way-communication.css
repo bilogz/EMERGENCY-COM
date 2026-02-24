@@ -711,4 +711,460 @@
                 max-width: 90%;
             }
         }
+
+        /* Chatbot logs view */
+        .twc-primary-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.35rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-color-1);
+            background: color-mix(in srgb, var(--card-bg-1) 85%, var(--bg-color-1));
+            margin: 0.65rem 0 0.95rem;
+        }
+
+        .twc-primary-chip {
+            border: 1px solid transparent;
+            border-radius: 999px;
+            padding: 0.5rem 0.85rem;
+            background: transparent;
+            color: var(--text-secondary-1);
+            font-weight: 700;
+            font-size: 0.84rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.18s ease;
+        }
+
+        .twc-primary-chip i {
+            color: var(--primary-color-1);
+        }
+
+        .twc-primary-chip:hover {
+            color: var(--text-color-1);
+            background: color-mix(in srgb, var(--primary-color-1) 8%, transparent);
+            border-color: color-mix(in srgb, var(--primary-color-1) 35%, var(--border-color-1));
+        }
+
+        .twc-primary-chip.active {
+            color: var(--text-color-1);
+            background: color-mix(in srgb, var(--primary-color-1) 15%, var(--card-bg-1));
+            border-color: color-mix(in srgb, var(--primary-color-1) 45%, var(--border-color-1));
+            box-shadow: 0 6px 18px rgba(76, 138, 137, 0.14);
+        }
+
+        .twc-chatbot-logs-shell {
+            border: 1px solid var(--border-color-1);
+            border-radius: 12px;
+            background: var(--card-bg-1);
+            box-shadow: var(--card-shadow);
+            padding: 1rem;
+            display: grid;
+            gap: 1rem;
+        }
+
+        .twc-chatbot-logs-shell[hidden] {
+            display: none !important;
+        }
+
+        .twc-logs-intro h3 {
+            margin: 0;
+            color: var(--text-color-1);
+            font-size: 1.08rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .twc-logs-intro h3 i {
+            color: var(--primary-color-1);
+        }
+
+        .twc-logs-intro p {
+            margin: 0.3rem 0 0;
+            color: var(--text-secondary-1);
+            font-size: 0.9rem;
+        }
+
+        .twc-logs-summary {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.75rem;
+        }
+
+        .twc-logs-stat {
+            border: 1px solid var(--border-color-1);
+            border-radius: 12px;
+            background: color-mix(in srgb, var(--card-bg-1) 88%, var(--bg-color-1));
+            padding: 0.8rem;
+        }
+
+        .twc-logs-stat-label {
+            font-size: 0.72rem;
+            color: var(--text-secondary-1);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 700;
+        }
+
+        .twc-logs-stat-value {
+            margin-top: 0.35rem;
+            color: var(--text-color-1);
+            font-size: 1.4rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .twc-logs-stat--danger .twc-logs-stat-value {
+            color: #d62839;
+        }
+
+        .twc-logs-filters {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+            gap: 0.65rem;
+            align-items: end;
+        }
+
+        .twc-logs-filter {
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        .twc-logs-filter label {
+            font-size: 0.74rem;
+            font-weight: 700;
+            color: var(--text-secondary-1);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .twc-logs-filter input,
+        .twc-logs-filter select {
+            width: 100%;
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            background: var(--bg-color-1);
+            color: var(--text-color-1);
+            padding: 0.5rem 0.6rem;
+            font-size: 0.86rem;
+            min-height: 38px;
+        }
+
+        .twc-logs-filter--search {
+            grid-column: span 2;
+        }
+
+        .twc-logs-filter--actions {
+            display: flex;
+            gap: 0.45rem;
+            justify-content: flex-end;
+            grid-column: span 2;
+        }
+
+        .twc-logs-table-shell {
+            border: 1px solid var(--border-color-1);
+            border-radius: 12px;
+            overflow: hidden;
+            background: color-mix(in srgb, var(--card-bg-1) 94%, var(--bg-color-1));
+        }
+
+        .twc-logs-table-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.65rem;
+            padding: 0.75rem 0.9rem;
+            border-bottom: 1px solid var(--border-color-1);
+            background: color-mix(in srgb, var(--bg-color-1) 65%, var(--card-bg-1));
+        }
+
+        .twc-logs-table-head strong {
+            color: var(--text-color-1);
+            font-size: 0.92rem;
+        }
+
+        .twc-logs-table-head span {
+            color: var(--text-secondary-1);
+            font-size: 0.8rem;
+        }
+
+        .twc-logs-table-wrap {
+            overflow: auto;
+            max-height: 62vh;
+        }
+
+        .twc-logs-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 980px;
+        }
+
+        .twc-logs-table th,
+        .twc-logs-table td {
+            padding: 0.62rem 0.7rem;
+            text-align: left;
+            vertical-align: top;
+            border-bottom: 1px solid color-mix(in srgb, var(--border-color-1) 70%, transparent);
+        }
+
+        .twc-logs-table th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: color-mix(in srgb, var(--bg-color-1) 75%, var(--card-bg-1));
+            color: var(--text-secondary-1);
+            font-size: 0.74rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .twc-logs-table td {
+            color: var(--text-color-1);
+            font-size: 0.84rem;
+        }
+
+        .twc-logs-row:hover td {
+            background: color-mix(in srgb, var(--primary-color-1) 8%, transparent);
+        }
+
+        .twc-logs-snippet {
+            max-width: 340px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-secondary-1);
+        }
+
+        .twc-logs-meta-small {
+            color: var(--text-secondary-1);
+            font-size: 0.75rem;
+            margin-top: 0.15rem;
+        }
+
+        .twc-log-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.15rem 0.42rem;
+            border-radius: 999px;
+            font-size: 0.66rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .twc-log-badge + .twc-log-badge {
+            margin-left: 0.25rem;
+        }
+
+        .twc-log-badge--danger {
+            color: #b91c1c;
+            background: rgba(220, 38, 38, 0.12);
+            border-color: rgba(220, 38, 38, 0.3);
+        }
+
+        .twc-log-badge--ok {
+            color: #0f766e;
+            background: rgba(15, 118, 110, 0.12);
+            border-color: rgba(15, 118, 110, 0.3);
+        }
+
+        .twc-log-badge--warn {
+            color: #b45309;
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.35);
+        }
+
+        .twc-log-badge--neutral {
+            color: var(--text-secondary-1);
+            background: color-mix(in srgb, var(--bg-color-1) 70%, var(--card-bg-1));
+            border-color: var(--border-color-1);
+        }
+
+        .twc-logs-empty {
+            text-align: center;
+            color: var(--text-secondary-1);
+            padding: 1.1rem;
+        }
+
+        .twc-logs-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.6rem;
+            padding: 0.75rem 0.9rem;
+            border-top: 1px solid var(--border-color-1);
+            background: color-mix(in srgb, var(--bg-color-1) 70%, var(--card-bg-1));
+        }
+
+        #twcLogsPageLabel {
+            font-size: 0.8rem;
+            color: var(--text-secondary-1);
+            min-width: 110px;
+            text-align: center;
+        }
+
+        .twc-log-modal[hidden] {
+            display: none !important;
+        }
+
+        .twc-log-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 10060;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .twc-log-modal-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+        }
+
+        .twc-log-modal-card {
+            position: relative;
+            width: min(860px, 96vw);
+            max-height: 92vh;
+            overflow: hidden;
+            border-radius: 14px;
+            border: 1px solid var(--border-color-1);
+            background: var(--card-bg-1);
+            box-shadow: 0 26px 60px rgba(0, 0, 0, 0.36);
+            display: grid;
+            grid-template-rows: auto 1fr;
+        }
+
+        .twc-log-modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid var(--border-color-1);
+            background: color-mix(in srgb, var(--bg-color-1) 70%, var(--card-bg-1));
+        }
+
+        .twc-log-modal-head h4 {
+            margin: 0;
+            font-size: 1rem;
+            color: var(--text-color-1);
+        }
+
+        .twc-log-modal-close {
+            border: 1px solid var(--border-color-1);
+            background: transparent;
+            color: var(--text-secondary-1);
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .twc-log-modal-body {
+            overflow: auto;
+            padding: 0.9rem 1rem 1rem;
+            display: grid;
+            gap: 0.8rem;
+        }
+
+        .twc-log-modal-meta {
+            font-size: 0.82rem;
+            color: var(--text-secondary-1);
+            line-height: 1.5;
+            border: 1px dashed color-mix(in srgb, var(--border-color-1) 85%, transparent);
+            border-radius: 10px;
+            padding: 0.65rem 0.75rem;
+            background: color-mix(in srgb, var(--bg-color-1) 75%, var(--card-bg-1));
+        }
+
+        .twc-log-modal-block {
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        .twc-log-modal-block label {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--text-secondary-1);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .twc-log-modal-block pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border: 1px solid var(--border-color-1);
+            border-radius: 10px;
+            padding: 0.7rem;
+            background: color-mix(in srgb, var(--bg-color-1) 74%, var(--card-bg-1));
+            color: var(--text-color-1);
+            font-size: 0.84rem;
+            line-height: 1.45;
+            max-height: 240px;
+            overflow: auto;
+        }
+
+        @media (max-width: 1200px) {
+            .twc-logs-summary {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .twc-logs-filters {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+
+            .twc-logs-filter--search,
+            .twc-logs-filter--actions {
+                grid-column: span 2;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .twc-primary-switch {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .twc-chatbot-logs-shell {
+                padding: 0.75rem;
+                gap: 0.75rem;
+            }
+
+            .twc-logs-summary {
+                grid-template-columns: 1fr;
+            }
+
+            .twc-logs-filters {
+                grid-template-columns: 1fr;
+            }
+
+            .twc-logs-filter--search,
+            .twc-logs-filter--actions {
+                grid-column: auto;
+            }
+
+            .twc-logs-filter--actions {
+                justify-content: stretch;
+            }
+
+            .twc-logs-filter--actions .btn {
+                flex: 1;
+            }
+
+            .twc-logs-pagination {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+        }
     
