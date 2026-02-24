@@ -111,6 +111,11 @@ $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
                     <span>Dark</span>
                 </button>
             </div>
+
+            <button class="report-export-btn" id="headerPdfExportBtn" type="button" aria-label="Download report as PDF" title="Download current report as PDF">
+                <i class="fas fa-file-pdf"></i>
+                <span>PDF</span>
+            </button>
             
             <?php if (!$hideNotifications): ?>
             <div class="notification-item">
@@ -1091,6 +1096,8 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Replace browser alert() with themed modal -->
 <script src="<?php echo $headerBase; ?>../shared/js/ui-alert.js?v=<?php echo filemtime(__DIR__ . '/../../shared/js/ui-alert.js'); ?>"></script>
 <script src="<?php echo $headerBase; ?>../shared/js/module-analytics-strip.js?v=<?php echo filemtime(__DIR__ . '/../../shared/js/module-analytics-strip.js'); ?>"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="<?php echo $headerBase; ?>js/report-pdf-export.js?v=<?php echo filemtime(__DIR__ . '/../js/report-pdf-export.js'); ?>"></script>
 <script>
     // API base is initialized in the header script above.
 

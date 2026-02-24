@@ -51,9 +51,10 @@ class AlertRepository
      * @param string|null $severity Alert severity (optional)
      * @param int|null $weatherSignal Weather signal (1-5) for weather category (optional)
      * @param int|null $fireLevel Fire level (1-3) for fire category (optional)
+     * @param string|null $source Alert source (optional, e.g. mass_notification, pagasa, phivolcs)
      * @return int|null New alert ID or null on failure
      */
-    public function create($title, $message, $content = null, $categoryId = null, $status = 'active', $severity = null, $weatherSignal = null, $fireLevel = null)
+    public function create($title, $message, $content = null, $categoryId = null, $status = 'active', $severity = null, $weatherSignal = null, $fireLevel = null, $source = null)
     {
         if ($content === null) {
             $content = $message;
@@ -81,6 +82,12 @@ class AlertRepository
             if ($fireLevel !== null && in_array('fire_level', $available, true)) {
                 $cols[] = 'fire_level';
                 $vals[] = $fireLevel;
+                $placeholders[] = '?';
+            }
+
+            if ($source !== null && $source !== '' && in_array('source', $available, true)) {
+                $cols[] = 'source';
+                $vals[] = $source;
                 $placeholders[] = '?';
             }
 

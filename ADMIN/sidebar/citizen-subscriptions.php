@@ -100,8 +100,8 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                     <div class="module-card">
                         <div class="module-card-header">
                             <h2><i class="fas fa-users"></i> Subscribers</h2>
-                            <button class="btn btn-primary" onclick="exportSubscribers()">
-                                <i class="fas fa-download"></i> Export
+                            <button class="btn btn-primary" id="exportSubscribersPdfBtn" onclick="exportSubscribers()">
+                                <i class="fas fa-file-pdf"></i> Export PDF
                             </button>
                         </div>
                         <div class="search-container">
@@ -497,7 +497,17 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
         }
 
         function exportSubscribers() {
-            window.location.href = '../api/citizen-subscriptions.php?action=export';
+            const exportButton = document.getElementById('exportSubscribersPdfBtn');
+            if (window.AdminReportPdfExporter && typeof window.AdminReportPdfExporter.exportCurrentPage === 'function') {
+                window.AdminReportPdfExporter.exportCurrentPage({
+                    filenamePrefix: 'citizen-subscriptions-report',
+                    targetSelector: '.main-content .main-container',
+                    triggerButton: exportButton
+                });
+                return;
+            }
+
+            alert('PDF export is currently unavailable.');
         }
 
         // Search functionality

@@ -233,8 +233,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             if ($fireLevel < 1 || $fireLevel > 3) $fireLevel = null;
         }
 
-        // Insert alert into alerts table
-        $alertId = $alertRepository->create($title, $message, $message, $categoryId, 'active', $severity, $weatherSignal, $fireLevel);
+        // Insert alert into alerts table and mark source as mass_notification
+        $alertSource = 'mass_notification';
+        $alertId = $alertRepository->create($title, $message, $message, $categoryId, 'active', $severity, $weatherSignal, $fireLevel, $alertSource);
         
         // Initialize translation helper
         $translationHelper = new AlertTranslationHelper($pdo);

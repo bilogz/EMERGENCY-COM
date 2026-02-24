@@ -993,7 +993,7 @@ function resolveAutomatedWarningsTable(PDO $pdo): string {
 
 function shouldAutoBroadcastCriticalWarning(string $type, string $severity): bool {
     $sev = strtolower(trim($severity));
-    if ($sev !== 'critical') {
+    if (!in_array($sev, ['high', 'critical', 'extreme'], true)) {
         return false;
     }
 

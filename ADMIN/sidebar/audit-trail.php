@@ -135,8 +135,8 @@ $pageTitle = 'Log and Audit Trail';
                     <div class="module-card">
                         <div class="module-card-header">
                             <h2><i class="fas fa-list"></i> Audit Trail</h2>
-                            <button class="btn btn-sm btn-primary" onclick="exportAuditTrail()">
-                                <i class="fas fa-download"></i> Export
+                            <button class="btn btn-sm btn-primary" id="exportAuditTrailPdfBtn" onclick="exportAuditTrail()">
+                                <i class="fas fa-file-pdf"></i> Export PDF
                             </button>
                         </div>
                         <div class="module-card-content table-responsive">
@@ -309,9 +309,17 @@ $pageTitle = 'Log and Audit Trail';
         }
 
         function exportAuditTrail() {
-            const filters = getFilters();
-            const queryParams = new URLSearchParams({...filters, action: 'export'}).toString();
-            window.location.href = `../api/audit-trail.php?${queryParams}`;
+            const exportButton = document.getElementById('exportAuditTrailPdfBtn');
+            if (window.AdminReportPdfExporter && typeof window.AdminReportPdfExporter.exportCurrentPage === 'function') {
+                window.AdminReportPdfExporter.exportCurrentPage({
+                    filenamePrefix: 'audit-trail-report',
+                    targetSelector: '.main-content .main-container',
+                    triggerButton: exportButton
+                });
+                return;
+            }
+
+            alert('PDF export is currently unavailable.');
         }
 
         // Load data on page load

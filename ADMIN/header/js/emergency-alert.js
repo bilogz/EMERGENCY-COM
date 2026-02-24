@@ -1,6 +1,8 @@
 /**
  * Global Emergency Alert System (Citizen Pages)
- * Mandatory modal for critical alerts with alarm sound.
+ * Mandatory modal + sound for:
+ * - Automated warnings with high/critical severity
+ * - Mass notifications
  */
 
 (function () {
@@ -23,7 +25,7 @@
         apiEndpoint: '',
         shownIds: new Set(),
         acknowledgedIds: new Set(),
-        lastHandledCriticalId: 0,
+        lastHandledAlertId: 0,
         modalOpen: false,
         currentAlertId: null,
         alarmActive: false,
@@ -42,11 +44,17 @@
         return 'USERS/api/get-alerts.php';
     }
 
+    function shouldRunForCurrentPage() {
+        const path = String(window.location.pathname || '').toLowerCase();
+        return !path.includes('/admin/');
+    }
+
     function loadAcknowledgedIds() {
         state.acknowledgedIds.clear();
         try {
-            const lastHandled = localStorage.getItem('last_handled_critical_alert_id');
-            state.lastHandledCriticalId = lastHandled ? Number(lastHandled) || 0 : 0;
+            const lastHandled = localStorage.getItem('last_handled_mandatory_alert_id')
+                || localStorage.getItem('last_handled_critical_alert_id');
+            state.lastHandledAlertId = lastHandled ? Number(lastHandled) || 0 : 0;
         } catch (e) {
             // Ignore storage errors.
         }
@@ -54,7 +62,9 @@
 
     function persistAcknowledgedIds() {
         try {
-            localStorage.setItem('last_handled_critical_alert_id', String(state.lastHandledCriticalId || 0));
+            localStorage.setItem('last_handled_mandatory_alert_id', String(state.lastHandledAlertId || 0));
+            // Backward compatibility with previous key.
+            localStorage.setItem('last_handled_critical_alert_id', String(state.lastHandledAlertId || 0));
         } catch (e) {
             // Ignore storage errors.
         }
@@ -140,8 +150,8 @@
             '<div class="emergency-alert-overlay"></div>',
             '<div class="emergency-alert-content" role="dialog" aria-modal="true" aria-labelledby="emergencyAlertTitle">',
             '  <div class="emergency-alert-header">',
-            '    <div class="emergency-alert-icon"><i class="fas fa-triangle-exclamation"></i></div>',
-            '    <h2 class="emergency-alert-title">CRITICAL EMERGENCY ALERT</h2>',
+            '    <div id="emergencyAlertHeaderIcon" class="emergency-alert-icon"><i class="fas fa-triangle-exclamation"></i></div>',
+            '    <h2 id="emergencyAlertHeaderTitle" class="emergency-alert-title">MANDATORY EMERGENCY ALERT</h2>',
             '  </div>',
             '  <div class="emergency-alert-body">',
             '    <h3 id="emergencyAlertTitle" class="emergency-alert-title-text"></h3>',
@@ -194,30 +204,92 @@
         }, true);
     }
 
-    function isCriticalAlert(alert) {
-        const title = String(alert.title || '').toLowerCase();
-        const severity = String(alert.severity || '').toLowerCase();
-        const message = String(alert.message || '').toLowerCase();
-        return (
-            severity === 'critical' ||
-            severity === 'extreme' ||
-            title.includes('critical') ||
-            title.includes('[extreme]') ||
-            message.includes('emergency bulletin')
-        );
+    function normalizeText(value) {
+        return String(value || '').trim().toLowerCase();
+    }
+
+    function isMassNotificationAlert(alert) {
+        const source = normalizeText(alert.source);
+        if (!source) return false;
+        return source.includes('mass_notification')
+            || source === 'mass'
+            || source.includes('mass-notification')
+            || source.includes('mass_notification');
+    }
+
+    function isAutomatedHighPriorityAlert(alert) {
+        const severity = normalizeText(alert.severity);
+        const source = normalizeText(alert.source);
+        const message = normalizeText(alert.message);
+        const automatedSources = ['pagasa', 'phivolcs', 'automated_warning', 'automated', 'ai_warning', 'ai'];
+        const isAutomatedSource = automatedSources.includes(source);
+        const hasPrioritySeverity = severity === 'high' || severity === 'critical' || severity === 'extreme';
+        const emergencyBulletinPattern = message.includes('emergency bulletin');
+
+        return hasPrioritySeverity && (isAutomatedSource || emergencyBulletinPattern);
+    }
+
+    function shouldTriggerMandatoryModal(alert) {
+        return isMassNotificationAlert(alert) || isAutomatedHighPriorityAlert(alert);
+    }
+
+    function getModalPreset(alert) {
+        const severity = normalizeText(alert.severity);
+        if (isMassNotificationAlert(alert)) {
+            return {
+                headerTitle: 'MASS NOTIFICATION',
+                headerColor: '#1d4ed8',
+                iconClass: 'fas fa-bullhorn'
+            };
+        }
+
+        if (severity === 'high') {
+            return {
+                headerTitle: 'HIGH AUTOMATED WARNING',
+                headerColor: '#d97706',
+                iconClass: 'fas fa-triangle-exclamation'
+            };
+        }
+
+        return {
+            headerTitle: 'CRITICAL AUTOMATED WARNING',
+            headerColor: '#dc2626',
+            iconClass: 'fas fa-triangle-exclamation'
+        };
     }
 
     function showCriticalModal(alert) {
         ensureModalExists();
 
         const modal = document.getElementById('emergencyAlertModal');
+        const header = modal ? modal.querySelector('.emergency-alert-header') : null;
+        const headerTitleEl = document.getElementById('emergencyAlertHeaderTitle');
+        const headerIconEl = document.getElementById('emergencyAlertHeaderIcon');
         const titleEl = document.getElementById('emergencyAlertTitle');
         const messageEl = document.getElementById('emergencyAlertMessage');
         const contentEl = document.getElementById('emergencyAlertContent');
         const categoryEl = document.getElementById('emergencyAlertCategory');
+        const statusEl = document.getElementById('emergencyAlertAlarmStatus');
+        const preset = getModalPreset(alert);
 
         if (!modal || !titleEl || !messageEl || !contentEl || !categoryEl) {
             return;
+        }
+
+        if (header) {
+            header.style.background = 'linear-gradient(135deg, ' + preset.headerColor + ' 0%, ' + preset.headerColor + ' 100%)';
+        }
+        if (headerTitleEl) {
+            headerTitleEl.textContent = preset.headerTitle;
+        }
+        if (headerIconEl) {
+            headerIconEl.innerHTML = '<i class="' + preset.iconClass + '"></i>';
+        }
+        if (titleEl) {
+            titleEl.style.color = preset.headerColor;
+        }
+        if (statusEl) {
+            statusEl.style.color = preset.headerColor;
         }
 
         titleEl.textContent = alert.title || 'Critical Emergency Alert';
@@ -260,8 +332,8 @@
         if (state.currentAlertId) {
             state.acknowledgedIds.add(state.currentAlertId);
             const currentIdNum = Number(state.currentAlertId) || 0;
-            if (currentIdNum > state.lastHandledCriticalId) {
-                state.lastHandledCriticalId = currentIdNum;
+            if (currentIdNum > state.lastHandledAlertId) {
+                state.lastHandledAlertId = currentIdNum;
             }
             persistAcknowledgedIds();
             state.currentAlertId = null;
@@ -289,14 +361,14 @@
             if (!data || !data.success || !Array.isArray(data.alerts)) return;
 
             const candidates = data.alerts
-                .filter(isCriticalAlert)
+                .filter(shouldTriggerMandatoryModal)
                 .filter(function (a) {
                     const id = String(a.id || '');
                     const idNum = Number(id) || 0;
                     if (!id) return false;
                     if (state.acknowledgedIds.has(id)) return false;
                     if (state.shownIds.has(id)) return false;
-                    if (idNum <= state.lastHandledCriticalId) return false;
+                    if (idNum <= state.lastHandledAlertId) return false;
                     return true;
                 })
                 .sort(function (a, b) {
@@ -315,6 +387,9 @@
     }
 
     function init() {
+        if (!shouldRunForCurrentPage()) {
+            return;
+        }
         state.apiEndpoint = resolveApiEndpoint();
         loadAcknowledgedIds();
         ensureModalExists();
