@@ -1106,18 +1106,21 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const path = String(window.location.pathname || '').replace(/\\/g, '/');
             const lower = path.toLowerCase();
             let appBasePath = '';
+            let markerMatched = false;
             for (const marker of ['/users/', '/admin/', '/php/']) {
                 const idx = lower.indexOf(marker);
                 if (idx === 0) {
+                    markerMatched = true;
                     appBasePath = '';
                     break;
                 }
                 if (idx > 0) {
+                    markerMatched = true;
                     appBasePath = path.slice(0, idx).replace(/\/+$/, '');
                     break;
                 }
             }
-            if (!appBasePath) {
+            if (!markerMatched) {
                 const dir = path.replace(/\/[^/]*$/, '');
                 if (dir && dir !== '/') {
                     appBasePath = dir.replace(/\/+$/, '');
@@ -1367,13 +1370,21 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
     const IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const APP_BASE_PATH = (() => {
+        const path = String(window.location.pathname || '').replace(/\\/g, '/');
+        const lower = path.toLowerCase();
+        for (const marker of ['/users/', '/admin/', '/php/']) {
+            const idx = lower.indexOf(marker);
+            if (idx === 0) return '';
+            if (idx > 0) return path.slice(0, idx).replace(/\/+$/, '');
+        }
+        return '';
+    })();
     const SOCKET_IO_PATH = '/socket.io';
     const LOCAL_SOCKET_PORT = 3000;
     const SIGNALING_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
     const SIGNALING_URL = IS_LOCAL ? `${window.location.protocol}//${SIGNALING_HOST}` + ':' + LOCAL_SOCKET_PORT : null;
-    const SOCKET_HEALTH_URL = IS_LOCAL
-        ? `${window.location.protocol}//${SIGNALING_HOST}:${LOCAL_SOCKET_PORT}/health`
-        : `${window.location.origin}${SOCKET_IO_PATH}/?EIO=4&transport=polling`;
+    const SOCKET_HEALTH_URL = `${window.location.origin}${APP_BASE_PATH}/ADMIN/api/socket-health.php`;
     const room = "emergency-room";
 
     let socket = null;
@@ -1434,7 +1445,16 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     signal: controller.signal
                 });
                 clearTimeout(timer);
-                reachable = response.ok;
+                if (response.ok) {
+                    try {
+                        const data = await response.json();
+                        reachable = !!(data && data.available === true);
+                    } catch (_) {
+                        reachable = false;
+                    }
+                } else {
+                    reachable = false;
+                }
             } catch (e) {
                 reachable = false;
             } finally {
@@ -2336,7 +2356,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 bindCallSocketListeners();
             }
         });
-    }, 7000);
+    }, 15000);
 </script>
 
 </body>

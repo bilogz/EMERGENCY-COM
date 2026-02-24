@@ -754,18 +754,21 @@ $admin_username = $admin['username'] ?? 'Admin';
             const path = String(window.location.pathname || '').replace(/\\/g, '/');
             const lower = path.toLowerCase();
             let appBasePath = '';
+            let markerMatched = false;
             for (const marker of ['/users/', '/admin/', '/php/']) {
                 const idx = lower.indexOf(marker);
                 if (idx === 0) {
+                    markerMatched = true;
                     appBasePath = '';
                     break;
                 }
                 if (idx > 0) {
+                    markerMatched = true;
                     appBasePath = path.slice(0, idx).replace(/\/+$/, '');
                     break;
                 }
             }
-            if (!appBasePath) {
+            if (!markerMatched) {
                 const dir = path.replace(/\/[^/]*$/, '');
                 if (dir && dir !== '/') {
                     appBasePath = dir.replace(/\/+$/, '');
