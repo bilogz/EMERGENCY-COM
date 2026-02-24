@@ -314,6 +314,12 @@ try {
         exit;
     }
 
+    if ($forceNewConversation && $text === '') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Please describe the emergency before starting chat.']);
+        exit;
+    }
+
     if (empty($userId)) {
         $cleanupAttachmentOnEarlyExit();
         http_response_code(400);
@@ -321,9 +327,37 @@ try {
         exit;
     }
 
-    $category = twc_normalize_category($rawCategory ?? '');
     $messageForPriority = $text !== '' ? $text : $attachmentPreviewText;
-    $priority = twc_normalize_priority($rawPriority ?? '', $messageForPriority, $category);
+    $rawCategoryText = trim((string)($rawCategory ?? ''));
+    $rawPriorityText = trim((string)($rawPriority ?? ''));
+
+    $category = null;
+    $priority = null;
+    $classificationCacheHit = false;
+
+    if ($text !== '') {
+        $cachedClassification = twc_postgres_incident_cache_fetch($text, $rawCategoryText, $rawPriorityText);
+        if (is_array($cachedClassification)) {
+            $cachedCategory = twc_normalize_category((string)($cachedClassification['category'] ?? ''));
+            $cachedPriority = strtolower(trim((string)($cachedClassification['priority'] ?? '')));
+            if ($cachedCategory !== '' && in_array($cachedPriority, ['urgent', 'normal'], true)) {
+                $category = $cachedCategory;
+                $priority = $cachedPriority;
+                $classificationCacheHit = true;
+            }
+        }
+    }
+
+    if ($category === null) {
+        $category = twc_normalize_category($rawCategoryText);
+    }
+    if ($priority === null) {
+        $priority = twc_normalize_priority($rawPriorityText, $messageForPriority, $category);
+    }
+    if (!$classificationCacheHit && $text !== '') {
+        twc_postgres_incident_cache_store($text, $rawCategoryText, $rawPriorityText, $category, $priority);
+    }
+
     $storedMessageText = $text !== '' ? $text : $attachmentPreviewText;
     $lastMessagePreview = $text !== '' ? $text : $attachmentPreviewText;
     if ($attachmentUrl !== null && $text !== '') {

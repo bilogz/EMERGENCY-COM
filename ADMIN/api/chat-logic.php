@@ -753,3 +753,186 @@ if (!function_exists('twc_fetch_attachment_from_postgres')) {
         }
     }
 }
+
+if (!function_exists('twc_incident_cache_key')) {
+    /**
+     * Stable hash key for incident classification cache.
+     */
+    function twc_incident_cache_key(string $message, string $rawCategory = '', string $rawPriority = ''): ?string {
+        $normalizedMessage = trim((string)preg_replace('/\s+/u', ' ', strtolower($message)));
+        if ($normalizedMessage === '') {
+            return null;
+        }
+        $normalizedCategory = trim((string)preg_replace('/\s+/u', ' ', strtolower($rawCategory)));
+        $normalizedPriority = trim((string)preg_replace('/\s+/u', ' ', strtolower($rawPriority)));
+        return hash('sha256', $normalizedMessage . '|' . $normalizedCategory . '|' . $normalizedPriority);
+    }
+}
+
+if (!function_exists('twc_incident_cache_ttl_seconds')) {
+    function twc_incident_cache_ttl_seconds(): int {
+        $raw = (int)twc_secure_cfg('CHAT_INCIDENT_CACHE_TTL_SECONDS', 2592000); // 30 days
+        if ($raw < 60) {
+            return 60;
+        }
+        if ($raw > 31536000) {
+            return 31536000;
+        }
+        return $raw;
+    }
+}
+
+if (!function_exists('twc_postgres_incident_cache_table_ready')) {
+    function twc_postgres_incident_cache_table_ready(): bool {
+        static $attempted = false;
+        static $ready = false;
+
+        if ($attempted) {
+            return $ready;
+        }
+        $attempted = true;
+
+        $pg = twc_postgres_image_pdo();
+        if (!$pg) {
+            return false;
+        }
+
+        try {
+            $pg->exec("
+                CREATE TABLE IF NOT EXISTS chat_incident_cache (
+                    cache_key VARCHAR(64) PRIMARY KEY,
+                    normalized_input TEXT NOT NULL,
+                    raw_category VARCHAR(120) NULL,
+                    raw_priority VARCHAR(40) NULL,
+                    category VARCHAR(120) NOT NULL,
+                    priority VARCHAR(20) NOT NULL,
+                    hit_count INTEGER NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+                )
+            ");
+            $pg->exec("CREATE INDEX IF NOT EXISTS idx_chat_incident_cache_updated_at ON chat_incident_cache(updated_at DESC)");
+            $ready = true;
+        } catch (Throwable $e) {
+            $ready = false;
+            error_log('TWC PostgreSQL incident cache table ensure failed: ' . $e->getMessage());
+        }
+
+        return $ready;
+    }
+}
+
+if (!function_exists('twc_postgres_incident_cache_fetch')) {
+    /**
+     * Returns cached ['category' => string, 'priority' => string] or null.
+     */
+    function twc_postgres_incident_cache_fetch(string $message, string $rawCategory = '', string $rawPriority = ''): ?array {
+        $cacheKey = twc_incident_cache_key($message, $rawCategory, $rawPriority);
+        if ($cacheKey === null || !twc_postgres_incident_cache_table_ready()) {
+            return null;
+        }
+
+        $pg = twc_postgres_image_pdo();
+        if (!$pg) {
+            return null;
+        }
+
+        try {
+            $ttl = twc_incident_cache_ttl_seconds();
+            $stmt = $pg->prepare("
+                SELECT category, priority
+                FROM chat_incident_cache
+                WHERE cache_key = ?
+                  AND updated_at >= (NOW() - (? * INTERVAL '1 second'))
+                LIMIT 1
+            ");
+            $stmt->execute([$cacheKey, $ttl]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                return null;
+            }
+
+            // Best effort stats update; ignore failures.
+            try {
+                $touch = $pg->prepare("
+                    UPDATE chat_incident_cache
+                    SET hit_count = hit_count + 1, updated_at = NOW()
+                    WHERE cache_key = ?
+                ");
+                $touch->execute([$cacheKey]);
+            } catch (Throwable $_) {
+            }
+
+            $category = trim((string)($row['category'] ?? ''));
+            $priority = strtolower(trim((string)($row['priority'] ?? '')));
+            if ($category === '' || !in_array($priority, ['urgent', 'normal'], true)) {
+                return null;
+            }
+
+            return [
+                'category' => $category,
+                'priority' => $priority,
+            ];
+        } catch (Throwable $e) {
+            error_log('TWC PostgreSQL incident cache fetch failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+}
+
+if (!function_exists('twc_postgres_incident_cache_store')) {
+    function twc_postgres_incident_cache_store(
+        string $message,
+        string $rawCategory,
+        string $rawPriority,
+        string $category,
+        string $priority
+    ): bool {
+        $cacheKey = twc_incident_cache_key($message, $rawCategory, $rawPriority);
+        if ($cacheKey === null || !twc_postgres_incident_cache_table_ready()) {
+            return false;
+        }
+
+        $normalizedMessage = trim((string)preg_replace('/\s+/u', ' ', strtolower($message)));
+        $safeCategory = trim((string)$category);
+        $safePriority = strtolower(trim((string)$priority));
+        if ($normalizedMessage === '' || $safeCategory === '' || !in_array($safePriority, ['urgent', 'normal'], true)) {
+            return false;
+        }
+
+        $pg = twc_postgres_image_pdo();
+        if (!$pg) {
+            return false;
+        }
+
+        try {
+            $stmt = $pg->prepare("
+                INSERT INTO chat_incident_cache
+                    (cache_key, normalized_input, raw_category, raw_priority, category, priority, hit_count, created_at, updated_at)
+                VALUES
+                    (?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
+                ON CONFLICT (cache_key) DO UPDATE
+                SET
+                    normalized_input = EXCLUDED.normalized_input,
+                    raw_category = EXCLUDED.raw_category,
+                    raw_priority = EXCLUDED.raw_priority,
+                    category = EXCLUDED.category,
+                    priority = EXCLUDED.priority,
+                    hit_count = chat_incident_cache.hit_count + 1,
+                    updated_at = NOW()
+            ");
+            $stmt->execute([
+                $cacheKey,
+                $normalizedMessage,
+                $rawCategory !== '' ? $rawCategory : null,
+                $rawPriority !== '' ? $rawPriority : null,
+                $safeCategory,
+                $safePriority,
+            ]);
+            return true;
+        } catch (Throwable $e) {
+            error_log('TWC PostgreSQL incident cache store failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+}

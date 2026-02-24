@@ -231,6 +231,10 @@ include __DIR__ . '/guest-monitoring-notice.php';
                         </div>
                     </div>
                     <div class="chat-form-group">
+                        <label for="userEmergencyDescriptionInput">Describe the emergency first <span class="required-asterisk">*</span></label>
+                        <textarea id="userEmergencyDescriptionInput" name="emergency_description" required class="chat-form-input" rows="3" maxlength="1000" placeholder="Describe what happened, who is affected, and immediate risks..."></textarea>
+                    </div>
+                    <div class="chat-form-group">
                         <label for="userConcernSelect"><span data-translate="chat.concern">What is your concern?</span> <span class="required-asterisk">*</span></label>
                         <select id="userConcernSelect" name="concern" required class="chat-form-select">
                             <option value="" data-translate="chat.selectConcern">Select a concern...</option>
@@ -1047,7 +1051,8 @@ document.addEventListener('DOMContentLoaded', function() {
         for (const endpoint of endpoints) {
             try {
                 const formData = new FormData();
-                formData.append('text', '');
+                formData.append('text', userPayload.userEmergencyDescription || '');
+                formData.append('emergencyDescription', userPayload.userEmergencyDescription || '');
                 formData.append('userId', userPayload.userId);
                 formData.append('userName', userPayload.userName || 'Guest User');
                 formData.append('userEmail', userPayload.userEmail || '');
@@ -1464,6 +1469,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.currentConversationId = null;
                 localStorage.removeItem('guest_concern');
                 sessionStorage.removeItem('user_concern');
+                localStorage.removeItem('guest_emergency_description');
+                sessionStorage.removeItem('user_emergency_description');
 
                 const chatInterface = document.getElementById('chatInterface');
                 const userInfoForm = document.getElementById('chatUserInfoForm');
@@ -1847,7 +1854,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
         const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
         const hasStoredConcern = localStorage.getItem('guest_concern') || sessionStorage.getItem('user_concern');
-        const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
+        const hasStoredEmergencyDescription = localStorage.getItem('guest_emergency_description') || sessionStorage.getItem('user_emergency_description');
+        const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern && hasStoredEmergencyDescription;
         
         if (!hasAllRequiredInfo) {
             // Show form and prevent chat
@@ -1955,6 +1963,8 @@ document.addEventListener('DOMContentLoaded', function() {
             window.currentConversationId = null;
             localStorage.removeItem('guest_concern');
             sessionStorage.removeItem('user_concern');
+            localStorage.removeItem('guest_emergency_description');
+            sessionStorage.removeItem('user_emergency_description');
         }
 
         window.formJustSubmitted = false;
@@ -1970,6 +1980,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const concernSelect = document.getElementById('userConcernSelect');
         if (concernSelect) {
             concernSelect.value = '';
+        }
+        const emergencyDescriptionInput = document.getElementById('userEmergencyDescriptionInput');
+        if (emergencyDescriptionInput) {
+            emergencyDescriptionInput.value = '';
         }
 
         const chatInterface = document.getElementById('chatInterface');
@@ -2052,14 +2066,15 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Anonymous mode - check if guest has provided ALL required info (name, contact, location, concern)
+        // Anonymous mode - check if guest has provided ALL required info (name, contact, location, emergency description, concern)
         const hasStoredName = localStorage.getItem('guest_name') || sessionStorage.getItem('user_name');
         const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
         const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
         const hasStoredConcern = localStorage.getItem('guest_concern') || sessionStorage.getItem('user_concern');
+        const hasStoredEmergencyDescription = localStorage.getItem('guest_emergency_description') || sessionStorage.getItem('user_emergency_description');
         
         // All fields are required for anonymous users
-        const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
+        const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern && hasStoredEmergencyDescription;
         
         console.log('Anonymous mode - hasAllRequiredInfo:', hasAllRequiredInfo);
         
@@ -2356,12 +2371,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const nameInput = document.getElementById('userNameInput');
         const contactInput = document.getElementById('userContactInput');
         const locationInput = document.getElementById('userLocationInput');
+        const emergencyDescriptionInput = document.getElementById('userEmergencyDescriptionInput');
         const concernSelect = document.getElementById('userConcernSelect');
         const submitBtn = document.querySelector('.chat-form-submit');
 
         bindInitialIncidentPhotoHandlers();
 
-        if (!nameInput || !contactInput || !locationInput || !concernSelect || !submitBtn) {
+        if (!nameInput || !contactInput || !locationInput || !emergencyDescriptionInput || !concernSelect || !submitBtn) {
             setTimeout(setupFormValidation, 100);
             return;
         }
@@ -2370,10 +2386,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const name = nameInput.value.trim();
             const contact = contactInput.value.trim();
             const location = locationInput.value.trim();
+            const emergencyDescription = emergencyDescriptionInput.value.trim();
             const concern = concernSelect.value;
             const hasProofFile = selectedInitialIncidentPhotoFile instanceof File;
 
-            if (name && contact && location && concern && hasProofFile) {
+            if (name && contact && location && emergencyDescription && concern && hasProofFile) {
                 submitBtn.disabled = false;
                 submitBtn.style.opacity = '1';
                 submitBtn.style.cursor = 'pointer';
@@ -2398,6 +2415,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!locationInput.hasAttribute('data-validate-bound')) {
             locationInput.setAttribute('data-validate-bound', 'true');
             locationInput.addEventListener('change', validateForm);
+        }
+        if (!emergencyDescriptionInput.hasAttribute('data-validate-bound')) {
+            emergencyDescriptionInput.setAttribute('data-validate-bound', 'true');
+            emergencyDescriptionInput.addEventListener('input', validateForm);
         }
         if (!concernSelect.hasAttribute('data-validate-bound')) {
             concernSelect.setAttribute('data-validate-bound', 'true');
@@ -2438,10 +2459,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 const name = document.getElementById('userNameInput').value.trim();
                 const contact = document.getElementById('userContactInput').value.trim();
                 const location = document.getElementById('userLocationInput').value.trim();
+                const emergencyDescription = document.getElementById('userEmergencyDescriptionInput').value.trim();
                 const concern = document.getElementById('userConcernSelect').value;
                 const proofFile = selectedInitialIncidentPhotoFile;
 
-                if (!name || !contact || !location || !concern) {
+                if (!name || !contact || !location || !emergencyDescription || !concern) {
                     showChatNoticeModal('Please fill in all required fields.', 'Missing Required Fields');
                     return false;
                 }
@@ -2465,7 +2487,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting Chat...';
                 }
 
-                console.log('Form submitted:', { name, contact, location, concern, hasProofFile: true });
+                console.log('Form submitted:', { name, contact, location, emergencyDescription, concern, hasProofFile: true });
 
                 try {
                     const identity = getOrCreateChatUserIdentity();
@@ -2476,6 +2498,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         userPhone: contact,
                         userLocation: location,
                         userConcern: concern,
+                        userEmergencyDescription: emergencyDescription,
                         isGuest: identity.isGuest
                     }, proofFile);
 
@@ -2490,6 +2513,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     sessionStorage.setItem('user_phone', contact);
                     sessionStorage.setItem('user_location', location);
                     sessionStorage.setItem('user_concern', concern);
+                    sessionStorage.setItem('user_emergency_description', emergencyDescription);
 
                     // Save to localStorage for persistence
                     localStorage.setItem('guest_info_provided', 'true');
@@ -2497,6 +2521,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     localStorage.setItem('guest_contact', contact);
                     localStorage.setItem('guest_location', location);
                     localStorage.setItem('guest_concern', concern);
+                    localStorage.setItem('guest_emergency_description', emergencyDescription);
 
                     // Clear selected proof file from the form after successful upload
                     clearInitialIncidentPhoto();
@@ -2949,6 +2974,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const storedGuestContact = localStorage.getItem('guest_contact');
         const storedGuestLocation = localStorage.getItem('guest_location');
         const storedGuestConcern = localStorage.getItem('guest_concern');
+        const storedGuestEmergencyDescription = localStorage.getItem('guest_emergency_description');
         
         // If guest and info not provided, show form first
         if (isGuest && !guestInfoProvided) {
@@ -2973,9 +2999,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         const name = document.getElementById('userNameInput').value.trim();
                         const contact = document.getElementById('userContactInput').value.trim();
                         const location = document.getElementById('userLocationInput').value.trim();
+                        const emergencyDescription = document.getElementById('userEmergencyDescriptionInput').value.trim();
                         const concern = document.getElementById('userConcernSelect').value;
                         
-                        if (!name || !contact || !location || !concern) {
+                        if (!name || !contact || !location || !emergencyDescription || !concern) {
                             alert('Please fill in all required fields.');
                             return;
                         }
@@ -2992,12 +3019,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         localStorage.setItem('guest_contact', contact);
                         localStorage.setItem('guest_location', location);
                         localStorage.setItem('guest_concern', concern);
+                        localStorage.setItem('guest_emergency_description', emergencyDescription);
                         
                         // Update sessionStorage
                         sessionStorage.setItem('user_name', name);
                         sessionStorage.setItem('user_phone', contact);
                         sessionStorage.setItem('user_location', location);
                         sessionStorage.setItem('user_concern', concern);
+                        sessionStorage.setItem('user_emergency_description', emergencyDescription);
                         
                         // Hide form and show chat interface
                         userInfoForm.style.display = 'none';
@@ -3017,6 +3046,7 @@ document.addEventListener('DOMContentLoaded', function() {
             sessionStorage.setItem('user_phone', userPhone);
             if (storedGuestLocation) sessionStorage.setItem('user_location', storedGuestLocation);
             if (storedGuestConcern) sessionStorage.setItem('user_concern', storedGuestConcern);
+            if (storedGuestEmergencyDescription) sessionStorage.setItem('user_emergency_description', storedGuestEmergencyDescription);
         }
         
         // Get user location and concern from sessionStorage if available
@@ -3188,10 +3218,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
             const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
             const hasStoredConcern = localStorage.getItem('guest_concern') || sessionStorage.getItem('user_concern');
-            const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
+            const hasStoredEmergencyDescription = localStorage.getItem('guest_emergency_description') || sessionStorage.getItem('user_emergency_description');
+            const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern && hasStoredEmergencyDescription;
             
             if (!hasAllRequiredInfo) {
-                alert('Please fill in all required information (Name, Contact, Location, and Concern) before sending a message.');
+                alert('Please fill in all required information (Name, Contact, Location, Emergency Description, and Concern) before sending a message.');
                 // Show the form
                 checkAndShowUserInfoForm();
                 return;
@@ -3378,10 +3409,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     const hasStoredContact = localStorage.getItem('guest_contact') || sessionStorage.getItem('user_phone');
                     const hasStoredLocation = localStorage.getItem('guest_location') || sessionStorage.getItem('user_location');
                     const hasStoredConcern = localStorage.getItem('guest_concern') || sessionStorage.getItem('user_concern');
-                    const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern;
+                    const hasStoredEmergencyDescription = localStorage.getItem('guest_emergency_description') || sessionStorage.getItem('user_emergency_description');
+                    const hasAllRequiredInfo = hasStoredName && hasStoredContact && hasStoredLocation && hasStoredConcern && hasStoredEmergencyDescription;
                     
                     if (!hasAllRequiredInfo) {
-                        alert('Please fill in all required information (Name, Contact, Location, and Concern) before sending a message.');
+                        alert('Please fill in all required information (Name, Contact, Location, Emergency Description, and Concern) before sending a message.');
                         // Show the form
                         checkAndShowUserInfoForm();
                         return false;

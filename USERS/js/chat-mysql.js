@@ -738,11 +738,17 @@
             // Clear stored concern/category to force re-selection
             localStorage.removeItem('guest_concern');
             sessionStorage.removeItem('user_concern');
+            localStorage.removeItem('guest_emergency_description');
+            sessionStorage.removeItem('user_emergency_description');
             
             // Clear the concern select dropdown
             const concernSelect = document.getElementById('userConcernSelect');
             if (concernSelect) {
                 concernSelect.value = '';
+            }
+            const emergencyDescriptionInput = document.getElementById('userEmergencyDescriptionInput');
+            if (emergencyDescriptionInput) {
+                emergencyDescriptionInput.value = '';
             }
 
             if (typeof window.clearInitialIncidentPhotoSelection === 'function') {
@@ -849,10 +855,16 @@
         // Force new concern + new proof-photo flow.
         localStorage.removeItem('guest_concern');
         sessionStorage.removeItem('user_concern');
+        localStorage.removeItem('guest_emergency_description');
+        sessionStorage.removeItem('user_emergency_description');
 
         const concernSelect = document.getElementById('userConcernSelect');
         if (concernSelect) {
             concernSelect.value = '';
+        }
+        const emergencyDescriptionInput = document.getElementById('userEmergencyDescriptionInput');
+        if (emergencyDescriptionInput) {
+            emergencyDescriptionInput.value = '';
         }
 
         if (typeof window.clearInitialIncidentPhotoSelection === 'function') {
