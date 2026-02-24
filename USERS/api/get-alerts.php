@@ -184,33 +184,47 @@ function usersResolveAlertsTable(PDO $pdo): string {
         return 'alerts';
     }
 
-    // Runtime fallback used by admin degraded mode.
+    $runtimeSql = "
+        CREATE TABLE IF NOT EXISTS alerts_runtime (
+            id INT(11) NOT NULL AUTO_INCREMENT,
+            category_id INT(11) DEFAULT NULL,
+            incident_id INT(11) DEFAULT NULL,
+            title VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            content TEXT DEFAULT NULL,
+            category VARCHAR(100) DEFAULT NULL,
+            area VARCHAR(255) DEFAULT NULL,
+            location VARCHAR(255) DEFAULT NULL,
+            latitude DECIMAL(10,8) DEFAULT NULL,
+            longitude DECIMAL(11,8) DEFAULT NULL,
+            source VARCHAR(100) DEFAULT NULL,
+            severity VARCHAR(20) DEFAULT NULL,
+            status VARCHAR(20) DEFAULT 'active',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP(),
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
+            PRIMARY KEY (id),
+            KEY idx_status (status),
+            KEY idx_created_at (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ";
+
     try {
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS alerts_runtime (
-                id INT(11) NOT NULL AUTO_INCREMENT,
-                category_id INT(11) DEFAULT NULL,
-                incident_id INT(11) DEFAULT NULL,
-                title VARCHAR(255) NOT NULL,
-                message TEXT NOT NULL,
-                content TEXT DEFAULT NULL,
-                category VARCHAR(100) DEFAULT NULL,
-                area VARCHAR(255) DEFAULT NULL,
-                location VARCHAR(255) DEFAULT NULL,
-                latitude DECIMAL(10,8) DEFAULT NULL,
-                longitude DECIMAL(11,8) DEFAULT NULL,
-                source VARCHAR(100) DEFAULT NULL,
-                severity VARCHAR(20) DEFAULT NULL,
-                status VARCHAR(20) DEFAULT 'active',
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP(),
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
-                PRIMARY KEY (id),
-                KEY idx_status (status),
-                KEY idx_created_at (created_at)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ");
+        $pdo->exec($runtimeSql);
+        $pdo->query("SELECT 1 FROM alerts_runtime LIMIT 1");
     } catch (Throwable $e) {
-        // Ignore create failure; read attempt below will decide.
+        $msg = strtolower($e->getMessage());
+        $isTablespaceIssue = (strpos($msg, '1813') !== false)
+            || (strpos($msg, '1932') !== false)
+            || (strpos($msg, "doesn't exist in engine") !== false)
+            || (strpos($msg, 'tablespace for table') !== false);
+        if ($isTablespaceIssue) {
+            try {
+                $pdo->exec("DROP TABLE IF EXISTS alerts_runtime");
+                $pdo->exec($runtimeSql);
+            } catch (Throwable $rebuildEx) {
+                // Ignore; final readable check below decides.
+            }
+        }
     }
 
     return usersHasReadableTable($pdo, 'alerts_runtime') ? 'alerts_runtime' : 'alerts';

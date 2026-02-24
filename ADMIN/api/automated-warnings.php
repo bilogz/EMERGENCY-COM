@@ -141,6 +141,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'status' => 'published'
             ], $adminId);
 
+            $degraded = empty($dispatchResult['alert_id']);
+            $messageText = strtoupper($mockType) . ' mock alert published and queued for citizen broadcast.';
+            if ($degraded) {
+                $messageText = strtoupper($mockType) . ' mock alert saved, but citizen delivery is degraded (alert feed or queue table issue).';
+            }
+
             if ($adminId && function_exists('logAdminActivity')) {
                 logAdminActivity($adminId, 'mock_critical_warning', strtoupper($mockType) . " mock warning created (ID: {$warningId})");
             }
@@ -148,7 +154,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ob_clean();
             echo json_encode([
                 'success' => true,
-                'message' => strtoupper($mockType) . ' mock alert published and queued for citizen broadcast.',
+                'message' => $messageText,
+                'degraded' => $degraded,
                 'warning_id' => $warningId,
                 'dispatch' => $dispatchResult
             ]);
@@ -209,10 +216,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'status' => 'published'
             ], $adminId);
 
+            $degraded = empty($dispatchResult['alert_id']);
+            $messageText = 'Critical event ingested and auto-broadcast queued.';
+            if ($degraded) {
+                $messageText = 'Critical event ingested, but citizen delivery is degraded (alert feed or queue table issue).';
+            }
+
             ob_clean();
             echo json_encode([
                 'success' => true,
-                'message' => 'Critical event ingested and auto-broadcast queued.',
+                'message' => $messageText,
+                'degraded' => $degraded,
                 'warning_id' => $warningId,
                 'dispatch' => $dispatchResult
             ]);
@@ -1078,7 +1092,7 @@ function buildCriticalWarningTemplate(string $domain, bool $isMock = false): arr
 }
 
 function ensureNotificationQueueTableForAutomatedWarnings(PDO $pdo): void {
-    $pdo->exec("
+    $sql = "
         CREATE TABLE IF NOT EXISTS notification_queue (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             log_id BIGINT UNSIGNED NOT NULL,
@@ -1098,7 +1112,32 @@ function ensureNotificationQueueTableForAutomatedWarnings(PDO $pdo): void {
             INDEX idx_queue_log_id (log_id),
             INDEX idx_queue_channel_status (channel, status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ");
+    ";
+
+    try {
+        $pdo->exec($sql);
+        $pdo->query("SELECT 1 FROM notification_queue LIMIT 1");
+    } catch (Throwable $e) {
+        $msg = strtolower($e->getMessage());
+        $isEngineIssue = (strpos($msg, '1932') !== false)
+            || (strpos($msg, '1813') !== false)
+            || (strpos($msg, "doesn't exist in engine") !== false)
+            || (strpos($msg, 'tablespace for table') !== false);
+
+        if ($isEngineIssue) {
+            try {
+                $pdo->exec("DROP TABLE IF EXISTS notification_queue");
+                $pdo->exec($sql);
+                $pdo->query("SELECT 1 FROM notification_queue LIMIT 1");
+                return;
+            } catch (Throwable $rebuildEx) {
+                error_log("notification_queue rebuild failed: " . $rebuildEx->getMessage());
+                return;
+            }
+        }
+
+        error_log("notification_queue health check failed: " . $e->getMessage());
+    }
 }
 
 function ensureNotificationLogsTableForAutomatedWarnings(PDO $pdo, string $tableName): bool {
@@ -1523,6 +1562,43 @@ function ensureAlertsTableHealthy(PDO $pdo): bool {
     }
 }
 
+function ensureAlertsRuntimeTableHealthy(PDO $pdo): bool {
+    $tableExists = false;
+    try {
+        $existsStmt = $pdo->query("SHOW TABLES LIKE 'alerts_runtime'");
+        $tableExists = (bool)($existsStmt && $existsStmt->fetchColumn());
+    } catch (PDOException $e) {
+        error_log("alerts_runtime exists check failed: " . $e->getMessage());
+    }
+
+    if (!$tableExists) {
+        return createAlertsTable($pdo, 'alerts_runtime');
+    }
+
+    try {
+        $pdo->query("SELECT 1 FROM alerts_runtime LIMIT 1");
+        return true;
+    } catch (PDOException $e) {
+        $msg = strtolower($e->getMessage());
+        $isEngineCorruption = (strpos($msg, "doesn't exist in engine") !== false)
+            || (strpos($msg, '1932') !== false)
+            || (strpos($msg, '1813') !== false)
+            || (strpos($msg, 'tablespace for table') !== false);
+        if (!$isEngineCorruption) {
+            error_log("alerts_runtime health check failed: " . $e->getMessage());
+            return false;
+        }
+
+        error_log("alerts_runtime table unhealthy. Attempting rebuild.");
+        try {
+            $pdo->exec("DROP TABLE IF EXISTS alerts_runtime");
+        } catch (PDOException $dropEx) {
+            error_log("alerts_runtime drop failed during rebuild: " . $dropEx->getMessage());
+        }
+        return createAlertsTable($pdo, 'alerts_runtime');
+    }
+}
+
 function createAlertsTable(PDO $pdo, string $tableName): bool {
     if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
         return false;
@@ -1554,6 +1630,18 @@ function createAlertsTable(PDO $pdo, string $tableName): bool {
         $pdo->exec($sql);
         return true;
     } catch (PDOException $e) {
+        $msg = strtolower($e->getMessage());
+        $isTablespaceConflict = (strpos($msg, '1813') !== false) || (strpos($msg, 'tablespace for table') !== false);
+        if ($isTablespaceConflict) {
+            try {
+                $pdo->exec("DROP TABLE IF EXISTS {$tableName}");
+                $pdo->exec($sql);
+                return true;
+            } catch (PDOException $retryEx) {
+                error_log("{$tableName} recreate failed: " . $retryEx->getMessage());
+                return false;
+            }
+        }
         error_log("{$tableName} create failed: " . $e->getMessage());
         return false;
     }
@@ -1563,7 +1651,7 @@ function resolveAlertsTable(PDO $pdo): string {
     if (ensureAlertsTableHealthy($pdo)) {
         return 'alerts';
     }
-    createAlertsTable($pdo, 'alerts_runtime');
+    ensureAlertsRuntimeTableHealthy($pdo);
     return 'alerts_runtime';
 }
 ?>

@@ -18,7 +18,8 @@
         checkIntervalMs: 3000,
         maxAlarmMs: 60000,
         beepIntervalMs: 900,
-        modalZIndex: 10000
+        modalZIndex: 10000,
+        maxStoredAcknowledgedIds: 300
     };
 
     const state = {
@@ -52,9 +53,27 @@
     function loadAcknowledgedIds() {
         state.acknowledgedIds.clear();
         try {
+            const acknowledgedRaw = localStorage.getItem('acknowledged_mandatory_alert_ids');
+            if (acknowledgedRaw) {
+                const parsed = JSON.parse(acknowledgedRaw);
+                if (Array.isArray(parsed)) {
+                    parsed.forEach(function (id) {
+                        const normalized = String(id || '').trim();
+                        if (normalized !== '') {
+                            state.acknowledgedIds.add(normalized);
+                        }
+                    });
+                }
+            }
+
             const lastHandled = localStorage.getItem('last_handled_mandatory_alert_id')
                 || localStorage.getItem('last_handled_critical_alert_id');
             state.lastHandledAlertId = lastHandled ? Number(lastHandled) || 0 : 0;
+
+            // One-time migration from legacy single-ID storage.
+            if (state.lastHandledAlertId > 0 && state.acknowledgedIds.size === 0) {
+                state.acknowledgedIds.add(String(state.lastHandledAlertId));
+            }
         } catch (e) {
             // Ignore storage errors.
         }
@@ -65,6 +84,13 @@
             localStorage.setItem('last_handled_mandatory_alert_id', String(state.lastHandledAlertId || 0));
             // Backward compatibility with previous key.
             localStorage.setItem('last_handled_critical_alert_id', String(state.lastHandledAlertId || 0));
+
+            const ids = Array.from(state.acknowledgedIds);
+            if (ids.length > CONFIG.maxStoredAcknowledgedIds) {
+                const trimmed = ids.slice(ids.length - CONFIG.maxStoredAcknowledgedIds);
+                state.acknowledgedIds = new Set(trimmed);
+            }
+            localStorage.setItem('acknowledged_mandatory_alert_ids', JSON.stringify(Array.from(state.acknowledgedIds)));
         } catch (e) {
             // Ignore storage errors.
         }
@@ -364,11 +390,9 @@
                 .filter(shouldTriggerMandatoryModal)
                 .filter(function (a) {
                     const id = String(a.id || '');
-                    const idNum = Number(id) || 0;
                     if (!id) return false;
                     if (state.acknowledgedIds.has(id)) return false;
                     if (state.shownIds.has(id)) return false;
-                    if (idNum <= state.lastHandledAlertId) return false;
                     return true;
                 })
                 .sort(function (a, b) {
