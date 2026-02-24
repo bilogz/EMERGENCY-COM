@@ -34,6 +34,22 @@ class DashboardRepository {
             return false;
         }
     }
+
+    /**
+     * Check if a column exists in a table
+     *
+     * @param string $tableName
+     * @param string $columnName
+     * @return bool
+     */
+    private function columnExists($tableName, $columnName) {
+        try {
+            $stmt = $this->pdo->query("SHOW COLUMNS FROM `{$tableName}` LIKE '{$columnName}'");
+            return $stmt && $stmt->rowCount() > 0;
+        } catch (PDOException $e) {
+            return false;
+        }
+    }
     
     /**
      * Safe query execution with error handling
@@ -151,15 +167,23 @@ class DashboardRepository {
      * @return int Pending messages count
      */
     public function getPendingMessages() {
-        if ($this->tableExists('messages')) {
-            return (int)$this->safeQuery("
-                SELECT COUNT(DISTINCT conversation_id) FROM messages 
-                WHERE sender_type = 'citizen' AND read_at IS NULL
-            ", 0);
-        } elseif ($this->tableExists('chat_messages')) {
+        if ($this->tableExists('chat_messages')) {
             return (int)$this->safeQuery("
                 SELECT COUNT(DISTINCT conversation_id) FROM chat_messages 
-                WHERE sender_type = 'citizen' AND is_read = 0
+                WHERE sender_type IN ('user', 'citizen') AND COALESCE(is_read, 0) = 0
+            ", 0);
+        } elseif ($this->tableExists('messages') && $this->columnExists('messages', 'conversation_id')) {
+            if ($this->columnExists('messages', 'sender_type') && $this->columnExists('messages', 'read_at')) {
+                return (int)$this->safeQuery("
+                    SELECT COUNT(DISTINCT conversation_id) FROM messages 
+                    WHERE sender_type IN ('citizen', 'user') AND read_at IS NULL
+                ", 0);
+            }
+
+            // Legacy fallback when sender/read columns are unavailable.
+            return (int)$this->safeQuery("
+                SELECT COUNT(DISTINCT conversation_id) FROM messages 
+                WHERE sent_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)
             ", 0);
         }
         return 0;
@@ -247,34 +271,13 @@ class DashboardRepository {
         }
         
         // Recent messages
-        if ($this->tableExists('messages')) {
-            try {
-                $stmt = $this->pdo->query("
-                    SELECT CONCAT('New message from citizen') as title, 
-                           sent_at as time, 'message' as type
-                    FROM messages 
-                    WHERE sender_type = 'citizen'
-                    ORDER BY sent_at DESC 
-                    LIMIT 3
-                ");
-                $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                foreach ($messages as $msg) {
-                    $activities[] = [
-                        'title' => $msg['title'],
-                        'time' => $msg['time'],
-                        'type' => 'message'
-                    ];
-                }
-            } catch (PDOException $e) {
-                error_log("Dashboard recent messages error: " . $e->getMessage());
-            }
-        } elseif ($this->tableExists('chat_messages')) {
+        if ($this->tableExists('chat_messages')) {
             try {
                 $stmt = $this->pdo->query("
                     SELECT CONCAT('New message from citizen') as title, 
                            created_at as time, 'message' as type
                     FROM chat_messages 
-                    WHERE sender_type = 'citizen'
+                    WHERE sender_type IN ('citizen', 'user')
                     ORDER BY created_at DESC 
                     LIMIT 3
                 ");
@@ -289,6 +292,37 @@ class DashboardRepository {
             } catch (PDOException $e) {
                 error_log("Dashboard recent chat messages error: " . $e->getMessage());
             }
+        } elseif ($this->tableExists('messages') && $this->columnExists('messages', 'sent_at')) {
+            try {
+                if ($this->columnExists('messages', 'sender_type')) {
+                    $stmt = $this->pdo->query("
+                        SELECT CONCAT('New message from citizen') as title, 
+                               sent_at as time, 'message' as type
+                        FROM messages 
+                        WHERE sender_type IN ('citizen', 'user')
+                        ORDER BY sent_at DESC 
+                        LIMIT 3
+                    ");
+                } else {
+                    $stmt = $this->pdo->query("
+                        SELECT CONCAT('Recent chat message') as title, 
+                               sent_at as time, 'message' as type
+                        FROM messages 
+                        ORDER BY sent_at DESC 
+                        LIMIT 3
+                    ");
+                }
+                $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($messages as $msg) {
+                    $activities[] = [
+                        'title' => $msg['title'],
+                        'time' => $msg['time'],
+                        'type' => 'message'
+                    ];
+                }
+            } catch (PDOException $e) {
+                error_log("Dashboard recent messages error: " . $e->getMessage());
+            }
         }
         
         // Sort by time and limit
@@ -297,5 +331,327 @@ class DashboardRepository {
         });
         
         return array_slice($activities, 0, $limit);
+    }
+
+    /**
+     * End-to-end module status overview used by dashboard monitor cards.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getModuleStatusOverview() {
+        $subscribers = $this->getTotalSubscribers();
+        $notificationsToday = $this->getNotificationsToday();
+        $successRate = $this->getSuccessRate();
+        $pendingMessages = $this->getPendingMessages();
+
+        $activeConversations = 0;
+        if ($this->tableExists('conversations')) {
+            $activeConversations = (int)$this->safeQuery("
+                SELECT COUNT(*) FROM conversations 
+                WHERE status IN ('active', 'open')
+            ", 0);
+        }
+
+        $pendingQueue = 0;
+        if ($this->tableExists('chat_queue')) {
+            $pendingQueue = (int)$this->safeQuery("
+                SELECT COUNT(*) FROM chat_queue
+                WHERE status IN ('pending', 'open')
+            ", 0);
+        }
+
+        $weather24h = $this->getDomainWarningCount('weather', 24);
+        $earthquake24h = $this->getDomainWarningCount('earthquake', 24);
+        $pendingAutoWarnings = $this->getPendingAutomatedWarningsCount();
+        $weatherIntegration = $this->getIntegrationHealth('pagasa');
+        $earthquakeIntegration = $this->getIntegrationHealth('phivolcs');
+        $activeLanguages = $this->getActiveLanguagesCount();
+        $auditToday = $this->getAuditEventsTodayCount();
+        $pendingApprovals = $this->getPendingApprovalsCount();
+
+        $massStatus = 'ok';
+        if ($notificationsToday === 0) {
+            $massStatus = 'info';
+        } elseif ($successRate < 85) {
+            $massStatus = 'critical';
+        } elseif ($successRate < 95) {
+            $massStatus = 'warning';
+        }
+
+        $chatStatus = 'ok';
+        if ($pendingQueue > 10 || $pendingMessages > 20) {
+            $chatStatus = 'critical';
+        } elseif ($pendingQueue > 3 || $pendingMessages > 5) {
+            $chatStatus = 'warning';
+        } elseif ($activeConversations === 0) {
+            $chatStatus = 'info';
+        }
+
+        $autoWarnStatus = 'ok';
+        if ($pendingAutoWarnings > 25) {
+            $autoWarnStatus = 'critical';
+        } elseif ($pendingAutoWarnings > 5) {
+            $autoWarnStatus = 'warning';
+        } elseif (($weather24h + $earthquake24h) === 0) {
+            $autoWarnStatus = 'info';
+        }
+
+        $weatherStatus = ($weatherIntegration['enabled'] && $weatherIntegration['configured']) ? 'ok' : 'critical';
+        $earthquakeStatus = $earthquakeIntegration['enabled'] ? 'ok' : 'warning';
+        $subsStatus = $subscribers > 0 ? 'ok' : 'info';
+        $languageStatus = $activeLanguages >= 2 ? 'ok' : 'warning';
+        $approvalsStatus = $pendingApprovals > 0 ? 'warning' : 'ok';
+        $auditStatus = $auditToday > 0 ? 'ok' : 'info';
+
+        return [
+            [
+                'key' => 'mass_notification',
+                'name' => 'Mass Notification',
+                'icon' => 'fa-paper-plane',
+                'status' => $massStatus,
+                'metric' => $notificationsToday,
+                'metric_label' => 'Sent today',
+                'secondary' => $successRate . '% success rate',
+                'route' => 'mass-notification.php'
+            ],
+            [
+                'key' => 'two_way_communication',
+                'name' => 'Two-Way Communication',
+                'icon' => 'fa-comments',
+                'status' => $chatStatus,
+                'metric' => $pendingMessages,
+                'metric_label' => 'Unread threads',
+                'secondary' => $pendingQueue . ' queued | ' . $activeConversations . ' active',
+                'route' => 'two-way-communication.php'
+            ],
+            [
+                'key' => 'automated_warnings',
+                'name' => 'Automated Warnings',
+                'icon' => 'fa-bolt',
+                'status' => $autoWarnStatus,
+                'metric' => $weather24h + $earthquake24h,
+                'metric_label' => 'Events (24h)',
+                'secondary' => $pendingAutoWarnings . ' pending processing',
+                'route' => 'automated-warnings.php'
+            ],
+            [
+                'key' => 'weather_monitoring',
+                'name' => 'Weather Monitoring',
+                'icon' => 'fa-cloud-rain',
+                'status' => $weatherStatus,
+                'metric' => $weather24h,
+                'metric_label' => 'Weather alerts (24h)',
+                'secondary' => $weatherIntegration['summary'],
+                'route' => 'weather-monitoring.php'
+            ],
+            [
+                'key' => 'earthquake_monitoring',
+                'name' => 'Earthquake Monitoring',
+                'icon' => 'fa-mountain',
+                'status' => $earthquakeStatus,
+                'metric' => $earthquake24h,
+                'metric_label' => 'Seismic alerts (24h)',
+                'secondary' => $earthquakeIntegration['summary'],
+                'route' => 'earthquake-monitoring.php'
+            ],
+            [
+                'key' => 'citizen_subscriptions',
+                'name' => 'Citizen Subscriptions',
+                'icon' => 'fa-users',
+                'status' => $subsStatus,
+                'metric' => $subscribers,
+                'metric_label' => 'Active subscribers',
+                'secondary' => 'Monitoring enrollment and delivery reach',
+                'route' => 'citizen-subscriptions.php'
+            ],
+            [
+                'key' => 'multilingual_support',
+                'name' => 'Multilingual Support',
+                'icon' => 'fa-language',
+                'status' => $languageStatus,
+                'metric' => $activeLanguages,
+                'metric_label' => 'Active languages',
+                'secondary' => 'Translation and language delivery pipeline',
+                'route' => 'general-settings.php'
+            ],
+            [
+                'key' => 'admin_approvals',
+                'name' => 'Admin Approvals',
+                'icon' => 'fa-user-check',
+                'status' => $approvalsStatus,
+                'metric' => $pendingApprovals,
+                'metric_label' => 'Pending approvals',
+                'secondary' => $pendingApprovals > 0 ? 'Review pending admin requests' : 'No pending admin approvals',
+                'route' => 'admin-approvals.php'
+            ],
+            [
+                'key' => 'audit_trail',
+                'name' => 'Audit Trail',
+                'icon' => 'fa-clipboard-list',
+                'status' => $auditStatus,
+                'metric' => $auditToday,
+                'metric_label' => 'Events logged today',
+                'secondary' => 'Operational accountability and traceability',
+                'route' => 'audit-trail.php'
+            ]
+        ];
+    }
+
+    /**
+     * Count domain-specific warnings for the last N hours.
+     */
+    private function getDomainWarningCount($domain, $hours = 24) {
+        $hours = max(1, (int)$hours);
+
+        if ($this->tableExists('automated_warnings')) {
+            if ($domain === 'weather') {
+                return (int)$this->safeQuery("
+                    SELECT COUNT(*) FROM automated_warnings
+                    WHERE received_at >= DATE_SUB(NOW(), INTERVAL {$hours} HOUR)
+                      AND (
+                        LOWER(COALESCE(source, '')) IN ('pagasa', 'weather', 'openweather')
+                        OR LOWER(COALESCE(type, '')) IN ('weather', 'rain', 'flood', 'storm', 'typhoon')
+                      )
+                ", 0);
+            }
+
+            if ($domain === 'earthquake') {
+                return (int)$this->safeQuery("
+                    SELECT COUNT(*) FROM automated_warnings
+                    WHERE received_at >= DATE_SUB(NOW(), INTERVAL {$hours} HOUR)
+                      AND (
+                        LOWER(COALESCE(source, '')) IN ('phivolcs', 'earthquake')
+                        OR LOWER(COALESCE(type, '')) IN ('earthquake', 'seismic', 'tsunami')
+                      )
+                ", 0);
+            }
+        }
+
+        if ($this->tableExists('alerts')) {
+            if ($domain === 'weather') {
+                return (int)$this->safeQuery("
+                    SELECT COUNT(*) FROM alerts
+                    WHERE created_at >= DATE_SUB(NOW(), INTERVAL {$hours} HOUR)
+                      AND (
+                        category_id = 1
+                        OR LOWER(COALESCE(category, '')) LIKE '%weather%'
+                      )
+                ", 0);
+            }
+
+            if ($domain === 'earthquake') {
+                return (int)$this->safeQuery("
+                    SELECT COUNT(*) FROM alerts
+                    WHERE created_at >= DATE_SUB(NOW(), INTERVAL {$hours} HOUR)
+                      AND (
+                        category_id = 2
+                        OR LOWER(COALESCE(category, '')) LIKE '%earthquake%'
+                      )
+                ", 0);
+            }
+        }
+
+        return 0;
+    }
+
+    private function getPendingAutomatedWarningsCount() {
+        if (!$this->tableExists('automated_warnings')) {
+            return 0;
+        }
+        return (int)$this->safeQuery("
+            SELECT COUNT(*) FROM automated_warnings 
+            WHERE LOWER(COALESCE(status, '')) IN ('pending', 'queued')
+        ", 0);
+    }
+
+    private function getIntegrationHealth($source) {
+        if (!$this->tableExists('integration_settings')) {
+            return [
+                'enabled' => false,
+                'configured' => false,
+                'summary' => 'Integration settings table unavailable'
+            ];
+        }
+
+        try {
+            $stmt = $this->pdo->prepare("
+                SELECT enabled, api_key, last_sync
+                FROM integration_settings
+                WHERE source = :source
+                LIMIT 1
+            ");
+            $stmt->execute([':source' => $source]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$row) {
+                return [
+                    'enabled' => false,
+                    'configured' => false,
+                    'summary' => 'Integration not configured'
+                ];
+            }
+
+            $enabled = (int)($row['enabled'] ?? 0) === 1;
+            // PHIVOLCS typically does not require API key in this project.
+            $configured = $source === 'phivolcs' ? true : !empty($row['api_key']);
+            $lastSync = !empty($row['last_sync']) ? ('Last sync: ' . $row['last_sync']) : 'No recent sync';
+
+            if (!$enabled) {
+                return ['enabled' => false, 'configured' => $configured, 'summary' => 'Integration disabled'];
+            }
+
+            if (!$configured) {
+                return ['enabled' => true, 'configured' => false, 'summary' => 'API key not set'];
+            }
+
+            return ['enabled' => true, 'configured' => true, 'summary' => $lastSync];
+        } catch (PDOException $e) {
+            error_log('Dashboard integration health error: ' . $e->getMessage());
+            return [
+                'enabled' => false,
+                'configured' => false,
+                'summary' => 'Integration check failed'
+            ];
+        }
+    }
+
+    private function getActiveLanguagesCount() {
+        if (!$this->tableExists('supported_languages')) {
+            return 0;
+        }
+        return (int)$this->safeQuery("
+            SELECT COUNT(*) FROM supported_languages
+            WHERE COALESCE(is_active, 1) = 1
+        ", 0);
+    }
+
+    private function getPendingApprovalsCount() {
+        if (!$this->tableExists('admin_user')) {
+            return 0;
+        }
+        if ($this->columnExists('admin_user', 'status')) {
+            return (int)$this->safeQuery("
+                SELECT COUNT(*) FROM admin_user
+                WHERE status = 'pending_approval'
+            ", 0);
+        }
+        return 0;
+    }
+
+    private function getAuditEventsTodayCount() {
+        $today = date('Y-m-d');
+        if ($this->tableExists('admin_activity_logs') && $this->columnExists('admin_activity_logs', 'created_at')) {
+            return (int)$this->safeQuery("
+                SELECT COUNT(*) FROM admin_activity_logs
+                WHERE DATE(created_at) = '{$today}'
+            ", 0);
+        }
+        if ($this->tableExists('audit_log') && $this->columnExists('audit_log', 'created_at')) {
+            return (int)$this->safeQuery("
+                SELECT COUNT(*) FROM audit_log
+                WHERE DATE(created_at) = '{$today}'
+            ", 0);
+        }
+        return 0;
     }
 }

@@ -866,17 +866,18 @@ window.GlobalTranslator = class GlobalTranslator {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    text: text,
-                    target_lang: targetLang,
-                    source_lang: sourceLang
+                    texts: { text: text },
+                    target_language: targetLang,
+                    source_language: sourceLang
                 })
             });
             
             if (response.ok) {
                 const data = await response.json();
-                if (data.success && data.translated_text) {
-                    this.translationCache.set(cacheKey, data.translated_text);
-                    return data.translated_text;
+                const translatedText = data?.translations?.text || data?.translated_text || null;
+                if (data.success && translatedText) {
+                    this.translationCache.set(cacheKey, translatedText);
+                    return translatedText;
                 }
             }
         } catch (error) {

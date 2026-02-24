@@ -125,6 +125,19 @@ $pageTitle = 'Dashboard';
                         <strong>Getting Started:</strong> This dashboard shows you everything at a glance. Click on any card or button to learn more about that feature.
                     </div>
 
+                    <div class="module-monitor-container">
+                        <div class="chart-title">
+                            <i class="fas fa-network-wired"></i> Module Operations Monitor
+                            <span class="help-tooltip">
+                                <i class="fas fa-question-circle"></i>
+                                <span class="tooltip-text">Static module health cards driven by live table data for end-to-end monitoring.</span>
+                            </span>
+                        </div>
+                        <div id="moduleStatusGrid" class="module-status-grid">
+                            <div class="module-status-empty">Loading module health...</div>
+                        </div>
+                    </div>
+
                     <!-- Quick Actions -->
                     <div class="chart-container">
                         <div class="chart-title">
@@ -262,6 +275,10 @@ $pageTitle = 'Dashboard';
                         if (data.activity) {
                             loadRecentActivity(data.activity);
                         }
+
+                        if (data.modules) {
+                            renderModuleStatus(data.modules);
+                        }
                     }
                 })
                 .catch(error => {
@@ -374,6 +391,49 @@ $pageTitle = 'Dashboard';
                 `;
                 container.appendChild(item);
             });
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderModuleStatus(modules) {
+            const container = document.getElementById('moduleStatusGrid');
+            if (!container) return;
+
+            if (!Array.isArray(modules) || modules.length === 0) {
+                container.innerHTML = '<div class="module-status-empty">No module health data available.</div>';
+                return;
+            }
+
+            container.innerHTML = modules.map((module) => {
+                const status = ['ok', 'warning', 'critical', 'info'].includes(module.status) ? module.status : 'info';
+                const metric = module.metric ?? 0;
+                const metricLabel = module.metric_label ?? 'Metric';
+                const secondary = module.secondary ?? '';
+                const route = module.route ?? '#';
+                const icon = module.icon || 'fa-cube';
+                const name = module.name || 'Module';
+
+                return `
+                    <article class="module-status-card status-${escapeHtml(status)}">
+                        <div class="module-status-head">
+                            <div class="module-status-icon"><i class="fas ${escapeHtml(icon)}"></i></div>
+                            <span class="module-status-chip">${escapeHtml(status.toUpperCase())}</span>
+                        </div>
+                        <div class="module-status-name">${escapeHtml(name)}</div>
+                        <div class="module-status-metric">${escapeHtml(metric)}</div>
+                        <div class="module-status-label">${escapeHtml(metricLabel)}</div>
+                        <div class="module-status-secondary">${escapeHtml(secondary)}</div>
+                        <a href="${escapeHtml(route)}" class="module-status-link">Open module</a>
+                    </article>
+                `;
+            }).join('');
         }
 
         // Load data on page load (wait for DOM to be ready)

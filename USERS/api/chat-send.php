@@ -186,16 +186,17 @@ try {
                 $attachmentSize,
                 $originalName !== '' ? $originalName : null
             );
-            if (!$stored || empty($stored['url'])) {
-                throw new RuntimeException(
-                    'PostgreSQL attachment storage is not available. Enable pdo_pgsql and set PG_IMG_URL (or PG_IMG_HOST, PG_IMG_DB, PG_IMG_USER, and PG_IMG_PASS).'
-                );
+            if ($stored && !empty($stored['url'])) {
+                $attachmentMime = (string)($stored['mime'] ?? $detectedMime);
+                $attachmentSize = isset($stored['size']) ? (int)$stored['size'] : $attachmentSize;
+                $attachmentUrl = (string)$stored['url'];
+            } else {
+                error_log('chat-send: PostgreSQL attachment storage unavailable, falling back to filesystem storage.');
+                $storageDriver = 'filesystem';
             }
+        }
 
-            $attachmentMime = (string)($stored['mime'] ?? $detectedMime);
-            $attachmentSize = isset($stored['size']) ? (int)$stored['size'] : $attachmentSize;
-            $attachmentUrl = (string)$stored['url'];
-        } else {
+        if ($storageDriver === 'filesystem') {
             $uploadDir = twc_chat_upload_dir();
             if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
                 throw new RuntimeException('Unable to create upload directory.');

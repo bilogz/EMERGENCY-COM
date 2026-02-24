@@ -138,12 +138,13 @@ window.LanguageManager = class LanguageManager {
             const data = await response.json();
             
             if (data.success && data.languages) {
-                const wasUpdated = this.supportedLanguages.length !== data.languages.length || 
+                const normalizedLanguages = data.languages.map((lang) => this.normalizeLanguage(lang));
+                const wasUpdated = this.supportedLanguages.length !== normalizedLanguages.length || 
                                   this.lastUpdate !== data.last_update ||
-                                  JSON.stringify(this.supportedLanguages) !== JSON.stringify(data.languages);
+                                  JSON.stringify(this.supportedLanguages) !== JSON.stringify(normalizedLanguages);
                 
                 // Update from admin-managed database
-                this.supportedLanguages = data.languages;
+                this.supportedLanguages = normalizedLanguages;
                 this.lastUpdate = data.last_update;
                 
                 // Trigger update event if languages changed
@@ -307,10 +308,58 @@ window.LanguageManager = class LanguageManager {
     
     getFallbackLanguages() {
         return [
-            {language_code: 'en', language_name: 'English', native_name: 'English', flag_emoji: '🇺🇸', is_active: 1, is_ai_supported: 1},
-            {language_code: 'fil', language_name: 'Filipino', native_name: 'Filipino', flag_emoji: '🇵🇭', is_active: 1, is_ai_supported: 1},
-            {language_code: 'es', language_name: 'Spanish', native_name: 'Español', flag_emoji: '🇪🇸', is_active: 1, is_ai_supported: 1}
+            {language_code: 'en', language_name: 'English', native_name: 'English', flag_emoji: '', is_active: 1, is_ai_supported: 1},
+            {language_code: 'fil', language_name: 'Filipino', native_name: 'Filipino', flag_emoji: '', is_active: 1, is_ai_supported: 1},
+            {language_code: 'es', language_name: 'Spanish', native_name: 'Spanish', flag_emoji: '', is_active: 1, is_ai_supported: 1}
         ];
+    }
+    
+    isLikelyMojibake(value) {
+        if (!value) return false;
+        return /(?:\u00C3|\u00C2|\u00E2|\u00D0|\u00D1|\u00F0\u009F)/.test(String(value));
+    }
+    
+    normalizeLanguage(language) {
+        const normalized = {...language};
+        const code = String(normalized.language_code || 'en').toLowerCase().trim();
+        const fallbackNames = {
+            en: 'English',
+            es: 'Spanish',
+            zh: 'Chinese',
+            hi: 'Hindi',
+            ar: 'Arabic',
+            pt: 'Portuguese',
+            ru: 'Russian',
+            ja: 'Japanese',
+            de: 'German',
+            fr: 'French',
+            fil: 'Filipino',
+            tl: 'Tagalog',
+            ceb: 'Cebuano',
+            ilo: 'Ilocano',
+            war: 'Waray',
+            id: 'Indonesian',
+            ko: 'Korean'
+        };
+        let languageName = String(normalized.language_name || fallbackNames[code] || code.toUpperCase()).trim();
+        let nativeName = String(normalized.native_name || '').trim();
+        let flagEmoji = String(normalized.flag_emoji || '').trim();
+        
+        if (!languageName || this.isLikelyMojibake(languageName)) {
+            languageName = fallbackNames[code] || code.toUpperCase();
+        }
+        if (!nativeName || this.isLikelyMojibake(nativeName)) {
+            nativeName = languageName;
+        }
+        if (this.isLikelyMojibake(flagEmoji)) {
+            flagEmoji = '';
+        }
+        
+        normalized.language_code = code;
+        normalized.language_name = languageName;
+        normalized.native_name = nativeName;
+        normalized.flag_emoji = flagEmoji;
+        return normalized;
     }
     
     /**

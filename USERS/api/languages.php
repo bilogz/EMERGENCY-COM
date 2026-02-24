@@ -76,6 +76,64 @@ function resolveUserLanguagesTable(PDO $pdo): ?string {
     return null;
 }
 
+function isLikelyMojibake(string $value): bool {
+    if ($value === '') {
+        return false;
+    }
+    return preg_match('/(?:\\xC3\\x83|\\xC3\\x82|\\xC3\\xA2|\\xC3\\x90|\\xC3\\x91|\\xC3\\xB0\\xC5\\xB8)/', $value) === 1;
+}
+
+function defaultFlagEmojiForLanguage(string $languageCode): string {
+    return '';
+}
+
+function defaultLanguageNameForCode(string $languageCode): string {
+    $code = strtolower(trim($languageCode));
+    $map = [
+        'en' => 'English',
+        'es' => 'Spanish',
+        'zh' => 'Chinese',
+        'hi' => 'Hindi',
+        'ar' => 'Arabic',
+        'pt' => 'Portuguese',
+        'ru' => 'Russian',
+        'ja' => 'Japanese',
+        'de' => 'German',
+        'fr' => 'French',
+        'fil' => 'Filipino',
+        'tl' => 'Tagalog',
+        'ceb' => 'Cebuano',
+        'ilo' => 'Ilocano',
+        'war' => 'Waray',
+        'id' => 'Indonesian',
+        'ko' => 'Korean',
+    ];
+    return $map[$code] ?? strtoupper($code);
+}
+
+function normalizeLanguageRow(array $row): array {
+    $languageCode = strtolower(trim((string)($row['language_code'] ?? 'en')));
+    $languageName = trim((string)($row['language_name'] ?? strtoupper($languageCode)));
+    $nativeName = trim((string)($row['native_name'] ?? ''));
+    $flagEmoji = trim((string)($row['flag_emoji'] ?? ''));
+
+    if ($languageName === '' || isLikelyMojibake($languageName)) {
+        $languageName = defaultLanguageNameForCode($languageCode);
+    }
+    if ($nativeName === '' || isLikelyMojibake($nativeName)) {
+        $nativeName = $languageName;
+    }
+    if ($flagEmoji === '' || isLikelyMojibake($flagEmoji)) {
+        $flagEmoji = defaultFlagEmojiForLanguage($languageCode);
+    }
+
+    $row['language_code'] = $languageCode;
+    $row['language_name'] = $languageName;
+    $row['native_name'] = $nativeName;
+    $row['flag_emoji'] = $flagEmoji;
+    return $row;
+}
+
 $languagesTable = null;
 
 $action = $_GET['action'] ?? 'list';
@@ -162,6 +220,9 @@ try {
             ORDER BY priority DESC, language_name ASC
         ");
         $languages = $stmt->fetchAll();
+        if (is_array($languages)) {
+            $languages = array_map('normalizeLanguageRow', $languages);
+        }
         
         // Log for debugging (remove in production if needed)
         // error_log("Languages API: Serving " . count($languages) . " active languages to user/guest");
@@ -228,7 +289,7 @@ try {
             
             if ($result) {
                 $detectedLanguage = $result['language_code'];
-                $matchedLanguage = $result;
+                $matchedLanguage = normalizeLanguageRow($result);
                 break;
             }
             
@@ -244,7 +305,7 @@ try {
             
             if ($result) {
                 $detectedLanguage = $result['language_code'];
-                $matchedLanguage = $result;
+                $matchedLanguage = normalizeLanguageRow($result);
                 break;
             }
         }
@@ -331,4 +392,5 @@ try {
     }
     exit;
 }
+
 

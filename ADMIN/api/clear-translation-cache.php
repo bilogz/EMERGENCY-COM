@@ -6,54 +6,52 @@
 
 header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
+require_once __DIR__ . '/../../USERS/api/translation-cache-store.php';
 
 try {
-    if ($pdo === null) {
-        throw new Exception('Database connection failed');
-    }
-    
     $lang = $_GET['lang'] ?? null;
     $clearAll = $_GET['all'] ?? false;
-    
+
     if ($clearAll === 'true' || $clearAll === '1') {
-        // Clear ALL cached translations
-        $stmt = $pdo->exec("DELETE FROM translation_cache");
+        $result = translation_cache_clear(null, $pdo ?? null);
+        $deletedByBackend = $result['deleted'];
+        $totalDeleted = array_sum(array_map('intval', $deletedByBackend));
+
         echo json_encode([
             'success' => true,
             'message' => 'All translation cache cleared',
-            'deleted_count' => $stmt,
-            'note' => 'Fresh AI translations will be generated on next request'
+            'deleted_count' => $totalDeleted,
+            'deleted_by_backend' => $deletedByBackend,
+            'cache_driver' => $result['driver'],
+            'cache_backends' => $result['backends'],
+            'errors' => array_filter($result['errors']),
+            'note' => 'Fresh translations will be generated on next request'
         ]);
     } elseif ($lang) {
-        // Clear specific language
-        $stmt = $pdo->prepare("DELETE FROM translation_cache WHERE target_lang = ?");
-        $stmt->execute([$lang]);
-        $count = $stmt->rowCount();
-        
+        $result = translation_cache_clear($lang, $pdo ?? null);
+        $deletedByBackend = $result['deleted'];
+        $totalDeleted = array_sum(array_map('intval', $deletedByBackend));
+
         echo json_encode([
             'success' => true,
             'message' => "Translation cache cleared for language: $lang",
-            'deleted_count' => $count,
-            'note' => 'Fresh AI translations will be generated on next request for this language'
+            'deleted_count' => $totalDeleted,
+            'deleted_by_backend' => $deletedByBackend,
+            'cache_driver' => $result['driver'],
+            'cache_backends' => $result['backends'],
+            'errors' => array_filter($result['errors']),
+            'note' => 'Fresh translations will be generated on next request for this language'
         ]);
     } else {
-        // Show current cache status
-        $stmt = $pdo->query("
-            SELECT 
-                target_lang,
-                COUNT(*) as count,
-                translation_method,
-                MAX(created_at) as last_cached
-            FROM translation_cache
-            GROUP BY target_lang, translation_method
-            ORDER BY target_lang
-        ");
-        $cacheStatus = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+        $status = translation_cache_status($pdo ?? null);
+
         echo json_encode([
             'success' => true,
             'message' => 'Translation cache status',
-            'cache_entries' => $cacheStatus,
+            'cache_entries' => $status['entries'],
+            'cache_driver' => $status['driver'],
+            'cache_backends' => $status['backends'],
+            'errors' => array_filter($status['errors']),
             'usage' => [
                 'clear_specific' => 'Add ?lang=zh to clear Chinese cache',
                 'clear_all' => 'Add ?all=true to clear ALL cached translations',
@@ -66,18 +64,12 @@ try {
             ]
         ], JSON_PRETTY_PRINT);
     }
-    
-} catch (PDOException $e) {
+
+} catch (Throwable $e) {
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'error' => 'Database error: ' . $e->getMessage()
-    ]);
-} catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'error' => $e->getMessage()
+        'error' => 'Cache clear failed: ' . $e->getMessage()
     ]);
 }
 ?>

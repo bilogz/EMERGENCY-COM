@@ -16,20 +16,25 @@ if (file_exists($configFile)) {
 }
 
 // Fallback to environment variables or defaults
-$aiProvider = $secureConfig['AI_PROVIDER'] ?? $_ENV['AI_PROVIDER'] ?? 'gemini';
+$translationProviderRaw = $secureConfig['TRANSLATION_PROVIDER'] ?? $_ENV['TRANSLATION_PROVIDER'] ?? null;
+$aiProviderRaw = $secureConfig['AI_PROVIDER'] ?? $_ENV['AI_PROVIDER'] ?? null;
+$aiProvider = strtolower(trim((string)($translationProviderRaw !== null ? $translationProviderRaw : ($aiProviderRaw ?? 'argos'))));
+$supportedProviders = ['argos', 'gemini', 'openai', 'claude', 'groq', 'mymemory'];
+if (!in_array($aiProvider, $supportedProviders, true)) {
+    $aiProvider = 'argos';
+}
 $aiApiKey = $secureConfig['AI_API_KEY'] ?? $_ENV['AI_API_KEY'] ?? '';
 $aiApiKeyTranslation = $secureConfig['AI_API_KEY_TRANSLATION'] ?? $aiApiKey; // Use specific key for translation
 $geminiModel = $secureConfig['GEMINI_MODEL'] ?? $_ENV['GEMINI_MODEL'] ?? 'gemini-2.5-flash';
-$libreTranslateUrl = $secureConfig['LIBRETRANSLATE_URL'] ?? 'https://libretranslate.de/translate';
-$libreTranslateKey = $secureConfig['LIBRETRANSLATE_API_KEY'] ?? '';
+$argosTranslateUrl = $secureConfig['ARGOS_TRANSLATE_URL'] ?? $_ENV['ARGOS_TRANSLATE_URL'] ?? 'http://localhost:5001/translate';
 
 // Define constants
 define('AI_PROVIDER', $aiProvider);
+define('TRANSLATION_PROVIDER', $aiProvider);
 define('AI_API_KEY', $aiApiKey);
 define('AI_API_KEY_TRANSLATION', $aiApiKeyTranslation);
 define('GEMINI_MODEL', $geminiModel);
-define('LIBRETRANSLATE_URL', $libreTranslateUrl);
-define('LIBRETRANSLATE_API_KEY', $libreTranslateKey);
+define('ARGOS_TRANSLATE_URL', $argosTranslateUrl);
 
 // API Endpoints
 define('OPENAI_API_URL', 'https://api.openai.com/v1/chat/completions');
@@ -73,24 +78,38 @@ function getLanguageName($code) {
 }
 
 /**
+ * Normalize language codes for Argos Translate service.
+ */
+function mapArgosLanguageCode($langCode) {
+    $code = strtolower(trim((string)$langCode));
+    if ($code === 'fil' || $code === 'tl') {
+        return 'tl';
+    }
+    return $code;
+}
+
+/**
  * Translate text using AI
  */
 function translateWithAI($text, $sourceLang, $targetLang) {
-    $sourceName = getLanguageName($sourceLang);
-    $targetName = getLanguageName($targetLang);
-    
     if ($sourceLang === $targetLang) {
         return $text;
     }
-    
-    $provider = AI_PROVIDER;
+
+    $provider = defined('TRANSLATION_PROVIDER') ? TRANSLATION_PROVIDER : AI_PROVIDER;
+
+    if ($provider === 'argos') {
+        return translateWithArgos($text, $sourceLang, $targetLang);
+    }
+
+    $sourceName = getLanguageName($sourceLang);
+    $targetName = getLanguageName($targetLang);
     $apiKey = AI_API_KEY;
-    
     if (empty($apiKey) || $apiKey === 'your-api-key-here') {
         error_log('AI API key not configured');
         return $text;
     }
-    
+
     switch ($provider) {
         case 'openai':
             return translateWithOpenAI($text, $targetName, $apiKey);
@@ -101,7 +120,7 @@ function translateWithAI($text, $sourceLang, $targetLang) {
         case 'groq':
             return translateWithGroq($text, $targetName, $apiKey);
         default:
-            return $text;
+            return translateWithArgos($text, $sourceLang, $targetLang);
     }
 }
 
@@ -278,8 +297,139 @@ function translateWithGroq($text, $targetLang, $apiKey) {
  * BATCH Translation - Translate multiple texts in ONE API call
  * This is MUCH faster than translating one by one!
  */
+function translateWithArgos($text, $sourceLang, $targetLang) {
+    if ($sourceLang === $targetLang || trim((string)$text) === '') {
+        return $text;
+    }
+
+    $apiUrl = defined('ARGOS_TRANSLATE_URL') ? ARGOS_TRANSLATE_URL : 'http://localhost:5001/translate';
+    $argosSource = mapArgosLanguageCode($sourceLang);
+    $argosTarget = mapArgosLanguageCode($targetLang);
+
+    $payload = [
+        'q' => $text,
+        'source' => $argosSource,
+        'target' => $argosTarget
+    ];
+
+    $ch = curl_init($apiUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_CONNECTTIMEOUT => 5
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlError) {
+        error_log("Argos translation error: " . $curlError);
+        return $text;
+    }
+
+    if ($httpCode !== 200 || !$response) {
+        error_log("Argos translation HTTP error: " . $httpCode);
+        return $text;
+    }
+
+    $decoded = json_decode($response, true);
+    if (!is_array($decoded)) {
+        return $text;
+    }
+
+    if (isset($decoded['translatedText']) && trim((string)$decoded['translatedText']) !== '') {
+        return trim((string)$decoded['translatedText']);
+    }
+
+    return $text;
+}
+
+function translateBatchWithArgos($textsArray, $sourceLang, $targetLang) {
+    if (empty($textsArray) || !is_array($textsArray) || $sourceLang === $targetLang) {
+        return $textsArray;
+    }
+
+    $apiUrl = defined('ARGOS_TRANSLATE_URL') ? ARGOS_TRANSLATE_URL : 'http://localhost:5001/translate';
+    $argosSource = mapArgosLanguageCode($sourceLang);
+    $argosTarget = mapArgosLanguageCode($targetLang);
+
+    $translations = [];
+    $mh = curl_multi_init();
+    $handles = [];
+
+    foreach ($textsArray as $key => $text) {
+        $original = (string)$text;
+        if (trim($original) === '') {
+            $translations[$key] = $original;
+            continue;
+        }
+
+        $payload = [
+            'q' => $original,
+            'source' => $argosSource,
+            'target' => $argosTarget
+        ];
+
+        $ch = curl_init($apiUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($payload),
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+            CURLOPT_TIMEOUT => 20,
+            CURLOPT_CONNECTTIMEOUT => 5
+        ]);
+
+        curl_multi_add_handle($mh, $ch);
+        $handles[$key] = $ch;
+    }
+
+    $running = null;
+    do {
+        curl_multi_exec($mh, $running);
+        curl_multi_select($mh, 1.0);
+    } while ($running > 0);
+
+    foreach ($handles as $key => $ch) {
+        $response = curl_multi_getcontent($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $decoded = json_decode((string)$response, true);
+
+        if ($httpCode === 200 && is_array($decoded) && isset($decoded['translatedText']) && trim((string)$decoded['translatedText']) !== '') {
+            $translations[$key] = trim((string)$decoded['translatedText']);
+        } else {
+            $translations[$key] = $textsArray[$key];
+        }
+
+        curl_multi_remove_handle($mh, $ch);
+        curl_close($ch);
+    }
+
+    curl_multi_close($mh);
+
+    foreach ($textsArray as $key => $text) {
+        if (!array_key_exists($key, $translations)) {
+            $translations[$key] = $text;
+        }
+    }
+
+    return $translations;
+}
+
 function translateBatchWithAI($textsArray, $sourceLang, $targetLang) {
-    // Check if AI translation is enabled via settings
+    $provider = defined('TRANSLATION_PROVIDER') ? TRANSLATION_PROVIDER : AI_PROVIDER;
+
+    // Argos is local/offline and should work without the AI toggle.
+    if ($provider === 'argos') {
+        return translateBatchWithArgos($textsArray, $sourceLang, $targetLang);
+    }
+
+    // Check if cloud AI translation is enabled via settings
     if (file_exists(__DIR__ . '/../../ADMIN/api/secure-api-config.php')) {
         require_once __DIR__ . '/../../ADMIN/api/secure-api-config.php';
         if (function_exists('isAIAnalysisEnabled')) {
@@ -311,19 +461,15 @@ Return ONLY the translations, no explanations.
 
 $textList";
 
-    $provider = AI_PROVIDER;
-    
     switch ($provider) {
+        case 'argos':
+            return translateBatchWithArgos($textsArray, $sourceLang, $targetLang);
         case 'gemini':
             return translateBatchWithGemini($textsArray, $keys, $prompt, $targetName, $apiKey);
         case 'openai':
             return translateBatchWithOpenAI($textsArray, $keys, $prompt, $targetName, $apiKey);
-        case 'libretranslate':
-            return translateBatchWithLibreTranslate($textsArray, $sourceLang, $targetLang);
-        case 'mymemory':
-            return translateBatchWithMyMemory($textsArray, $sourceLang, $targetLang);
         default:
-            return translateBatchWithGemini($textsArray, $keys, $prompt, $targetName, $apiKey);
+            return translateBatchWithArgos($textsArray, $sourceLang, $targetLang);
     }
 }
 
@@ -535,133 +681,12 @@ function translateBatchWithMyMemory($textsArray, $sourceLang, $targetLang) {
 }
 
 /**
- * LibreTranslate API (self-hosted or public)
- * FREE - No API key needed for public servers!
- * 
- * Public servers:
- * - https://libretranslate.de (Germany, fast)
- * - https://libretranslate.com (official)
- */
-function translateWithLibreTranslate($text, $sourceLang, $targetLang) {
-    $apiUrl = defined('LIBRETRANSLATE_URL') ? LIBRETRANSLATE_URL : 'https://libretranslate.de/translate';
-    $apiKey = defined('LIBRETRANSLATE_API_KEY') ? LIBRETRANSLATE_API_KEY : '';
-    
-    $data = [
-        'q' => $text,
-        'source' => $sourceLang,
-        'target' => $targetLang,
-        'format' => 'text'
-    ];
-    
-    // Add API key if provided
-    if (!empty($apiKey)) {
-        $data['api_key'] = $apiKey;
-    }
-    
-    $ch = curl_init($apiUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($data),
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-        CURLOPT_TIMEOUT => 15
-    ]);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    
-    if ($httpCode === 200 && $response) {
-        $result = json_decode($response, true);
-        if (isset($result['translatedText'])) {
-            return $result['translatedText'];
-        }
-    }
-    
-    return $text;
-}
-
-/**
- * Batch translation using LibreTranslate (parallel requests)
- * FREE - Works with public servers
- */
-function translateBatchWithLibreTranslate($textsArray, $sourceLang, $targetLang) {
-    $apiUrl = defined('LIBRETRANSLATE_URL') ? LIBRETRANSLATE_URL : 'https://libretranslate.de/translate';
-    $apiKey = defined('LIBRETRANSLATE_API_KEY') ? LIBRETRANSLATE_API_KEY : '';
-    
-    $translations = [];
-    $mh = curl_multi_init();
-    $handles = [];
-    
-    foreach ($textsArray as $key => $text) {
-        $data = [
-            'q' => $text,
-            'source' => $sourceLang,
-            'target' => $targetLang,
-            'format' => 'text'
-        ];
-        
-        if (!empty($apiKey)) {
-            $data['api_key'] = $apiKey;
-        }
-        
-        $ch = curl_init($apiUrl);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($data),
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-            CURLOPT_TIMEOUT => 20
-        ]);
-        
-        curl_multi_add_handle($mh, $ch);
-        $handles[$key] = $ch;
-    }
-    
-    // Execute all requests in parallel
-    $running = null;
-    do {
-        curl_multi_exec($mh, $running);
-        curl_multi_select($mh);
-    } while ($running > 0);
-    
-    // Get results
-    foreach ($handles as $key => $ch) {
-        $response = curl_multi_getcontent($ch);
-        $result = json_decode($response, true);
-        
-        if (isset($result['translatedText'])) {
-            $translations[$key] = $result['translatedText'];
-        } else {
-            $translations[$key] = $textsArray[$key]; // Fallback to original
-        }
-        
-        curl_multi_remove_handle($mh, $ch);
-    }
-    
-    curl_multi_close($mh);
-    
-    return $translations;
-}
-
-/**
  * Smart translation - tries multiple providers
  * Falls back to next provider if one fails
  */
 function translateSmart($text, $sourceLang, $targetLang) {
-    // Try AI first (best quality)
-    $translated = translateWithAI($text, $sourceLang, $targetLang);
-    if ($translated !== $text) {
-        return $translated;
-    }
-    
-    // Fall back to MyMemory (free, no key)
-    $translated = translateWithMyMemory($text, $sourceLang, $targetLang);
-    if ($translated !== $text) {
-        return $translated;
-    }
-    
-    return $text;
+    // Citizen-side translation path now uses ArgosTranslate only.
+    return translateWithArgos($text, $sourceLang, $targetLang);
 }
 ?>
 

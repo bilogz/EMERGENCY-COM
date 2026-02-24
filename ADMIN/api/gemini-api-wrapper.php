@@ -188,15 +188,53 @@ function callGeminiApi($apiKey, $prompt, $model = 'gemini-2.0-flash-exp', $optio
         ];
     }
 
-    // Extract text from response
+    // Extract text from response (concatenate all text parts to avoid truncated replies).
     $text = '';
-    if (isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
-        $text = $responseData['candidates'][0]['content']['parts'][0]['text'];
+    $finishReason = null;
+    if (isset($responseData['candidates'][0]) && is_array($responseData['candidates'][0])) {
+        $finishReason = $responseData['candidates'][0]['finishReason'] ?? null;
+        $parts = $responseData['candidates'][0]['content']['parts'] ?? [];
+        if (is_array($parts)) {
+            $chunks = [];
+            foreach ($parts as $part) {
+                if (is_array($part) && isset($part['text']) && is_string($part['text']) && $part['text'] !== '') {
+                    $chunks[] = $part['text'];
+                }
+            }
+            if (!empty($chunks)) {
+                $text = implode('', $chunks);
+            }
+        }
+    }
+
+    // Fallback: scan other candidates if first candidate has no text.
+    if ($text === '' && isset($responseData['candidates']) && is_array($responseData['candidates'])) {
+        foreach ($responseData['candidates'] as $candidate) {
+            if (!is_array($candidate)) {
+                continue;
+            }
+            $parts = $candidate['content']['parts'] ?? [];
+            if (!is_array($parts)) {
+                continue;
+            }
+            $chunks = [];
+            foreach ($parts as $part) {
+                if (is_array($part) && isset($part['text']) && is_string($part['text']) && $part['text'] !== '') {
+                    $chunks[] = $part['text'];
+                }
+            }
+            if (!empty($chunks)) {
+                $text = implode('', $chunks);
+                $finishReason = $candidate['finishReason'] ?? $finishReason;
+                break;
+            }
+        }
     }
 
     return [
         'success' => true,
         'data' => $text,
+        'finish_reason' => $finishReason,
         'full_response' => $responseData
     ];
 }

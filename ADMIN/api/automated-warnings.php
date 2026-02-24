@@ -1072,6 +1072,36 @@ function ensureNotificationLogsTableForAutomatedWarnings(PDO $pdo, string $table
                 INDEX idx_channel (channel)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
+
+        $existingCols = [];
+        try {
+            $colsStmt = $pdo->query("SHOW COLUMNS FROM {$tableName}");
+            $colRows = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+            foreach ($colRows as $colRow) {
+                $field = strtolower((string)($colRow['Field'] ?? ''));
+                if ($field !== '') {
+                    $existingCols[$field] = true;
+                }
+            }
+        } catch (Throwable $colEx) {
+            error_log("{$tableName} column scan failed: " . $colEx->getMessage());
+        }
+
+        $columnPatches = [
+            'recipients' => "ALTER TABLE {$tableName} ADD COLUMN recipients TEXT NULL AFTER recipient",
+            'sent_by' => "ALTER TABLE {$tableName} ADD COLUMN sent_by VARCHAR(120) NULL AFTER sent_at",
+            'created_at' => "ALTER TABLE {$tableName} ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        ];
+        foreach ($columnPatches as $columnName => $sql) {
+            if (!isset($existingCols[$columnName])) {
+                try {
+                    $pdo->exec($sql);
+                } catch (Throwable $patchEx) {
+                    error_log("{$tableName} add column {$columnName} failed: " . $patchEx->getMessage());
+                }
+            }
+        }
+
         $pdo->query("SELECT 1 FROM {$tableName} LIMIT 1");
         return true;
     } catch (Throwable $e) {

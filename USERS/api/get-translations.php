@@ -35,6 +35,7 @@ header('Cache-Control: no-cache, must-revalidate, max-age=0');
 try {
     require_once '../../ADMIN/api/db_connect.php';
     require_once 'ai-translation-config.php';
+    require_once 'translation-cache-store.php';
     
     if (session_status() === PHP_SESSION_NONE) {
         @session_start();
@@ -67,7 +68,51 @@ function resolveTranslationsLanguagesTable(PDO $pdo): ?string {
     return null;
 }
 
-$languageCode = $_GET['lang'] ?? 'en';
+function normalizeTranslationsLanguage(string $lang): string {
+    $lang = strtolower(trim($lang));
+    if ($lang === 'tl') {
+        $lang = 'fil';
+    }
+    if ($lang !== '' && preg_match('/^[a-z0-9_-]{2,15}$/', $lang) !== 1) {
+        return '';
+    }
+    return $lang;
+}
+
+function detectTranslationsBrowserLanguage(): string {
+    $acceptLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
+    if ($acceptLanguage === '') {
+        return 'en';
+    }
+    $first = trim(explode(',', $acceptLanguage)[0] ?? '');
+    $base = strtolower(trim(explode('-', $first)[0] ?? ''));
+    $normalized = normalizeTranslationsLanguage($base);
+    return $normalized !== '' ? $normalized : 'en';
+}
+
+$requestedLang = normalizeTranslationsLanguage((string)($_GET['lang'] ?? ''));
+$languageCode = $requestedLang;
+if ($languageCode === '') {
+    $sessionUserId = (int)($_SESSION['user_id'] ?? 0);
+    if ($sessionUserId > 0 && isset($pdo) && $pdo instanceof PDO) {
+        try {
+            $prefStmt = $pdo->prepare("SELECT preferred_language FROM user_preferences WHERE user_id = ? LIMIT 1");
+            $prefStmt->execute([$sessionUserId]);
+            $pref = $prefStmt->fetch(PDO::FETCH_ASSOC);
+            if ($pref && !empty($pref['preferred_language'])) {
+                $languageCode = normalizeTranslationsLanguage((string)$pref['preferred_language']);
+            }
+        } catch (Throwable $e) {
+            // Ignore and continue to device language fallback.
+        }
+    }
+}
+if ($languageCode === '') {
+    $languageCode = detectTranslationsBrowserLanguage();
+}
+if ($languageCode === '') {
+    $languageCode = 'en';
+}
 
 // Base English translations
 $baseTranslations = [
@@ -572,112 +617,52 @@ try {
         $language = ['language_code' => $languageCode, 'language_name' => ucfirst($languageCode)];
     }
     
-    // Check user's auto-translate preference
-    $autoTranslateEnabled = true; // Default enabled
-    $userId = $_SESSION['user_id'] ?? null;
-    
-    if ($userId && $pdo) {
-        try {
-            $stmt = $pdo->prepare("SELECT auto_translate_enabled FROM user_preferences WHERE user_id = ?");
-            $stmt->execute([$userId]);
-            $prefs = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($prefs && isset($prefs['auto_translate_enabled'])) {
-                $autoTranslateEnabled = (bool)$prefs['auto_translate_enabled'];
-            }
-        } catch (PDOException $e) {
-            // Column might not exist yet, default to enabled
-            error_log("Auto-translate preference check failed: " . $e->getMessage());
-        }
-    }
-    
     // Select translations based on language
     $translations = [];
     $autoTranslated = false;
-    
+    $translationProvider = defined('TRANSLATION_PROVIDER') ? TRANSLATION_PROVIDER : (defined('AI_PROVIDER') ? AI_PROVIDER : 'argos');
+
     if ($languageCode === 'en') {
         // English - use base translations
         $translations = $baseTranslations;
-    } elseif ($languageCode === 'fil' || $languageCode === 'tl') {
-        // Filipino - use pre-translated
-        $translations = $filipinoTranslations;
     } else {
-        // Other languages - Check if AI translation is enabled
-        if (!$autoTranslateEnabled) {
-            // User disabled auto-translation, return English
-            echo json_encode([
-                'success' => true,
-                'language_code' => $languageCode,
-                'language_name' => $language['language_name'] ?? ucfirst($languageCode),
-                'native_name' => $language['native_name'] ?? '',
-                'translations' => $baseTranslations,
-                'auto_translated' => false,
-                'ai_provider' => null,
-                'note' => 'Auto-translation disabled by user. Showing English content.',
-                'user_preference' => 'auto_translate_disabled'
-            ]);
-            exit;
-        }
-        
-        // AI translate (user has it enabled)
+        // Citizen-side translation path is ArgosTranslate-first for all non-English languages.
         $autoTranslated = true;
         
         // First, check which translations are already cached
-        $uncachedKeys = [];
         $uncachedTexts = [];
         
         foreach ($baseTranslations as $key => $englishText) {
             $cacheKey = md5($englishText . 'en' . $languageCode);
-            $cached = null;
-            
-            if ($pdo) {
-                try {
-                    $stmt = $pdo->prepare("
-                        SELECT translated_text 
-                        FROM translation_cache 
-                        WHERE cache_key = ? 
-                        AND TIMESTAMPDIFF(DAY, created_at, NOW()) < ?
-                    ");
-                    $stmt->execute([$cacheKey, TRANSLATION_CACHE_DAYS]);
-                    $cached = $stmt->fetch(PDO::FETCH_ASSOC);
-                } catch (PDOException $e) {
-                    // If translation_cache table is unavailable/corrupted, continue without cache.
-                    $cached = null;
-                    error_log("Translation cache read failed: " . $e->getMessage());
-                }
-            }
-            
-            if ($cached) {
+            $cachedText = translation_cache_read($cacheKey, TRANSLATION_CACHE_DAYS, $pdo ?? null);
+
+            if ($cachedText !== null) {
                 // Use cached translation
-                $translations[$key] = $cached['translated_text'];
+                $translations[$key] = $cachedText;
             } else {
                 // Need to translate this one
-                $uncachedKeys[] = $key;
                 $uncachedTexts[$key] = $englishText;
             }
         }
         
         // If there are uncached translations, do BATCH translation
         if (!empty($uncachedTexts)) {
-            $translationMethod = 'ai_batch';
-            
-            // Try AI batch translation first
-            $batchTranslations = translateBatchWithAI($uncachedTexts, 'en', $languageCode);
-            
-            // Check if AI translation worked (translations should be different from originals)
-            $aiWorked = false;
-            foreach ($batchTranslations as $key => $translated) {
-                if ($translated !== $uncachedTexts[$key]) {
-                    $aiWorked = true;
-                    break;
+            $translationMethod = 'argos';
+            $batchTranslations = translateBatchWithArgos($uncachedTexts, 'en', $languageCode);
+
+            // If Argos is unavailable, keep a Filipino static fallback for user continuity.
+            $translatedCount = 0;
+            foreach ($batchTranslations as $key => $translatedText) {
+                $original = $uncachedTexts[$key] ?? '';
+                if (trim((string)$translatedText) !== '' && trim((string)$translatedText) !== trim((string)$original)) {
+                    $translatedCount++;
                 }
             }
-            
-            // If AI failed, fall back to MyMemory (free, no API key needed)
-            if (!$aiWorked) {
-                error_log("AI translation failed, falling back to MyMemory");
-                $batchTranslations = translateBatchWithMyMemory($uncachedTexts, 'en', $languageCode);
-                $translationMethod = 'mymemory';
+            if ($translatedCount === 0 && ($languageCode === 'fil' || $languageCode === 'tl')) {
+                foreach ($uncachedTexts as $key => $englishText) {
+                    $batchTranslations[$key] = $filipinoTranslations[$key] ?? $englishText;
+                }
+                $translationMethod = 'fallback_static_fil';
             }
             
             foreach ($batchTranslations as $key => $translatedText) {
@@ -687,22 +672,24 @@ try {
                 $englishText = $uncachedTexts[$key];
                 $cacheKey = md5($englishText . 'en' . $languageCode);
                 
-                if ($pdo && $translatedText !== $englishText) {
-                    try {
-                        $stmt = $pdo->prepare("
-                            INSERT INTO translation_cache 
-                            (cache_key, source_text, source_lang, target_lang, translated_text, translation_method)
-                            VALUES (?, ?, 'en', ?, ?, ?)
-                            ON DUPLICATE KEY UPDATE 
-                            translated_text = VALUES(translated_text),
-                            updated_at = NOW()
-                        ");
-                        $stmt->execute([$cacheKey, $englishText, $languageCode, $translatedText, $translationMethod]);
-                    } catch (PDOException $e) {
-                        // Cache write failure should not fail the translation response.
-                        error_log("Translation cache write failed: " . $e->getMessage());
-                    }
+                if ($translatedText !== $englishText) {
+                    translation_cache_write(
+                        $cacheKey,
+                        $englishText,
+                        'en',
+                        $languageCode,
+                        $translatedText,
+                        $translationMethod,
+                        $pdo ?? null
+                    );
                 }
+            }
+        }
+
+        // Ensure no missing keys even when translation service is partially unavailable.
+        foreach ($baseTranslations as $key => $englishText) {
+            if (!isset($translations[$key]) || trim((string)$translations[$key]) === '') {
+                $translations[$key] = $englishText;
             }
         }
     }
@@ -720,8 +707,8 @@ try {
         'native_name' => $language['native_name'] ?? '',
         'translations' => $translations,
         'auto_translated' => $autoTranslated,
-        'ai_provider' => $autoTranslated ? (defined('AI_PROVIDER') ? AI_PROVIDER : 'unknown') : null,
-        'note' => $autoTranslated && defined('AI_PROVIDER') ? 'Automatically translated using ' . strtoupper(AI_PROVIDER) . ' AI' : null
+        'translation_provider' => $autoTranslated ? $translationProvider : null,
+        'note' => $autoTranslated ? 'Automatically translated using ArgosTranslate' : null
     ];
     
     echo json_encode($response, JSON_UNESCAPED_UNICODE);

@@ -135,7 +135,7 @@ function getDatabaseConfig() {
 function getApiConfig() {
     return [
         // AI/Analysis (not used for alert translation)
-        'ai_provider' => getSecureConfig('AI_PROVIDER', 'libretranslate'),
+        'ai_provider' => getSecureConfig('AI_PROVIDER', 'argos'),
         'gemini_model' => getSecureConfig('GEMINI_MODEL', 'gemini-2.5-flash'),
         'ai_api_key' => getSecureConfig('AI_API_KEY', ''),
         'ai_api_key_analysis' => getSecureConfig('AI_API_KEY_ANALYSIS', ''),

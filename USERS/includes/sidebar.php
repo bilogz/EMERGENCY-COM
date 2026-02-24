@@ -1076,6 +1076,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 const errMsg = data && data.message ? data.message : ('HTTP ' + res.status);
+                if (res.status !== 404) {
+                    throw new Error(errMsg);
+                }
                 lastError = new Error(errMsg);
             } catch (err) {
                 lastError = err;

@@ -84,7 +84,9 @@ class DashboardService {
         return [
             'stats' => $this->getStatistics(),
             'charts' => $this->getChartData(),
-            'activity' => $this->getRecentActivity()
+            'activity' => $this->getRecentActivity(),
+            'modules' => $this->repository->getModuleStatusOverview(),
+            'generated_at' => date('Y-m-d H:i:s')
         ];
     }
     

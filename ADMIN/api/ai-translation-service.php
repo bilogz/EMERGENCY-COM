@@ -22,7 +22,7 @@ class AITranslationService {
     private $pdo;
     private $apiKey;
     private $apiUrl;
-    private $translationProvider; // 'argos', 'gemini', 'libretranslate', etc.
+    private $translationProvider; // 'argos', 'gemini', etc.
     private $argosTranslateUrl;
     
     public function __construct($pdo) {
@@ -35,7 +35,7 @@ class AITranslationService {
             $this->loadTranslationProvider();
         } catch (Throwable $e) {
             error_log("Failed to load translation provider: " . $e->getMessage());
-            $this->translationProvider = 'gemini'; // Default fallback
+            $this->translationProvider = 'argos'; // Default fallback
         }
         
         // Try to load API key and URL, but don't fail if they can't be loaded
@@ -56,29 +56,44 @@ class AITranslationService {
     }
     
     /**
-     * Load translation provider from config (argos, gemini, libretranslate)
+     * Load translation provider from config (argos, gemini, etc.)
      */
     private function loadTranslationProvider() {
         try {
-            // Try config.env.php first (uses getDatabaseConfig)
+            $provider = null;
+            $argosUrl = null;
+
+            // Try secure config loader first.
             if (file_exists(__DIR__ . '/config.env.php')) {
                 require_once __DIR__ . '/config.env.php';
-                $dbConfig = getDatabaseConfig();
-                $this->translationProvider = $dbConfig['translation_provider'] ?? 'gemini';
-                $this->argosTranslateUrl = $dbConfig['argos_translate_url'] ?? 'http://localhost:5001/translate';
+                if (function_exists('getSecureConfig')) {
+                    $provider = getSecureConfig('TRANSLATION_PROVIDER', getSecureConfig('AI_PROVIDER', 'argos'));
+                    $argosUrl = getSecureConfig('ARGOS_TRANSLATE_URL', 'http://localhost:5001/translate');
+                }
             }
-            // Also check config.local.php for direct config values
-            elseif (file_exists(__DIR__ . '/config.local.php')) {
+
+            // Fallback to config.local.php direct values.
+            if (($provider === null || trim((string)$provider) === '') && file_exists(__DIR__ . '/config.local.php')) {
                 $localConfig = require __DIR__ . '/config.local.php';
-                $this->translationProvider = $localConfig['TRANSLATION_PROVIDER'] ?? 'gemini';
-                $this->argosTranslateUrl = $localConfig['ARGOS_TRANSLATE_URL'] ?? 'http://localhost:5001/translate';
-            } else {
-                $this->translationProvider = 'gemini';
-                $this->argosTranslateUrl = 'http://localhost:5001/translate';
+                if (is_array($localConfig)) {
+                    $provider = $localConfig['TRANSLATION_PROVIDER'] ?? ($localConfig['AI_PROVIDER'] ?? 'argos');
+                    $argosUrl = $localConfig['ARGOS_TRANSLATE_URL'] ?? ($argosUrl ?? 'http://localhost:5001/translate');
+                }
             }
+
+            $provider = strtolower(trim((string)($provider ?? 'argos')));
+            $supportedProviders = ['argos', 'gemini', 'openai', 'claude', 'groq', 'mymemory'];
+            if (!in_array($provider, $supportedProviders, true)) {
+                $provider = 'argos';
+            }
+            if ($provider === '') {
+                $provider = 'argos';
+            }
+            $this->translationProvider = $provider;
+            $this->argosTranslateUrl = trim((string)($argosUrl ?? 'http://localhost:5001/translate'));
         } catch (Throwable $e) {
             error_log("Error loading translation provider config: " . $e->getMessage());
-            $this->translationProvider = 'gemini';
+            $this->translationProvider = 'argos';
             $this->argosTranslateUrl = 'http://localhost:5001/translate';
         }
     }
@@ -169,9 +184,9 @@ class AITranslationService {
         if (isset($this->pdo)) {
             $GLOBALS['pdo'] = $this->pdo;
         }
-        
-        // Check if AI translation is specifically enabled
-        if (function_exists('isAIAnalysisEnabled')) {
+
+        // Check the AI translation toggle only for cloud AI providers.
+        if ($this->translationProvider !== 'argos' && function_exists('isAIAnalysisEnabled')) {
             // Check if translation is specifically enabled
             if (!isAIAnalysisEnabled('translation')) {
                 return false;
@@ -197,11 +212,11 @@ class AITranslationService {
     public function translate($text, $targetLanguage, $sourceLanguage = 'en') {
         if (!$this->isAvailable()) {
             // Check if translation is specifically disabled
-            if (function_exists('isAIAnalysisEnabled')) {
+            if ($this->translationProvider !== 'argos' && function_exists('isAIAnalysisEnabled')) {
                 if (!isAIAnalysisEnabled('translation')) {
                     return [
                         'success' => false,
-                        'error' => 'AI Translation API is currently disabled. Please enable it in General Settings → System Settings → AI Translation API to use translation features.'
+                        'error' => 'AI Translation API is currently disabled. Please enable it in General Settings > System Settings > AI Translation API to use translation features.'
                     ];
                 }
             }
@@ -459,18 +474,19 @@ class AITranslationService {
         // If both translations succeeded, save to database
         if ($titleResult['success'] && $contentResult['success']) {
             try {
+                $method = $this->translationProvider ?: 'argos';
                 $stmt = $this->pdo->prepare("
                     INSERT INTO alert_translations (
                         alert_id, target_language, translated_title, translated_content, 
                         status, translated_at, translated_by_admin_id, translation_method
                     )
-                    VALUES (?, ?, ?, ?, 'active', NOW(), ?, 'ai')
+                    VALUES (?, ?, ?, ?, 'active', NOW(), ?, ?)
                     ON DUPLICATE KEY UPDATE 
                         translated_title = VALUES(translated_title),
                         translated_content = VALUES(translated_content),
                         translated_at = NOW(),
                         translated_by_admin_id = VALUES(translated_by_admin_id),
-                        translation_method = 'ai'
+                        translation_method = VALUES(translation_method)
                 ");
                 
                 $stmt->execute([
@@ -478,7 +494,8 @@ class AITranslationService {
                     $targetLanguage,
                     $results['title_translation'],
                     $results['content_translation'],
-                    $adminId
+                    $adminId,
+                    $method
                 ]);
                 
                 $results['success'] = true;
@@ -489,7 +506,7 @@ class AITranslationService {
                     logAdminActivity(
                         $adminId,
                         'ai_translation',
-                        "AI translated alert #{$alertId} to {$targetLanguage}"
+                        strtoupper($method) . " translated alert #{$alertId} to {$targetLanguage}"
                     );
                 }
                 

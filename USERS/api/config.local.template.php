@@ -62,8 +62,24 @@ return [
     // AI/TRANSLATION API KEYS
     // ===========================================
     
-    // AI Provider: 'libretranslate', 'gemini', 'openai', or 'mymemory'
-    'AI_PROVIDER' => 'libretranslate',
+    // AI Provider: 'argos', 'gemini', 'openai', or 'mymemory'
+    'AI_PROVIDER' => 'argos',
+    // Citizen-side translation provider (UI + alerts): set to 'argos' to use ArgosTranslate.
+    'TRANSLATION_PROVIDER' => 'argos',
+    // Local ArgosTranslate API endpoint (argos-translate service)
+    'ARGOS_TRANSLATE_URL' => 'http://localhost:5001/translate',
+    // Translation cache backend:
+    // - 'mysql'  : existing translation_cache table in MySQL
+    // - 'neon'   : Neon/PostgreSQL only
+    // - 'hybrid' : read Neon first, fallback MySQL, write to both
+    // Leave empty to auto-detect (uses 'hybrid' when NEON_TRANSLATION_CACHE_URL is set).
+    'TRANSLATION_CACHE_DRIVER' => 'mysql',
+    // Full Neon/PostgreSQL URL used for translation cache.
+    // Example: postgresql://user:pass@host/dbname?sslmode=require&channel_binding=require
+    // If empty, the system may fallback to PG_IMG_URL.
+    'NEON_TRANSLATION_CACHE_URL' => '',
+    // Optional table override for Neon cache.
+    'NEON_TRANSLATION_CACHE_TABLE' => 'translation_cache',
     'GEMINI_MODEL' => 'gemini-2.5-flash',
     
     // API Keys (get from respective providers)
@@ -77,10 +93,6 @@ return [
     'CHAT_ASSISTANT_EMERGENCY_CALL_URL' => 'http://localhost/EMERGENCY-COM/USERS/emergency-call.php', // Emergency call URL sent by AI assistant
     'CHAT_ASSISTANT_EMERGENCY_NUMBER' => '122', // Emergency hotline number used by AI assistant (Quezon City)
     'CHAT_ASSISTANT_SYSTEM_PROMPT' => '', // Optional override. Leave blank to use built-in QC emergency prompt.
-    
-    // LibreTranslate (FREE - no API key needed for public servers)
-    'LIBRETRANSLATE_URL' => 'https://libretranslate.com/translate',
-    'LIBRETRANSLATE_API_KEY' => '',     // Leave empty for public servers
     
     // ===========================================
     // GOOGLE OAUTH CREDENTIALS

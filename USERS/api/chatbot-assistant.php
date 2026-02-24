@@ -44,6 +44,63 @@ function chatbot_clean_text(string $text): string {
     return trim((string)$text);
 }
 
+function chatbot_limit_reply_length(string $reply, int $maxChars = 1800): string {
+    $reply = trim($reply);
+    if ($reply === '' || strlen($reply) <= $maxChars) {
+        return $reply;
+    }
+
+    $truncated = trim(substr($reply, 0, $maxChars));
+    $lastSentence = max(
+        strrpos($truncated, '.'),
+        strrpos($truncated, '!'),
+        strrpos($truncated, '?'),
+        strrpos($truncated, "\n")
+    );
+
+    if ($lastSentence !== false && $lastSentence > (int)($maxChars * 0.55)) {
+        $truncated = trim(substr($truncated, 0, $lastSentence + 1));
+    } else {
+        $truncated = rtrim($truncated, " \t\n\r\0\x0B,;:-");
+        $truncated .= '...';
+    }
+
+    return trim($truncated);
+}
+
+function chatbot_finalize_reply(string $reply, string $languageCode, string $followUpHint): string {
+    $reply = chatbot_clean_text($reply);
+    if ($reply === '') {
+        return $reply;
+    }
+
+    $reply = preg_replace('/\s+([,.!?])/u', '$1', $reply);
+    $reply = trim((string)$reply);
+
+    $hasTerminalPunctuation = preg_match('/[.!?]["\')\]]*\s*$/u', $reply) === 1;
+    if ($hasTerminalPunctuation) {
+        return chatbot_clean_text($reply);
+    }
+
+    // Remove obvious dangling one/two-letter tail tokens from cut-off model output.
+    if (preg_match('/\s+[^\s]{1,2}$/u', $reply) === 1) {
+        $reply = preg_replace('/\s+[^\s]{1,2}$/u', '', $reply);
+        $reply = trim((string)$reply);
+    }
+
+    $fallbackEnding = $languageCode === 'fil'
+        ? 'Pakibigay ang eksaktong lokasyon/barangay at mahahalagang detalye para maipasa ko nang tama.'
+        : 'Please share exact location/barangay and key details so I can route this correctly.';
+    $ending = trim($followUpHint) !== '' ? trim($followUpHint) : $fallbackEnding;
+
+    $reply = rtrim($reply, " \t\n\r\0\x0B,;:-");
+    if ($reply === '') {
+        return chatbot_clean_text($ending);
+    }
+
+    return chatbot_clean_text($reply . '. ' . $ending);
+}
+
 function chatbot_normalize_for_match(string $text): string {
     $text = strtolower(trim($text));
     $text = preg_replace('/\s+/', ' ', $text);
@@ -602,6 +659,7 @@ try {
     $defaultSystemPrompt = "You are the Quezon City Emergency Communication AI assistant.\n"
         . "Rules:\n"
         . "- Keep replies practical, short, and clear.\n"
+        . "- Always finish with complete sentences and proper punctuation.\n"
         . "- Match the user's language. If user writes in Filipino/Tagalog, reply in Filipino/Tagalog.\n"
         . "- If the user reports danger, treat it as urgent and prioritize immediate safety.\n"
         . "- If user asks what incident type it is, classify into one category and explain briefly.\n"
@@ -672,6 +730,7 @@ try {
         . "- If user asks for classification (e.g., 'what incident is this'), answer with one category from:\n"
         . "  fire, medical_emergency, crime_violence, road_accident, flood, earthquake, landslide, typhoon_storm, electrical_hazard, missing_person, rescue_request, general_support.\n"
         . "- Follow-up hint for this case: " . $followUpHint . "\n"
+        . "- End your answer with a complete final sentence.\n"
         . "- Keep response under 6 short sentences.\n\n"
         . "Preferred locale: " . $locale . "\n"
         . "Conversation:\n";
@@ -766,9 +825,8 @@ try {
         );
     }
 
-    if (strlen($reply) > 1800) {
-        $reply = trim(substr($reply, 0, 1800));
-    }
+    $reply = chatbot_finalize_reply($reply, $preferredLanguage, $followUpHint);
+    $reply = chatbot_limit_reply_length($reply, 1800);
 
     $replyLanguageDetected = chatbot_detect_language_from_text($reply);
 

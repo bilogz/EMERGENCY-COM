@@ -1005,14 +1005,128 @@ function analyzeWithAI($settings) {
 /**
  * Get weather data from OpenWeatherMap
  */
+function aiWeatherHttpJsonGet($url, $timeoutSeconds = 10) {
+    $response = null;
+    $httpCode = 0;
+    $curlError = '';
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeoutSeconds);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $response = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = (string)curl_error($ch);
+        curl_close($ch);
+    } else {
+        $context = stream_context_create([
+            'http' => ['timeout' => $timeoutSeconds]
+        ]);
+        $response = @file_get_contents($url, false, $context);
+        if (isset($http_response_header[0]) && preg_match('#HTTP/\S+\s+(\d+)#', $http_response_header[0], $matches)) {
+            $httpCode = (int)$matches[1];
+        }
+    }
+
+    if ($response === false || $response === null || $response === '') {
+        return ['success' => false, 'error' => $curlError !== '' ? $curlError : 'No weather provider response'];
+    }
+
+    $decoded = json_decode($response, true);
+    if (!is_array($decoded)) {
+        return ['success' => false, 'error' => 'Invalid weather provider JSON response'];
+    }
+
+    if ($httpCode >= 400) {
+        return ['success' => false, 'error' => "HTTP {$httpCode}: {$response}"];
+    }
+
+    return ['success' => true, 'data' => $decoded];
+}
+
+function aiWeatherCodeToMeta($code, $isDay = 1) {
+    $code = (int)$code;
+    $isDayTime = ((int)$isDay) === 1;
+    $iconDay = $isDayTime ? 'd' : 'n';
+
+    if ($code === 0) return ['main' => 'Clear', 'description' => 'clear sky', 'icon' => '01' . $iconDay];
+    if ($code === 1) return ['main' => 'Clouds', 'description' => 'mainly clear', 'icon' => '02' . $iconDay];
+    if ($code === 2) return ['main' => 'Clouds', 'description' => 'partly cloudy', 'icon' => '03' . $iconDay];
+    if ($code === 3) return ['main' => 'Clouds', 'description' => 'overcast clouds', 'icon' => '04' . $iconDay];
+    if (in_array($code, [45, 48], true)) return ['main' => 'Mist', 'description' => 'fog', 'icon' => '50' . $iconDay];
+    if (in_array($code, [51, 53, 55, 56, 57], true)) return ['main' => 'Drizzle', 'description' => 'drizzle', 'icon' => '09' . $iconDay];
+    if (in_array($code, [61, 63, 65, 66, 67, 80, 81, 82], true)) return ['main' => 'Rain', 'description' => 'rain', 'icon' => '10' . $iconDay];
+    if (in_array($code, [71, 73, 75, 77, 85, 86], true)) return ['main' => 'Snow', 'description' => 'snow', 'icon' => '13' . $iconDay];
+    if (in_array($code, [95, 96, 99], true)) return ['main' => 'Thunderstorm', 'description' => 'thunderstorm', 'icon' => '11' . $iconDay];
+
+    return ['main' => 'Clouds', 'description' => 'cloudy', 'icon' => '03' . $iconDay];
+}
+
+function aiFetchOpenMeteoCurrent($lat, $lon) {
+    $url = "https://api.open-meteo.com/v1/forecast?latitude={$lat}&longitude={$lon}"
+        . "&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,is_day"
+        . "&timezone=Asia%2FManila";
+
+    $result = aiWeatherHttpJsonGet($url, 12);
+    if (empty($result['success'])) {
+        return ['error' => $result['error'] ?? 'Open-Meteo weather request failed'];
+    }
+
+    $current = $result['data']['current'] ?? null;
+    if (!is_array($current)) {
+        return ['error' => 'Open-Meteo response missing current weather'];
+    }
+
+    $code = (int)($current['weather_code'] ?? 0);
+    $meta = aiWeatherCodeToMeta($code, (int)($current['is_day'] ?? 1));
+    $timestamp = isset($current['time']) ? strtotime((string)$current['time']) : time();
+    if ($timestamp === false) {
+        $timestamp = time();
+    }
+
+    return [
+        'coord' => ['lon' => (float)$lon, 'lat' => (float)$lat],
+        'weather' => [[
+            'id' => $code,
+            'main' => $meta['main'],
+            'description' => $meta['description'],
+            'icon' => $meta['icon']
+        ]],
+        'main' => [
+            'temp' => round((float)($current['temperature_2m'] ?? 0), 1),
+            'feels_like' => round((float)($current['apparent_temperature'] ?? ($current['temperature_2m'] ?? 0)), 1),
+            'humidity' => (int)round((float)($current['relative_humidity_2m'] ?? 0))
+        ],
+        'wind' => [
+            'speed' => round(((float)($current['wind_speed_10m'] ?? 0)) / 3.6, 2), // OpenWeather format (m/s)
+            'deg' => (int)round((float)($current['wind_direction_10m'] ?? 0)),
+            'gust' => isset($current['wind_gusts_10m']) ? round(((float)$current['wind_gusts_10m']) / 3.6, 2) : null
+        ],
+        'rain' => ['1h' => round((float)($current['precipitation'] ?? 0), 2)],
+        'dt' => $timestamp,
+        'sys' => ['country' => 'PH']
+    ];
+}
+
+function aiFetchWeatherCurrentForLocation($lat, $lon, $apiKey) {
+    $apiKey = trim((string)$apiKey);
+    if ($apiKey !== '') {
+        $url = "https://api.openweathermap.org/data/2.5/weather?lat={$lat}&lon={$lon}&appid={$apiKey}&units=metric";
+        $result = aiWeatherHttpJsonGet($url, 10);
+        if (!empty($result['success']) && is_array($result['data'])) {
+            return $result['data'];
+        }
+    }
+
+    // Fallback path when key is missing/invalid or OpenWeather is unreachable.
+    return aiFetchOpenMeteoCurrent($lat, $lon);
+}
+
 function getWeatherData() {
     global $pdo;
 
     $apiKey = function_exists('getOpenWeatherApiKey') ? getOpenWeatherApiKey(true) : null;
-
-    if (empty($apiKey)) {
-        return [];
-    }
 
     $weatherData = [];
     $locations = [
@@ -1022,13 +1136,10 @@ function getWeatherData() {
     ];
 
     foreach ($locations as $loc) {
-        $url = "https://api.openweathermap.org/data/2.5/weather?lat={$loc['lat']}&lon={$loc['lon']}&appid={$apiKey}&units=metric";
-        $response = @file_get_contents($url);
-        if ($response) {
-            $data = json_decode($response, true);
-            if ($data) {
-                $weatherData[$loc['name']] = $data;
-            }
+        $data = aiFetchWeatherCurrentForLocation($loc['lat'], $loc['lon'], $apiKey);
+        if (is_array($data) && !isset($data['error'])) {
+            $data['name'] = $loc['name'];
+            $weatherData[$loc['name']] = $data;
         }
     }
 
@@ -1224,64 +1335,56 @@ function mapWarningTypeToCategory($type) {
 }
 
 function checkWeatherConditions($settings) {
-    global $pdo;
     $warnings = [];
 
     $windThreshold = floatval($settings['wind_threshold'] ?? 60); // km/h
     $rainThreshold = floatval($settings['rain_threshold'] ?? 20); // mm/hour
     $warningTypes = explode(',', $settings['warning_types'] ?? '');
 
-    // Get OpenWeatherMap API key (PAGASA alias)
-    $apiKey = function_exists('getOpenWeatherApiKey') ? getOpenWeatherApiKey(true) : null;
-
-    if (empty($apiKey)) {
-        return $warnings; // No API key configured
+    $weatherByLocation = getWeatherData();
+    if (empty($weatherByLocation) || !is_array($weatherByLocation)) {
+        return $warnings;
     }
 
-    // Check Quezon City weather (primary monitoring area)
-    $lat = 14.6488;
-    $lon = 121.0509;
-    $url = "https://api.openweathermap.org/data/2.5/weather?lat={$lat}&lon={$lon}&appid={$apiKey}&units=metric";
+    $weatherData = $weatherByLocation['Quezon City'] ?? reset($weatherByLocation);
+    if (!is_array($weatherData)) {
+        return $warnings;
+    }
 
-    $response = @file_get_contents($url);
-    if ($response) {
-        $weatherData = json_decode($response, true);
+    if (isset($weatherData['wind']['speed'])) {
+        $windSpeedMs = floatval($weatherData['wind']['speed']); // m/s
+        $windSpeedKmh = $windSpeedMs * 3.6; // Convert to km/h
 
-        if (isset($weatherData['wind']['speed'])) {
-            $windSpeedMs = floatval($weatherData['wind']['speed']); // m/s
-            $windSpeedKmh = $windSpeedMs * 3.6; // Convert to km/h
+        if ($windSpeedKmh >= $windThreshold && in_array('typhoon', $warningTypes)) {
+            $warnings[] = [
+                'type' => 'typhoon',
+                'title' => "High Wind Warning - {$windSpeedKmh} km/h",
+                'content' => "Dangerous wind speeds detected in Quezon City ({$windSpeedKmh} km/h). Take precautions and secure loose objects.",
+                'severity' => $windSpeedKmh >= 100 ? 'critical' : ($windSpeedKmh >= 80 ? 'high' : 'medium')
+            ];
+        }
+    }
 
-            if ($windSpeedKmh >= $windThreshold && in_array('typhoon', $warningTypes)) {
+    if (isset($weatherData['rain']['1h'])) {
+        $rainfall = floatval($weatherData['rain']['1h']); // mm in last hour
+
+        if ($rainfall >= $rainThreshold) {
+            if (in_array('flooding', $warningTypes)) {
                 $warnings[] = [
-                    'type' => 'typhoon',
-                    'title' => "High Wind Warning - {$windSpeedKmh} km/h",
-                    'content' => "Dangerous wind speeds detected in Quezon City ({$windSpeedKmh} km/h). Take precautions and secure loose objects.",
-                    'severity' => $windSpeedKmh >= 100 ? 'critical' : ($windSpeedKmh >= 80 ? 'high' : 'medium')
+                    'type' => 'flooding',
+                    'title' => "Heavy Rainfall Alert - {$rainfall}mm/hour",
+                    'content' => "Heavy rainfall detected in Quezon City ({$rainfall}mm/hour). Risk of flooding in low-lying areas. Avoid flood-prone areas.",
+                    'severity' => $rainfall >= 50 ? 'critical' : ($rainfall >= 30 ? 'high' : 'medium')
                 ];
             }
-        }
 
-        if (isset($weatherData['rain']['1h'])) {
-            $rainfall = floatval($weatherData['rain']['1h']); // mm in last hour
-
-            if ($rainfall >= $rainThreshold) {
-                if (in_array('flooding', $warningTypes)) {
-                    $warnings[] = [
-                        'type' => 'flooding',
-                        'title' => "Heavy Rainfall Alert - {$rainfall}mm/hour",
-                        'content' => "Heavy rainfall detected in Quezon City ({$rainfall}mm/hour). Risk of flooding in low-lying areas. Avoid flood-prone areas.",
-                        'severity' => $rainfall >= 50 ? 'critical' : ($rainfall >= 30 ? 'high' : 'medium')
-                    ];
-                }
-
-                if (in_array('landslide', $warningTypes) && $rainfall >= 30) {
-                    $warnings[] = [
-                        'type' => 'landslide',
-                        'title' => "Landslide Risk Alert",
-                        'content' => "Heavy rainfall ({$rainfall}mm/hour) increases landslide risk in hilly areas of Quezon City. Residents near slopes should be alert.",
-                        'severity' => $rainfall >= 50 ? 'critical' : 'high'
-                    ];
-                }
+            if (in_array('landslide', $warningTypes) && $rainfall >= 30) {
+                $warnings[] = [
+                    'type' => 'landslide',
+                    'title' => "Landslide Risk Alert",
+                    'content' => "Heavy rainfall ({$rainfall}mm/hour) increases landslide risk in hilly areas of Quezon City. Residents near slopes should be alert.",
+                    'severity' => $rainfall >= 50 ? 'critical' : 'high'
+                ];
             }
         }
     }
@@ -1354,7 +1457,7 @@ function sendWeatherAnalysisAuto() {
 
     if (empty($weatherData) || !is_array($weatherData)) {
         http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Set OPENWEATHER_API_KEY (or PAGASA_API_KEY) in ADMIN/api/config.local.php or .env.']);
+        echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data from available providers (OpenWeather/Open-Meteo). Check internet/API configuration and try again.']);
         return;
     }
 
@@ -1676,7 +1779,7 @@ function getWeatherAnalysis() {
 
         if (empty($weatherData) || !is_array($weatherData)) {
             http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data. Set OPENWEATHER_API_KEY (or PAGASA_API_KEY) in ADMIN/api/config.local.php or .env.']);
+            echo json_encode(['success' => false, 'message' => 'Unable to fetch weather data from available providers (OpenWeather/Open-Meteo). Check internet/API configuration and try again.']);
             return;
         }
 
@@ -1942,19 +2045,15 @@ function checkEarthquakeConditions($settings) {
 }
 
 function checkFloodingLandslideRisks($settings) {
-    global $pdo;
     $warnings = [];
     $monitoredAreas = explode("\n", $settings['monitored_areas'] ?? '');
     $warningTypes = explode(',', $settings['warning_types'] ?? '');
 
     $rainThreshold = floatval($settings['rain_threshold'] ?? 20);
 
-    // Get OpenWeatherMap API key (PAGASA alias)
+    // OpenWeather key is optional because aiFetchWeatherCurrentForLocation includes no-key fallback.
     $apiKey = function_exists('getOpenWeatherApiKey') ? getOpenWeatherApiKey(true) : null;
-
-    if (empty($apiKey)) {
-        return $warnings;
-    }
+    $weatherByLocation = getWeatherData();
 
     // Area coordinates (simplified - in production, use geocoding)
     $areaCoords = [
@@ -1967,34 +2066,34 @@ function checkFloodingLandslideRisks($settings) {
         $area = trim($area);
         if (empty($area) || !isset($areaCoords[$area])) continue;
 
-        $coords = $areaCoords[$area];
-        $url = "https://api.openweathermap.org/data/2.5/weather?lat={$coords['lat']}&lon={$coords['lon']}&appid={$apiKey}&units=metric";
+        $weatherData = (is_array($weatherByLocation) && isset($weatherByLocation[$area]) && is_array($weatherByLocation[$area]))
+            ? $weatherByLocation[$area]
+            : aiFetchWeatherCurrentForLocation($areaCoords[$area]['lat'], $areaCoords[$area]['lon'], $apiKey);
 
-        $response = @file_get_contents($url);
-        if ($response) {
-            $weatherData = json_decode($response, true);
+        if (!is_array($weatherData) || isset($weatherData['error'])) {
+            continue;
+        }
 
-            if (isset($weatherData['rain']['1h'])) {
-                $rainfall = floatval($weatherData['rain']['1h']);
+        if (isset($weatherData['rain']['1h'])) {
+            $rainfall = floatval($weatherData['rain']['1h']);
 
-                if ($rainfall >= $rainThreshold) {
-                    if (in_array('flooding', $warningTypes)) {
-                        $warnings[] = [
-                            'type' => 'flooding',
-                            'title' => "Flooding Risk Alert - {$area}",
-                            'content' => "Heavy rainfall detected in {$area} ({$rainfall}mm/hour). Risk of flooding in low-lying areas. Residents should prepare for possible evacuation.",
-                            'severity' => $rainfall >= 50 ? 'critical' : ($rainfall >= 30 ? 'high' : 'medium')
-                        ];
-                    }
+            if ($rainfall >= $rainThreshold) {
+                if (in_array('flooding', $warningTypes)) {
+                    $warnings[] = [
+                        'type' => 'flooding',
+                        'title' => "Flooding Risk Alert - {$area}",
+                        'content' => "Heavy rainfall detected in {$area} ({$rainfall}mm/hour). Risk of flooding in low-lying areas. Residents should prepare for possible evacuation.",
+                        'severity' => $rainfall >= 50 ? 'critical' : ($rainfall >= 30 ? 'high' : 'medium')
+                    ];
+                }
 
-                    if (in_array('landslide', $warningTypes) && $rainfall >= 30) {
-                        $warnings[] = [
-                            'type' => 'landslide',
-                            'title' => "Landslide Risk Alert - {$area}",
-                            'content' => "Heavy rainfall ({$rainfall}mm/hour) increases landslide risk in hilly areas of {$area}. Residents near slopes and embankments should be alert and consider evacuation if necessary.",
-                            'severity' => $rainfall >= 50 ? 'critical' : 'high'
-                        ];
-                    }
+                if (in_array('landslide', $warningTypes) && $rainfall >= 30) {
+                    $warnings[] = [
+                        'type' => 'landslide',
+                        'title' => "Landslide Risk Alert - {$area}",
+                        'content' => "Heavy rainfall ({$rainfall}mm/hour) increases landslide risk in hilly areas of {$area}. Residents near slopes and embankments should be alert and consider evacuation if necessary.",
+                        'severity' => $rainfall >= 50 ? 'critical' : 'high'
+                    ];
                 }
             }
         }

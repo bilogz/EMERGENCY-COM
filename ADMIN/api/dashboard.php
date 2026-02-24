@@ -16,10 +16,12 @@ try {
         'success' => true,
         'stats' => $dashboardData['stats'],
         'charts' => $dashboardData['charts'],
-        'activity' => $dashboardData['activity']
+        'activity' => $dashboardData['activity'],
+        'modules' => $dashboardData['modules'] ?? [],
+        'generated_at' => $dashboardData['generated_at'] ?? null
     ]);
     
-} catch (PDOException $e) {
+} catch (Throwable $e) {
     error_log("Dashboard API Error: " . $e->getMessage());
     echo json_encode([
         'success' => false,
@@ -43,7 +45,9 @@ try {
                 'values' => [0, 0, 0]
             ]
         ],
-        'activity' => []
+        'activity' => [],
+        'modules' => [],
+        'generated_at' => null
     ]);
 }
 ?>

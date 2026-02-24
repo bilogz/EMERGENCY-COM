@@ -1,8 +1,8 @@
 <?php
 /**
  * Translate Alert Text API
- * Client-side translation endpoint for alert card content
- * Uses Argos Translate (offline) or LibreTranslate API (fallback)
+ * Client-side translation endpoint for alert card content.
+ * Citizen-side translation is ArgosTranslate-only.
  */
 
 // Prevent any output before headers
@@ -33,6 +33,20 @@ register_shutdown_function(function() {
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate, max-age=0');
 
+// Translation cache backends (MySQL/Neon)
+$pdo = $pdo ?? null;
+try {
+    $dbConnectPath = __DIR__ . '/../../ADMIN/api/db_connect.php';
+    if (file_exists($dbConnectPath)) {
+        require_once $dbConnectPath;
+    }
+} catch (Throwable $e) {
+    // Translation must still work even if DB cache is unavailable.
+    $pdo = null;
+    error_log('Translate Alert Text API cache DB bootstrap failed: ' . $e->getMessage());
+}
+require_once __DIR__ . '/translation-cache-store.php';
+
 // Load translation service configuration
 function getTranslationConfig() {
     // Try ADMIN/api/config.local.php first
@@ -60,19 +74,28 @@ function getTranslationConfig() {
     // Argos Translate configuration (preferred - offline)
     $argosTranslateUrl = $config['ARGOS_TRANSLATE_URL'] ?? 'http://localhost:5001/translate';
     
-    // LibreTranslate configuration (fallback)
-    $libreTranslateUrl = $config['LIBRETRANSLATE_URL'] ?? 'http://localhost:5000/translate';
-    $libreTranslateApiKey = $config['LIBRETRANSLATE_API_KEY'] ?? '';
-    
-    // Translation provider preference
-    $translationProvider = $config['TRANSLATION_PROVIDER'] ?? 'argos'; // 'argos' or 'libretranslate'
+    // Translation provider preference (Argos-only for citizen-side translation)
+    $translationProvider = strtolower(trim((string)($config['TRANSLATION_PROVIDER'] ?? 'argos')));
+    if ($translationProvider !== 'argos') {
+        $translationProvider = 'argos';
+    }
     
     return [
         'provider' => $translationProvider,
-        'argos_url' => $argosTranslateUrl,
-        'libretranslate_url' => $libreTranslateUrl,
-        'libretranslate_api_key' => $libreTranslateApiKey
+        'argos_url' => $argosTranslateUrl
     ];
+}
+
+/**
+ * Normalize language code for Argos service.
+ * Argos commonly uses "tl" for Filipino/Tagalog.
+ */
+function mapArgosLanguageCode($lang) {
+    $code = strtolower(trim((string)$lang));
+    if ($code === 'fil' || $code === 'tl') {
+        return 'tl';
+    }
+    return $code;
 }
 
 /**
@@ -96,10 +119,13 @@ function translateWithArgos($text, $targetLang, $sourceLang = 'en') {
     $apiUrl = $config['argos_url'];
     
     // Prepare request payload
+    $argosSource = mapArgosLanguageCode($sourceLang);
+    $argosTarget = mapArgosLanguageCode($targetLang);
+
     $data = [
         'q' => $text,
-        'source' => $sourceLang,
-        'target' => $targetLang
+        'source' => $argosSource,
+        'target' => $argosTarget
     ];
     
     // Initialize cURL
@@ -173,8 +199,8 @@ function translateWithArgos($text, $targetLang, $sourceLang = 'en') {
         ];
     }
     
-    // Check for success and translated text
-    if (isset($result['success']) && $result['success'] && isset($result['translatedText'])) {
+    // Argos standard response shape: {"translatedText":"..."}
+    if (isset($result['translatedText']) && trim((string)$result['translatedText']) !== '') {
         return [
             'success' => true,
             'translated_text' => $result['translatedText'],
@@ -202,165 +228,24 @@ function translateWithArgos($text, $targetLang, $sourceLang = 'en') {
 }
 
 /**
- * Translate text using LibreTranslate API (fallback)
- * @param string $text Text to translate
- * @param string $targetLang Target language code (e.g., 'es', 'fr')
- * @param string $sourceLang Source language code (default: 'en')
- * @return array ['success' => bool, 'translated_text' => string|null, 'error' => string|null]
- */
-function translateWithLibreTranslate($text, $targetLang, $sourceLang = 'en') {
-    if (empty($text)) {
-        return ['success' => true, 'translated_text' => $text, 'error' => null];
-    }
-    
-    // Don't translate if source and target are the same
-    if ($sourceLang === $targetLang) {
-        return ['success' => true, 'translated_text' => $text, 'error' => null];
-    }
-    
-    $config = getTranslationConfig();
-    $apiUrl = $config['libretranslate_url'];
-    $apiKey = $config['libretranslate_api_key'];
-    
-    // Prepare request payload
-    $data = [
-        'q' => $text,
-        'source' => $sourceLang,
-        'target' => $targetLang,
-        'format' => 'text'
-    ];
-    
-    // Add API key if provided
-    if (!empty($apiKey)) {
-        $data['api_key'] = $apiKey;
-    }
-    
-    // Initialize cURL
-    $ch = curl_init($apiUrl);
-    
-    // Set cURL options
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($data),
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-        ],
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_SSL_VERIFYHOST => 2
-    ]);
-    
-    // Execute request
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    $curlErrno = curl_errno($ch);
-    curl_close($ch);
-    
-    // Handle cURL errors
-    if ($curlError) {
-        error_log("LibreTranslate API cURL error: {$curlError} (code: {$curlErrno})");
-        return [
-            'success' => false,
-            'translated_text' => null,
-            'error' => 'Connection error: ' . $curlError
-        ];
-    }
-    
-    // Handle HTTP errors
-    if ($httpCode !== 200) {
-        $errorMsg = "HTTP {$httpCode}";
-        if ($response) {
-            $errorData = json_decode($response, true);
-            if (isset($errorData['error'])) {
-                $errorMsg = $errorData['error'];
-            }
-        }
-        error_log("LibreTranslate API HTTP error: {$errorMsg} (code: {$httpCode})");
-        return [
-            'success' => false,
-            'translated_text' => null,
-            'error' => $errorMsg
-        ];
-    }
-    
-    // Parse response
-    if (!$response) {
-        return [
-            'success' => false,
-            'translated_text' => null,
-            'error' => 'Empty response from translation service'
-        ];
-    }
-    
-    $result = json_decode($response, true);
-    
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        error_log("LibreTranslate API JSON decode error: " . json_last_error_msg());
-        return [
-            'success' => false,
-            'translated_text' => null,
-            'error' => 'Invalid JSON response from translation service'
-        ];
-    }
-    
-    // Check for translated text
-    if (isset($result['translatedText'])) {
-        return [
-            'success' => true,
-            'translated_text' => $result['translatedText'],
-            'error' => null
-        ];
-    }
-    
-    // If no translatedText in response, check for error
-    if (isset($result['error'])) {
-        error_log("LibreTranslate API error: " . $result['error']);
-        return [
-            'success' => false,
-            'translated_text' => null,
-            'error' => $result['error']
-        ];
-    }
-    
-    // Unknown response format
-    error_log("LibreTranslate API unexpected response format: " . substr($response, 0, 200));
-    return [
-        'success' => false,
-        'translated_text' => null,
-        'error' => 'Unexpected response format from translation service'
-    ];
-}
-
-/**
- * Translate text using configured translation service
+ * Translate text using ArgosTranslate service
  * @param string $text Text to translate
  * @param string $targetLang Target language code
  * @param string $sourceLang Source language code (default: 'en')
  * @return array ['success' => bool, 'translated_text' => string|null, 'error' => string|null]
  */
 function translateText($text, $targetLang, $sourceLang = 'en') {
-    $config = getTranslationConfig();
-    $provider = $config['provider'];
-    
-    // Try Argos Translate first (preferred)
-    if ($provider === 'argos' || $provider === 'auto') {
-        $result = translateWithArgos($text, $targetLang, $sourceLang);
-        if ($result['success']) {
-            return $result;
-        }
-        // If Argos fails and provider is 'auto', fallback to LibreTranslate
-        if ($provider === 'auto') {
-            error_log("Argos Translate failed, falling back to LibreTranslate");
-            return translateWithLibreTranslate($text, $targetLang, $sourceLang);
-        }
+    $result = translateWithArgos($text, $targetLang, $sourceLang);
+    if ($result['success']) {
         return $result;
     }
-    
-    // Use LibreTranslate
-    return translateWithLibreTranslate($text, $targetLang, $sourceLang);
+
+    error_log("ArgosTranslate unavailable for alert text translation: " . ($result['error'] ?? 'unknown error'));
+    return [
+        'success' => false,
+        'translated_text' => $text,
+        'error' => $result['error'] ?? 'ArgosTranslate unavailable'
+    ];
 }
 
 // Clean output buffer before processing
@@ -429,30 +314,43 @@ try {
         exit;
     }
     
-    if (!isset($input['texts']) || !is_array($input['texts'])) {
+    $targetLanguage = strtolower(trim((string)($input['target_language'] ?? ($input['target_lang'] ?? 'en'))));
+    $sourceLanguage = strtolower(trim((string)($input['source_language'] ?? ($input['source_lang'] ?? 'en'))));
+
+    // Accept both payload formats:
+    // 1) { texts: { key: "text" }, target_language, source_language }
+    // 2) { text: "text", target_lang, source_lang }
+    $singleResponseKey = null;
+    if (isset($input['texts']) && is_array($input['texts'])) {
+        $texts = $input['texts'];
+    } elseif (isset($input['text']) && (is_string($input['text']) || is_numeric($input['text']))) {
+        $texts = ['text' => (string)$input['text']];
+        $singleResponseKey = 'text';
+    } else {
         if (ob_get_level()) {
             ob_clean();
         }
         http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'Invalid request: texts array required']);
+        echo json_encode(['success' => false, 'message' => 'Invalid request: provide texts[] or text']);
         if (ob_get_level()) {
             ob_end_flush();
         }
         exit;
     }
     
-    $targetLanguage = $input['target_language'] ?? 'en';
-    $sourceLanguage = $input['source_language'] ?? 'en';
-    
     // Return original texts if target is English
     if ($targetLanguage === 'en' || empty($targetLanguage)) {
         if (ob_get_level()) {
             ob_clean();
         }
-        echo json_encode([
+        $response = [
             'success' => true,
-            'translations' => $input['texts']
-        ]);
+            'translations' => $texts
+        ];
+        if ($singleResponseKey !== null) {
+            $response['translated_text'] = (string)($texts[$singleResponseKey] ?? '');
+        }
+        echo json_encode($response);
         if (ob_get_level()) {
             ob_end_flush();
         }
@@ -463,31 +361,50 @@ try {
     $translations = [];
     $errors = [];
     $allSuccessful = true;
+    $cacheDays = translation_cache_days();
+    $translationMethod = 'argos';
     
-    foreach ($input['texts'] as $key => $text) {
+    foreach ($texts as $key => $text) {
         if (empty($text)) {
             $translations[$key] = $text;
             continue;
         }
-        
-        $result = translateText($text, $targetLanguage, $sourceLanguage);
+
+        $originalText = (string)$text;
+        $cacheKey = md5($originalText . $sourceLanguage . $targetLanguage);
+        $cachedText = translation_cache_read($cacheKey, $cacheDays, $pdo ?? null);
+        if ($cachedText !== null && trim((string)$cachedText) !== '') {
+            $translations[$key] = $cachedText;
+            continue;
+        }
+
+        $result = translateText($originalText, $targetLanguage, $sourceLanguage);
         
         if ($result['success'] && isset($result['translated_text'])) {
             $translatedText = trim($result['translated_text']);
             // Check if translation actually changed the text (ignore if same as original)
-            if ($translatedText !== trim($text) && !empty($translatedText)) {
+            if ($translatedText !== trim($originalText) && !empty($translatedText)) {
                 $translations[$key] = $translatedText;
+                translation_cache_write(
+                    $cacheKey,
+                    $originalText,
+                    $sourceLanguage,
+                    $targetLanguage,
+                    $translatedText,
+                    $translationMethod,
+                    $pdo ?? null
+                );
             } else {
                 // Translation returned same text or empty - treat as failure
-                $translations[$key] = $text;
+                $translations[$key] = $originalText;
                 $errorMsg = 'Translation returned same text or empty result';
                 $errors[$key] = $errorMsg;
                 $allSuccessful = false;
-                error_log("Translation failed for key '{$key}': {$errorMsg} (original: '{$text}', returned: '{$translatedText}')");
+                error_log("Translation failed for key '{$key}': {$errorMsg} (original: '{$originalText}', returned: '{$translatedText}')");
             }
         } else {
             // If translation fails, use original text
-            $translations[$key] = $text;
+            $translations[$key] = $originalText;
             $errorMsg = $result['error'] ?? 'Unknown error';
             $errors[$key] = $errorMsg;
             $allSuccessful = false;
@@ -505,6 +422,10 @@ try {
         'translations' => $translations,
         'target_language' => $targetLanguage
     ];
+
+    if ($singleResponseKey !== null) {
+        $response['translated_text'] = (string)($translations[$singleResponseKey] ?? '');
+    }
     
     // Include errors if any translations failed
     if (!empty($errors)) {

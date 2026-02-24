@@ -349,7 +349,7 @@ $current = 'alerts.php';
                 // 2. Logged-in user's DB preference (persistent preference)
                 // 3. Browser language detection (for guests)
                 // 4. Default English
-                let currentLanguage = localStorage.getItem('preferredLanguage') || 'en';
+                let currentLanguage = autoDetectDeviceLanguage();
                 
                 // Always send language parameter so backend knows the UI selector value
                 // Backend will use DB preference first for logged-in users, then this value
@@ -612,7 +612,7 @@ $current = 'alerts.php';
          * @param {Object} alert - The alert data object
          */
         async function translateAlertCard(card, alert) {
-            const currentLang = localStorage.getItem('preferredLanguage') || 'en';
+            const currentLang = autoDetectDeviceLanguage();
             
             // Skip if English or if translation already applied by backend
             if (currentLang === 'en' || !currentLang) {
@@ -1069,7 +1069,7 @@ $current = 'alerts.php';
         }
         
         function getNotificationText(count) {
-            const lang = localStorage.getItem('preferredLanguage') || 'en';
+            const lang = autoDetectDeviceLanguage();
             const translations = {
                 'en': {
                     alert: count === 1 ? 'New Alert' : 'New Alerts',
@@ -1137,7 +1137,7 @@ $current = 'alerts.php';
                 showAlertModal(alert);
             } else {
                 // If not in cache, fetch from API
-                const currentLanguage = localStorage.getItem('preferredLanguage') || 'en';
+                const currentLanguage = autoDetectDeviceLanguage();
                 let url = `${API_BASE}get-alerts.php?status=active&limit=50`;
                 if (currentLanguage && currentLanguage !== 'en') {
                     url += `&lang=${encodeURIComponent(currentLanguage)}`;

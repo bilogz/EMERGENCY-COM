@@ -51,7 +51,7 @@ window.LanguageSelectorModal = class LanguageSelectorModal {
             
             if (data.success && data.languages) {
                 // Update languages from admin-managed database
-                this.languages = data.languages;
+                this.languages = data.languages.map((lang) => this.normalizeLanguage(lang));
                 this.filteredLanguages = [...this.languages];
                 
                 // Trigger update event
@@ -166,6 +166,9 @@ window.LanguageSelectorModal = class LanguageSelectorModal {
         return this.filteredLanguages.map(lang => {
             const isSelected = lang.language_code === selectedLangCode;
             const isAISupported = lang.is_ai_supported ? '<span class="ai-badge" title="AI Translation Available"><i class="fas fa-robot"></i></span>' : '';
+            const flagMarkup = lang.flag_emoji
+                ? lang.flag_emoji
+                : '<i class="fas fa-globe" aria-hidden="true"></i>';
             
             return `
                 <div class="language-item ${isSelected ? 'selected' : ''}" 
@@ -173,7 +176,7 @@ window.LanguageSelectorModal = class LanguageSelectorModal {
                      role="button"
                      tabindex="0">
                     <div class="language-item-content">
-                        <div class="language-flag">${lang.flag_emoji || '🌐'}</div>
+                        <div class="language-flag">${flagMarkup}</div>
                         <div class="language-info">
                             <div class="language-name">${lang.language_name}</div>
                             ${lang.native_name && lang.native_name !== lang.language_name ? 
@@ -482,10 +485,58 @@ window.LanguageSelectorModal = class LanguageSelectorModal {
     
     getFallbackLanguages() {
         return [
-            {language_code: 'en', language_name: 'English', native_name: 'English', flag_emoji: '🇺🇸', is_active: 1, is_ai_supported: 1},
-            {language_code: 'fil', language_name: 'Filipino', native_name: 'Filipino', flag_emoji: '🇵🇭', is_active: 1, is_ai_supported: 1},
-            {language_code: 'es', language_name: 'Spanish', native_name: 'Español', flag_emoji: '🇪🇸', is_active: 1, is_ai_supported: 1}
+            {language_code: 'en', language_name: 'English', native_name: 'English', flag_emoji: '', is_active: 1, is_ai_supported: 1},
+            {language_code: 'fil', language_name: 'Filipino', native_name: 'Filipino', flag_emoji: '', is_active: 1, is_ai_supported: 1},
+            {language_code: 'es', language_name: 'Spanish', native_name: 'Spanish', flag_emoji: '', is_active: 1, is_ai_supported: 1}
         ];
+    }
+    
+    isLikelyMojibake(value) {
+        if (!value) return false;
+        return /(?:\u00C3|\u00C2|\u00E2|\u00D0|\u00D1|\u00F0\u009F)/.test(String(value));
+    }
+    
+    normalizeLanguage(language) {
+        const normalized = {...language};
+        const code = String(normalized.language_code || 'en').toLowerCase().trim();
+        const fallbackNames = {
+            en: 'English',
+            es: 'Spanish',
+            zh: 'Chinese',
+            hi: 'Hindi',
+            ar: 'Arabic',
+            pt: 'Portuguese',
+            ru: 'Russian',
+            ja: 'Japanese',
+            de: 'German',
+            fr: 'French',
+            fil: 'Filipino',
+            tl: 'Tagalog',
+            ceb: 'Cebuano',
+            ilo: 'Ilocano',
+            war: 'Waray',
+            id: 'Indonesian',
+            ko: 'Korean'
+        };
+        let languageName = String(normalized.language_name || fallbackNames[code] || code.toUpperCase()).trim();
+        let nativeName = String(normalized.native_name || '').trim();
+        let flagEmoji = String(normalized.flag_emoji || '').trim();
+        
+        if (!languageName || this.isLikelyMojibake(languageName)) {
+            languageName = fallbackNames[code] || code.toUpperCase();
+        }
+        if (!nativeName || this.isLikelyMojibake(nativeName)) {
+            nativeName = languageName;
+        }
+        if (this.isLikelyMojibake(flagEmoji)) {
+            flagEmoji = '';
+        }
+        
+        normalized.language_code = code;
+        normalized.language_name = languageName;
+        normalized.native_name = nativeName;
+        normalized.flag_emoji = flagEmoji;
+        return normalized;
     }
     
     /**
@@ -868,4 +919,5 @@ if (typeof window.languageSelectorModal === 'undefined') {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = window.LanguageSelectorModal;
 }
+
 

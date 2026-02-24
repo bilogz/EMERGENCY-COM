@@ -177,62 +177,246 @@ $philippinesCities = [
     ['name' => 'Zamboanga City', 'lat' => 6.9214, 'lon' => 122.0790]
 ];
 
-function fetchWeatherData($lat, $lon, $apiKey) {
-    if (isPlaceholderWeatherKey($apiKey)) {
-        return ['error' => 'OpenWeather API key is not configured. Set OPENWEATHER_API_KEY in ADMIN/api/config.local.php (or .env), then reload.'];
+function weatherHttpJsonGet($url, $timeoutSeconds = 10) {
+    $response = null;
+    $httpCode = 0;
+    $error = '';
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeoutSeconds);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $response = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = (string)curl_error($ch);
+        curl_close($ch);
+    } else {
+        $context = stream_context_create([
+            'http' => ['timeout' => $timeoutSeconds]
+        ]);
+        $response = @file_get_contents($url, false, $context);
+        if (isset($http_response_header[0]) && preg_match('#HTTP/\S+\s+(\d+)#', $http_response_header[0], $matches)) {
+            $httpCode = (int)$matches[1];
+        }
     }
 
-    $url = "https://api.openweathermap.org/data/2.5/weather?lat={$lat}&lon={$lon}&appid={$apiKey}&units=metric";
-    
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    curl_close($ch);
-    
-    if ($error) {
-        return ['error' => $error];
+    if ($response === false || $response === null || $response === '') {
+        return ['success' => false, 'error' => $error !== '' ? $error : 'No response from weather provider'];
     }
-    
-    if ($httpCode !== 200) {
-        return ['error' => "HTTP {$httpCode}: " . $response];
+
+    $decoded = json_decode($response, true);
+    if (!is_array($decoded)) {
+        return ['success' => false, 'error' => 'Invalid JSON response from weather provider'];
     }
-    
-    return json_decode($response, true);
+
+    if ($httpCode >= 400) {
+        return ['success' => false, 'error' => "HTTP {$httpCode}: {$response}"];
+    }
+
+    return ['success' => true, 'data' => $decoded];
+}
+
+function weatherCodeToOpenWeatherMeta($code, $isDay = 1) {
+    $code = (int)$code;
+    $isDayTime = ((int)$isDay) === 1;
+    $iconDay = $isDayTime ? 'd' : 'n';
+
+    if ($code === 0) {
+        return ['main' => 'Clear', 'description' => 'clear sky', 'icon' => '01' . $iconDay];
+    }
+    if ($code === 1) {
+        return ['main' => 'Clouds', 'description' => 'mainly clear', 'icon' => '02' . $iconDay];
+    }
+    if ($code === 2) {
+        return ['main' => 'Clouds', 'description' => 'partly cloudy', 'icon' => '03' . $iconDay];
+    }
+    if ($code === 3) {
+        return ['main' => 'Clouds', 'description' => 'overcast clouds', 'icon' => '04' . $iconDay];
+    }
+    if (in_array($code, [45, 48], true)) {
+        return ['main' => 'Mist', 'description' => 'fog', 'icon' => '50' . $iconDay];
+    }
+    if (in_array($code, [51, 53, 55, 56, 57], true)) {
+        return ['main' => 'Drizzle', 'description' => 'drizzle', 'icon' => '09' . $iconDay];
+    }
+    if (in_array($code, [61, 63, 65, 66, 67, 80, 81, 82], true)) {
+        return ['main' => 'Rain', 'description' => 'rain', 'icon' => '10' . $iconDay];
+    }
+    if (in_array($code, [71, 73, 75, 77, 85, 86], true)) {
+        return ['main' => 'Snow', 'description' => 'snow', 'icon' => '13' . $iconDay];
+    }
+    if (in_array($code, [95, 96, 99], true)) {
+        return ['main' => 'Thunderstorm', 'description' => 'thunderstorm', 'icon' => '11' . $iconDay];
+    }
+
+    return ['main' => 'Clouds', 'description' => 'cloudy', 'icon' => '03' . $iconDay];
+}
+
+function resolveWeatherLocationName($lat, $lon) {
+    global $philippinesCities;
+
+    $bestName = 'Quezon City';
+    $bestDistance = PHP_FLOAT_MAX;
+    foreach ($philippinesCities as $city) {
+        $distance = (($lat - $city['lat']) ** 2) + (($lon - $city['lon']) ** 2);
+        if ($distance < $bestDistance) {
+            $bestDistance = $distance;
+            $bestName = $city['name'];
+        }
+    }
+    return $bestName;
+}
+
+function fetchOpenMeteoCurrentData($lat, $lon) {
+    $url = "https://api.open-meteo.com/v1/forecast?latitude={$lat}&longitude={$lon}"
+        . "&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,is_day"
+        . "&timezone=Asia%2FManila";
+
+    $result = weatherHttpJsonGet($url, 12);
+    if (empty($result['success'])) {
+        return ['error' => $result['error'] ?? 'Open-Meteo current weather request failed'];
+    }
+
+    $current = $result['data']['current'] ?? null;
+    if (!is_array($current)) {
+        return ['error' => 'Open-Meteo current weather payload is missing current data'];
+    }
+
+    $code = (int)($current['weather_code'] ?? 0);
+    $meta = weatherCodeToOpenWeatherMeta($code, (int)($current['is_day'] ?? 1));
+    $timestamp = isset($current['time']) ? strtotime((string)$current['time']) : time();
+    if ($timestamp === false) {
+        $timestamp = time();
+    }
+
+    $locationName = resolveWeatherLocationName($lat, $lon);
+
+    return [
+        'coord' => ['lon' => (float)$lon, 'lat' => (float)$lat],
+        'weather' => [[
+            'id' => $code,
+            'main' => $meta['main'],
+            'description' => $meta['description'],
+            'icon' => $meta['icon']
+        ]],
+        'base' => 'open-meteo',
+        'main' => [
+            'temp' => round((float)($current['temperature_2m'] ?? 0), 1),
+            'feels_like' => round((float)($current['apparent_temperature'] ?? ($current['temperature_2m'] ?? 0)), 1),
+            'temp_min' => round((float)($current['temperature_2m'] ?? 0), 1),
+            'temp_max' => round((float)($current['temperature_2m'] ?? 0), 1),
+            'pressure' => null,
+            'humidity' => (int)round((float)($current['relative_humidity_2m'] ?? 0))
+        ],
+        'wind' => [
+            'speed' => round(((float)($current['wind_speed_10m'] ?? 0)) / 3.6, 2), // OpenWeather format (m/s)
+            'deg' => (int)round((float)($current['wind_direction_10m'] ?? 0)),
+            'gust' => isset($current['wind_gusts_10m']) ? round(((float)$current['wind_gusts_10m']) / 3.6, 2) : null
+        ],
+        'rain' => [
+            '1h' => round((float)($current['precipitation'] ?? 0), 2)
+        ],
+        'clouds' => ['all' => null],
+        'dt' => $timestamp,
+        'sys' => ['country' => 'PH'],
+        'name' => $locationName
+    ];
+}
+
+function fetchOpenMeteoForecastData($lat, $lon) {
+    $url = "https://api.open-meteo.com/v1/forecast?latitude={$lat}&longitude={$lon}"
+        . "&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,is_day"
+        . "&forecast_days=7&timezone=Asia%2FManila";
+
+    $result = weatherHttpJsonGet($url, 12);
+    if (empty($result['success'])) {
+        return ['error' => $result['error'] ?? 'Open-Meteo forecast request failed'];
+    }
+
+    $hourly = $result['data']['hourly'] ?? null;
+    if (!is_array($hourly) || empty($hourly['time']) || !is_array($hourly['time'])) {
+        return ['error' => 'Open-Meteo forecast payload is missing hourly time data'];
+    }
+
+    $times = $hourly['time'];
+    $list = [];
+    $count = count($times);
+
+    // Keep 3-hour cadence to match OpenWeather forecast structure.
+    for ($i = 0; $i < $count; $i += 3) {
+        $timestamp = strtotime((string)$times[$i]);
+        if ($timestamp === false) {
+            continue;
+        }
+
+        $code = (int)($hourly['weather_code'][$i] ?? 0);
+        $meta = weatherCodeToOpenWeatherMeta($code, (int)($hourly['is_day'][$i] ?? 1));
+
+        $list[] = [
+            'dt' => $timestamp,
+            'main' => [
+                'temp' => round((float)($hourly['temperature_2m'][$i] ?? 0), 1),
+                'feels_like' => round((float)($hourly['apparent_temperature'][$i] ?? ($hourly['temperature_2m'][$i] ?? 0)), 1),
+                'humidity' => (int)round((float)($hourly['relative_humidity_2m'][$i] ?? 0))
+            ],
+            'weather' => [[
+                'id' => $code,
+                'main' => $meta['main'],
+                'description' => $meta['description'],
+                'icon' => $meta['icon']
+            ]],
+            'wind' => [
+                'speed' => round(((float)($hourly['wind_speed_10m'][$i] ?? 0)) / 3.6, 2), // OpenWeather format (m/s)
+                'deg' => (int)round((float)($hourly['wind_direction_10m'][$i] ?? 0))
+            ],
+            'rain' => [
+                '3h' => round((float)($hourly['precipitation'][$i] ?? 0), 2)
+            ],
+            'pop' => max(0, min(1, ((float)($hourly['precipitation_probability'][$i] ?? 0)) / 100)),
+            'dt_txt' => date('Y-m-d H:i:s', $timestamp)
+        ];
+    }
+
+    $locationName = resolveWeatherLocationName($lat, $lon);
+
+    return [
+        'cod' => '200',
+        'list' => $list,
+        'city' => [
+            'name' => $locationName,
+            'country' => 'PH',
+            'coord' => ['lat' => (float)$lat, 'lon' => (float)$lon],
+            'timezone' => 8 * 3600
+        ]
+    ];
+}
+
+function fetchWeatherData($lat, $lon, $apiKey) {
+    if (!isPlaceholderWeatherKey($apiKey)) {
+        $url = "https://api.openweathermap.org/data/2.5/weather?lat={$lat}&lon={$lon}&appid={$apiKey}&units=metric";
+        $result = weatherHttpJsonGet($url, 10);
+        if (!empty($result['success']) && is_array($result['data'])) {
+            return $result['data'];
+        }
+    }
+
+    // No key or OpenWeather failed: use a no-key fallback provider.
+    return fetchOpenMeteoCurrentData($lat, $lon);
 }
 
 function fetchForecastData($lat, $lon, $apiKey) {
-    if (isPlaceholderWeatherKey($apiKey)) {
-        return ['error' => 'OpenWeather API key is not configured. Set OPENWEATHER_API_KEY in ADMIN/api/config.local.php (or .env), then reload.'];
+    if (!isPlaceholderWeatherKey($apiKey)) {
+        $url = "https://api.openweathermap.org/data/2.5/forecast?lat={$lat}&lon={$lon}&appid={$apiKey}&units=metric";
+        $result = weatherHttpJsonGet($url, 10);
+        if (!empty($result['success']) && is_array($result['data'])) {
+            return $result['data'];
+        }
     }
 
-    $url = "https://api.openweathermap.org/data/2.5/forecast?lat={$lat}&lon={$lon}&appid={$apiKey}&units=metric";
-    
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    curl_close($ch);
-    
-    if ($error) {
-        return ['error' => $error];
-    }
-    
-    if ($httpCode !== 200) {
-        return ['error' => "HTTP {$httpCode}: " . $response];
-    }
-    
-    return json_decode($response, true);
+    // No key or OpenWeather failed: use a no-key fallback provider.
+    return fetchOpenMeteoForecastData($lat, $lon);
 }
 
 function getRainPreparation($rain, $condition) {
@@ -353,16 +537,6 @@ if ($action === 'current') {
         'data' => $results
     ]);
 } elseif ($action === 'map') {
-    // Check if API key is available
-    if (!$apiKey) {
-        echo json_encode([
-            'success' => false,
-            'message' => 'OpenWeather/PAGASA API key not configured. Set OPENWEATHER_API_KEY in ADMIN/api/config.local.php (or .env).',
-            'data' => []
-        ]);
-        exit();
-    }
-    
     // Get weather data for map display (multiple points across Philippines)
     $mapPoints = [];
     
@@ -406,15 +580,6 @@ if ($action === 'current') {
         ]
     ]);
 } elseif ($action === 'forecast') {
-    // Check if API key is available
-    if (!$apiKey) {
-        echo json_encode([
-            'success' => false,
-            'message' => 'OpenWeather/PAGASA API key not configured. Set OPENWEATHER_API_KEY in ADMIN/api/config.local.php (or .env).'
-        ]);
-        exit();
-    }
-    
     // Get weather forecast for a specific location or default to Quezon City
     $lat = isset($_GET['lat']) ? floatval($_GET['lat']) : 14.6760; // Quezon City
     $lon = isset($_GET['lon']) ? floatval($_GET['lon']) : 121.0437;

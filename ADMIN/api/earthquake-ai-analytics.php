@@ -24,7 +24,7 @@ register_shutdown_function(function() {
             http_response_code(500);
             $output = json_encode([
                 "success" => false,
-                "message" => "Fatal error: " . $error['message'] . " in " . basename($error['file']) . " on line " . $error['line']
+                "message" => "Internal server error."
             ], JSON_UNESCAPED_UNICODE);
             echo $output;
             if (ob_get_level()) {
@@ -43,7 +43,7 @@ try {
 } catch (Exception $e) {
     ob_clean();
     http_response_code(500);
-    $output = json_encode(['success' => false, 'message' => 'Configuration error: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    $output = json_encode(['success' => false, 'message' => 'Service initialization failed.'], JSON_UNESCAPED_UNICODE);
     echo $output;
     error_log('Earthquake AI Analytics: Failed to load required files: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
     if (ob_get_level()) {
@@ -53,7 +53,7 @@ try {
 } catch (Error $e) {
     ob_clean();
     http_response_code(500);
-    $output = json_encode(['success' => false, 'message' => 'Fatal error loading files: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    $output = json_encode(['success' => false, 'message' => 'Service initialization failed.'], JSON_UNESCAPED_UNICODE);
     echo $output;
     error_log('Earthquake AI Analytics: Fatal error loading files: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
     if (ob_get_level()) {
@@ -63,7 +63,7 @@ try {
 } catch (Throwable $e) {
     ob_clean();
     http_response_code(500);
-    $output = json_encode(['success' => false, 'message' => 'Error loading files: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    $output = json_encode(['success' => false, 'message' => 'Service initialization failed.'], JSON_UNESCAPED_UNICODE);
     echo $output;
     error_log('Earthquake AI Analytics: Throwable error loading files: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
     if (ob_get_level()) {
@@ -144,9 +144,8 @@ try {
 } catch (Exception $e) {
     ob_clean();
     http_response_code(500);
-    $errorMessage = 'Error: ' . $e->getMessage();
     error_log('Earthquake AI Analytics Exception: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-    $output = json_encode(['success' => false, 'message' => $errorMessage], JSON_UNESCAPED_UNICODE);
+    $output = json_encode(['success' => false, 'message' => 'Request processing failed.'], JSON_UNESCAPED_UNICODE);
     echo $output;
     if (ob_get_level()) {
         ob_end_flush();
@@ -155,9 +154,8 @@ try {
 } catch (Error $e) {
     ob_clean();
     http_response_code(500);
-    $errorMessage = 'Fatal error: ' . $e->getMessage();
     error_log('Earthquake AI Analytics Fatal Error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-    $output = json_encode(['success' => false, 'message' => $errorMessage], JSON_UNESCAPED_UNICODE);
+    $output = json_encode(['success' => false, 'message' => 'Request processing failed.'], JSON_UNESCAPED_UNICODE);
     echo $output;
     if (ob_get_level()) {
         ob_end_flush();
@@ -166,9 +164,8 @@ try {
 } catch (Throwable $e) {
     ob_clean();
     http_response_code(500);
-    $errorMessage = 'Throwable error: ' . $e->getMessage();
     error_log('Earthquake AI Analytics Throwable Error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-    $output = json_encode(['success' => false, 'message' => $errorMessage], JSON_UNESCAPED_UNICODE);
+    $output = json_encode(['success' => false, 'message' => 'Request processing failed.'], JSON_UNESCAPED_UNICODE);
     echo $output;
     if (ob_get_level()) {
         ob_end_flush();
@@ -314,7 +311,7 @@ function analyzeEarthquakeImpact() {
         ob_clean();
         http_response_code(500);
         error_log('Error in analyzeEarthquakeImpact (input processing): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-        $output = json_encode(['success' => false, 'message' => 'Error processing request: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        $output = json_encode(['success' => false, 'message' => 'Error processing request.'], JSON_UNESCAPED_UNICODE);
         echo $output;
         if (ob_get_level()) {
             ob_end_flush();
@@ -324,7 +321,7 @@ function analyzeEarthquakeImpact() {
         ob_clean();
         http_response_code(500);
         error_log('Fatal error in analyzeEarthquakeImpact (input processing): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-        $output = json_encode(['success' => false, 'message' => 'Fatal error processing request: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        $output = json_encode(['success' => false, 'message' => 'Error processing request.'], JSON_UNESCAPED_UNICODE);
         echo $output;
         if (ob_get_level()) {
             ob_end_flush();
@@ -334,7 +331,7 @@ function analyzeEarthquakeImpact() {
         ob_clean();
         http_response_code(500);
         error_log('Throwable error in analyzeEarthquakeImpact (input processing): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-        $output = json_encode(['success' => false, 'message' => 'Error processing request: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        $output = json_encode(['success' => false, 'message' => 'Error processing request.'], JSON_UNESCAPED_UNICODE);
         echo $output;
         if (ob_get_level()) {
             ob_end_flush();
@@ -441,7 +438,7 @@ function analyzeEarthquakeImpact() {
         ob_clean();
         http_response_code(500);
         error_log('Error in analyzeEarthquakeImpact (analysis): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-        $output = json_encode(['success' => false, 'message' => 'Error during analysis: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        $output = json_encode(['success' => false, 'message' => 'Unable to complete earthquake analysis.'], JSON_UNESCAPED_UNICODE);
         echo $output;
         if (ob_get_level()) {
             ob_end_flush();
@@ -451,7 +448,7 @@ function analyzeEarthquakeImpact() {
         ob_clean();
         http_response_code(500);
         error_log('Fatal error in analyzeEarthquakeImpact (analysis): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-        $output = json_encode(['success' => false, 'message' => 'Fatal error during analysis: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        $output = json_encode(['success' => false, 'message' => 'Unable to complete earthquake analysis.'], JSON_UNESCAPED_UNICODE);
         echo $output;
         if (ob_get_level()) {
             ob_end_flush();
@@ -461,7 +458,7 @@ function analyzeEarthquakeImpact() {
         ob_clean();
         http_response_code(500);
         error_log('Throwable error in analyzeEarthquakeImpact (analysis): ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-        $output = json_encode(['success' => false, 'message' => 'Error during analysis: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        $output = json_encode(['success' => false, 'message' => 'Unable to complete earthquake analysis.'], JSON_UNESCAPED_UNICODE);
         echo $output;
         if (ob_get_level()) {
             ob_end_flush();
@@ -841,121 +838,139 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
  */
 function assessEarthquakeRisk() {
     global $pdo;
-    
-    // Check if AI analysis is enabled for earthquake
-    if (!isAIAnalysisEnabled('earthquake')) {
-        ob_clean();
-        http_response_code(403);
-        $output = json_encode([
-            'success' => false, 
-            'message' => 'AI earthquake analysis is currently disabled.'
-        ], JSON_UNESCAPED_UNICODE);
-        echo $output;
-        if (ob_get_level()) {
-            ob_end_flush();
-        }
-        exit();
-    }
-    
+
     try {
         $input = file_get_contents('php://input');
-        
         if (empty($input)) {
             throw new Exception('No input data received');
         }
-        
+
         $data = json_decode($input, true);
-        
         if (json_last_error() !== JSON_ERROR_NONE) {
             throw new Exception('Invalid JSON input: ' . json_last_error_msg());
         }
-        
+
         if (!isset($data['earthquakes']) || !is_array($data['earthquakes'])) {
             throw new Exception('No earthquake data provided or invalid format');
         }
-        
+
         $earthquakes = $data['earthquakes'];
-        $baseRisk = $data['base_risk'] ?? 'unknown';
-        
-        // Get API key for analysis
-        $apiKey = null;
-        $backupApiKey = null;
-        
-        try {
-            // Check if function exists
-            if (!function_exists('getGeminiApiKey')) {
-                throw new Exception('getGeminiApiKey function not found');
-            }
-            
-            // Try earthquake-specific key first, then analysis, then default
-            $apiKey = getGeminiApiKey('earthquake');
-            if (empty($apiKey)) {
-                $apiKey = getGeminiApiKey('analysis');
-            }
-            if (empty($apiKey)) {
-                $apiKey = getGeminiApiKey('default');
-            }
-            
-            // Get backup key for quota exceeded scenarios
-            $backupApiKey = getGeminiApiKey('analysis_backup');
-        } catch (Throwable $e) {
-            error_log('Error getting Gemini API key in assessEarthquakeRisk: ' . $e->getMessage());
+        $baseRisk = strtolower((string)($data['base_risk'] ?? 'unknown'));
+
+        if (count($earthquakes) === 0) {
+            throw new Exception('No earthquake entries were received');
         }
-        
-        if (empty($apiKey)) {
+
+        $fallbackAnalysis = buildRuleBasedRiskAssessment($earthquakes, $baseRisk);
+        $aiEnabled = function_exists('isAIAnalysisEnabled') ? isAIAnalysisEnabled('earthquake') : true;
+
+        if (!$aiEnabled) {
             ob_clean();
-            http_response_code(503);
-            $output = json_encode([
-                'success' => false, 
-                'message' => 'AI API key not configured. Please configure Gemini API key settings.',
-                'error_code' => 'API_KEY_MISSING'
+            echo json_encode([
+                'success' => true,
+                'analysis' => $fallbackAnalysis,
+                'timestamp' => date('Y-m-d H:i:s'),
+                'mode' => 'rule_based',
+                'message' => 'AI earthquake analysis is disabled. Using rule-based seismic analytics.'
             ], JSON_UNESCAPED_UNICODE);
-            echo $output;
             if (ob_get_level()) {
                 ob_end_flush();
             }
             exit();
         }
-        
-        // Build prompt
-        $prompt = buildRiskAssessmentPrompt($earthquakes, $baseRisk);
-        
-        // Call API with backup key support
-        $response = callGeminiAI($apiKey, $prompt, $backupApiKey);
-        
-        if ($response['success']) {
+
+        // Get API key for analysis.
+        $apiKey = null;
+        $backupApiKey = null;
+        try {
+            if (function_exists('getGeminiApiKey')) {
+                $apiKey = getGeminiApiKey('earthquake');
+                if (empty($apiKey)) {
+                    $apiKey = getGeminiApiKey('analysis');
+                }
+                if (empty($apiKey)) {
+                    $apiKey = getGeminiApiKey('default');
+                }
+                $backupApiKey = getGeminiApiKey('analysis_backup');
+            }
+        } catch (Throwable $e) {
+            error_log('Error getting Gemini API key in assessEarthquakeRisk: ' . $e->getMessage());
+        }
+
+        // If no key, keep endpoint operational with deterministic analytics.
+        if (empty($apiKey)) {
             ob_clean();
             echo json_encode([
                 'success' => true,
-                'analysis' => $response['content'],
-                'timestamp' => date('Y-m-d H:i:s')
+                'analysis' => $fallbackAnalysis,
+                'timestamp' => date('Y-m-d H:i:s'),
+                'mode' => 'rule_based',
+                'message' => 'Gemini key is not configured. Showing rule-based earthquake analytics.'
             ], JSON_UNESCAPED_UNICODE);
-        } else {
-            // Log the specific AI error but return a generic message if it's sensitive
-            error_log('AI Analysis Failed: ' . ($response['error'] ?? 'Unknown error'));
-            throw new Exception('AI processing failed. The service might be temporarily unavailable.');
+            if (ob_get_level()) {
+                ob_end_flush();
+            }
+            exit();
         }
-        
+
+        $prompt = buildRiskAssessmentPrompt($earthquakes, $baseRisk);
+        $response = callGeminiAI($apiKey, $prompt, $backupApiKey);
+
+        if (!empty($response['success'])) {
+            $normalized = normalizeRiskAssessment($response['content'] ?? [], $fallbackAnalysis);
+            ob_clean();
+            echo json_encode([
+                'success' => true,
+                'analysis' => $normalized,
+                'timestamp' => date('Y-m-d H:i:s'),
+                'mode' => 'ai'
+            ], JSON_UNESCAPED_UNICODE);
+            if (ob_get_level()) {
+                ob_end_flush();
+            }
+            exit();
+        }
+
+        error_log('AI analysis failed in assessEarthquakeRisk, falling back to rule-based output. Error: ' . ($response['error'] ?? 'Unknown'));
+        ob_clean();
+        echo json_encode([
+            'success' => true,
+            'analysis' => $fallbackAnalysis,
+            'timestamp' => date('Y-m-d H:i:s'),
+            'mode' => 'rule_based',
+            'message' => 'AI service is temporarily unavailable. Showing rule-based earthquake analytics.'
+        ], JSON_UNESCAPED_UNICODE);
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
+        exit();
+    } catch (Exception $e) {
+        ob_clean();
+        http_response_code(400);
+        error_log('assessEarthquakeRisk Input Error: ' . $e->getMessage());
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage(),
+            'error_code' => 'INVALID_REQUEST'
+        ], JSON_UNESCAPED_UNICODE);
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
+        exit();
     } catch (Throwable $e) {
         ob_clean();
-        // Log the full error details for admins
-        error_log('assessEarthquakeRisk Error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
-        
-        // Return 500 status code
         http_response_code(500);
-        
-        // Return safe, generic error message to frontend
+        error_log('assessEarthquakeRisk Runtime Error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
         echo json_encode([
-            'success' => false, 
-            'message' => 'An error occurred while assessing risk. Please check server logs for details.',
+            'success' => false,
+            'message' => 'An unexpected error occurred while assessing earthquake risk.',
             'error_code' => 'INTERNAL_SERVER_ERROR'
         ], JSON_UNESCAPED_UNICODE);
+        if (ob_get_level()) {
+            ob_end_flush();
+        }
+        exit();
     }
-    
-    if (ob_get_level()) {
-        ob_end_flush();
-    }
-    exit();
 }
 
 /**
@@ -1022,5 +1037,134 @@ Ensure actionable recommendations are feasible, specific, and safety-oriented.
 EOT;
     
     return $prompt;
+}
+
+/**
+ * Normalize AI response to the UI contract and fall back to rule-based values when keys are missing.
+ */
+function normalizeRiskAssessment($analysis, $fallback) {
+    $safe = is_array($analysis) ? $analysis : [];
+    $risk = strtoupper(trim((string)($safe['risk_level'] ?? $safe['ai_risk_level'] ?? $fallback['risk_level'] ?? 'LOW')));
+    $allowed = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
+    if (!in_array($risk, $allowed, true)) {
+        $risk = $fallback['risk_level'] ?? 'LOW';
+    }
+
+    $summary = trim((string)($safe['seismic_summary'] ?? $safe['risk_summary'] ?? $safe['overall_assessment'] ?? $fallback['seismic_summary'] ?? ''));
+    $outlook = trim((string)($safe['predictive_outlook'] ?? $safe['prediction'] ?? $fallback['predictive_outlook'] ?? ''));
+    $recommendation = $safe['actionable_recommendations'] ?? $safe['recommendations'] ?? ($fallback['actionable_recommendations'] ?? '');
+
+    if (is_array($recommendation)) {
+        $recommendation = implode(' ', array_filter(array_map('trim', $recommendation)));
+    }
+    $recommendation = trim((string)$recommendation);
+
+    if ($summary === '') {
+        $summary = $fallback['seismic_summary'] ?? 'Seismic data is stable around Quezon City with no major immediate threat detected.';
+    }
+    if ($outlook === '') {
+        $outlook = $fallback['predictive_outlook'] ?? 'Low probability of damaging aftershocks in Quezon City over the next 7 days.';
+    }
+    if ($recommendation === '') {
+        $recommendation = $fallback['actionable_recommendations'] ?? 'Continue preparedness checks and monitor official LGU advisories.';
+    }
+
+    return [
+        'risk_level' => $risk,
+        'seismic_summary' => $summary,
+        'predictive_outlook' => $outlook,
+        'actionable_recommendations' => $recommendation
+    ];
+}
+
+/**
+ * Deterministic fallback assessment so the UI remains end-to-end operational
+ * even when AI keys are unavailable or external AI calls fail.
+ */
+function buildRuleBasedRiskAssessment($earthquakes, $baseRisk = 'unknown') {
+    $maxMagnitude = 0.0;
+    $minDistance = 9999.0;
+    $nearbyEvents = 0;
+    $recent24h = 0;
+    $weightedScore = 0.0;
+
+    foreach ($earthquakes as $event) {
+        $mag = (float)($event['magnitude'] ?? $event['mag'] ?? 0);
+        $depth = (float)($event['depth'] ?? 0);
+        $dist = (float)($event['distanceFromQC'] ?? $event['distance_km'] ?? 9999);
+        $timeRaw = $event['time'] ?? null;
+
+        $maxMagnitude = max($maxMagnitude, $mag);
+        $minDistance = min($minDistance, $dist);
+        if ($dist <= 200) {
+            $nearbyEvents++;
+        }
+
+        if (is_numeric($timeRaw)) {
+            $timestamp = (float)$timeRaw;
+            // Support both seconds and milliseconds timestamps.
+            if ($timestamp > 1000000000000) {
+                $timestamp = $timestamp / 1000;
+            }
+            if ((time() - $timestamp) <= 86400) {
+                $recent24h++;
+            }
+        }
+
+        $distanceFactor = 0.2;
+        if ($dist <= 50) {
+            $distanceFactor = 1.5;
+        } elseif ($dist <= 100) {
+            $distanceFactor = 1.2;
+        } elseif ($dist <= 200) {
+            $distanceFactor = 0.8;
+        } elseif ($dist <= 400) {
+            $distanceFactor = 0.4;
+        }
+
+        $magnitudeFactor = max(0.0, ($mag - 3.0) * 8.0);
+        $depthFactor = ($depth > 0 && $depth <= 30) ? 4.0 : (($depth > 30 && $depth <= 70) ? 2.0 : 0.0);
+        $weightedScore += ($magnitudeFactor + $depthFactor) * $distanceFactor;
+    }
+
+    if ($baseRisk === 'high') {
+        $weightedScore += 12;
+    } elseif ($baseRisk === 'moderate') {
+        $weightedScore += 6;
+    }
+
+    $risk = 'LOW';
+    if (($maxMagnitude >= 6.5 && $minDistance <= 80) || $weightedScore >= 70) {
+        $risk = 'CRITICAL';
+    } elseif (($maxMagnitude >= 5.5 && $minDistance <= 150) || $weightedScore >= 45) {
+        $risk = 'HIGH';
+    } elseif (($maxMagnitude >= 4.5 && $minDistance <= 250) || $weightedScore >= 25) {
+        $risk = 'MODERATE';
+    }
+
+    $distanceText = is_finite($minDistance) ? number_format($minDistance, 1) : 'N/A';
+    $summary = "Rule-based assessment shows max magnitude {$maxMagnitude} with nearest event {$distanceText} km from Quezon City. "
+        . "{$nearbyEvents} event(s) were within 200 km and {$recent24h} event(s) occurred in the last 24 hours.";
+
+    $outlookMap = [
+        'CRITICAL' => 'Elevated aftershock probability in the next 24-72 hours. Maintain high vigilance across high-density barangays and elevated structures.',
+        'HIGH' => 'Moderate-to-high chance of felt aftershocks in the next 2-5 days. Expect intermittent seismic activity and keep rapid response teams ready.',
+        'MODERATE' => 'Low-to-moderate aftershock probability over the next 7 days. Continue close monitoring, especially near fault-adjacent and soft-soil zones.',
+        'LOW' => 'Low probability of damaging aftershocks in Quezon City over the next 7 days, with routine monitoring recommended.'
+    ];
+
+    $recommendationMap = [
+        'CRITICAL' => 'Activate barangay emergency coordination, inspect critical buildings and bridges immediately, and prepare controlled evacuations in high-risk areas.',
+        'HIGH' => 'Conduct rapid structural checks in public facilities and keep emergency communications on standby for possible felt aftershocks.',
+        'MODERATE' => 'Run precautionary building checks in vulnerable zones and remind residents to review go-bags and earthquake response steps.',
+        'LOW' => 'Continue routine preparedness briefings and monitor official LGU and PHIVOLCS advisories for any escalation.'
+    ];
+
+    return [
+        'risk_level' => $risk,
+        'seismic_summary' => $summary,
+        'predictive_outlook' => $outlookMap[$risk],
+        'actionable_recommendations' => $recommendationMap[$risk]
+    ];
 }
 
