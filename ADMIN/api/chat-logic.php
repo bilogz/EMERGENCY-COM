@@ -388,6 +388,42 @@ if (!function_exists('twc_chat_upload_url')) {
     }
 }
 
+if (!function_exists('twc_normalize_public_url')) {
+    /**
+     * Normalizes app-local URLs for deployments hosted in a subdirectory
+     * (e.g. /EMERGENCY-COM) while preserving absolute http(s) URLs.
+     */
+    function twc_normalize_public_url($url): ?string {
+        if ($url === null) {
+            return null;
+        }
+        $raw = trim((string)$url);
+        if ($raw === '') {
+            return null;
+        }
+        if (preg_match('/^https?:\\/\\//i', $raw) === 1) {
+            return $raw;
+        }
+
+        $base = trim((string)twc_app_base_url());
+        if ($base === '' || $base === '/') {
+            return $raw;
+        }
+        $base = '/' . trim($base, '/');
+
+        if (strpos($raw, $base . '/') === 0) {
+            return $raw;
+        }
+        if ($raw[0] !== '/') {
+            return $base . '/' . ltrim($raw, '/');
+        }
+        if (preg_match('#^/(USERS|ADMIN|PHP)/#i', $raw) === 1) {
+            return $base . $raw;
+        }
+        return $raw;
+    }
+}
+
 if (!function_exists('twc_secure_cfg')) {
     /**
      * Config helper that works even when config.env.php is not explicitly loaded.
@@ -501,12 +537,9 @@ if (!function_exists('twc_postgres_image_pdo')) {
             $labels = explode('.', $host);
             $endpointLabel = trim((string)($labels[0] ?? ''));
             if ($endpointLabel !== '') {
-                if (substr($endpointLabel, -7) === '-pooler') {
-                    $endpointLabel = substr($endpointLabel, 0, -7);
-                }
-                if ($endpointLabel !== '') {
-                    $libpqOptions = 'endpoint=' . $endpointLabel;
-                }
+                // Keep full pooler label to match Neon SNI project inference.
+                // Stripping "-pooler" can trigger "Inconsistent project name inferred from SNI" errors.
+                $libpqOptions = 'endpoint=' . $endpointLabel;
             }
         }
 

@@ -106,6 +106,7 @@ try {
 
     $formattedMessages = array_map(function ($msg) {
         $isRead = (bool)$msg['is_read'];
+        $attachmentUrl = twc_normalize_public_url($msg['attachment_url'] ?? null);
         return [
             'id' => (int)$msg['message_id'],
             'conversationId' => (int)$msg['conversation_id'],
@@ -118,8 +119,8 @@ try {
             'read' => $isRead,
             'readAt' => !empty($msg['read_at']) ? strtotime((string)$msg['read_at']) * 1000 : null,
             'deliveryStatus' => $isRead ? 'delivered' : 'sent',
-            'imageUrl' => $msg['attachment_url'] ?? null,
-            'attachmentUrl' => $msg['attachment_url'] ?? null,
+            'imageUrl' => $attachmentUrl,
+            'attachmentUrl' => $attachmentUrl,
             'attachmentMime' => $msg['attachment_mime'] ?? null,
             'attachmentSize' => isset($msg['attachment_size']) ? (int)$msg['attachment_size'] : null,
         ];

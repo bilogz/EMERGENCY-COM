@@ -677,6 +677,8 @@ try {
 
     $pdo->commit();
 
+    $responseAttachmentUrl = twc_normalize_public_url($attachmentUrl);
+
     echo json_encode([
         'success' => true,
         'messageId' => $messageId,
@@ -685,9 +687,9 @@ try {
         'category' => $category,
         'priority' => $priority,
         'assignedTo' => $assignedTo,
-        'imageUrl' => $attachmentUrl,
-        'attachment' => $attachmentUrl !== null ? [
-            'url' => $attachmentUrl,
+        'imageUrl' => $responseAttachmentUrl,
+        'attachment' => $responseAttachmentUrl !== null ? [
+            'url' => $responseAttachmentUrl,
             'mime' => $attachmentMime,
             'size' => $attachmentSize,
             'type' => $attachmentKind,
