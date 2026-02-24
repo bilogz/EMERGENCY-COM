@@ -201,6 +201,14 @@ try {
             if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
                 throw new RuntimeException('Unable to create upload directory.');
             }
+            if (!is_writable($uploadDir)) {
+                @chmod($uploadDir, 0755);
+                clearstatcache(true, $uploadDir);
+                if (!is_writable($uploadDir)) {
+                    @chmod($uploadDir, 0775);
+                    clearstatcache(true, $uploadDir);
+                }
+            }
 
             $newFileName = 'incident_' . date('Ymd_His') . '_' . bin2hex(random_bytes(8)) . '.' . $resolvedExtension;
             $savedAttachmentAbsolutePath = $uploadDir . DIRECTORY_SEPARATOR . $newFileName;
@@ -222,6 +230,24 @@ try {
                     $savedToDisk = true;
                 } else {
                     $lastUploadWarning = error_get_last();
+                }
+            }
+
+            if (!$savedToDisk) {
+                // Last-resort fallback: store attachment in PostgreSQL when disk writes fail.
+                $storedFallback = twc_store_attachment_in_postgres(
+                    $tmpFile,
+                    $detectedMime,
+                    $attachmentSize,
+                    $originalName !== '' ? $originalName : null
+                );
+                if ($storedFallback && !empty($storedFallback['url'])) {
+                    $attachmentMime = (string)($storedFallback['mime'] ?? $detectedMime);
+                    $attachmentSize = isset($storedFallback['size']) ? (int)$storedFallback['size'] : $attachmentSize;
+                    $attachmentUrl = (string)$storedFallback['url'];
+                    $savedAttachmentAbsolutePath = null;
+                    error_log('chat-send: filesystem attachment save failed; fell back to PostgreSQL storage.');
+                    $savedToDisk = true;
                 }
             }
 
