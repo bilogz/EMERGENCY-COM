@@ -520,7 +520,11 @@ $pageTitle = 'Automated Warnings Analytics';
                 return data;
             })
             .then(data => {
-                alert(data.message || 'Mock alert sent.');
+                let noticeMessage = data.message || 'Mock alert sent.';
+                if (data.degraded && data.degraded_reason) {
+                    noticeMessage += `\nReason: ${data.degraded_reason}`;
+                }
+                alert(noticeMessage);
                 loadAnalytics();
                 loadDispatchHistory();
             })

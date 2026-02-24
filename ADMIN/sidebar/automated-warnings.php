@@ -542,7 +542,11 @@ $pageTitle = 'Automated Warning Integration';
                 return data;
             })
             .then(data => {
-                alert(data.message || 'Mock alert queued successfully.');
+                let noticeMessage = data.message || 'Mock alert queued successfully.';
+                if (data.degraded && data.degraded_reason) {
+                    noticeMessage += `\nReason: ${data.degraded_reason}`;
+                }
+                alert(noticeMessage);
                 loadWarnings();
             })
             .catch(error => {

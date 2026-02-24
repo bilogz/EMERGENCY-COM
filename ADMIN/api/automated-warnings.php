@@ -142,6 +142,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ], $adminId);
 
             $degraded = empty($dispatchResult['alert_id']);
+            $degradedReason = '';
+            if ($degraded) {
+                $degradedReason = (string)($dispatchResult['recipient_meta']['error'] ?? $dispatchResult['warning_message'] ?? '');
+                if ($degradedReason !== '') {
+                    $degradedReason = trim(preg_replace('/\s+/', ' ', $degradedReason));
+                    if (strlen($degradedReason) > 320) {
+                        $degradedReason = substr($degradedReason, 0, 320) . '...';
+                    }
+                }
+            }
             $messageText = strtoupper($mockType) . ' mock alert published and queued for citizen broadcast.';
             if ($degraded) {
                 $messageText = strtoupper($mockType) . ' mock alert saved, but citizen delivery is degraded (alert feed or queue table issue).';
@@ -156,6 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'success' => true,
                 'message' => $messageText,
                 'degraded' => $degraded,
+                'degraded_reason' => $degradedReason,
                 'warning_id' => $warningId,
                 'dispatch' => $dispatchResult
             ]);
@@ -217,6 +228,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ], $adminId);
 
             $degraded = empty($dispatchResult['alert_id']);
+            $degradedReason = '';
+            if ($degraded) {
+                $degradedReason = (string)($dispatchResult['recipient_meta']['error'] ?? $dispatchResult['warning_message'] ?? '');
+                if ($degradedReason !== '') {
+                    $degradedReason = trim(preg_replace('/\s+/', ' ', $degradedReason));
+                    if (strlen($degradedReason) > 320) {
+                        $degradedReason = substr($degradedReason, 0, 320) . '...';
+                    }
+                }
+            }
             $messageText = 'Critical event ingested and auto-broadcast queued.';
             if ($degraded) {
                 $messageText = 'Critical event ingested, but citizen delivery is degraded (alert feed or queue table issue).';
@@ -227,6 +248,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'success' => true,
                 'message' => $messageText,
                 'degraded' => $degraded,
+                'degraded_reason' => $degradedReason,
                 'warning_id' => $warningId,
                 'dispatch' => $dispatchResult
             ]);
