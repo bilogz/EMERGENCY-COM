@@ -236,11 +236,40 @@
 
     function isMassNotificationAlert(alert) {
         const source = normalizeText(alert.source);
-        if (!source) return false;
-        return source.includes('mass_notification')
+        const title = normalizeText(alert.title);
+        const content = normalizeText(alert.content);
+        const message = normalizeText(alert.message);
+        if (source && (
+            source.includes('mass_notification')
             || source === 'mass'
             || source.includes('mass-notification')
-            || source.includes('mass_notification');
+            || source.includes('mass_notification')
+        )) {
+            return true;
+        }
+        return title.includes('fire alert level')
+            || title.includes('weather signal')
+            || content.includes('fire alert level')
+            || message.includes('fire alert level');
+    }
+
+    function hasHighPrioritySeverity(alert) {
+        const severity = normalizeText(alert.severity);
+        return severity === 'high' || severity === 'critical' || severity === 'extreme';
+    }
+
+    function isLikelyEmergencyDispatch(alert) {
+        const category = normalizeText(alert.category_name);
+        const source = normalizeText(alert.source);
+        const title = normalizeText(alert.title);
+        const message = normalizeText(alert.message);
+        const content = normalizeText(alert.content);
+
+        if (source === 'application') return true;
+        if (category.includes('emergency') || category.includes('fire') || category.includes('earthquake') || category.includes('weather')) return true;
+        if (title.includes('fire alert level') || title.includes('weather signal')) return true;
+        if (message.includes('evacuate') || content.includes('evacuate')) return true;
+        return false;
     }
 
     function isAutomatedHighPriorityAlert(alert) {
@@ -259,7 +288,12 @@
     }
 
     function shouldTriggerMandatoryModal(alert) {
-        return isMassNotificationAlert(alert) || isAutomatedHighPriorityAlert(alert);
+        if (isMassNotificationAlert(alert) || isAutomatedHighPriorityAlert(alert)) {
+            return true;
+        }
+
+        // Fallback for older schemas where source metadata may be missing.
+        return hasHighPrioritySeverity(alert) && isLikelyEmergencyDispatch(alert);
     }
 
     function getModalPreset(alert) {

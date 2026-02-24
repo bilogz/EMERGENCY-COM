@@ -185,6 +185,46 @@ function mnResolveNotificationLogsTable(PDO $pdo): string {
     return 'notification_logs_runtime';
 }
 
+function mnEnsureAlertRecipientsTable(PDO $pdo): void {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS alert_recipients (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            alert_id BIGINT UNSIGNED NOT NULL,
+            user_id BIGINT UNSIGNED NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_alert_user (alert_id, user_id),
+            INDEX idx_alert_id (alert_id),
+            INDEX idx_user_id (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
+
+function mnPersistAlertRecipients(PDO $pdo, int $alertId, array $subscribers): int {
+    if ($alertId <= 0 || empty($subscribers)) {
+        return 0;
+    }
+    try {
+        mnEnsureAlertRecipientsTable($pdo);
+
+        $stmt = $pdo->prepare("INSERT IGNORE INTO alert_recipients (alert_id, user_id) VALUES (?, ?)");
+        $inserted = 0;
+        $seen = [];
+        foreach ($subscribers as $subscriber) {
+            $userId = (int)($subscriber['user_id'] ?? 0);
+            if ($userId <= 0 || isset($seen[$userId])) {
+                continue;
+            }
+            $seen[$userId] = true;
+            $stmt->execute([$alertId, $userId]);
+            $inserted++;
+        }
+        return $inserted;
+    } catch (Throwable $e) {
+        error_log('mnPersistAlertRecipients degraded mode: ' . $e->getMessage());
+        return 0;
+    }
+}
+
 $action = $_GET['action'] ?? 'send';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
@@ -220,6 +260,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             // Try to find or create a "General" category
             $categoryId = $alertRepository->findOrGetDefaultCategoryId('General');
         }
+
+        $categoryKind = 'general';
+        if ($categoryId) {
+            foreach (['alert_categories', 'alert_categories_catalog'] as $catTable) {
+                try {
+                    $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($catTable));
+                    if (!$exists || !$exists->fetch()) {
+                        continue;
+                    }
+                    $cStmt = $pdo->prepare("SELECT name FROM {$catTable} WHERE id = ? LIMIT 1");
+                    $cStmt->execute([$categoryId]);
+                    $catName = strtolower((string)($cStmt->fetchColumn() ?: ''));
+                    if ($catName !== '') {
+                        if (strpos($catName, 'fire') !== false || strpos($catName, 'smoke') !== false || strpos($catName, 'burn') !== false) {
+                            $categoryKind = 'fire';
+                        } elseif (strpos($catName, 'weather') !== false || strpos($catName, 'storm') !== false || strpos($catName, 'typhoon') !== false) {
+                            $categoryKind = 'weather';
+                        } elseif (strpos($catName, 'earthquake') !== false || strpos($catName, 'seismic') !== false) {
+                            $categoryKind = 'earthquake';
+                        }
+                        break;
+                    }
+                } catch (Throwable $e) {
+                    // Continue with fallback kind.
+                }
+            }
+        }
+
+        $severityNorm = strtolower(trim((string)$severity));
+        if (!in_array($severityNorm, ['low', 'medium', 'high', 'critical'], true)) {
+            $severityNorm = 'medium';
+        }
         
         $weatherSignal = null;
         if ($weatherSignalRaw !== null && $weatherSignalRaw !== '') {
@@ -230,8 +302,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         $fireLevel = null;
         if ($fireLevelRaw !== null && $fireLevelRaw !== '') {
             $fireLevel = (int)$fireLevelRaw;
-            if ($fireLevel < 1 || $fireLevel > 3) $fireLevel = null;
+            if ($fireLevel < 1 || $fireLevel > 5) $fireLevel = null;
         }
+
+        if ($categoryKind === 'fire' || $fireLevel !== null) {
+            if ($fireLevel === null || $fireLevel < 1 || $fireLevel > 5) {
+                $fireLevel = 5;
+            }
+            if ($fireLevel >= 4) {
+                $severityNorm = 'critical';
+            } elseif ($severityNorm !== 'high' && $severityNorm !== 'critical') {
+                $severityNorm = 'high';
+            }
+        }
+        $severity = $severityNorm;
 
         // Insert alert into alerts table and mark source as mass_notification
         $alertSource = 'mass_notification';
@@ -248,6 +332,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         if (is_array($recipients)) {
             $subscribers = $subscriberRepository->getByRecipients($recipients);
         }
+        $targetedRecipientCount = mnPersistAlertRecipients($pdo, (int)$alertId, $subscribers);
 
         // Resolve each subscriber's language:
         // 1) subscriptions.preferred_language (already in result)
@@ -497,6 +582,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             'message' => 'Notification sent successfully.',
             'alert_id' => $alertId,
             'sent_count' => $sentCount,
+            'targeted_recipients' => $targetedRecipientCount,
             'translation_stats' => $translationStats,
             'note' => $translationStats['translated'] > 0 ? 
                 "Alerts translated to {$translationStats['translated']} different languages" : 

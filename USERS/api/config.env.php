@@ -104,6 +104,10 @@ function getSecureConfig($key, $default = null) {
             'PG_IMG_HOST',
             'PG_IMG_DB',
             'PG_IMG_USER',
+            'CHATBOT_NEON_URL',
+            'CHATBOT_NEON_HOST',
+            'CHATBOT_NEON_DB',
+            'CHATBOT_NEON_USER',
         ];
         foreach ($userLocal as $cfgKey => $cfgValue) {
             if (

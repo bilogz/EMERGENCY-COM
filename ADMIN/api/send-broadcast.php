@@ -161,6 +161,186 @@ function ensureNotificationQueueTable(PDO $pdo): void {
     }
 }
 
+/**
+ * Normalize category name into a routing kind used by dispatch rules.
+ */
+function dispatchCategoryKindFromName(string $name): string {
+    $n = strtolower(trim($name));
+    if ($n === '') return 'general';
+    if (strpos($n, 'fire') !== false || strpos($n, 'smoke') !== false || strpos($n, 'burn') !== false) return 'fire';
+    if (strpos($n, 'earthquake') !== false || strpos($n, 'seismic') !== false || strpos($n, 'aftershock') !== false) return 'earthquake';
+    if (strpos($n, 'weather') !== false || strpos($n, 'storm') !== false || strpos($n, 'typhoon') !== false || strpos($n, 'rain') !== false || strpos($n, 'flood') !== false) return 'weather';
+    return 'general';
+}
+
+/**
+ * Resolve category kind from category table by ID.
+ */
+function dispatchResolveCategoryKind(PDO $pdo, $categoryId): string {
+    $cid = (int)$categoryId;
+    if ($cid <= 0) {
+        return 'general';
+    }
+
+    foreach (['alert_categories', 'alert_categories_catalog'] as $table) {
+        try {
+            $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+            if (!$exists || !$exists->fetch()) {
+                continue;
+            }
+            $stmt = $pdo->prepare("SELECT name FROM {$table} WHERE id = ? LIMIT 1");
+            $stmt->execute([$cid]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($row && isset($row['name'])) {
+                return dispatchCategoryKindFromName((string)$row['name']);
+            }
+        } catch (Throwable $e) {
+            // Backward-compatible fallback to general.
+        }
+    }
+
+    return 'general';
+}
+
+/**
+ * Normalize accepted severity values to low|medium|high|critical.
+ */
+function dispatchNormalizeSeverity($severity): string {
+    $normalized = strtolower(trim((string)$severity));
+    return in_array($normalized, ['low', 'medium', 'high', 'critical'], true)
+        ? $normalized
+        : 'medium';
+}
+
+/**
+ * Fire policy:
+ * - Fire level supports 1..5
+ * - Fire severity is always high/critical
+ * - Fire level >= 4 forces critical
+ */
+function dispatchEnforceFireRules(string $categoryKind, ?int $fireLevel, string $severity): array {
+    $normalizedSeverity = dispatchNormalizeSeverity($severity);
+    $isFireAlert = ($categoryKind === 'fire') || ($fireLevel !== null);
+
+    if (!$isFireAlert) {
+        return [$normalizedSeverity, $fireLevel, false];
+    }
+
+    $resolvedLevel = (int)($fireLevel ?? 5);
+    if ($resolvedLevel < 1 || $resolvedLevel > 5) {
+        $resolvedLevel = 5;
+    }
+
+    if ($resolvedLevel >= 4) {
+        $normalizedSeverity = 'critical';
+    } elseif ($normalizedSeverity !== 'high' && $normalizedSeverity !== 'critical') {
+        $normalizedSeverity = 'high';
+    }
+
+    return [$normalizedSeverity, $resolvedLevel, true];
+}
+
+function dispatchParseEnumValues(string $columnType): array {
+    $values = [];
+    if (preg_match_all("/'([^']+)'/", $columnType, $matches)) {
+        foreach (($matches[1] ?? []) as $raw) {
+            $v = strtolower(trim((string)$raw));
+            if ($v !== '') {
+                $values[] = $v;
+            }
+        }
+    }
+    return array_values(array_unique($values));
+}
+
+/**
+ * Resolve severity to match alerts.severity column constraints (when ENUM is used).
+ */
+function dispatchResolveSeverityForAlerts(PDO $pdo, string $severity): string {
+    $desired = dispatchNormalizeSeverity($severity);
+
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'severity'");
+        $row = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : null;
+        if (!$row || empty($row['Type'])) {
+            return $desired;
+        }
+
+        $type = strtolower((string)$row['Type']);
+        if (strpos($type, 'enum(') !== 0) {
+            return $desired;
+        }
+
+        $allowed = dispatchParseEnumValues($type);
+        if (empty($allowed)) {
+            return $desired;
+        }
+        if (in_array($desired, $allowed, true)) {
+            return $desired;
+        }
+
+        $fallbacks = [
+            'critical' => ['critical', 'extreme', 'high', 'medium', 'moderate', 'low'],
+            'high' => ['high', 'critical', 'extreme', 'medium', 'moderate', 'low'],
+            'medium' => ['medium', 'moderate', 'high', 'critical', 'extreme', 'low'],
+            'low' => ['low', 'medium', 'moderate', 'high', 'critical']
+        ];
+        foreach ($fallbacks[$desired] ?? [] as $candidate) {
+            if (in_array($candidate, $allowed, true)) {
+                return $candidate;
+            }
+        }
+
+        return (string)$allowed[0];
+    } catch (Throwable $e) {
+        return $desired;
+    }
+}
+
+function ensureAlertRecipientsTable(PDO $pdo): void {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS alert_recipients (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            alert_id BIGINT UNSIGNED NOT NULL,
+            user_id BIGINT UNSIGNED NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_alert_user (alert_id, user_id),
+            INDEX idx_alert_id (alert_id),
+            INDEX idx_user_id (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
+
+/**
+ * Persist exact user targeting map for an alert.
+ */
+function persistAlertRecipients(PDO $pdo, int $alertId, array $recipients): int {
+    if ($alertId <= 0 || empty($recipients)) {
+        return 0;
+    }
+    try {
+        ensureAlertRecipientsTable($pdo);
+        $stmt = $pdo->prepare("INSERT IGNORE INTO alert_recipients (alert_id, user_id) VALUES (?, ?)");
+
+        $inserted = 0;
+        $seen = [];
+        foreach ($recipients as $recipient) {
+            $userId = (int)($recipient['id'] ?? $recipient['user_id'] ?? 0);
+            if ($userId <= 0 || isset($seen[$userId])) {
+                continue;
+            }
+            $seen[$userId] = true;
+            $stmt->execute([$alertId, $userId]);
+            $inserted++;
+        }
+
+        return $inserted;
+    } catch (Throwable $e) {
+        error_log('persistAlertRecipients degraded mode: ' . $e->getMessage());
+        return 0;
+    }
+}
+
 try {
     require_once 'db_connect.php';
     require_once 'activity_logger.php';
@@ -202,6 +382,11 @@ try {
     $weatherSignalRaw = $_POST['weather_signal'] ?? null;
     $fireLevelRaw = $_POST['fire_level'] ?? null;
 
+    $categoryId = ($categoryId !== null && $categoryId !== '') ? (int)$categoryId : null;
+    if ($categoryId !== null && $categoryId <= 0) {
+        $categoryId = null;
+    }
+
     $severityAllowed = ['Low', 'Medium', 'High', 'Critical'];
     if (!in_array($severity, $severityAllowed, true)) {
         $severity = 'Medium';
@@ -216,8 +401,12 @@ try {
     $fireLevel = null;
     if ($fireLevelRaw !== null && $fireLevelRaw !== '') {
         $fireLevel = (int)$fireLevelRaw;
-        if ($fireLevel < 1 || $fireLevel > 3) $fireLevel = null;
+        if ($fireLevel < 1 || $fireLevel > 5) $fireLevel = null;
     }
+
+    $categoryKind = dispatchResolveCategoryKind($pdo, $categoryId);
+    [$severityNormalized, $fireLevel, $isFireAlert] = dispatchEnforceFireRules($categoryKind, $fireLevel, (string)$severity);
+    $severity = ucfirst($severityNormalized);
 
     $targetLat = null;
     $targetLng = null;
@@ -333,7 +522,7 @@ try {
         $channelStr,
         $body,
         $audienceStr,
-        strtolower($severity),
+        $severityNormalized,
         'admin_' . $adminId,
         $_SERVER['REMOTE_ADDR'] ?? 'unknown'
     ]);
@@ -343,14 +532,26 @@ try {
     $hasSeverityCol = false;
     $hasWeatherSignalCol = false;
     $hasFireLevelCol = false;
+    $hasSourceCol = false;
+    $hasLocationCol = false;
+    $hasLatitudeCol = false;
+    $hasLongitudeCol = false;
     try {
         $hasSeverityCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'severity'")->rowCount() > 0;
         $hasWeatherSignalCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'weather_signal'")->rowCount() > 0;
         $hasFireLevelCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'fire_level'")->rowCount() > 0;
+        $hasSourceCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'source'")->rowCount() > 0;
+        $hasLocationCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'location'")->rowCount() > 0;
+        $hasLatitudeCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'latitude'")->rowCount() > 0;
+        $hasLongitudeCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'longitude'")->rowCount() > 0;
     } catch (PDOException $e) {
         $hasSeverityCol = false;
         $hasWeatherSignalCol = false;
         $hasFireLevelCol = false;
+        $hasSourceCol = false;
+        $hasLocationCol = false;
+        $hasLatitudeCol = false;
+        $hasLongitudeCol = false;
     }
 
     $alertCols = ['title', 'message', 'content', 'category_id', 'status'];
@@ -358,8 +559,9 @@ try {
     $alertPlaceholders = array_fill(0, count($alertVals), '?');
 
     if ($hasSeverityCol) {
+        $severityForDb = dispatchResolveSeverityForAlerts($pdo, $severityNormalized);
         $alertCols[] = 'severity';
-        $alertVals[] = $severity;
+        $alertVals[] = $severityForDb;
         $alertPlaceholders[] = '?';
     }
 
@@ -373,6 +575,28 @@ try {
         $alertVals[] = $fireLevel;
         $alertPlaceholders[] = '?';
     }
+    if ($hasSourceCol) {
+        $alertCols[] = 'source';
+        $alertVals[] = 'mass_notification';
+        $alertPlaceholders[] = '?';
+    }
+    if ($audienceType === 'location' && $targetLat !== null && $targetLng !== null) {
+        if ($hasLatitudeCol) {
+            $alertCols[] = 'latitude';
+            $alertVals[] = $targetLat;
+            $alertPlaceholders[] = '?';
+        }
+        if ($hasLongitudeCol) {
+            $alertCols[] = 'longitude';
+            $alertVals[] = $targetLng;
+            $alertPlaceholders[] = '?';
+        }
+        if ($hasLocationCol) {
+            $alertCols[] = 'location';
+            $alertVals[] = ($targetAddress !== '' ? $targetAddress : ($targetLat . ',' . $targetLng));
+            $alertPlaceholders[] = '?';
+        }
+    }
 
     $alertCols[] = 'created_at';
     $alertPlaceholders[] = 'NOW()';
@@ -380,6 +604,9 @@ try {
     $aStmt = $pdo->prepare("INSERT INTO alerts (" . implode(', ', $alertCols) . ") VALUES (" . implode(', ', $alertPlaceholders) . ")");
     $aStmt->execute($alertVals);
     $alertId = (int)$pdo->lastInsertId();
+
+    // Save exact recipients for feed visibility filtering (nearby/location-safe targeting).
+    $targetedRecipientCount = persistAlertRecipients($pdo, $alertId, $recipients);
 
     // Optional topic broadcast via legacy FCM helper.
     // Non-blocking: alert creation flow continues even if this fails.
@@ -488,8 +715,12 @@ try {
         'message' => 'Notification successfully queued.',
         'log_id' => $logId,
         'recipients' => count($recipients),
+        'targeted_recipients' => $targetedRecipientCount,
         'queued_jobs' => $queueCount,
         'alert_id' => $alertId,
+        'severity' => $severityNormalized,
+        'fire_level' => $fireLevel,
+        'is_fire_alert' => $isFireAlert,
         'translated_languages' => array_values(array_keys($uniqueTargetLanguages))
     ]);
     exit;

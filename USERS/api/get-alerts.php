@@ -264,6 +264,69 @@ function usersTableHasColumn(PDO $pdo, string $tableName, string $column): bool 
     }
 }
 
+/**
+ * Filter alerts so targeted alerts are only visible to mapped recipients.
+ * Legacy/global alerts (without alert_recipients rows) remain visible.
+ */
+function usersFilterAlertsByRecipientMap(PDO $pdo, array $alerts, int $userId, bool $bypassFilter = false): array {
+    if ($bypassFilter || empty($alerts) || !usersHasReadableTable($pdo, 'alert_recipients')) {
+        return $alerts;
+    }
+
+    $alertIds = [];
+    foreach ($alerts as $alert) {
+        $id = (int)($alert['id'] ?? 0);
+        if ($id > 0) {
+            $alertIds[] = $id;
+        }
+    }
+    $alertIds = array_values(array_unique($alertIds));
+    if (empty($alertIds)) {
+        return $alerts;
+    }
+
+    try {
+        $ph = implode(',', array_fill(0, count($alertIds), '?'));
+        $targetedStmt = $pdo->prepare("SELECT DISTINCT alert_id FROM alert_recipients WHERE alert_id IN ({$ph})");
+        $targetedStmt->execute($alertIds);
+        $targetedRows = $targetedStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+
+        $targetedSet = [];
+        foreach ($targetedRows as $rowId) {
+            $targetedSet[(int)$rowId] = true;
+        }
+        if (empty($targetedSet)) {
+            return $alerts;
+        }
+
+        $allowedSet = [];
+        if ($userId > 0) {
+            $allowedStmt = $pdo->prepare("SELECT DISTINCT alert_id FROM alert_recipients WHERE user_id = ? AND alert_id IN ({$ph})");
+            $allowedStmt->execute(array_merge([$userId], $alertIds));
+            $allowedRows = $allowedStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+            foreach ($allowedRows as $rowId) {
+                $allowedSet[(int)$rowId] = true;
+            }
+        }
+
+        $filtered = [];
+        foreach ($alerts as $alert) {
+            $id = (int)($alert['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $isTargeted = isset($targetedSet[$id]);
+            if (!$isTargeted || isset($allowedSet[$id])) {
+                $filtered[] = $alert;
+            }
+        }
+        return $filtered;
+    } catch (Throwable $e) {
+        // Fallback: keep alerts visible if filter table is unhealthy.
+        return $alerts;
+    }
+}
+
 function usersNormalizeAlertMeta(array $alert): array {
     $title = strtolower((string)($alert['title'] ?? ''));
     $source = strtolower((string)($alert['source'] ?? ''));
@@ -319,6 +382,8 @@ $lastId = isset($_GET['last_id']) ? max(0, (int)$_GET['last_id']) : 0;
 $category = isset($_GET['category']) && $_GET['category'] !== '' && $_GET['category'] !== 'all' ? trim($_GET['category']) : null;
 $timeFilter = isset($_GET['time_filter']) && in_array($_GET['time_filter'], ['24h', 'week', 'month', 'year', 'all'], true) ? $_GET['time_filter'] : '24h';
 $severityFilter = isset($_GET['severity_filter']) && in_array($_GET['severity_filter'], ['emergency_only', 'warnings_only'], true) ? $_GET['severity_filter'] : null;
+$sessionUserId = (int)($_SESSION['user_id'] ?? 0);
+$isAdminSession = (int)($_SESSION['admin_user_id'] ?? 0) > 0;
 
 // Resolve requested language (user preference / device language)
 $targetLanguage = resolveTargetLanguage($pdo);
@@ -428,6 +493,9 @@ try {
     error_log("Error fetching alerts: " . $e->getMessage());
     $alerts = [];
 }
+
+// Enforce recipient visibility for targeted dispatches.
+$alerts = usersFilterAlertsByRecipientMap($pdo, $alerts, $sessionUserId, $isAdminSession);
 
 // Apply server-side translation for alerts feed
 $translationHelper = null;

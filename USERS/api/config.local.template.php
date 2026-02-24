@@ -93,6 +93,13 @@ return [
     'CHAT_ASSISTANT_EMERGENCY_CALL_URL' => 'http://localhost/EMERGENCY-COM/USERS/emergency-call.php', // Emergency call URL sent by AI assistant
     'CHAT_ASSISTANT_EMERGENCY_NUMBER' => '122', // Emergency hotline number used by AI assistant (Quezon City)
     'CHAT_ASSISTANT_SYSTEM_PROMPT' => '', // Optional override. Leave blank to use built-in QC emergency prompt.
+    // Chatbot interaction logging (Neon/PostgreSQL)
+    'CHATBOT_NEON_LOG_ENABLED' => true,
+    // Optional dedicated Neon URL for chatbot logs. If empty, falls back to NEON_DATABASE_URL / NEON_TRANSLATION_CACHE_URL / PG_IMG_URL.
+    'CHATBOT_NEON_URL' => '',
+    'CHATBOT_NEON_TABLE' => 'chatbot_interactions',
+    // Admin risk-alert dedupe window for citizen chat messages (seconds)
+    'CHAT_RISK_NOTIFICATION_DEDUPE_SECONDS' => 120,
     
     // ===========================================
     // GOOGLE OAUTH CREDENTIALS

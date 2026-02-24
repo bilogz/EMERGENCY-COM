@@ -20,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 require_once __DIR__ . '/config.env.php';
 require_once __DIR__ . '/../../ADMIN/api/secure-api-config.php';
 require_once __DIR__ . '/../../ADMIN/api/gemini-api-wrapper.php';
+require_once __DIR__ . '/../../ADMIN/api/chat-logic.php';
 
 /**
  * @param mixed $value
@@ -480,6 +481,445 @@ function chatbot_get_emergency_number(): string {
     return trim($normalized);
 }
 
+/**
+ * @param mixed $default
+ * @return mixed
+ */
+function chatbot_cfg(string $key, $default = null) {
+    if (function_exists('getSecureConfig')) {
+        return getSecureConfig($key, $default);
+    }
+    $env = getenv($key);
+    if ($env !== false && trim((string)$env) !== '') {
+        return $env;
+    }
+    return $default;
+}
+
+function chatbot_trim_text(string $value, int $maxLen = 4000): string {
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
+    if ($maxLen < 1) {
+        return '';
+    }
+    if (function_exists('mb_substr')) {
+        return mb_substr($value, 0, $maxLen, 'UTF-8');
+    }
+    return substr($value, 0, $maxLen);
+}
+
+function chatbot_neon_log_enabled(): bool {
+    return chatbot_to_bool(chatbot_cfg('CHATBOT_NEON_LOG_ENABLED', true));
+}
+
+function chatbot_neon_url(): string {
+    $candidates = [
+        trim((string)chatbot_cfg('CHATBOT_NEON_URL', '')),
+        trim((string)chatbot_cfg('NEON_CHATBOT_URL', '')),
+        trim((string)chatbot_cfg('NEON_DATABASE_URL', '')),
+        trim((string)chatbot_cfg('NEON_TRANSLATION_CACHE_URL', '')),
+        trim((string)chatbot_cfg('PG_IMG_URL', '')),
+    ];
+    foreach ($candidates as $candidate) {
+        if ($candidate !== '') {
+            return $candidate;
+        }
+    }
+    return '';
+}
+
+function chatbot_neon_log_table(): string {
+    $raw = trim((string)chatbot_cfg('CHATBOT_NEON_TABLE', 'chatbot_interactions'));
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $raw);
+    return $table !== '' ? $table : 'chatbot_interactions';
+}
+
+function chatbot_neon_pdo(): ?PDO {
+    static $attempted = false;
+    static $pdo = null;
+
+    if ($attempted) {
+        return $pdo;
+    }
+    $attempted = true;
+
+    if (!extension_loaded('pdo_pgsql')) {
+        error_log('chatbot-assistant: Neon logging disabled (pdo_pgsql extension missing)');
+        return null;
+    }
+
+    $host = trim((string)chatbot_cfg('CHATBOT_NEON_HOST', chatbot_cfg('PG_IMG_HOST', '')));
+    $port = (int)chatbot_cfg('CHATBOT_NEON_PORT', chatbot_cfg('PG_IMG_PORT', 5432));
+    $dbName = trim((string)chatbot_cfg('CHATBOT_NEON_DB', chatbot_cfg('PG_IMG_DB', '')));
+    $user = trim((string)chatbot_cfg('CHATBOT_NEON_USER', chatbot_cfg('PG_IMG_USER', '')));
+    $pass = (string)chatbot_cfg('CHATBOT_NEON_PASS', chatbot_cfg('PG_IMG_PASS', ''));
+    $sslmode = trim((string)chatbot_cfg('CHATBOT_NEON_SSLMODE', chatbot_cfg('PG_IMG_SSLMODE', 'require')));
+    $channelBinding = trim((string)chatbot_cfg('CHATBOT_NEON_CHANNEL_BINDING', chatbot_cfg('PG_IMG_CHANNEL_BINDING', '')));
+    $libpqOptions = trim((string)chatbot_cfg('CHATBOT_NEON_OPTIONS', chatbot_cfg('PG_IMG_OPTIONS', '')));
+
+    $url = chatbot_neon_url();
+    if ($url !== '') {
+        $parts = @parse_url($url);
+        if (is_array($parts)) {
+            if (!empty($parts['host'])) {
+                $host = (string)$parts['host'];
+            }
+            if (!empty($parts['port'])) {
+                $port = (int)$parts['port'];
+            }
+            if (!empty($parts['path'])) {
+                $dbName = ltrim((string)$parts['path'], '/');
+            }
+            if (isset($parts['user'])) {
+                $user = rawurldecode((string)$parts['user']);
+            }
+            if (isset($parts['pass'])) {
+                $pass = rawurldecode((string)$parts['pass']);
+            }
+            if (!empty($parts['query'])) {
+                $query = [];
+                parse_str((string)$parts['query'], $query);
+                if (!empty($query['sslmode'])) {
+                    $sslmode = (string)$query['sslmode'];
+                }
+                if (!empty($query['channel_binding'])) {
+                    $channelBinding = (string)$query['channel_binding'];
+                }
+                if (!empty($query['options'])) {
+                    $libpqOptions = (string)$query['options'];
+                }
+            }
+        }
+    } elseif (function_exists('twc_postgres_image_pdo')) {
+        $fallbackPdo = twc_postgres_image_pdo();
+        if ($fallbackPdo instanceof PDO) {
+            $pdo = $fallbackPdo;
+            return $pdo;
+        }
+    }
+
+    if ($host === '' || $dbName === '' || $user === '') {
+        error_log('chatbot-assistant: Neon logging config incomplete (host/db/user missing)');
+        return null;
+    }
+
+    if ($libpqOptions === '' && stripos($host, '-pooler.') !== false) {
+        $labels = explode('.', $host);
+        $endpointLabel = trim((string)($labels[0] ?? ''));
+        if ($endpointLabel !== '') {
+            $libpqOptions = 'endpoint=' . $endpointLabel;
+        }
+    }
+
+    $dsn = "pgsql:host={$host};port={$port};dbname={$dbName};sslmode={$sslmode}";
+    if ($libpqOptions !== '') {
+        $dsn .= ';options=' . $libpqOptions;
+    }
+
+    $normalizedChannelBinding = strtolower($channelBinding);
+    $dsnWithChannelBinding = $dsn;
+    if (in_array($normalizedChannelBinding, ['require', 'prefer', 'disable'], true)) {
+        $dsnWithChannelBinding .= ';channel_binding=' . $normalizedChannelBinding;
+    }
+
+    $options = [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_TIMEOUT => 10,
+    ];
+
+    try {
+        $pdo = new PDO($dsnWithChannelBinding, $user, $pass, $options);
+        return $pdo;
+    } catch (Throwable $e) {
+        if (
+            $dsnWithChannelBinding !== $dsn &&
+            stripos($e->getMessage(), 'invalid connection option "channel_binding"') !== false
+        ) {
+            try {
+                $pdo = new PDO($dsn, $user, $pass, $options);
+                return $pdo;
+            } catch (Throwable $retryError) {
+                error_log('chatbot-assistant: Neon logging retry without channel_binding failed: ' . $retryError->getMessage());
+                return null;
+            }
+        }
+
+        error_log('chatbot-assistant: Neon logging connection failed: ' . $e->getMessage());
+        return null;
+    }
+}
+
+function chatbot_neon_log_table_ready(): bool {
+    static $ready = null;
+    if ($ready !== null) {
+        return $ready;
+    }
+
+    $pg = chatbot_neon_pdo();
+    if (!$pg) {
+        $ready = false;
+        return false;
+    }
+
+    $table = chatbot_neon_log_table();
+    try {
+        $pg->exec("
+            CREATE TABLE IF NOT EXISTS {$table} (
+                id BIGSERIAL PRIMARY KEY,
+                session_key VARCHAR(120) NULL,
+                user_id VARCHAR(120) NULL,
+                conversation_id VARCHAR(80) NULL,
+                request_text TEXT NOT NULL,
+                response_text TEXT NOT NULL,
+                incident_type VARCHAR(64) NULL,
+                incident_label VARCHAR(120) NULL,
+                emergency_detected BOOLEAN NOT NULL DEFAULT FALSE,
+                language_code VARCHAR(16) NULL,
+                locale VARCHAR(40) NULL,
+                model_used VARCHAR(80) NULL,
+                used_rule_fallback BOOLEAN NOT NULL DEFAULT FALSE,
+                qc_scope VARCHAR(24) NULL,
+                qc_barangays TEXT NULL,
+                metadata JSONB NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        ");
+        $pg->exec("CREATE INDEX IF NOT EXISTS idx_{$table}_created_at ON {$table}(created_at DESC)");
+        $pg->exec("CREATE INDEX IF NOT EXISTS idx_{$table}_conversation_id ON {$table}(conversation_id)");
+        $ready = true;
+        return true;
+    } catch (Throwable $e) {
+        $ready = false;
+        error_log('chatbot-assistant: Neon log table ensure failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+function chatbot_log_interaction(array $payload): bool {
+    if (!chatbot_neon_log_enabled()) {
+        return false;
+    }
+    if (!chatbot_neon_log_table_ready()) {
+        return false;
+    }
+
+    $pg = chatbot_neon_pdo();
+    if (!$pg) {
+        return false;
+    }
+
+    $table = chatbot_neon_log_table();
+
+    $sessionKey = chatbot_trim_text((string)($payload['session_key'] ?? ''), 120);
+    $userId = chatbot_trim_text((string)($payload['user_id'] ?? ''), 120);
+    $conversationId = chatbot_trim_text((string)($payload['conversation_id'] ?? ''), 80);
+    $requestText = chatbot_trim_text((string)($payload['request_text'] ?? ''), 7000);
+    $responseText = chatbot_trim_text((string)($payload['response_text'] ?? ''), 7000);
+    $incidentType = chatbot_trim_text((string)($payload['incident_type'] ?? ''), 64);
+    $incidentLabel = chatbot_trim_text((string)($payload['incident_label'] ?? ''), 120);
+    $emergencyDetected = !empty($payload['emergency_detected']);
+    $languageCode = chatbot_trim_text((string)($payload['language_code'] ?? ''), 16);
+    $locale = chatbot_trim_text((string)($payload['locale'] ?? ''), 40);
+    $modelUsed = chatbot_trim_text((string)($payload['model_used'] ?? ''), 80);
+    $usedRuleFallback = !empty($payload['used_rule_fallback']);
+    $qcScope = chatbot_trim_text((string)($payload['qc_scope'] ?? ''), 24);
+    $qcBarangays = $payload['qc_barangays'] ?? [];
+    if (is_array($qcBarangays)) {
+        $qcBarangays = implode(', ', array_slice(array_values(array_filter(array_map('trim', $qcBarangays))), 0, 20));
+    }
+    $qcBarangays = chatbot_trim_text((string)$qcBarangays, 1200);
+    $metadata = $payload['metadata'] ?? null;
+
+    if ($requestText === '' || $responseText === '') {
+        return false;
+    }
+
+    $metadataJson = null;
+    if (is_array($metadata) || is_object($metadata)) {
+        $encoded = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (is_string($encoded) && $encoded !== '' && $encoded !== 'null') {
+            $metadataJson = $encoded;
+        }
+    } elseif (is_string($metadata) && trim($metadata) !== '') {
+        $candidate = chatbot_trim_text($metadata, 4000);
+        $decoded = json_decode($candidate, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            $metadataJson = $candidate;
+        } else {
+            $metadataJson = json_encode(
+                ['raw' => $candidate],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            );
+        }
+    }
+
+    try {
+        $stmt = $pg->prepare("
+            INSERT INTO {$table}
+                (session_key, user_id, conversation_id, request_text, response_text,
+                 incident_type, incident_label, emergency_detected, language_code, locale,
+                 model_used, used_rule_fallback, qc_scope, qc_barangays, metadata, created_at)
+            VALUES
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), NOW())
+        ");
+        $stmt->execute([
+            $sessionKey !== '' ? $sessionKey : null,
+            $userId !== '' ? $userId : null,
+            $conversationId !== '' ? $conversationId : null,
+            $requestText,
+            $responseText,
+            $incidentType !== '' ? $incidentType : null,
+            $incidentLabel !== '' ? $incidentLabel : null,
+            $emergencyDetected ? 1 : 0,
+            $languageCode !== '' ? $languageCode : null,
+            $locale !== '' ? $locale : null,
+            $modelUsed !== '' ? $modelUsed : null,
+            $usedRuleFallback ? 1 : 0,
+            $qcScope !== '' ? $qcScope : null,
+            $qcBarangays !== '' ? $qcBarangays : null,
+            $metadataJson,
+        ]);
+        return true;
+    } catch (Throwable $e) {
+        error_log('chatbot-assistant: Neon log insert failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * @return string[]
+ */
+function chatbot_qc_barangays(): array {
+    static $cached = null;
+    if (is_array($cached)) {
+        return $cached;
+    }
+
+    $fallback = [
+        'Commonwealth',
+        'Batasan Hills',
+        'Tandang Sora',
+        'Bagong Pag-asa',
+        'Holy Spirit',
+        'Payatas',
+        'Novaliches Proper',
+        'Culiat',
+        'Pasong Tamo',
+        'Loyola Heights',
+    ];
+
+    $path = dirname(__DIR__, 2) . '/barangay-main/barangay/data/qc_barangays.json';
+    if (!is_file($path)) {
+        $cached = $fallback;
+        return $cached;
+    }
+
+    $raw = @file_get_contents($path);
+    if (!is_string($raw) || trim($raw) === '') {
+        $cached = $fallback;
+        return $cached;
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        $cached = $fallback;
+        return $cached;
+    }
+
+    $list = [];
+    foreach ($decoded as $item) {
+        $name = trim((string)$item);
+        if ($name !== '') {
+            $list[$name] = true;
+        }
+    }
+
+    $cached = !empty($list) ? array_keys($list) : $fallback;
+    return $cached;
+}
+
+function chatbot_qc_normalize_token(string $text): string {
+    $text = strtolower(trim($text));
+    $text = str_replace(['ñ', 'Ñ'], 'n', $text);
+    $text = preg_replace('/[^a-z0-9]+/u', ' ', $text);
+    $text = preg_replace('/\s+/', ' ', (string)$text);
+    return trim((string)$text);
+}
+
+/**
+ * @param string[] $barangays
+ * @return string[]
+ */
+function chatbot_match_qc_barangays(string $text, array $barangays): array {
+    $normalizedHaystack = chatbot_qc_normalize_token($text);
+    if ($normalizedHaystack === '') {
+        return [];
+    }
+
+    $searchable = ' ' . $normalizedHaystack . ' ';
+    $matches = [];
+    foreach ($barangays as $barangay) {
+        $normalizedBarangay = chatbot_qc_normalize_token((string)$barangay);
+        if ($normalizedBarangay === '') {
+            continue;
+        }
+        if (strpos($searchable, ' ' . $normalizedBarangay . ' ') !== false) {
+            $matches[] = (string)$barangay;
+            if (count($matches) >= 8) {
+                break;
+            }
+        }
+    }
+
+    return $matches;
+}
+
+function chatbot_detect_non_qc_location(string $text): string {
+    $normalized = chatbot_normalize_for_match($text);
+    if ($normalized === '') {
+        return '';
+    }
+
+    $patterns = [
+        'Makati' => '/\bmakati\b/i',
+        'Manila' => '/\bmanila\b/i',
+        'Taguig' => '/\btaguig\b/i',
+        'Pasig' => '/\bpasig\b/i',
+        'Mandaluyong' => '/\bmandaluyong\b/i',
+        'Caloocan' => '/\bcaloocan\b/i',
+        'Marikina' => '/\bmarikina\b/i',
+        'San Juan' => '/\bsan juan\b/i',
+        'Paranaque' => '/\bparanaque|parañaque\b/i',
+        'Las Pinas' => '/\blas pinas|las piñas\b/i',
+        'Pasay' => '/\bpasay\b/i',
+        'Quezon Province' => '/\bquezon province\b/i',
+    ];
+
+    foreach ($patterns as $label => $pattern) {
+        if (preg_match($pattern, $normalized) === 1) {
+            return $label;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * @param string[] $matchedBarangays
+ */
+function chatbot_qc_scope(string $sourceText, array $matchedBarangays, string $nonQcLocation): string {
+    if ($nonQcLocation !== '') {
+        return 'outside_qc';
+    }
+    if (!empty($matchedBarangays) || preg_match('/\b(quezon city|qc)\b/i', $sourceText) === 1) {
+        return 'qc';
+    }
+    return 'unknown';
+}
+
 function chatbot_build_local_reply(
     string $message,
     string $incidentType,
@@ -661,6 +1101,8 @@ try {
         . "- Keep replies practical, short, and clear.\n"
         . "- Always finish with complete sentences and proper punctuation.\n"
         . "- Match the user's language. If user writes in Filipino/Tagalog, reply in Filipino/Tagalog.\n"
+        . "- Focus on Quezon City locations, barangays, and emergency context.\n"
+        . "- If the user location looks outside Quezon City, ask for confirmation and remind them to contact local responders.\n"
         . "- If the user reports danger, treat it as urgent and prioritize immediate safety.\n"
         . "- If user asks what incident type it is, classify into one category and explain briefly.\n"
         . "- Always ask for exact location/barangay when needed.\n"
@@ -712,9 +1154,21 @@ try {
     $incidentLabel = chatbot_incident_label($incidentType, $preferredLanguage);
     $followUpHint = chatbot_incident_follow_up($incidentType, $preferredLanguage);
 
+    $routingText = trim($message . ' ' . implode(' ', array_slice($historyUserMessages, -4)));
+    $qcBarangays = chatbot_qc_barangays();
+    $matchedQcBarangays = chatbot_match_qc_barangays($routingText, $qcBarangays);
+    $nonQcLocation = chatbot_detect_non_qc_location($routingText);
+    $locationScope = chatbot_qc_scope($routingText, $matchedQcBarangays, $nonQcLocation);
+    $qcBarangayPromptReference = implode(', ', array_slice($qcBarangays, 0, 50));
+
     $prompt = $systemPrompt . "\n\n"
         . "Server routing context:\n"
         . "- Service location: Quezon City, Philippines.\n"
+        . "- Service scope: Quezon City operations only.\n"
+        . "- location_scope_signal: " . $locationScope . "\n"
+        . "- matched_qc_barangays: " . (!empty($matchedQcBarangays) ? implode(', ', $matchedQcBarangays) : 'none_detected') . "\n"
+        . "- detected_non_qc_location: " . ($nonQcLocation !== '' ? $nonQcLocation : 'none_detected') . "\n"
+        . "- qc_barangay_reference_sample: " . $qcBarangayPromptReference . "\n"
         . "- emergency_detected: " . ($isEmergency ? 'true' : 'false') . "\n"
         . "- incident_type: " . $incidentType . "\n"
         . "- incident_label: " . $incidentLabel . "\n"
@@ -723,6 +1177,9 @@ try {
         . "- emergency_number: " . $emergencyNumber . "\n"
         . "- emergency_call_link: " . ($callLink !== '' ? $callLink : 'not_configured') . "\n"
         . "- Always reply in response_language_name.\n"
+        . "- If location_scope_signal=outside_qc: ask user to confirm exact Quezon City barangay and explain that this assistant is optimized for QC routing.\n"
+        . "- If location_scope_signal=outside_qc and incident is urgent: still give immediate safety steps, then advise contacting local emergency responders in that city.\n"
+        . "- Ask for barangay + landmark (street, nearest school/hospital/intersection) whenever location details are incomplete.\n"
         . "- If response_language_code=fil, use natural Filipino (Tagalog). Avoid switching to English except URLs, numbers, and proper names.\n"
         . "- If emergency_detected=true and response_language_code=en: include 'Call " . $emergencyNumber . " immediately if life is at risk.'\n"
         . "- If emergency_detected=true and response_language_code=fil: include 'Tumawag agad sa " . $emergencyNumber . " kung may banta sa buhay.'\n"
@@ -829,11 +1286,35 @@ try {
     $reply = chatbot_limit_reply_length($reply, 1800);
 
     $replyLanguageDetected = chatbot_detect_language_from_text($reply);
+    $resolvedModel = $usedRuleFallback ? 'rule-fallback' : $configuredModel;
+    $loggedToNeon = chatbot_log_interaction([
+        'session_key' => (string)($input['sessionId'] ?? $input['sessionKey'] ?? ''),
+        'user_id' => (string)($input['userId'] ?? ''),
+        'conversation_id' => (string)($input['conversationId'] ?? ''),
+        'request_text' => $message,
+        'response_text' => $reply,
+        'incident_type' => $incidentType,
+        'incident_label' => $incidentLabel,
+        'emergency_detected' => $isEmergency,
+        'language_code' => $preferredLanguage,
+        'locale' => $locale,
+        'model_used' => $resolvedModel,
+        'used_rule_fallback' => $usedRuleFallback,
+        'qc_scope' => $locationScope,
+        'qc_barangays' => $matchedQcBarangays,
+        'metadata' => [
+            'reply_language_detected' => $replyLanguageDetected,
+            'non_qc_location' => $nonQcLocation,
+            'history_count' => count($historyLines),
+            'emergency_number' => $emergencyNumber,
+            'call_link' => $callLink,
+        ],
+    ]);
 
     echo json_encode([
         'success' => true,
         'reply' => $reply,
-        'model' => $usedRuleFallback ? 'rule-fallback' : $configuredModel,
+        'model' => $resolvedModel,
         'timestamp' => round(microtime(true) * 1000),
         'emergencyDetected' => $isEmergency,
         'incidentType' => $incidentType,
@@ -842,7 +1323,10 @@ try {
         'callLink' => $callLink,
         'usedRuleFallback' => $usedRuleFallback,
         'preferredLanguage' => $preferredLanguage,
-        'replyLanguage' => $replyLanguageDetected
+        'replyLanguage' => $replyLanguageDetected,
+        'locationScope' => $locationScope,
+        'matchedQcBarangays' => $matchedQcBarangays,
+        'loggedToNeon' => $loggedToNeon
     ]);
 } catch (Throwable $e) {
     error_log('chatbot-assistant error: ' . $e->getMessage());

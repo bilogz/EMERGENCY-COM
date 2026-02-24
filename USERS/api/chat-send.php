@@ -357,6 +357,7 @@ try {
     if (!$classificationCacheHit && $text !== '') {
         twc_postgres_incident_cache_store($text, $rawCategoryText, $rawPriorityText, $category, $priority);
     }
+    $riskLevel = twc_chat_risk_level($messageForPriority, $category, $priority);
 
     $storedMessageText = $text !== '' ? $text : $attachmentPreviewText;
     $lastMessagePreview = $text !== '' ? $text : $attachmentPreviewText;
@@ -721,6 +722,18 @@ try {
     $pdo->commit();
 
     $responseAttachmentUrl = twc_normalize_public_url($attachmentUrl);
+    $riskNotification = twc_emit_chat_risk_notification($pdo, [
+        'message' => $text !== '' ? $text : $attachmentPreviewText,
+        'category' => $category !== '' ? $category : (string)$userConcern,
+        'priority' => (string)$priority,
+        'riskLevel' => $riskLevel,
+        'conversationId' => $conversationId,
+        'userName' => $userName,
+        'userLocation' => (string)$userLocation,
+        'assignedTo' => $assignedTo,
+        'ipAddress' => (string)$ipAddress,
+        'snippet' => $lastMessagePreview,
+    ]);
 
     echo json_encode([
         'success' => true,
@@ -729,6 +742,8 @@ try {
         'workflowStatus' => $statusInProgress,
         'category' => $category,
         'priority' => $priority,
+        'riskLevel' => $riskLevel,
+        'riskNotification' => $riskNotification,
         'assignedTo' => $assignedTo,
         'imageUrl' => $responseAttachmentUrl,
         'attachment' => $responseAttachmentUrl !== null ? [

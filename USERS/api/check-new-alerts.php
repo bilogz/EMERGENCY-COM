@@ -172,51 +172,107 @@ try {
     $alertsTable = resolveRealtimeAlertsTable($pdo);
     $logsTable = resolveRealtimeLogsTable($pdo);
     $hasCategoryTable = realtimeHasReadableTable($pdo, 'alert_categories');
+    $hasRecipientsMap = realtimeHasReadableTable($pdo, 'alert_recipients');
 
-    // 1. Get user's subscribed categories
-    $stmt = $pdo->prepare("SELECT category_id FROM user_subscriptions WHERE user_id = ? AND is_active = 1");
-    $stmt->execute([$userId]);
-    $subscriptions = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $latestAlert = null;
+    $unreadCount = 0;
 
-    // 2. Get user's barangay/role for targeting
-    $uStmt = $pdo->prepare("SELECT barangay, user_type FROM users WHERE id = ?");
-    $uStmt->execute([$userId]);
-    $user = $uStmt->fetch(PDO::FETCH_ASSOC);
-    $barangay = $user['barangay'] ?? '';
-    $userType = $user['user_type'] ?? '';
+    if ($hasRecipientsMap) {
+        // Recipient-mapped visibility:
+        // - global alerts (no map rows) are visible to all
+        // - targeted alerts are visible only to mapped users
+        $sql = "SELECT a.*";
+        if ($hasCategoryTable) {
+            $sql .= ", c.name as category_name, c.icon as category_icon, c.color as category_color
+                FROM {$alertsTable} a
+                LEFT JOIN alert_categories c ON a.category_id = c.id
+                WHERE a.status = 'active'";
+        } else {
+            $sql .= ", COALESCE(a.category, 'General') as category_name, 'fa-exclamation-triangle' as category_icon, '#95a5a6' as category_color
+                FROM {$alertsTable} a
+                WHERE a.status = 'active'";
+        }
+        $sql .= "
+            AND a.id NOT IN (SELECT alert_id FROM user_alert_marks WHERE user_id = ?)
+            AND (
+                NOT EXISTS (SELECT 1 FROM alert_recipients ar0 WHERE ar0.alert_id = a.id)
+                OR EXISTS (SELECT 1 FROM alert_recipients ar WHERE ar.alert_id = a.id AND ar.user_id = ?)
+            )
+            ORDER BY a.created_at DESC
+            LIMIT 1";
 
-    // 3. Find the latest alert that the user hasn't seen yet
-    // Filter by: Subscription OR Targeted Barangay OR Targeted Role
-    $sql = "SELECT a.*";
-    if ($hasCategoryTable) {
-        $sql .= ", c.name as category_name, c.icon as category_icon, c.color as category_color
-            FROM {$alertsTable} a
-            LEFT JOIN alert_categories c ON a.category_id = c.id
-            WHERE a.status = 'active'";
-    } else {
-        $sql .= ", COALESCE(a.category, 'General') as category_name, 'fa-exclamation-triangle' as category_icon, '#95a5a6' as category_color
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$userId, $userId]);
+        $latestAlert = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $cStmt = $pdo->prepare("
+            SELECT COUNT(*)
             FROM {$alertsTable} a
             WHERE a.status = 'active'
-        ";
-    }
-    $sql .= "
+            AND a.id NOT IN (SELECT alert_id FROM user_alert_marks WHERE user_id = ?)
+            AND (
+                NOT EXISTS (SELECT 1 FROM alert_recipients ar0 WHERE ar0.alert_id = a.id)
+                OR EXISTS (SELECT 1 FROM alert_recipients ar WHERE ar.alert_id = a.id AND ar.user_id = ?)
+            )
+        ");
+        $cStmt->execute([$userId, $userId]);
+        $unreadCount = (int)$cStmt->fetchColumn();
+    } else {
+        // Backward-compatible fallback for deployments without recipient map.
+        $stmt = $pdo->prepare("SELECT category_id FROM user_subscriptions WHERE user_id = ? AND is_active = 1");
+        $stmt->execute([$userId]);
+        $subscriptions = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $uStmt = $pdo->prepare("SELECT barangay, user_type FROM users WHERE id = ?");
+        $uStmt->execute([$userId]);
+        $user = $uStmt->fetch(PDO::FETCH_ASSOC);
+        $barangay = $user['barangay'] ?? '';
+        $userType = $user['user_type'] ?? '';
+
+        $sql = "SELECT a.*";
+        if ($hasCategoryTable) {
+            $sql .= ", c.name as category_name, c.icon as category_icon, c.color as category_color
+                FROM {$alertsTable} a
+                LEFT JOIN alert_categories c ON a.category_id = c.id
+                WHERE a.status = 'active'";
+        } else {
+            $sql .= ", COALESCE(a.category, 'General') as category_name, 'fa-exclamation-triangle' as category_icon, '#95a5a6' as category_color
+                FROM {$alertsTable} a
+                WHERE a.status = 'active'
+            ";
+        }
+        $sql .= "
+                AND a.id NOT IN (SELECT alert_id FROM user_alert_marks WHERE user_id = ?)
+                AND (
+                    a.category_id IN (" . (empty($subscriptions) ? "0" : implode(',', array_map('intval', $subscriptions))) . ")
+                    OR a.id IN (SELECT log_id FROM {$logsTable} WHERE recipients LIKE ?)
+                    OR a.id IN (SELECT log_id FROM {$logsTable} WHERE recipients LIKE ?)
+                )
+                ORDER BY a.created_at DESC
+                LIMIT 1";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            $userId,
+            "%$barangay%",
+            "%$userType%"
+        ]);
+        $latestAlert = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $cStmt = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM {$alertsTable} a
+            WHERE a.status = 'active'
             AND a.id NOT IN (SELECT alert_id FROM user_alert_marks WHERE user_id = ?)
             AND (
                 a.category_id IN (" . (empty($subscriptions) ? "0" : implode(',', array_map('intval', $subscriptions))) . ")
                 OR a.id IN (SELECT log_id FROM {$logsTable} WHERE recipients LIKE ?)
                 OR a.id IN (SELECT log_id FROM {$logsTable} WHERE recipients LIKE ?)
             )
-            ORDER BY a.created_at DESC
-            LIMIT 1";
-    
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        $userId,
-        "%$barangay%",
-        "%$userType%"
-    ]);
-    
-    $latestAlert = $stmt->fetch(PDO::FETCH_ASSOC);
+        ");
+        $cStmt->execute([$userId, "%$barangay%", "%$userType%"]);
+        $unreadCount = (int)$cStmt->fetchColumn();
+    }
 
     // Translate latest alert according to user preference/device-derived preference
     $targetLanguage = resolveRealtimeUserLanguage($pdo, (int)$userId);
@@ -234,21 +290,6 @@ try {
             }
         }
     }
-
-    // 4. Get unread count for badge
-    $cStmt = $pdo->prepare("
-        SELECT COUNT(*) 
-        FROM {$alertsTable} a
-        WHERE a.status = 'active'
-        AND a.id NOT IN (SELECT alert_id FROM user_alert_marks WHERE user_id = ?)
-        AND (
-            a.category_id IN (" . (empty($subscriptions) ? "0" : implode(',', array_map('intval', $subscriptions))) . ")
-            OR a.id IN (SELECT log_id FROM {$logsTable} WHERE recipients LIKE ?)
-            OR a.id IN (SELECT log_id FROM {$logsTable} WHERE recipients LIKE ?)
-        )
-    ");
-    $cStmt->execute([$userId, "%$barangay%", "%$userType%"]);
-    $unreadCount = $cStmt->fetchColumn();
 
     echo json_encode([
         'success' => true,

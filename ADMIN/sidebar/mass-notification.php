@@ -147,7 +147,7 @@ $pageTitle = 'Mass Notification System';
                             </div>
                             <div class="mn-template">
                                 <div class="mn-template-name"><i class="fas fa-fire"></i> Fire Alert Level</div>
-                                <div class="mn-template-desc">Sets a Fire category + Level 1-3, then generates a QC-ready draft message.</div>
+                                <div class="mn-template-desc">Sets a Fire category + Level 1-5, then generates a QC-ready draft message.</div>
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="mnApplyStarterTemplate('fire_level')">Use Template</button>
                             </div>
                             <div class="mn-template">
@@ -300,13 +300,15 @@ $pageTitle = 'Mass Notification System';
                                         </div>
 
                                         <div class="form-group" id="mnFireLevelWrap" style="display:none;">
-                                            <label for="mnFireLevel">Fire Alert Level (1-3)</label>
+                                            <label for="mnFireLevel">Fire Alert Level (1-5)</label>
                                             <select id="mnFireLevel" name="fire_level" class="form-control">
                                                 <option value="1">Level 1</option>
                                                 <option value="2">Level 2</option>
                                                 <option value="3">Level 3</option>
+                                                <option value="4">Level 4</option>
+                                                <option value="5">Level 5</option>
                                             </select>
-                                            <div class="mn-help">Shown for fire categories. You can adjust the alert level before generating a draft.</div>
+                                            <div class="mn-help">Shown for fire categories. Fire dispatch is automatically enforced to High/Critical severity.</div>
                                         </div>
 
                                         <div class="form-group">
@@ -738,9 +740,46 @@ $pageTitle = 'Mass Notification System';
             }
         }
 
+        function mnIsFireCategorySelected() {
+            const catId = $('#category_id').val();
+            const cat = categoriesData.find(c => String(c.id) === String(catId));
+            return mnCategoryKindFromName(cat?.name || '') === 'fire';
+        }
+
+        function mnEnforceFireSeveritySelection(radio) {
+            if (!mnIsFireCategorySelected()) {
+                return radio;
+            }
+
+            const selectedValue = String((radio && radio.value) || (document.querySelector('input[name="severity"]:checked')?.value || '')).trim();
+            if (selectedValue === 'High' || selectedValue === 'Critical') {
+                return radio;
+            }
+
+            const currentFireLevel = parseInt(document.getElementById('mnFireLevel')?.value || '0', 10);
+            const forcedValue = currentFireLevel >= 4 ? 'Critical' : 'High';
+            const forcedRadio = document.querySelector(`input[name="severity"][value="${forcedValue}"]`)
+                || document.querySelector('input[name="severity"][value="High"]');
+
+            if (forcedRadio) {
+                forcedRadio.checked = true;
+            }
+
+            if (!mnEnforceFireSeveritySelection._noticeShown) {
+                mnShowNotice('Fire alerts are automatically enforced to High or Critical severity.');
+                mnEnforceFireSeveritySelection._noticeShown = true;
+            }
+
+            return forcedRadio || radio;
+        }
+
         function updateSeverityUI(radio) {
+            const activeRadio = mnEnforceFireSeveritySelection(radio) || radio;
+
             document.querySelectorAll('.severity-radio').forEach(lbl => lbl.classList.remove('selected'));
-            radio.parentElement.classList.add('selected');
+            if (activeRadio && activeRadio.parentElement) {
+                activeRadio.parentElement.classList.add('selected');
+            }
             mnSyncWeatherSignalFromSeverity();
             mnRefreshAutoDraftFromContext();
             updateDispatchCTAState();
@@ -987,7 +1026,7 @@ $pageTitle = 'Mass Notification System';
 
             const desired = (() => {
                 if (key === 'weather_signal') return { kind: 'weather', severity: 'Medium', weatherSignal: '3' };
-                if (key === 'fire_level') return { kind: 'fire', severity: 'High', fireLevel: '2' };
+                if (key === 'fire_level') return { kind: 'fire', severity: 'Critical', fireLevel: '4' };
                 return { kind: null, severity: 'Medium' };
             })();
 
@@ -1109,11 +1148,11 @@ $pageTitle = 'Mass Notification System';
 
             const titlePrefix = severityWord(sev);
 
-            // Special: Fire alert levels (1–3) mapped from severity
+            // Special: Fire alert levels (1-5) mapped from severity
             const fireLevel = (() => {
                 if (kind !== 'fire') return null;
                 const provided = String(ctx.fireLevel || '').trim();
-                if (provided && /^[1-3]$/.test(provided)) return Number(provided);
+                if (provided && /^[1-5]$/.test(provided)) return Number(provided);
                 return mnDefaultFireLevelFromSeverity(sev);
             })();
 
@@ -1227,7 +1266,8 @@ $pageTitle = 'Mass Notification System';
             const s = String(sev || '').toLowerCase();
             if (s === 'low') return 1;
             if (s === 'medium') return 2;
-            return 3; // high + critical
+            if (s === 'high') return 4;
+            return 5; // critical
         }
 
         function mnDefaultWeatherSignalFromSeverity(sev) {
@@ -1276,7 +1316,7 @@ $pageTitle = 'Mass Notification System';
             if (showFire && fireSel) {
                 if (fireSel.dataset.userSet !== '1') {
                     const current = String(fireSel.value || '').trim();
-                    if (!/^[1-3]$/.test(current)) {
+                    if (!/^[1-5]$/.test(current)) {
                         fireSel.value = String(mnDefaultFireLevelFromSeverity(sev));
                     }
                 }
@@ -1284,9 +1324,20 @@ $pageTitle = 'Mass Notification System';
                 if (!fireSel.dataset._bound) {
                     fireSel.addEventListener('change', () => {
                         fireSel.dataset.userSet = '1';
+                        const currentSev = document.querySelector('input[name="severity"]:checked');
+                        if (currentSev) updateSeverityUI(currentSev);
                         updateLivePreview();
                     });
                     fireSel.dataset._bound = '1';
+                }
+            }
+
+            if (showFire) {
+                const currentSev = document.querySelector('input[name="severity"]:checked');
+                const enforcedSev = mnEnforceFireSeveritySelection(currentSev) || currentSev;
+                if (enforcedSev && currentSev && enforcedSev !== currentSev) {
+                    updateSeverityUI(enforcedSev);
+                    return;
                 }
             }
         }

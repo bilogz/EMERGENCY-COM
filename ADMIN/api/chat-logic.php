@@ -1156,3 +1156,344 @@ if (!function_exists('twc_postgres_chat_draft_clear')) {
         }
     }
 }
+
+if (!function_exists('twc_notification_logs_table')) {
+    /**
+     * Resolves a writable notification logs table with runtime fallback.
+     */
+    function twc_notification_logs_table(PDO $pdo): ?string {
+        static $resolved = null;
+        if ($resolved !== null) {
+            return $resolved !== '' ? $resolved : null;
+        }
+
+        $candidates = ['notification_logs', 'notification_logs_runtime'];
+        foreach ($candidates as $tableName) {
+            if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
+                continue;
+            }
+
+            try {
+                $pdo->exec("
+                    CREATE TABLE IF NOT EXISTS {$tableName} (
+                        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                        channel VARCHAR(64) NOT NULL DEFAULT '',
+                        message TEXT NULL,
+                        recipient VARCHAR(255) NULL,
+                        recipients TEXT NULL,
+                        priority VARCHAR(32) NOT NULL DEFAULT 'medium',
+                        status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                        sent_at DATETIME NULL,
+                        sent_by VARCHAR(120) NULL,
+                        ip_address VARCHAR(64) NULL,
+                        response LONGTEXT NULL,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_status_sent_at (status, sent_at),
+                        INDEX idx_channel (channel)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ");
+            } catch (Throwable $e) {
+                // Continue to health check; table may already exist with custom schema.
+            }
+
+            try {
+                $pdo->query("SELECT 1 FROM {$tableName} LIMIT 1");
+                $resolved = $tableName;
+                return $resolved;
+            } catch (Throwable $e) {
+                error_log("TWC notification logs table '{$tableName}' unavailable: " . $e->getMessage());
+            }
+        }
+
+        $resolved = '';
+        return null;
+    }
+}
+
+if (!function_exists('twc_notification_logs_columns')) {
+    /**
+     * Returns lowercase column-name map for notification logs table.
+     *
+     * @return array<string, bool>
+     */
+    function twc_notification_logs_columns(PDO $pdo, string $tableName): array {
+        static $cache = [];
+        $key = strtolower($tableName);
+        if (isset($cache[$key])) {
+            return $cache[$key];
+        }
+
+        $columns = [];
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM {$tableName}");
+            $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+            foreach ($rows as $row) {
+                $field = strtolower(trim((string)($row['Field'] ?? '')));
+                if ($field !== '') {
+                    $columns[$field] = true;
+                }
+            }
+        } catch (Throwable $e) {
+            error_log("TWC notification logs columns fetch failed ({$tableName}): " . $e->getMessage());
+        }
+
+        $cache[$key] = $columns;
+        return $columns;
+    }
+}
+
+if (!function_exists('twc_insert_notification_log')) {
+    /**
+     * Inserts one notification log row using only columns available in current schema.
+     */
+    function twc_insert_notification_log(PDO $pdo, array $payload): ?int {
+        $tableName = twc_notification_logs_table($pdo);
+        if ($tableName === null) {
+            return null;
+        }
+
+        $columnsMap = twc_notification_logs_columns($pdo, $tableName);
+        if (empty($columnsMap)) {
+            return null;
+        }
+
+        $data = [
+            'channel' => trim((string)($payload['channel'] ?? 'system')),
+            'message' => trim((string)($payload['message'] ?? '')),
+            'recipient' => trim((string)($payload['recipient'] ?? '')),
+            'recipients' => trim((string)($payload['recipients'] ?? '')),
+            'priority' => trim((string)($payload['priority'] ?? 'medium')),
+            'status' => trim((string)($payload['status'] ?? 'pending')),
+            'sent_at' => (string)($payload['sent_at'] ?? date('Y-m-d H:i:s')),
+            'sent_by' => trim((string)($payload['sent_by'] ?? 'system')),
+            'ip_address' => trim((string)($payload['ip_address'] ?? '')),
+            'response' => trim((string)($payload['response'] ?? '')),
+            'created_at' => (string)($payload['created_at'] ?? date('Y-m-d H:i:s')),
+        ];
+
+        $orderedColumns = [];
+        $values = [];
+        foreach ([
+            'channel', 'message', 'recipient', 'recipients',
+            'priority', 'status', 'sent_at', 'sent_by',
+            'ip_address', 'response', 'created_at',
+        ] as $columnName) {
+            if (!isset($columnsMap[$columnName])) {
+                continue;
+            }
+
+            if ($columnName === 'message' && $data[$columnName] === '') {
+                continue;
+            }
+
+            $orderedColumns[] = $columnName;
+            $value = $data[$columnName];
+            if ($value === '') {
+                $value = null;
+            }
+            $values[] = $value;
+        }
+
+        if (empty($orderedColumns)) {
+            return null;
+        }
+
+        try {
+            $sql = "INSERT INTO {$tableName} (" . implode(', ', $orderedColumns) . ")
+                    VALUES (" . twc_placeholders($values) . ")";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($values);
+            $rawId = $pdo->lastInsertId();
+            return is_numeric($rawId) ? (int)$rawId : null;
+        } catch (Throwable $e) {
+            error_log('TWC notification log insert failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+}
+
+if (!function_exists('twc_chat_risk_level')) {
+    /**
+     * Classifies incoming citizen chat reports into normal/high/critical risk.
+     */
+    function twc_chat_risk_level(string $message = '', string $category = '', string $priority = ''): string {
+        $priorityNorm = strtolower(trim((string)$priority));
+        $categoryNorm = strtolower(trim((string)$category));
+        $text = strtolower(trim($message . ' ' . $category));
+        $text = preg_replace('/\s+/', ' ', (string)$text);
+
+        if ($priorityNorm === 'critical' || $priorityNorm === 'high') {
+            return $priorityNorm;
+        }
+
+        $criticalPatterns = [
+            '/\b(fire|sunog|earthquake|lindol|explosion|sumabog|bomb|active shooter|shooting|binaril)\b/i',
+            '/\b(life.?threat|not breathing|unconscious|severe bleeding|collapsed|heart attack|stroke)\b/i',
+            '/\b(kagyat|delikado|critical|critical emergency|major emergency)\b/i',
+        ];
+
+        foreach ($criticalPatterns as $pattern) {
+            if (preg_match($pattern, $text) === 1) {
+                return 'critical';
+            }
+        }
+
+        if (
+            strpos($categoryNorm, 'fire') !== false ||
+            strpos($categoryNorm, 'earthquake') !== false ||
+            strpos($categoryNorm, 'crime') !== false ||
+            strpos($categoryNorm, 'violence') !== false ||
+            strpos($categoryNorm, 'medical') !== false
+        ) {
+            return 'critical';
+        }
+
+        $highPatterns = [
+            '/\b(accident|collision|hit and run|flood|baha|landslide|bagyo|storm|rescue|evac)\b/i',
+            '/\b(injured|sugatan|trapped|na-trap|urgent|emergency|help now|sos)\b/i',
+        ];
+
+        foreach ($highPatterns as $pattern) {
+            if (preg_match($pattern, $text) === 1) {
+                return 'high';
+            }
+        }
+
+        if ($priorityNorm === 'urgent') {
+            return 'high';
+        }
+
+        return 'normal';
+    }
+}
+
+if (!function_exists('twc_should_emit_chat_risk_notification')) {
+    function twc_should_emit_chat_risk_notification(string $riskLevel): bool {
+        $risk = strtolower(trim($riskLevel));
+        return in_array($risk, ['high', 'critical'], true);
+    }
+}
+
+if (!function_exists('twc_emit_chat_risk_notification')) {
+    /**
+     * Emits a notification_logs entry for high-risk citizen chat activity.
+     *
+     * @return array{sent:bool,riskLevel:string,reason:string,logId:int|null,table:string|null}
+     */
+    function twc_emit_chat_risk_notification(PDO $pdo, array $context): array {
+        $message = trim((string)($context['message'] ?? ''));
+        $category = trim((string)($context['category'] ?? ''));
+        $priority = trim((string)($context['priority'] ?? ''));
+        $riskLevel = strtolower(trim((string)($context['riskLevel'] ?? '')));
+        if (!in_array($riskLevel, ['normal', 'high', 'critical'], true)) {
+            $riskLevel = twc_chat_risk_level($message, $category, $priority);
+        }
+
+        $result = [
+            'sent' => false,
+            'riskLevel' => $riskLevel,
+            'reason' => 'risk_below_threshold',
+            'logId' => null,
+            'table' => null,
+        ];
+
+        if (!twc_should_emit_chat_risk_notification($riskLevel)) {
+            return $result;
+        }
+
+        $conversationId = twc_safe_int($context['conversationId'] ?? null);
+        if ($conversationId === null || $conversationId <= 0) {
+            $result['reason'] = 'missing_conversation_id';
+            return $result;
+        }
+
+        $tableName = twc_notification_logs_table($pdo);
+        if ($tableName === null) {
+            $result['reason'] = 'notification_logs_unavailable';
+            return $result;
+        }
+        $result['table'] = $tableName;
+
+        $dedupeSeconds = (int)twc_secure_cfg('CHAT_RISK_NOTIFICATION_DEDUPE_SECONDS', 120);
+        if ($dedupeSeconds < 15) {
+            $dedupeSeconds = 15;
+        } elseif ($dedupeSeconds > 3600) {
+            $dedupeSeconds = 3600;
+        }
+
+        $signature = '[CID:' . $conversationId . '][RISK:' . strtoupper($riskLevel) . ']';
+        $logsColumns = twc_notification_logs_columns($pdo, $tableName);
+        $timeColumn = isset($logsColumns['sent_at']) ? 'sent_at' : (isset($logsColumns['created_at']) ? 'created_at' : '');
+        if (isset($logsColumns['channel']) && isset($logsColumns['message']) && $timeColumn !== '') {
+            try {
+                $dedupeStmt = $pdo->prepare("
+                    SELECT id
+                    FROM {$tableName}
+                    WHERE channel = ?
+                      AND message LIKE ?
+                      AND {$timeColumn} >= (NOW() - INTERVAL ? SECOND)
+                    ORDER BY id DESC
+                    LIMIT 1
+                ");
+                $dedupeStmt->execute(['chat_risk', '%' . $signature . '%', $dedupeSeconds]);
+                $existingId = $dedupeStmt->fetchColumn();
+                if ($existingId) {
+                    $result['reason'] = 'deduped';
+                    $result['logId'] = (int)$existingId;
+                    return $result;
+                }
+            } catch (Throwable $e) {
+                // Do not block insertion when dedupe query fails in non-standard schemas.
+            }
+        }
+
+        $userName = trim((string)($context['userName'] ?? 'Citizen'));
+        $userLocation = trim((string)($context['userLocation'] ?? ''));
+        $assignedTo = twc_safe_int($context['assignedTo'] ?? null);
+
+        $snippet = trim((string)($context['snippet'] ?? $message));
+        if ($snippet === '') {
+            $snippet = '[Attachment] Incident media attached.';
+        }
+        $snippet = preg_replace('/\s+/', ' ', $snippet);
+        if (function_exists('mb_substr')) {
+            $snippet = mb_substr((string)$snippet, 0, 220, 'UTF-8');
+        } else {
+            $snippet = substr((string)$snippet, 0, 220);
+        }
+
+        $lines = [];
+        $lines[] = $signature . ' Citizen high-risk report';
+        $lines[] = 'Reporter: ' . $userName;
+        if ($category !== '') {
+            $lines[] = 'Category: ' . $category;
+        }
+        if ($userLocation !== '') {
+            $lines[] = 'Location: ' . $userLocation;
+        }
+        $lines[] = 'Summary: ' . $snippet;
+        $logMessage = implode(' | ', $lines);
+
+        $logId = twc_insert_notification_log($pdo, [
+            'channel' => 'chat_risk',
+            'message' => $logMessage,
+            'recipient' => 'admin',
+            'recipients' => $assignedTo !== null ? ('admin:' . $assignedTo) : 'admins',
+            'priority' => 'high',
+            'status' => 'sent',
+            'sent_at' => date('Y-m-d H:i:s'),
+            'sent_by' => 'chat_risk_engine',
+            'ip_address' => trim((string)($context['ipAddress'] ?? '')),
+        ]);
+
+        if ($logId === null) {
+            $result['reason'] = 'insert_failed';
+            return $result;
+        }
+
+        $result['sent'] = true;
+        $result['reason'] = 'sent';
+        $result['logId'] = $logId;
+        return $result;
+    }
+}

@@ -13,6 +13,7 @@ class AlertRepository
 {
     private $pdo;
     private $alertsColumns = null;
+    private $alertsColumnMeta = null;
 
     /**
      * Constructor
@@ -39,6 +40,88 @@ class AlertRepository
 
         return $this->alertsColumns;
     }
+
+    private function getAlertsColumnMeta()
+    {
+        if (is_array($this->alertsColumnMeta)) {
+            return $this->alertsColumnMeta;
+        }
+
+        $meta = [];
+        try {
+            $stmt = $this->pdo->query("SHOW COLUMNS FROM alerts");
+            $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+            foreach ($rows as $row) {
+                $field = (string)($row['Field'] ?? '');
+                if ($field !== '') {
+                    $meta[$field] = $row;
+                }
+            }
+        } catch (PDOException $e) {
+            $meta = [];
+        }
+
+        $this->alertsColumnMeta = $meta;
+        return $this->alertsColumnMeta;
+    }
+
+    private function normalizeSeverity($severity): string
+    {
+        $s = strtolower(trim((string)$severity));
+        return in_array($s, ['low', 'medium', 'high', 'critical'], true) ? $s : 'medium';
+    }
+
+    private function parseEnumValues($columnType): array
+    {
+        $vals = [];
+        if (preg_match_all("/'([^']+)'/", (string)$columnType, $matches)) {
+            foreach (($matches[1] ?? []) as $raw) {
+                $v = strtolower(trim((string)$raw));
+                if ($v !== '') {
+                    $vals[] = $v;
+                }
+            }
+        }
+        return array_values(array_unique($vals));
+    }
+
+    private function resolveSeverityForAlertsColumn($severity): string
+    {
+        $desired = $this->normalizeSeverity($severity);
+        $meta = $this->getAlertsColumnMeta();
+        $col = $meta['severity'] ?? null;
+        if (!$col) {
+            return $desired;
+        }
+
+        $type = strtolower((string)($col['Type'] ?? ''));
+        if (strpos($type, 'enum(') !== 0) {
+            return $desired;
+        }
+
+        $allowed = $this->parseEnumValues($type);
+        if (empty($allowed)) {
+            return $desired;
+        }
+        if (in_array($desired, $allowed, true)) {
+            return $desired;
+        }
+
+        $fallbacks = [
+            'critical' => ['critical', 'extreme', 'high', 'medium', 'moderate', 'low'],
+            'high' => ['high', 'critical', 'extreme', 'medium', 'moderate', 'low'],
+            'medium' => ['medium', 'moderate', 'high', 'critical', 'extreme', 'low'],
+            'low' => ['low', 'medium', 'moderate', 'high', 'critical']
+        ];
+
+        foreach ($fallbacks[$desired] ?? [] as $candidate) {
+            if (in_array($candidate, $allowed, true)) {
+                return $candidate;
+            }
+        }
+
+        return (string)$allowed[0];
+    }
     
     /**
      * Create a new alert
@@ -50,7 +133,7 @@ class AlertRepository
      * @param string $status Alert status (default: 'active')
      * @param string|null $severity Alert severity (optional)
      * @param int|null $weatherSignal Weather signal (1-5) for weather category (optional)
-     * @param int|null $fireLevel Fire level (1-3) for fire category (optional)
+     * @param int|null $fireLevel Fire level (1-5) for fire category (optional)
      * @param string|null $source Alert source (optional, e.g. mass_notification, pagasa, phivolcs)
      * @return int|null New alert ID or null on failure
      */
@@ -69,7 +152,7 @@ class AlertRepository
 
             if ($severity !== null && in_array('severity', $available, true)) {
                 $cols[] = 'severity';
-                $vals[] = $severity;
+                $vals[] = $this->resolveSeverityForAlertsColumn($severity);
                 $placeholders[] = '?';
             }
 
