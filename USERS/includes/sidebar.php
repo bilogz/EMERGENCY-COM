@@ -2456,6 +2456,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const submitBtn = freshForm.querySelector('.chat-form-submit');
                 const submitBtnOriginalHtml = submitBtn ? submitBtn.innerHTML : '';
+                if (freshForm.getAttribute('data-submitting') === 'true') {
+                    return false;
+                }
+                freshForm.setAttribute('data-submitting', 'true');
                 if (submitBtn) {
                     submitBtn.disabled = true;
                     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting Chat...';
@@ -2577,6 +2581,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         window.updateUserInfoSubmitState();
                     }
                     return false;
+                } finally {
+                    freshForm.setAttribute('data-submitting', 'false');
                 }
 
                 return false;

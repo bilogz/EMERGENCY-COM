@@ -205,7 +205,38 @@ try {
             $newFileName = 'incident_' . date('Ymd_His') . '_' . bin2hex(random_bytes(8)) . '.' . $resolvedExtension;
             $savedAttachmentAbsolutePath = $uploadDir . DIRECTORY_SEPARATOR . $newFileName;
 
-            if (!move_uploaded_file($tmpFile, $savedAttachmentAbsolutePath)) {
+            $savedToDisk = false;
+            $lastUploadWarning = null;
+
+            if (move_uploaded_file($tmpFile, $savedAttachmentAbsolutePath)) {
+                $savedToDisk = true;
+            } else {
+                $lastUploadWarning = error_get_last();
+                clearstatcache(true, $tmpFile);
+
+                // Fallbacks for hosts where move_uploaded_file() fails despite a valid upload.
+                if (is_file($tmpFile) && @rename($tmpFile, $savedAttachmentAbsolutePath)) {
+                    $savedToDisk = true;
+                } elseif (is_file($tmpFile) && @copy($tmpFile, $savedAttachmentAbsolutePath)) {
+                    @unlink($tmpFile);
+                    $savedToDisk = true;
+                } else {
+                    $lastUploadWarning = error_get_last();
+                }
+            }
+
+            if (!$savedToDisk) {
+                $debugContext = [
+                    'tmpFile' => $tmpFile,
+                    'tmpFileExists' => is_file($tmpFile),
+                    'uploadDir' => $uploadDir,
+                    'uploadDirWritable' => is_writable($uploadDir),
+                    'destination' => $savedAttachmentAbsolutePath,
+                ];
+                if (is_array($lastUploadWarning) && !empty($lastUploadWarning['message'])) {
+                    $debugContext['phpWarning'] = $lastUploadWarning['message'];
+                }
+                error_log('chat-send: attachment save failure context: ' . json_encode($debugContext));
                 throw new RuntimeException('Failed to save uploaded attachment.');
             }
 
