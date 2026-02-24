@@ -45,6 +45,8 @@ class DashboardService {
     public function getChartData() {
         $notificationData = $this->repository->getNotificationChartData();
         $channelData = $this->repository->getChannelDistribution();
+        $incidentTrend = $this->repository->getIncidentTrendData(7);
+        $endToEndFlow = $this->repository->getEndToEndFlowData();
         
         return [
             'notifications' => [
@@ -54,7 +56,16 @@ class DashboardService {
             'channels' => [
                 'labels' => ['SMS', 'Email', 'PA System'],
                 'values' => [$channelData['sms'], $channelData['email'], $channelData['pa']]
-            ]
+            ],
+            'incident_trend' => [
+                'labels' => $incidentTrend['labels'],
+                'weather' => $incidentTrend['weather'],
+                'earthquake' => $incidentTrend['earthquake']
+            ],
+            'end_to_end' => [
+                'labels' => $endToEndFlow['labels'],
+                'values' => $endToEndFlow['values']
+            ],
         ];
     }
     

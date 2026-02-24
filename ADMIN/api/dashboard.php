@@ -43,7 +43,22 @@ try {
             'channels' => [
                 'labels' => ['SMS', 'Email', 'PA System'],
                 'values' => [0, 0, 0]
-            ]
+            ],
+            'incident_trend' => [
+                'labels' => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                'weather' => [0, 0, 0, 0, 0, 0, 0],
+                'earthquake' => [0, 0, 0, 0, 0, 0, 0]
+            ],
+            'end_to_end' => [
+                'labels' => [
+                    'Citizen reports (24h)',
+                    'Queue backlog',
+                    'In-progress conversations',
+                    'Alerts sent today',
+                    'Estimated delivered'
+                ],
+                'values' => [0, 0, 0, 0, 0]
+            ],
         ],
         'activity' => [],
         'modules' => [],

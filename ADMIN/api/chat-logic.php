@@ -936,3 +936,223 @@ if (!function_exists('twc_postgres_incident_cache_store')) {
         }
     }
 }
+
+if (!function_exists('twc_chat_draft_cache_ttl_seconds')) {
+    function twc_chat_draft_cache_ttl_seconds(): int {
+        $raw = (int)twc_secure_cfg('CHAT_DRAFT_CACHE_TTL_SECONDS', 604800); // 7 days
+        if ($raw < 60) {
+            return 60;
+        }
+        if ($raw > 31536000) {
+            return 31536000;
+        }
+        return $raw;
+    }
+}
+
+if (!function_exists('twc_chat_draft_user_key')) {
+    function twc_chat_draft_user_key($userId): ?string {
+        $value = trim((string)$userId);
+        if ($value === '' || strlen($value) > 191) {
+            return null;
+        }
+        if (preg_match('/^[A-Za-z0-9._:@-]{1,191}$/', $value) !== 1) {
+            return null;
+        }
+        return $value;
+    }
+}
+
+if (!function_exists('twc_chat_draft_scope_key')) {
+    function twc_chat_draft_scope_key($conversationId = null): string {
+        $raw = trim((string)$conversationId);
+        if ($raw === '' || strcasecmp($raw, 'null') === 0 || strcasecmp($raw, 'undefined') === 0) {
+            return 'pending';
+        }
+        if (preg_match('/^[A-Za-z0-9_-]{1,80}$/', $raw) !== 1) {
+            return 'pending';
+        }
+        return 'conv_' . $raw;
+    }
+}
+
+if (!function_exists('twc_postgres_chat_draft_table_ready')) {
+    function twc_postgres_chat_draft_table_ready(): bool {
+        static $attempted = false;
+        static $ready = false;
+
+        if ($attempted) {
+            return $ready;
+        }
+        $attempted = true;
+
+        $pg = twc_postgres_image_pdo();
+        if (!$pg) {
+            return false;
+        }
+
+        try {
+            $pg->exec("
+                CREATE TABLE IF NOT EXISTS chat_message_drafts (
+                    user_key VARCHAR(191) NOT NULL,
+                    scope_key VARCHAR(96) NOT NULL DEFAULT 'pending',
+                    draft_text TEXT NOT NULL,
+                    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (user_key, scope_key)
+                )
+            ");
+            $pg->exec("CREATE INDEX IF NOT EXISTS idx_chat_message_drafts_updated_at ON chat_message_drafts(updated_at DESC)");
+            $ready = true;
+        } catch (Throwable $e) {
+            $ready = false;
+            error_log('TWC PostgreSQL chat draft table ensure failed: ' . $e->getMessage());
+        }
+
+        return $ready;
+    }
+}
+
+if (!function_exists('twc_postgres_chat_draft_fetch')) {
+    /**
+     * Returns ['text' => string, 'scope' => string, 'updatedAt' => string] or null.
+     */
+    function twc_postgres_chat_draft_fetch(string $userId, $conversationId = null): ?array {
+        $userKey = twc_chat_draft_user_key($userId);
+        if ($userKey === null || !twc_postgres_chat_draft_table_ready()) {
+            return null;
+        }
+
+        $scopeKey = twc_chat_draft_scope_key($conversationId);
+        $fallbackScopeKey = 'pending';
+        $ttl = twc_chat_draft_cache_ttl_seconds();
+        $pg = twc_postgres_image_pdo();
+        if (!$pg) {
+            return null;
+        }
+
+        try {
+            if ($scopeKey === $fallbackScopeKey) {
+                $stmt = $pg->prepare("
+                    SELECT scope_key, draft_text, updated_at
+                    FROM chat_message_drafts
+                    WHERE user_key = ?
+                      AND scope_key = ?
+                      AND updated_at >= (NOW() - (? * INTERVAL '1 second'))
+                    LIMIT 1
+                ");
+                $stmt->execute([$userKey, $scopeKey, $ttl]);
+            } else {
+                $stmt = $pg->prepare("
+                    SELECT scope_key, draft_text, updated_at
+                    FROM chat_message_drafts
+                    WHERE user_key = ?
+                      AND scope_key IN (?, ?)
+                      AND updated_at >= (NOW() - (? * INTERVAL '1 second'))
+                    ORDER BY CASE WHEN scope_key = ? THEN 0 ELSE 1 END, updated_at DESC
+                    LIMIT 1
+                ");
+                $stmt->execute([$userKey, $scopeKey, $fallbackScopeKey, $ttl, $scopeKey]);
+            }
+
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                return null;
+            }
+
+            $text = (string)($row['draft_text'] ?? '');
+            if ($text === '') {
+                return null;
+            }
+
+            return [
+                'text' => $text,
+                'scope' => (string)($row['scope_key'] ?? $scopeKey),
+                'updatedAt' => (string)($row['updated_at'] ?? ''),
+            ];
+        } catch (Throwable $e) {
+            error_log('TWC PostgreSQL chat draft fetch failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+}
+
+if (!function_exists('twc_postgres_chat_draft_store')) {
+    function twc_postgres_chat_draft_store(string $userId, $conversationId, string $draftText): bool {
+        $userKey = twc_chat_draft_user_key($userId);
+        if ($userKey === null || !twc_postgres_chat_draft_table_ready()) {
+            return false;
+        }
+
+        $scopeKey = twc_chat_draft_scope_key($conversationId);
+        $text = (string)$draftText;
+        if ($text === '') {
+            return twc_postgres_chat_draft_clear($userId, $conversationId, true);
+        }
+
+        if (function_exists('mb_substr')) {
+            $text = mb_substr($text, 0, 5000, 'UTF-8');
+        } else {
+            $text = substr($text, 0, 5000);
+        }
+
+        $pg = twc_postgres_image_pdo();
+        if (!$pg) {
+            return false;
+        }
+
+        try {
+            $stmt = $pg->prepare("
+                INSERT INTO chat_message_drafts
+                    (user_key, scope_key, draft_text, created_at, updated_at)
+                VALUES
+                    (?, ?, ?, NOW(), NOW())
+                ON CONFLICT (user_key, scope_key) DO UPDATE
+                SET
+                    draft_text = EXCLUDED.draft_text,
+                    updated_at = NOW()
+            ");
+            $stmt->execute([$userKey, $scopeKey, $text]);
+            return true;
+        } catch (Throwable $e) {
+            error_log('TWC PostgreSQL chat draft store failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+}
+
+if (!function_exists('twc_postgres_chat_draft_clear')) {
+    function twc_postgres_chat_draft_clear(string $userId, $conversationId = null, bool $includePendingFallback = false): bool {
+        $userKey = twc_chat_draft_user_key($userId);
+        if ($userKey === null || !twc_postgres_chat_draft_table_ready()) {
+            return false;
+        }
+
+        $scopeKey = twc_chat_draft_scope_key($conversationId);
+        $scopeList = [$scopeKey];
+        if ($includePendingFallback && $scopeKey !== 'pending') {
+            $scopeList[] = 'pending';
+        }
+        $scopeList = array_values(array_unique($scopeList));
+
+        $pg = twc_postgres_image_pdo();
+        if (!$pg) {
+            return false;
+        }
+
+        try {
+            $placeholders = implode(', ', array_fill(0, count($scopeList), '?'));
+            $params = array_merge([$userKey], $scopeList);
+            $stmt = $pg->prepare("
+                DELETE FROM chat_message_drafts
+                WHERE user_key = ?
+                  AND scope_key IN ($placeholders)
+            ");
+            $stmt->execute($params);
+            return true;
+        } catch (Throwable $e) {
+            error_log('TWC PostgreSQL chat draft clear failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+}

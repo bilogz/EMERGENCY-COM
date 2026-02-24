@@ -857,6 +857,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.clearPendingChatAttachment = clearChatAttachmentSelection;
 
     bindChatAttachmentHandlers();
+    bindChatDraftAutosave(chatInput);
     // Function to ensure chat-mysql.js is loaded
     function ensureChatScriptLoaded() {
         return new Promise((resolve) => {
@@ -1023,6 +1024,328 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         return unique;
     }
+
+
+    const CHAT_MESSAGE_DRAFT_MAX_CHARS = 5000;
+    const CHAT_MESSAGE_DRAFT_SAVE_DEBOUNCE_MS = 800;
+    const CHAT_MESSAGE_DRAFT_LOCAL_PREFIX = 'chat_message_draft::';
+    let chatDraftSaveDebounceTimer = null;
+    let chatDraftLastSyncedSignature = null;
+
+    function resolveChatDraftUserId() {
+        const existingUserId = sessionStorage.getItem('user_id') || localStorage.getItem('guest_user_id');
+        if (existingUserId && existingUserId !== 'null' && existingUserId !== 'undefined') {
+            return String(existingUserId);
+        }
+        if (typeof getOrCreateChatUserIdentity === 'function') {
+            const identity = getOrCreateChatUserIdentity();
+            if (identity && identity.userId) {
+                return String(identity.userId);
+            }
+        }
+        return '';
+    }
+
+    function resolveChatDraftScopeKey(conversationIdOverride = null) {
+        const fallbackConversationId = sessionStorage.getItem('conversation_id') || window.currentConversationId || null;
+        const rawConversationId = conversationIdOverride !== null && conversationIdOverride !== undefined
+            ? String(conversationIdOverride).trim()
+            : String(fallbackConversationId || '').trim();
+        if (!rawConversationId || rawConversationId === 'null' || rawConversationId === 'undefined') {
+            return 'pending';
+        }
+        return 'conv_' + rawConversationId;
+    }
+
+    function buildChatDraftLocalKey(userId, scopeKey) {
+        return CHAT_MESSAGE_DRAFT_LOCAL_PREFIX + userId + '::' + scopeKey;
+    }
+
+    function chatDraftLocalKeysForRead(userId, scopeKey) {
+        const keys = [buildChatDraftLocalKey(userId, scopeKey)];
+        if (scopeKey !== 'pending') {
+            keys.push(buildChatDraftLocalKey(userId, 'pending'));
+        }
+        return keys;
+    }
+
+    function clampChatDraftText(rawText) {
+        const value = String(rawText == null ? '' : rawText);
+        if (value.length <= CHAT_MESSAGE_DRAFT_MAX_CHARS) {
+            return value;
+        }
+        return value.slice(0, CHAT_MESSAGE_DRAFT_MAX_CHARS);
+    }
+
+    function writeChatDraftToLocalStorage(rawText, conversationIdOverride = null) {
+        const userId = resolveChatDraftUserId();
+        if (!userId) return;
+
+        const scopeKey = resolveChatDraftScopeKey(conversationIdOverride);
+        const localKey = buildChatDraftLocalKey(userId, scopeKey);
+        const text = clampChatDraftText(rawText);
+        try {
+            if (text.trim() === '') {
+                localStorage.removeItem(localKey);
+            } else {
+                localStorage.setItem(localKey, text);
+            }
+        } catch (_) {
+        }
+    }
+
+    function readChatDraftFromLocalStorage(conversationIdOverride = null) {
+        const userId = resolveChatDraftUserId();
+        if (!userId) return '';
+
+        const scopeKey = resolveChatDraftScopeKey(conversationIdOverride);
+        const keys = chatDraftLocalKeysForRead(userId, scopeKey);
+        for (const key of keys) {
+            try {
+                const value = localStorage.getItem(key);
+                if (value && value.trim() !== '') {
+                    return clampChatDraftText(value);
+                }
+            } catch (_) {
+            }
+        }
+        return '';
+    }
+
+    function clearChatDraftFromLocalStorage(conversationIdOverride = null, includePending = true) {
+        const userId = resolveChatDraftUserId();
+        if (!userId) return;
+
+        const scopeKey = resolveChatDraftScopeKey(conversationIdOverride);
+        const keys = [buildChatDraftLocalKey(userId, scopeKey)];
+        if (includePending && scopeKey !== 'pending') {
+            keys.push(buildChatDraftLocalKey(userId, 'pending'));
+        }
+
+        try {
+            keys.forEach((key) => localStorage.removeItem(key));
+        } catch (_) {
+        }
+    }
+
+    async function postChatDraftApi(payload) {
+        const endpoints = resolveUserChatApiPath('chat-draft.php');
+        let lastError = null;
+
+        for (const endpoint of endpoints) {
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.status === 404) {
+                    lastError = new Error('Draft endpoint not found');
+                    continue;
+                }
+                if (!res.ok) {
+                    const errText = await res.text();
+                    lastError = new Error(errText || ('HTTP ' + res.status));
+                    continue;
+                }
+                const data = await res.json().catch(() => ({}));
+                if (data && data.success) {
+                    return data;
+                }
+                lastError = new Error(data && data.message ? data.message : 'Draft request failed');
+            } catch (err) {
+                lastError = err;
+            }
+        }
+
+        if (lastError) {
+            console.debug('Chat draft sync skipped:', lastError.message || lastError);
+        }
+        return null;
+    }
+
+    async function loadChatDraftFromApi(userId, conversationIdOverride = null) {
+        const endpoints = resolveUserChatApiPath('chat-draft.php');
+        const conversationId = conversationIdOverride !== null && conversationIdOverride !== undefined
+            ? String(conversationIdOverride)
+            : String(sessionStorage.getItem('conversation_id') || window.currentConversationId || '');
+        let lastError = null;
+
+        for (const endpoint of endpoints) {
+            try {
+                const query = new URLSearchParams({
+                    action: 'load',
+                    userId: userId,
+                    conversationId: conversationId
+                });
+                const res = await fetch(endpoint + '?' + query.toString(), { method: 'GET' });
+                if (res.status === 404) {
+                    lastError = new Error('Draft endpoint not found');
+                    continue;
+                }
+                if (!res.ok) {
+                    const errText = await res.text();
+                    lastError = new Error(errText || ('HTTP ' + res.status));
+                    continue;
+                }
+                const data = await res.json().catch(() => null);
+                if (data && data.success && typeof data.draftText === 'string') {
+                    return clampChatDraftText(data.draftText);
+                }
+                lastError = new Error(data && data.message ? data.message : 'Draft load failed');
+            } catch (err) {
+                lastError = err;
+            }
+        }
+
+        if (lastError) {
+            console.debug('Chat draft load skipped:', lastError.message || lastError);
+        }
+        return '';
+    }
+
+    async function flushChatMessageDraftSave(textOverride = null) {
+        const input = document.getElementById('chatInput');
+        const rawText = textOverride !== null && textOverride !== undefined
+            ? String(textOverride)
+            : (input ? String(input.value || '') : '');
+        const text = clampChatDraftText(rawText);
+        writeChatDraftToLocalStorage(text);
+
+        const userId = resolveChatDraftUserId();
+        if (!userId) return false;
+
+        const conversationId = sessionStorage.getItem('conversation_id') || window.currentConversationId || null;
+        const scopeKey = resolveChatDraftScopeKey(conversationId);
+        const signature = userId + '|' + scopeKey + '|' + text;
+        if (chatDraftLastSyncedSignature === signature) {
+            return true;
+        }
+
+        let synced = false;
+        if (text.trim() === '') {
+            const clearRes = await postChatDraftApi({
+                action: 'clear',
+                userId: userId,
+                conversationId: conversationId,
+                includePending: true
+            });
+            synced = !!(clearRes && clearRes.success);
+        } else {
+            const saveRes = await postChatDraftApi({
+                action: 'save',
+                userId: userId,
+                conversationId: conversationId,
+                text: text
+            });
+            synced = !!(saveRes && saveRes.success);
+        }
+
+        if (synced) {
+            chatDraftLastSyncedSignature = signature;
+        }
+        return synced;
+    }
+
+    function scheduleChatMessageDraftSave() {
+        const input = document.getElementById('chatInput');
+        if (!input) return;
+
+        const text = clampChatDraftText(input.value || '');
+        writeChatDraftToLocalStorage(text);
+
+        if (chatDraftSaveDebounceTimer) {
+            clearTimeout(chatDraftSaveDebounceTimer);
+        }
+        chatDraftSaveDebounceTimer = setTimeout(() => {
+            flushChatMessageDraftSave(text).catch(() => {});
+        }, CHAT_MESSAGE_DRAFT_SAVE_DEBOUNCE_MS);
+    }
+
+    async function restoreChatMessageDraft(options = {}) {
+        const input = document.getElementById('chatInput');
+        if (!input) return '';
+
+        const force = options && options.force === true;
+        const conversationId = options && Object.prototype.hasOwnProperty.call(options, 'conversationId')
+            ? options.conversationId
+            : (sessionStorage.getItem('conversation_id') || window.currentConversationId || null);
+
+        if (!force && input.value && input.value.trim() !== '') {
+            return input.value;
+        }
+
+        const userId = resolveChatDraftUserId();
+        if (!userId) return '';
+
+        const beforeLoadValue = input.value;
+        let draftText = readChatDraftFromLocalStorage(conversationId);
+
+        if (!draftText) {
+            draftText = await loadChatDraftFromApi(userId, conversationId);
+            if (draftText) {
+                writeChatDraftToLocalStorage(draftText, conversationId);
+            }
+        }
+
+        if (!draftText) return '';
+        if (!force && input.value !== beforeLoadValue) return input.value;
+        if (!force && input.value && input.value.trim() !== '') return input.value;
+
+        input.value = draftText;
+        return draftText;
+    }
+
+    function bindChatDraftAutosave(inputEl = null) {
+        const input = inputEl || document.getElementById('chatInput');
+        if (!input) return;
+        if (!input.hasAttribute('data-chat-draft-bound')) {
+            input.setAttribute('data-chat-draft-bound', 'true');
+            input.addEventListener('input', scheduleChatMessageDraftSave);
+            input.addEventListener('blur', function() {
+                flushChatMessageDraftSave().catch(() => {});
+            });
+        }
+    }
+
+    function clearChatMessageDraft(options = {}) {
+        const conversationId = options && Object.prototype.hasOwnProperty.call(options, 'conversationId')
+            ? options.conversationId
+            : (sessionStorage.getItem('conversation_id') || window.currentConversationId || null);
+        const includePending = !options || options.includePending !== false;
+        const clearInput = !options || options.clearInput !== false;
+        const syncRemote = !options || options.syncRemote !== false;
+
+        if (chatDraftSaveDebounceTimer) {
+            clearTimeout(chatDraftSaveDebounceTimer);
+            chatDraftSaveDebounceTimer = null;
+        }
+
+        clearChatDraftFromLocalStorage(conversationId, includePending);
+        chatDraftLastSyncedSignature = null;
+
+        const input = document.getElementById('chatInput');
+        if (clearInput && input) {
+            input.value = '';
+        }
+
+        if (syncRemote) {
+            const userId = resolveChatDraftUserId();
+            if (userId) {
+                postChatDraftApi({
+                    action: 'clear',
+                    userId: userId,
+                    conversationId: conversationId,
+                    includePending: includePending
+                }).catch(() => {});
+            }
+        }
+    }
+
+    window.scheduleChatMessageDraftSave = scheduleChatMessageDraftSave;
+    window.restoreChatMessageDraft = restoreChatMessageDraft;
+    window.clearChatMessageDraft = clearChatMessageDraft;
+    window.bindChatDraftAutosave = bindChatDraftAutosave;
 
     function getOrCreateChatUserIdentity() {
         let userId = sessionStorage.getItem('user_id');
@@ -1471,6 +1794,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 sessionStorage.removeItem('user_concern');
                 localStorage.removeItem('guest_emergency_description');
                 sessionStorage.removeItem('user_emergency_description');
+                clearChatMessageDraft({ clearInput: true, includePending: true, syncRemote: true });
 
                 const chatInterface = document.getElementById('chatInterface');
                 const userInfoForm = document.getElementById('chatUserInfoForm');
@@ -1939,6 +2263,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const input = document.getElementById('chatInput');
             if (input) {
+                bindChatDraftAutosave(input);
+                restoreChatMessageDraft().catch(() => {});
                 input.focus();
             }
         }, 150);
@@ -1976,6 +2302,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (typeof window.clearPendingChatAttachment === 'function') {
             window.clearPendingChatAttachment();
         }
+        clearChatMessageDraft({ clearInput: true, includePending: true, syncRemote: true });
 
         const concernSelect = document.getElementById('userConcernSelect');
         if (concernSelect) {
@@ -2752,6 +3079,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.attachSendButtonHandlers();
                 }, 100);
             }
+
+            setTimeout(() => {
+                const input = document.getElementById('chatInput');
+                if (input) {
+                    bindChatDraftAutosave(input);
+                    restoreChatMessageDraft().catch(() => {});
+                }
+            }, 250);
             
             console.log('Modal should be visible now');
         }, true); // Use capture phase
@@ -3316,6 +3651,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (success) {
                     console.log('Message sent successfully');
+                    if (typeof clearChatMessageDraft === 'function') {
+                        clearChatMessageDraft({ clearInput: false, includePending: true, syncRemote: true });
+                    }
                     // Update status
                     if (window.updateChatStatus) {
                         window.updateChatStatus('waiting');
@@ -3340,6 +3678,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (chatInput) {
                         chatInput.value = text;
                     }
+                    scheduleChatMessageDraftSave();
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
@@ -3659,6 +3998,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const newInput = input.cloneNode(true);
                 input.parentNode.replaceChild(newInput, input);
                 const freshInput = document.getElementById('chatInput');
+                if (freshInput) {
+                    bindChatDraftAutosave(freshInput);
+                    restoreChatMessageDraft().catch(() => {});
+                }
                 
                 freshInput.style.pointerEvents = 'auto';
                 freshInput.style.cursor = 'text';

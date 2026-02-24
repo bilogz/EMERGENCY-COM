@@ -754,6 +754,9 @@
             if (typeof window.clearInitialIncidentPhotoSelection === 'function') {
                 window.clearInitialIncidentPhotoSelection();
             }
+            if (typeof window.clearChatMessageDraft === 'function') {
+                window.clearChatMessageDraft({ clearInput: true, includePending: true, syncRemote: true });
+            }
             
             // Optionally clear all fields to force complete re-entry
             // Or keep name/contact/location and only clear concern
@@ -869,6 +872,9 @@
 
         if (typeof window.clearInitialIncidentPhotoSelection === 'function') {
             window.clearInitialIncidentPhotoSelection();
+        }
+        if (typeof window.clearChatMessageDraft === 'function') {
+            window.clearChatMessageDraft({ clearInput: true, includePending: true, syncRemote: true });
         }
 
         const chatMessages = document.querySelector('.chat-messages');
@@ -1092,6 +1098,9 @@
             
             if (data.success) {
                 console.log('Message sent successfully, messageId:', data.messageId, 'conversationId:', data.conversationId);
+                if (typeof window.clearChatMessageDraft === 'function') {
+                    window.clearChatMessageDraft({ clearInput: false, includePending: true, syncRemote: true });
+                }
                 // Update conversation ID if returned
                 if (data.conversationId) {
                     conversationId = data.conversationId;

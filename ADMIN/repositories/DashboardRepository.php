@@ -70,6 +70,98 @@ class DashboardRepository {
         }
         return $default;
     }
+
+    /**
+     * Build deterministic day labels and ISO dates for charting.
+     *
+     * @param int $days Number of days to include
+     * @return array{labels: array<int,string>, dates: array<int,string>}
+     */
+    private function buildRecentDateSeries($days = 7) {
+        $days = max(1, (int)$days);
+        $labels = [];
+        $dates = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $ts = strtotime("-{$i} days");
+            $labels[] = date('D', $ts);
+            $dates[] = date('Y-m-d', $ts);
+        }
+        return ['labels' => $labels, 'dates' => $dates];
+    }
+
+    /**
+     * Current active/open conversations across the system.
+     *
+     * @return int
+     */
+    public function getActiveConversationsCount() {
+        if (!$this->tableExists('conversations')) {
+            return 0;
+        }
+        return (int)$this->safeQuery("
+            SELECT COUNT(*) FROM conversations
+            WHERE status IN ('active', 'open', 'in_progress', 'waiting_user')
+        ", 0);
+    }
+
+    /**
+     * Queue backlog for two-way communication routing.
+     *
+     * @return int
+     */
+    public function getPendingQueueCount() {
+        if (!$this->tableExists('chat_queue')) {
+            return 0;
+        }
+        return (int)$this->safeQuery("
+            SELECT COUNT(*) FROM chat_queue
+            WHERE status IN ('pending', 'open')
+        ", 0);
+    }
+
+    /**
+     * Count inbound citizen/user threads in the last N hours.
+     *
+     * @param int $hours
+     * @return int
+     */
+    public function getRecentCitizenMessagesCount($hours = 24) {
+        $hours = max(1, (int)$hours);
+
+        if ($this->tableExists('chat_messages')) {
+            return (int)$this->safeQuery("
+                SELECT COUNT(DISTINCT conversation_id) FROM chat_messages
+                WHERE sender_type IN ('user', 'citizen')
+                  AND created_at >= DATE_SUB(NOW(), INTERVAL {$hours} HOUR)
+            ", 0);
+        }
+
+        if ($this->tableExists('messages') && $this->columnExists('messages', 'conversation_id')) {
+            $timeColumn = null;
+            if ($this->columnExists('messages', 'sent_at')) {
+                $timeColumn = 'sent_at';
+            } elseif ($this->columnExists('messages', 'created_at')) {
+                $timeColumn = 'created_at';
+            }
+
+            if ($this->columnExists('messages', 'sender_type') && $timeColumn !== null) {
+                return (int)$this->safeQuery("
+                    SELECT COUNT(DISTINCT conversation_id) FROM messages
+                    WHERE sender_type IN ('citizen', 'user')
+                      AND {$timeColumn} >= DATE_SUB(NOW(), INTERVAL {$hours} HOUR)
+                ", 0);
+            }
+
+            if ($timeColumn !== null) {
+                return (int)$this->safeQuery("
+                    SELECT COUNT(DISTINCT conversation_id) FROM messages
+                    WHERE {$timeColumn} >= DATE_SUB(NOW(), INTERVAL {$hours} HOUR)
+                ", 0);
+            }
+        }
+
+        return 0;
+    }
     
     /**
      * Get total active subscribers count
@@ -195,30 +287,19 @@ class DashboardRepository {
      * @return array Array with 'labels' and 'values' keys
      */
     public function getNotificationChartData() {
-        $labels = [];
-        $values = [];
-        
+        $series = $this->buildRecentDateSeries(7);
+        $values = array_fill(0, count($series['dates']), 0);
+
         if ($this->tableExists('notification_logs')) {
-            for ($i = 6; $i >= 0; $i--) {
-                $date = date('Y-m-d', strtotime("-$i days"));
-                $dayName = date('D', strtotime("-$i days"));
-                $count = (int)$this->safeQuery("
-                    SELECT COUNT(*) FROM notification_logs 
-                    WHERE DATE(sent_at) = '$date'
+            foreach ($series['dates'] as $idx => $date) {
+                $values[$idx] = (int)$this->safeQuery("
+                    SELECT COUNT(*) FROM notification_logs
+                    WHERE DATE(sent_at) = '{$date}'
                 ", 0);
-                $labels[] = $dayName;
-                $values[] = $count;
-            }
-        } else {
-            // Default empty data
-            for ($i = 6; $i >= 0; $i--) {
-                $dayName = date('D', strtotime("-$i days"));
-                $labels[] = $dayName;
-                $values[] = 0;
             }
         }
-        
-        return ['labels' => $labels, 'values' => $values];
+
+        return ['labels' => $series['labels'], 'values' => $values];
     }
     
     /**
@@ -235,6 +316,60 @@ class DashboardRepository {
             'sms' => (int)$this->safeQuery("SELECT COUNT(*) FROM notification_logs WHERE channel = 'sms'", 0),
             'email' => (int)$this->safeQuery("SELECT COUNT(*) FROM notification_logs WHERE channel = 'email'", 0),
             'pa' => (int)$this->safeQuery("SELECT COUNT(*) FROM notification_logs WHERE channel = 'pa'", 0)
+        ];
+    }
+
+    /**
+     * Daily incident source trend for dashboard charts.
+     *
+     * @param int $days
+     * @return array{labels: array<int,string>, weather: array<int,int>, earthquake: array<int,int>}
+     */
+    public function getIncidentTrendData($days = 7) {
+        $series = $this->buildRecentDateSeries($days);
+        $weather = [];
+        $earthquake = [];
+
+        foreach ($series['dates'] as $date) {
+            $weather[] = $this->getDomainWarningCountByDate('weather', $date);
+            $earthquake[] = $this->getDomainWarningCountByDate('earthquake', $date);
+        }
+
+        return [
+            'labels' => $series['labels'],
+            'weather' => $weather,
+            'earthquake' => $earthquake
+        ];
+    }
+
+    /**
+     * End-to-end operational flow snapshot used by static dashboard graph.
+     *
+     * @return array{labels: array<int,string>, values: array<int,int>}
+     */
+    public function getEndToEndFlowData() {
+        $received = $this->getRecentCitizenMessagesCount(24);
+        $pendingQueue = $this->getPendingQueueCount();
+        $activeConversations = $this->getActiveConversationsCount();
+        $alertsSent = $this->getNotificationsToday();
+        $successRate = max(0, min(100, (int)$this->getSuccessRate()));
+        $delivered = (int)round(($alertsSent * $successRate) / 100);
+
+        return [
+            'labels' => [
+                'Citizen reports (24h)',
+                'Queue backlog',
+                'In-progress conversations',
+                'Alerts sent today',
+                'Estimated delivered'
+            ],
+            'values' => [
+                $received,
+                $pendingQueue,
+                $activeConversations,
+                $alertsSent,
+                $delivered
+            ]
         ];
     }
     
@@ -343,22 +478,8 @@ class DashboardRepository {
         $notificationsToday = $this->getNotificationsToday();
         $successRate = $this->getSuccessRate();
         $pendingMessages = $this->getPendingMessages();
-
-        $activeConversations = 0;
-        if ($this->tableExists('conversations')) {
-            $activeConversations = (int)$this->safeQuery("
-                SELECT COUNT(*) FROM conversations 
-                WHERE status IN ('active', 'open')
-            ", 0);
-        }
-
-        $pendingQueue = 0;
-        if ($this->tableExists('chat_queue')) {
-            $pendingQueue = (int)$this->safeQuery("
-                SELECT COUNT(*) FROM chat_queue
-                WHERE status IN ('pending', 'open')
-            ", 0);
-        }
+        $activeConversations = $this->getActiveConversationsCount();
+        $pendingQueue = $this->getPendingQueueCount();
 
         $weather24h = $this->getDomainWarningCount('weather', 24);
         $earthquake24h = $this->getDomainWarningCount('earthquake', 24);
@@ -543,6 +664,67 @@ class DashboardRepository {
                 return (int)$this->safeQuery("
                     SELECT COUNT(*) FROM alerts
                     WHERE created_at >= DATE_SUB(NOW(), INTERVAL {$hours} HOUR)
+                      AND (
+                        category_id = 2
+                        OR LOWER(COALESCE(category, '')) LIKE '%earthquake%'
+                      )
+                ", 0);
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Count domain-specific warnings for a single date (YYYY-MM-DD).
+     *
+     * @param string $domain
+     * @param string $date
+     * @return int
+     */
+    private function getDomainWarningCountByDate($domain, $date) {
+        $safeDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$date) === 1 ? (string)$date : date('Y-m-d');
+
+        if ($this->tableExists('automated_warnings')) {
+            if ($domain === 'weather') {
+                return (int)$this->safeQuery("
+                    SELECT COUNT(*) FROM automated_warnings
+                    WHERE DATE(received_at) = '{$safeDate}'
+                      AND (
+                        LOWER(COALESCE(source, '')) IN ('pagasa', 'weather', 'openweather')
+                        OR LOWER(COALESCE(type, '')) IN ('weather', 'rain', 'flood', 'storm', 'typhoon')
+                      )
+                ", 0);
+            }
+
+            if ($domain === 'earthquake') {
+                return (int)$this->safeQuery("
+                    SELECT COUNT(*) FROM automated_warnings
+                    WHERE DATE(received_at) = '{$safeDate}'
+                      AND (
+                        LOWER(COALESCE(source, '')) IN ('phivolcs', 'earthquake')
+                        OR LOWER(COALESCE(type, '')) IN ('earthquake', 'seismic', 'tsunami')
+                      )
+                ", 0);
+            }
+        }
+
+        if ($this->tableExists('alerts')) {
+            if ($domain === 'weather') {
+                return (int)$this->safeQuery("
+                    SELECT COUNT(*) FROM alerts
+                    WHERE DATE(created_at) = '{$safeDate}'
+                      AND (
+                        category_id = 1
+                        OR LOWER(COALESCE(category, '')) LIKE '%weather%'
+                      )
+                ", 0);
+            }
+
+            if ($domain === 'earthquake') {
+                return (int)$this->safeQuery("
+                    SELECT COUNT(*) FROM alerts
+                    WHERE DATE(created_at) = '{$safeDate}'
                       AND (
                         category_id = 2
                         OR LOWER(COALESCE(category, '')) LIKE '%earthquake%'
