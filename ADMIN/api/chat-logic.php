@@ -1329,6 +1329,8 @@ if (!function_exists('twc_chat_risk_level')) {
         $criticalPatterns = [
             '/\b(fire|sunog|earthquake|lindol|explosion|sumabog|bomb|active shooter|shooting|binaril)\b/i',
             '/\b(life.?threat|not breathing|unconscious|severe bleeding|collapsed|heart attack|stroke)\b/i',
+            '/\b(dead|death|died|cardiac arrest|needs first aid|need first aid|medical first aid)\b/i',
+            '/\b(namatay|patay|walang pulso|kailangan ng first aid)\b/i',
             '/\b(kagyat|delikado|critical|critical emergency|major emergency)\b/i',
         ];
 

@@ -839,6 +839,103 @@
     font-weight: 600;
 }
 
+/* Header incident modal */
+.header-incident-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(7, 17, 24, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1200;
+    padding: 1rem;
+}
+
+.header-incident-modal.show {
+    display: flex;
+}
+
+.header-incident-modal-card {
+    width: min(560px, 95vw);
+    background: var(--card-bg-1);
+    border: 1px solid var(--border-color-1);
+    border-left: 5px solid #dc3545;
+    border-radius: 12px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+}
+
+.header-incident-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid var(--border-color-1);
+    background: var(--header-bg-1);
+}
+
+.header-incident-modal-head h4 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text-color-1);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.header-incident-modal-head h4 i {
+    color: #dc3545;
+}
+
+.header-incident-modal-close {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary-1);
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.header-incident-modal-close:hover {
+    background: var(--sidebar-hover-bg-1);
+    color: var(--text-color-1);
+}
+
+.header-incident-modal-body {
+    padding: 1rem;
+}
+
+.header-incident-modal-message {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--text-color-1);
+    line-height: 1.5;
+}
+
+.header-incident-modal-meta {
+    margin: 0.65rem 0 0;
+    font-size: 0.78rem;
+    color: var(--text-secondary-1);
+}
+
+.header-incident-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    padding: 0.9rem 1rem 1rem;
+    border-top: 1px solid var(--border-color-1);
+    background: var(--header-bg-1);
+}
+
+[data-theme="dark"] .header-incident-modal-card {
+    border-left-color: #f45d5d;
+}
+
 @media (max-width: 1024px) {
     .datetime-display {
         display: none;

@@ -119,7 +119,7 @@ $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
             
             <?php if (!$hideNotifications): ?>
             <div class="notification-item">
-                <button class="notification-btn" aria-label="Notifications">
+                <button class="notification-btn" id="headerNotificationBtn" aria-label="Notifications">
                     <i class="fas fa-bell"></i>
                     <span class="notification-badge" id="notificationBadge">0</span>
                 </button>
@@ -127,7 +127,7 @@ $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
             <?php endif; ?>
             
             <div class="notification-item">
-                <button class="notification-btn" aria-label="Messages">
+                <button class="notification-btn" id="headerMessageBtn" aria-label="Messages">
                     <i class="fas fa-envelope"></i>
                     <span class="notification-badge" id="messageBadge">0</span>
                 </button>
@@ -192,40 +192,39 @@ $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
                 <i class="fas fa-times"></i>
             </button>
         </div>
-        <div class="modal-body">
-            <div class="notification-item">
-                <div class="notification-icon">
-                    <i class="fas fa-info-circle"></i>
-                </div>
+        <div class="modal-body" id="headerNotificationBody">
+            <div class="notification-item notification-item--placeholder">
                 <div class="notification-details">
-                    <div class="notification-title">System Update</div>
-                    <div class="notification-text">System will be updated tonight at 11 PM</div>
-                    <div class="notification-time">2 hours ago</div>
-                </div>
-            </div>
-            <div class="notification-item">
-                <div class="notification-icon">
-                    <i class="fas fa-user-plus"></i>
-                </div>
-                <div class="notification-details">
-                    <div class="notification-title">New User Registered</div>
-                    <div class="notification-text">John Doe joined the platform</div>
-                    <div class="notification-time">5 hours ago</div>
-                </div>
-            </div>
-            <div class="notification-item">
-                <div class="notification-icon">
-                    <i class="fas fa-exclamation-triangle"></i>
-                </div>
-                <div class="notification-details">
-                    <div class="notification-title">Storage Warning</div>
-                    <div class="notification-text">Disk space is running low (85% used)</div>
-                    <div class="notification-time">1 day ago</div>
+                    <div class="notification-title">Loading notifications...</div>
+                    <div class="notification-text">Please wait while data is fetched.</div>
                 </div>
             </div>
         </div>
         <div class="modal-footer">
-            <a href="#" class="view-all-link">View All Notifications</a>
+            <button type="button" class="view-all-link" id="headerMarkNotificationsReadBtn">Mark all as read</button>
+            <a href="two-way-communication.php" class="view-all-link">Open Queue</a>
+        </div>
+    </div>
+</div>
+
+<!-- Incident Report Pop Modal -->
+<div class="header-incident-modal" id="headerIncidentModal" aria-hidden="true">
+    <div class="header-incident-modal-card" role="dialog" aria-modal="true" aria-labelledby="headerIncidentModalTitle">
+        <div class="header-incident-modal-head">
+            <h4 id="headerIncidentModalTitle"><i class="fas fa-triangle-exclamation"></i> New Incident Report</h4>
+            <button type="button" class="header-incident-modal-close" id="headerIncidentModalClose" aria-label="Close">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="header-incident-modal-body">
+            <p class="header-incident-modal-message" id="headerIncidentModalMessage"></p>
+            <p class="header-incident-modal-meta" id="headerIncidentModalMeta"></p>
+        </div>
+        <div class="header-incident-modal-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="headerIncidentModalDismiss">Dismiss</button>
+            <a href="two-way-communication.php" class="btn btn-primary btn-sm" id="headerIncidentModalOpen">
+                <i class="fas fa-comments"></i> Open Queue
+            </a>
         </div>
     </div>
 </div>
@@ -484,8 +483,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     modal.classList.add('show');
                     this.classList.add('active');
                     document.body.style.overflow = '';
-                    localStorage.setItem('systemNotificationsLastRead', String(Date.now()));
-                    loadHeaderNotifications();
+                    markHeaderNotificationsRead(true);
+                    closeIncidentReportModal();
                 }
             } else if (ariaLabel === 'Messages') {
                 const modal = document.getElementById('messageModal');
@@ -615,6 +614,7 @@ document.addEventListener('DOMContentLoaded', function() {
         modals.forEach(modal => {
             modal.classList.remove('show');
         });
+        closeIncidentReportModal();
         document.body.style.overflow = '';
     }
     
@@ -813,10 +813,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    const HEADER_NOTIFICATION_POLL_MS = 8000;
+    let lastIncidentModalKey = sessionStorage.getItem('header_last_incident_modal_key') || '';
+
+    function escapeHtml(value) {
+        const text = value == null ? '' : String(value);
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function formatTimeAgo(value) {
         if (!value) return 'Recently';
         const ts = typeof value === 'string' ? Date.parse(value) : Number(value);
-        if (!ts) return 'Recently';
+        if (!ts || Number.isNaN(ts)) return 'Recently';
         const diff = Date.now() - ts;
         if (diff < 60000) return 'Just now';
         if (diff < 3600000) return Math.floor(diff / 60000) + ' minutes ago';
@@ -825,61 +838,214 @@ document.addEventListener('DOMContentLoaded', function() {
         return new Date(ts).toLocaleDateString();
     }
 
+    function buildNotificationIcon(item) {
+        const type = String(item && item.type ? item.type : 'system').toLowerCase();
+        const channel = String(item && item.channel ? item.channel : '').toLowerCase();
+        const status = String(item && item.status ? item.status : '').toLowerCase();
+        const priority = String(item && item.priority ? item.priority : '').toLowerCase();
+
+        if (type === 'incident') {
+            if (priority === 'critical' || channel === 'chat_risk') {
+                return { icon: 'fa-triangle-exclamation', className: 'notification-icon--incident' };
+            }
+            return { icon: 'fa-bell', className: 'notification-icon--incident' };
+        }
+        if (status === 'failed') {
+            return { icon: 'fa-circle-xmark', className: 'notification-icon--failed' };
+        }
+        if (channel.indexOf('weather') !== -1 || channel.indexOf('earthquake') !== -1) {
+            return { icon: 'fa-cloud-bolt', className: 'notification-icon--warn' };
+        }
+        return { icon: 'fa-circle-info', className: 'notification-icon--system' };
+    }
+
+    function buildNotificationTarget(item) {
+        const type = String(item && item.type ? item.type : '').toLowerCase();
+        if (type !== 'incident') {
+            return null;
+        }
+        const convId = parseInt(item && item.conversation_id ? item.conversation_id : 0, 10);
+        if (convId > 0) {
+            return `two-way-communication.php?conversationId=${encodeURIComponent(convId)}`;
+        }
+        return 'two-way-communication.php';
+    }
+
     function renderSystemNotifications(items) {
-        const body = document.querySelector('#notificationModal .modal-body');
+        const body = document.getElementById('headerNotificationBody');
         if (!body) return;
+
         if (!Array.isArray(items) || items.length === 0) {
-            body.innerHTML = '<div class="notification-item"><div class="notification-details"><div class="notification-title">No system notifications</div><div class="notification-text">You are all caught up.</div></div></div>';
+            body.innerHTML = '<div class="notification-item notification-item--placeholder"><div class="notification-details"><div class="notification-title">No notifications</div><div class="notification-text">You are all caught up.</div></div></div>';
             return;
         }
-        body.innerHTML = items.map(item => {
-            const channel = (item.channel || 'system').toUpperCase();
-            const status = (item.status || '').toUpperCase();
-            const title = `${channel} ${status ? '(' + status + ')' : ''}`.trim();
-            const message = (item.message || '').toString().slice(0, 140);
-            const timeText = formatTimeAgo(item.sent_at);
-            const icon = item.status === 'failed' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+
+        body.innerHTML = items.map((item) => {
+            const safeItem = item || {};
+            const type = String(safeItem.type || 'system').toLowerCase();
+            const title = String(safeItem.title || (type === 'incident' ? 'Incident Report' : 'System Notification')).trim();
+            const message = String(safeItem.message || '').trim();
+            const location = String(safeItem.location || '').trim();
+            const timeText = formatTimeAgo(safeItem.sent_at || safeItem.created_at || safeItem.event_time);
+            const iconMeta = buildNotificationIcon(safeItem);
+            const itemClass = type === 'incident' ? 'notification-item--incident' : 'notification-item--system';
+            const target = buildNotificationTarget(safeItem);
+            const actionHtml = target
+                ? `<a href="${escapeHtml(target)}" class="notification-action-link"><i class="fas fa-arrow-up-right-from-square"></i> Open</a>`
+                : '';
+
             return `
-                <div class="notification-item">
-                    <div class="notification-icon">
-                        <i class="fas ${icon}"></i>
+                <div class="notification-item ${itemClass}" data-notification-type="${escapeHtml(type)}">
+                    <div class="notification-icon ${escapeHtml(iconMeta.className)}">
+                        <i class="fas ${escapeHtml(iconMeta.icon)}"></i>
                     </div>
                     <div class="notification-details">
-                        <div class="notification-title">${title || 'System Notification'}</div>
-                        <div class="notification-text">${message || 'Notification sent.'}</div>
-                        <div class="notification-time">${timeText}</div>
+                        <div class="notification-title">${escapeHtml(title)}</div>
+                        <div class="notification-text">${escapeHtml(message || 'Notification received.')}</div>
+                        ${location ? `<div class="notification-text notification-location"><i class="fas fa-location-dot"></i> ${escapeHtml(location)}</div>` : ''}
+                        <div class="notification-time">${escapeHtml(timeText)}</div>
+                        ${actionHtml}
                     </div>
                 </div>
             `;
         }).join('');
     }
 
-    function loadHeaderNotifications() {
-        const bellBtn = document.querySelector('.notification-btn[aria-label="Notifications"]');
+    function incidentModalElements() {
+        return {
+            shell: document.getElementById('headerIncidentModal'),
+            message: document.getElementById('headerIncidentModalMessage'),
+            meta: document.getElementById('headerIncidentModalMeta'),
+            open: document.getElementById('headerIncidentModalOpen'),
+            close: document.getElementById('headerIncidentModalClose'),
+            dismiss: document.getElementById('headerIncidentModalDismiss'),
+        };
+    }
+
+    function closeIncidentReportModal() {
+        const { shell } = incidentModalElements();
+        if (!shell) return;
+        shell.classList.remove('show');
+        shell.setAttribute('aria-hidden', 'true');
+    }
+
+    function openIncidentReportModal(item) {
+        const elements = incidentModalElements();
+        if (!elements.shell || !elements.message || !elements.meta) {
+            return;
+        }
+
+        const title = String(item && item.title ? item.title : 'Incident Report').trim();
+        const message = String(item && item.message ? item.message : 'A new incident was reported.').trim();
+        const location = String(item && item.location ? item.location : '').trim();
+        const sentAt = item && (item.sent_at || item.created_at || item.event_time) ? (item.sent_at || item.created_at || item.event_time) : '';
+        const timeText = formatTimeAgo(sentAt);
+
+        elements.message.textContent = `${title}: ${message}`;
+        const metaParts = [];
+        if (location) metaParts.push(`Location: ${location}`);
+        if (timeText) metaParts.push(timeText);
+        elements.meta.textContent = metaParts.join(' | ');
+
+        if (elements.open) {
+            const target = buildNotificationTarget(item) || 'two-way-communication.php';
+            elements.open.setAttribute('href', target);
+        }
+
+        elements.shell.classList.add('show');
+        elements.shell.setAttribute('aria-hidden', 'false');
+    }
+
+    function buildIncidentItemKey(item) {
+        if (!item || typeof item !== 'object') return '';
+        const id = item.id ? String(item.id) : '';
+        const conv = item.conversation_id ? String(item.conversation_id) : '';
+        const ts = item.sent_at ? String(item.sent_at) : '';
+        const msg = item.message ? String(item.message).slice(0, 80) : '';
+        return [id, conv, ts, msg].join('|');
+    }
+
+    function maybeShowIncidentReportModal(incidentItems) {
+        if (!Array.isArray(incidentItems) || incidentItems.length === 0) {
+            return;
+        }
+        const latest = incidentItems[0];
+        const key = buildIncidentItemKey(latest);
+        if (!key || key === lastIncidentModalKey) {
+            return;
+        }
+        lastIncidentModalKey = key;
+        sessionStorage.setItem('header_last_incident_modal_key', key);
+        openIncidentReportModal(latest);
+    }
+
+    function markHeaderNotificationsRead(reload = false) {
+        localStorage.setItem('systemNotificationsLastRead', String(Date.now()));
+        window.updateHeaderBadges({ notifications: 0 });
+        if (reload) {
+            loadHeaderNotifications({ suppressIncidentModal: true });
+        }
+    }
+
+    function loadHeaderNotifications(options = {}) {
+        const suppressIncidentModal = !!(options && options.suppressIncidentModal);
+        const bellBtn = document.getElementById('headerNotificationBtn');
         if (!bellBtn || !window.API_BASE_PATH) return;
 
-        const lastReadRaw = localStorage.getItem('systemNotificationsLastRead');
-        let lastRead = parseInt(lastReadRaw || '0', 10);
-        if (!lastReadRaw) {
+        let lastRead = parseInt(localStorage.getItem('systemNotificationsLastRead') || '0', 10);
+        if (!Number.isFinite(lastRead) || lastRead <= 0) {
             lastRead = Date.now();
             localStorage.setItem('systemNotificationsLastRead', String(lastRead));
         }
-        const url = `${window.API_BASE_PATH}header-notifications.php?since=${lastRead}`;
+
+        const url = `${window.API_BASE_PATH}header-notifications.php?since=${encodeURIComponent(String(lastRead))}`;
         fetch(url)
             .then(res => res.json())
             .then(data => {
                 if (!data || !data.success) return;
-                const activeAlerts = parseInt(data.active_alerts || 0, 10);
-                const systemUnread = parseInt(data.system_unread || 0, 10);
-                window.updateHeaderBadges({ notifications: activeAlerts + systemUnread });
-                renderSystemNotifications(data.system_notifications || []);
+
+                const notificationUnread = parseInt(data.notification_unread || 0, 10);
+                window.updateHeaderBadges({ notifications: Number.isFinite(notificationUnread) ? notificationUnread : 0 });
+
+                const list = Array.isArray(data.notifications)
+                    ? data.notifications
+                    : (Array.isArray(data.system_notifications) ? data.system_notifications : []);
+                renderSystemNotifications(list);
+
+                if (!suppressIncidentModal && !document.hidden) {
+                    maybeShowIncidentReportModal(Array.isArray(data.incident_notifications) ? data.incident_notifications : []);
+                }
             })
-            .catch(() => {});
+            .catch((error) => {
+                console.warn('header notifications fetch failed:', error);
+            });
+    }
+
+    const markReadBtn = document.getElementById('headerMarkNotificationsReadBtn');
+    if (markReadBtn) {
+        markReadBtn.addEventListener('click', function () {
+            markHeaderNotificationsRead(true);
+        });
+    }
+
+    const incidentModalEls = incidentModalElements();
+    if (incidentModalEls.close) {
+        incidentModalEls.close.addEventListener('click', closeIncidentReportModal);
+    }
+    if (incidentModalEls.dismiss) {
+        incidentModalEls.dismiss.addEventListener('click', closeIncidentReportModal);
+    }
+    if (incidentModalEls.shell) {
+        incidentModalEls.shell.addEventListener('click', function (event) {
+            if (event.target === incidentModalEls.shell) {
+                closeIncidentReportModal();
+            }
+        });
     }
 
     // Initial fetch + refresh
     loadHeaderNotifications();
-    setInterval(loadHeaderNotifications, 30000);
+    setInterval(() => loadHeaderNotifications(), HEADER_NOTIFICATION_POLL_MS);
     
     // Global Chat Notification System - Redirects to Two-Way Communication
     function initGlobalChatNotifications() {

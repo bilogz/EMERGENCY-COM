@@ -115,10 +115,33 @@
     }
 
     async function requestAssistantReply(message) {
+        const sessionUserId = sessionStorage.getItem('user_id') || localStorage.getItem('guest_user_id') || '';
+        const sessionUserName = sessionStorage.getItem('user_name') || localStorage.getItem('guest_name') || 'Guest User';
+        const sessionUserEmail = sessionStorage.getItem('user_email') || '';
+        const sessionUserPhone = sessionStorage.getItem('user_phone') || localStorage.getItem('guest_contact') || '';
+        const sessionUserLocation = sessionStorage.getItem('user_location') || localStorage.getItem('guest_location') || 'Quezon City';
+        const sessionUserConcern = sessionStorage.getItem('user_concern') || localStorage.getItem('guest_concern') || 'chatbot_assistant';
+        const assistantConversationId = sessionStorage.getItem('assistant_emergency_conversation_id') || '';
+        const isGuestUser = !sessionStorage.getItem('user_id') || String(sessionUserId).startsWith('guest_');
+        let chatbotSessionKey = sessionStorage.getItem('chatbot_session_key') || '';
+        if (!chatbotSessionKey) {
+            chatbotSessionKey = 'chatbot_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+            sessionStorage.setItem('chatbot_session_key', chatbotSessionKey);
+        }
+
         const payload = {
             message: message,
             history: assistantHistory.slice(-12),
-            locale: navigator.language || 'en-US'
+            locale: navigator.language || 'en-US',
+            sessionId: chatbotSessionKey,
+            conversationId: assistantConversationId,
+            userId: sessionUserId,
+            userName: sessionUserName,
+            userEmail: sessionUserEmail,
+            userPhone: sessionUserPhone,
+            userLocation: sessionUserLocation,
+            userConcern: sessionUserConcern,
+            isGuest: isGuestUser
         };
 
         let lastError = null;
@@ -143,7 +166,10 @@
                         emergencyDetected: data.emergencyDetected === true,
                         incidentType: typeof data.incidentType === 'string' ? data.incidentType : '',
                         incidentLabel: typeof data.incidentLabel === 'string' ? data.incidentLabel : '',
-                        callLink: typeof data.callLink === 'string' ? data.callLink : ''
+                        callLink: typeof data.callLink === 'string' ? data.callLink : '',
+                        adminRouting: (data && typeof data.adminRouting === 'object' && data.adminRouting)
+                            ? data.adminRouting
+                            : null
                     };
                 }
 
@@ -972,6 +998,13 @@
                 throw new Error('AI assistant returned an empty response.');
             }
 
+            const routedConversationId = replyPayload
+                && replyPayload.adminRouting
+                && (replyPayload.adminRouting.conversationId || replyPayload.adminRouting.conversation_id);
+            if (routedConversationId) {
+                sessionStorage.setItem('assistant_emergency_conversation_id', String(routedConversationId));
+            }
+
             assistantHistory.push({ role: 'assistant', content: assistantReply });
             if (assistantHistory.length > 20) {
                 assistantHistory = assistantHistory.slice(-20);
@@ -988,7 +1021,18 @@
             }
             if (window.updateChatStatus) {
                 if (replyPayload && replyPayload.emergencyDetected) {
-                    window.updateChatStatus('assistant_emergency');
+                    if (replyPayload.adminRouting && replyPayload.adminRouting.routed) {
+                        if (window.addMessageToChat) {
+                            window.addMessageToChat(
+                                'Emergency report forwarded to admin responders. Keep this chat open for updates.',
+                                'system',
+                                Date.now()
+                            );
+                        }
+                        window.updateChatStatus('admin_assigned');
+                    } else {
+                        window.updateChatStatus('assistant_emergency');
+                    }
                 } else {
                     window.updateChatStatus('admin');
                 }

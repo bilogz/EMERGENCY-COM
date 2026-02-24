@@ -382,7 +382,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         let topicSet = new Set();
         let currentPriority = 'all';
         let currentMainView = 'conversations';
+        const queryParams = new URLSearchParams(window.location.search);
+        let conversationIdFromQuery = parseInt(queryParams.get('conversationId') || '0', 10);
+        if (!Number.isFinite(conversationIdFromQuery) || conversationIdFromQuery <= 0) {
+            conversationIdFromQuery = 0;
+        }
+        let conversationFromQueryOpened = false;
         let chatbotLogsSearchTimer = null;
+        let chatbotLogsRealtimeTimer = null;
+        const CHATBOT_LOGS_REFRESH_MS = 3500;
         const chatbotLogsState = {
             page: 1,
             pageSize: 20,
@@ -441,6 +449,38 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             // Allow polling to refresh list again if needed, but keep current ID active in background
         }
 
+        function clearConversationIdQueryParam() {
+            const url = new URL(window.location.href);
+            if (!url.searchParams.has('conversationId')) {
+                return;
+            }
+            url.searchParams.delete('conversationId');
+            window.history.replaceState({}, '', url.toString());
+        }
+
+        function tryOpenConversationFromQuery(conversations) {
+            if (conversationFromQueryOpened || conversationIdFromQuery <= 0) {
+                return;
+            }
+            if (!Array.isArray(conversations) || conversations.length === 0) {
+                return;
+            }
+
+            const target = conversations.find((conv) => Number(conv && conv.id) === conversationIdFromQuery);
+            if (!target) {
+                return;
+            }
+
+            const element = document.querySelector(`.conversation-item[data-conversation-id="${conversationIdFromQuery}"]`);
+            if (!element) {
+                return;
+            }
+
+            openConversation(target.id, element._conversationData || target, element);
+            conversationFromQueryOpened = true;
+            clearConversationIdQueryParam();
+        }
+
         function updateMainViewQueryParam(view) {
             const url = new URL(window.location.href);
             if (view === 'chatbotLogs') {
@@ -474,7 +514,26 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
             if (normalized === 'chatbotLogs') {
                 loadChatbotLogs(false);
+                startChatbotLogsRealtime();
+            } else {
+                stopChatbotLogsRealtime();
             }
+        }
+
+        function stopChatbotLogsRealtime() {
+            if (chatbotLogsRealtimeTimer) {
+                clearInterval(chatbotLogsRealtimeTimer);
+                chatbotLogsRealtimeTimer = null;
+            }
+        }
+
+        function startChatbotLogsRealtime() {
+            stopChatbotLogsRealtime();
+            chatbotLogsRealtimeTimer = setInterval(() => {
+                if (currentMainView !== 'chatbotLogs') return;
+                if (document.hidden) return;
+                loadChatbotLogs(false, { silent: true });
+            }, CHATBOT_LOGS_REFRESH_MS);
         }
 
         function formatChatbotLogDate(rawValue) {
@@ -716,12 +775,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             loadChatbotLogs(false);
         }
 
-        async function loadChatbotLogs(forceResetPage) {
+        async function loadChatbotLogs(forceResetPage, options = {}) {
+            const silent = !!(options && options.silent);
             if (forceResetPage) {
                 chatbotLogsState.page = 1;
             }
             readChatbotLogsFiltersFromUi();
-            renderChatbotLogsLoading();
+            if (!silent) {
+                renderChatbotLogsLoading();
+            }
 
             const params = new URLSearchParams({
                 page: String(chatbotLogsState.page),
@@ -763,9 +825,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 }
             } catch (error) {
                 console.error('Error loading chatbot logs:', error);
-                renderChatbotLogsEmpty(error && error.message ? error.message : 'Failed to load chatbot logs.');
-                updateChatbotLogsPagination();
-                note = 'Request failed';
+                if (!silent) {
+                    renderChatbotLogsEmpty(error && error.message ? error.message : 'Failed to load chatbot logs.');
+                    updateChatbotLogsPagination();
+                    note = 'Request failed';
+                }
             }
 
             updateChatbotLogsMeta(chatbotLogsState.total, chatbotLogsState.page, chatbotLogsState.totalPages, note);
@@ -1116,6 +1180,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 
                 // Render Items (grouped by department)
                 renderGroupedConversations(conversations, append);
+                tryOpenConversationFromQuery(conversations);
                 
             } catch (error) {
                 console.error('Error loading conversations:', error);
@@ -1873,6 +1938,16 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (event.key === 'Escape') {
                     closeChatbotLogModal();
                 }
+            });
+
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && currentMainView === 'chatbotLogs') {
+                    loadChatbotLogs(false, { silent: true });
+                }
+            });
+
+            window.addEventListener('beforeunload', () => {
+                stopChatbotLogsRealtime();
             });
 
             if (deptFilter) {

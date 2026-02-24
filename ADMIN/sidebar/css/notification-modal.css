@@ -97,6 +97,12 @@
     display: inline-block;
 }
 
+.notification-modal button.view-all-link {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+}
+
 .notification-modal .view-all-link:hover {
     background-color: var(--sidebar-hover-bg-1);
     color: var(--primary-color-1);
@@ -169,6 +175,62 @@
     font-size: 0.6875rem;
     color: var(--text-secondary-1);
     opacity: 0.7;
+}
+
+.notification-modal .notification-item--placeholder {
+    cursor: default;
+}
+
+.notification-modal .notification-item--placeholder:hover {
+    background-color: transparent;
+}
+
+.notification-modal .notification-item--incident {
+    border: 1px solid rgba(220, 53, 69, 0.2);
+    background: rgba(220, 53, 69, 0.05);
+}
+
+.notification-modal .notification-item--system {
+    border: 1px solid transparent;
+}
+
+.notification-modal .notification-item .notification-icon.notification-icon--incident {
+    background-color: #dc3545;
+}
+
+.notification-modal .notification-item .notification-icon.notification-icon--system {
+    background-color: #4c8a89;
+}
+
+.notification-modal .notification-item .notification-icon.notification-icon--warn {
+    background-color: #f59e0b;
+}
+
+.notification-modal .notification-item .notification-icon.notification-icon--failed {
+    background-color: #d73030;
+}
+
+.notification-modal .notification-location {
+    margin-top: 0.2rem;
+}
+
+.notification-modal .notification-location i {
+    margin-right: 0.2rem;
+}
+
+.notification-modal .notification-action-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+    color: var(--primary-color-1);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.notification-modal .notification-action-link:hover {
+    text-decoration: underline;
 }
 
 /* ===================================

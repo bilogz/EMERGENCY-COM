@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 require_once __DIR__ . '/config.env.php';
+require_once __DIR__ . '/device_tracking.php';
 require_once __DIR__ . '/../../ADMIN/api/secure-api-config.php';
 require_once __DIR__ . '/../../ADMIN/api/gemini-api-wrapper.php';
 require_once __DIR__ . '/../../ADMIN/api/chat-logic.php';
@@ -233,6 +234,8 @@ function chatbot_detect_incident_type(string $text): string {
         'medical_emergency' => [
             '/\b(heart attack|stroke|seizure|unconscious|not breathing|difficulty breathing|overdose|bleeding|collapsed|ambulance)\b/i',
             '/\b(nahimatay|hindi humihinga|hirap huminga|atake sa puso|dumudugo|na-collapse)\b/i',
+            '/\b(dead|death|died|has died|cardiac arrest|first aid|medical first aid)\b/i',
+            '/\b(namatay|patay|walang pulso|first aid)\b/i',
         ],
         'fire' => [
             '/\b(fire|burning|smoke|flame|explosion|gas leak)\b/i',
@@ -382,6 +385,8 @@ function chatbot_detect_emergency(string $text, string $incidentType): bool {
     if (chatbot_matches_any($normalized, [
         '/\b(urgent|emergency|critical|immediate|sos|help now|life[- ]?threatening|dying|severe)\b/i',
         '/\b(kagyat|critical|agarang tulong|emergency|delikado)\b/i',
+        '/\b(dead|death|died|has died|cardiac arrest|first aid|needs first aid)\b/i',
+        '/\b(namatay|patay|walang pulso|kailangan ng first aid)\b/i',
     ])) {
         return true;
     }
@@ -1041,6 +1046,515 @@ function chatbot_enforce_emergency_reply(
     return chatbot_clean_text($combined);
 }
 
+function chatbot_mysql_pdo(): ?PDO {
+    static $attempted = false;
+    static $mysqlPdo = null;
+
+    if ($attempted) {
+        return $mysqlPdo;
+    }
+    $attempted = true;
+
+    try {
+        require __DIR__ . '/../../ADMIN/api/db_connect.php';
+        if (isset($pdo) && $pdo instanceof PDO) {
+            $mysqlPdo = $pdo;
+        }
+    } catch (Throwable $e) {
+        error_log('chatbot-assistant: MySQL bootstrap failed: ' . $e->getMessage());
+    }
+
+    return $mysqlPdo;
+}
+
+function chatbot_guest_user_id(): string {
+    try {
+        return 'guest_' . date('YmdHis') . '_' . substr(bin2hex(random_bytes(6)), 0, 12);
+    } catch (Throwable $e) {
+        return 'guest_' . date('YmdHis') . '_' . substr(md5((string)microtime(true)), 0, 12);
+    }
+}
+
+function chatbot_resolve_user_context(array $input): array {
+    $userId = trim((string)($input['userId'] ?? ''));
+    if ($userId === '') {
+        $userId = chatbot_guest_user_id();
+    }
+
+    $hasIsGuestInput = array_key_exists('isGuest', $input);
+    $isGuest = $hasIsGuestInput
+        ? chatbot_to_bool($input['isGuest'])
+        : (stripos($userId, 'guest_') === 0 || preg_match('/^\d+$/', $userId) !== 1);
+
+    $userName = trim((string)($input['userName'] ?? 'Guest User'));
+    if ($userName === '') {
+        $userName = 'Guest User';
+    }
+
+    $conversationId = twc_safe_int($input['conversationId'] ?? null);
+    if ($conversationId !== null && $conversationId <= 0) {
+        $conversationId = null;
+    }
+
+    $ipAddress = function_exists('getClientIP')
+        ? (string)getClientIP()
+        : (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    $deviceInfo = function_exists('formatDeviceInfoForDB')
+        ? (string)formatDeviceInfoForDB()
+        : '';
+    if (trim($deviceInfo) === '') {
+        $deviceInfo = null;
+    }
+
+    return [
+        'userId' => $userId,
+        'userName' => $userName,
+        'userEmail' => trim((string)($input['userEmail'] ?? '')),
+        'userPhone' => trim((string)($input['userPhone'] ?? '')),
+        'userLocation' => trim((string)($input['userLocation'] ?? '')),
+        'userConcern' => trim((string)($input['userConcern'] ?? 'chatbot_assistant')),
+        'isGuest' => $isGuest,
+        'conversationId' => $conversationId,
+        'ipAddress' => $ipAddress,
+        'deviceInfo' => $deviceInfo,
+        'userAgent' => (string)($_SERVER['HTTP_USER_AGENT'] ?? ''),
+    ];
+}
+
+function chatbot_insert_chat_message(PDO $pdo, array $payload): ?int {
+    $conversationId = twc_safe_int($payload['conversationId'] ?? null);
+    $senderId = trim((string)($payload['senderId'] ?? ''));
+    $senderName = trim((string)($payload['senderName'] ?? 'Citizen'));
+    $senderType = strtolower(trim((string)($payload['senderType'] ?? 'user')));
+    $messageText = trim((string)($payload['messageText'] ?? ''));
+    $isRead = !empty($payload['isRead']) ? 1 : 0;
+
+    if ($conversationId === null || $conversationId <= 0 || $messageText === '') {
+        return null;
+    }
+
+    if (!in_array($senderType, ['user', 'admin'], true)) {
+        $senderType = 'user';
+    }
+
+    $columns = [
+        'conversation_id',
+        'sender_id',
+        'sender_name',
+        'sender_type',
+        'message_text',
+        'is_read',
+        'created_at',
+    ];
+    $values = [
+        $conversationId,
+        $senderId,
+        $senderName !== '' ? $senderName : 'Citizen',
+        $senderType,
+        $messageText,
+        $isRead,
+        date('Y-m-d H:i:s'),
+    ];
+
+    if (twc_column_exists($pdo, 'chat_messages', 'ip_address')) {
+        $columns[] = 'ip_address';
+        $values[] = trim((string)($payload['ipAddress'] ?? '')) ?: null;
+    }
+    if (twc_column_exists($pdo, 'chat_messages', 'device_info')) {
+        $columns[] = 'device_info';
+        $values[] = trim((string)($payload['deviceInfo'] ?? '')) ?: null;
+    }
+
+    $sql = "INSERT INTO chat_messages (" . implode(', ', $columns) . ")
+            VALUES (" . twc_placeholders($values) . ")";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($values);
+
+    $rawId = $pdo->lastInsertId();
+    return is_numeric($rawId) ? (int)$rawId : null;
+}
+
+/**
+ * Routes chatbot emergency reports into admin two-way conversation queue.
+ *
+ * @return array{
+ *   routed:bool,
+ *   reason:string,
+ *   conversationId:int|null,
+ *   messageId:int|null,
+ *   createdConversation:bool,
+ *   assignedTo:int|null,
+ *   riskLevel:string,
+ *   riskNotification:array|null
+ * }
+ */
+function chatbot_route_emergency_to_admin(array $context): array {
+    $result = [
+        'routed' => false,
+        'reason' => 'not_attempted',
+        'conversationId' => null,
+        'messageId' => null,
+        'createdConversation' => false,
+        'assignedTo' => null,
+        'riskLevel' => 'critical',
+        'riskNotification' => null,
+    ];
+
+    $message = trim((string)($context['message'] ?? ''));
+    if ($message === '') {
+        $result['reason'] = 'empty_message';
+        return $result;
+    }
+
+    $pdo = chatbot_mysql_pdo();
+    if (!$pdo instanceof PDO) {
+        $result['reason'] = 'mysql_unavailable';
+        return $result;
+    }
+    if (!twc_chat_storage_available($pdo)) {
+        $result['reason'] = 'chat_storage_unavailable';
+        return $result;
+    }
+
+    $userId = trim((string)($context['userId'] ?? ''));
+    if ($userId === '') {
+        $userId = chatbot_guest_user_id();
+    }
+    $userName = trim((string)($context['userName'] ?? 'Guest User'));
+    if ($userName === '') {
+        $userName = 'Guest User';
+    }
+    $userEmail = trim((string)($context['userEmail'] ?? ''));
+    $userPhone = trim((string)($context['userPhone'] ?? ''));
+    $userLocation = trim((string)($context['userLocation'] ?? ''));
+    $isGuest = !empty($context['isGuest']);
+    $ipAddress = trim((string)($context['ipAddress'] ?? ''));
+    $deviceInfo = trim((string)($context['deviceInfo'] ?? ''));
+    $userAgent = trim((string)($context['userAgent'] ?? ''));
+
+    $category = twc_normalize_category('emergency_response');
+    if ($category === '') {
+        $category = 'emergency_response';
+    }
+    $priority = 'urgent';
+    $riskLevel = twc_chat_risk_level($message, $category, $priority);
+    if ($riskLevel === 'normal') {
+        $riskLevel = 'high';
+    }
+    $result['riskLevel'] = $riskLevel;
+
+    $hasCategoryColumn = twc_column_exists($pdo, 'conversations', 'category');
+    $hasPriorityColumn = twc_column_exists($pdo, 'conversations', 'priority');
+    $hasAssignedToColumn = twc_column_exists($pdo, 'conversations', 'assigned_to');
+    $hasUserIdStringColumn = twc_column_exists($pdo, 'conversations', 'user_id_string');
+    $hasDeviceInfoColumn = twc_column_exists($pdo, 'conversations', 'device_info');
+    $hasIpColumn = twc_column_exists($pdo, 'conversations', 'ip_address');
+    $hasUserAgentColumn = twc_column_exists($pdo, 'conversations', 'user_agent');
+    $assignedSelect = $hasAssignedToColumn ? 'assigned_to' : 'NULL AS assigned_to';
+
+    $conversationId = twc_safe_int($context['conversationId'] ?? null);
+    if ($conversationId !== null && $conversationId <= 0) {
+        $conversationId = null;
+    }
+    $assignedTo = null;
+    $createdConversation = false;
+
+    try {
+        $pdo->beginTransaction();
+
+        if ($conversationId !== null) {
+            $existingStmt = $pdo->prepare("
+                SELECT conversation_id, status, {$assignedSelect}
+                FROM conversations
+                WHERE conversation_id = ?
+                LIMIT 1
+            ");
+            $existingStmt->execute([$conversationId]);
+            $existingRow = $existingStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$existingRow || twc_is_closed_status($existingRow['status'] ?? '')) {
+                $conversationId = null;
+            } else {
+                $assignedTo = twc_safe_int($existingRow['assigned_to'] ?? null);
+            }
+        }
+
+        if ($conversationId === null) {
+            $activeStatuses = twc_active_statuses();
+            $activeIn = twc_placeholders($activeStatuses);
+            $existingRow = null;
+
+            if ($hasUserIdStringColumn && !is_numeric($userId)) {
+                $sql = "
+                    SELECT conversation_id, {$assignedSelect}
+                    FROM conversations
+                    WHERE user_id_string = ?
+                      AND status IN ($activeIn)
+                    ORDER BY updated_at DESC, conversation_id DESC
+                    LIMIT 1
+                ";
+                $params = array_merge([$userId], $activeStatuses);
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+                $existingRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+            } elseif (is_numeric($userId)) {
+                $sql = "
+                    SELECT conversation_id, {$assignedSelect}
+                    FROM conversations
+                    WHERE user_id = ?
+                      AND status IN ($activeIn)
+                    ORDER BY updated_at DESC, conversation_id DESC
+                    LIMIT 1
+                ";
+                $params = array_merge([(int)$userId], $activeStatuses);
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+                $existingRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+            }
+
+            if (
+                !$existingRow &&
+                $isGuest &&
+                $hasDeviceInfoColumn &&
+                $hasIpColumn &&
+                $ipAddress !== '' &&
+                $deviceInfo !== ''
+            ) {
+                $sql = "
+                    SELECT conversation_id, {$assignedSelect}
+                    FROM conversations
+                    WHERE ip_address = ?
+                      AND device_info = ?
+                      AND status IN ($activeIn)
+                    ORDER BY updated_at DESC, conversation_id DESC
+                    LIMIT 1
+                ";
+                $params = array_merge([$ipAddress, $deviceInfo], $activeStatuses);
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+                $existingRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+            }
+
+            if ($existingRow) {
+                $conversationId = (int)$existingRow['conversation_id'];
+                $assignedTo = twc_safe_int($existingRow['assigned_to'] ?? null);
+            } else {
+                $createdConversation = true;
+                $assignedTo = $hasAssignedToColumn ? twc_pick_assignee($pdo) : null;
+                $statusOpen = twc_status_for_db($pdo, 'open');
+
+                $columns = [
+                    'user_id',
+                    'user_name',
+                    'user_email',
+                    'user_phone',
+                    'user_location',
+                    'user_concern',
+                    'is_guest',
+                    'status',
+                    'created_at',
+                    'updated_at',
+                ];
+                $values = [
+                    is_numeric($userId) ? (int)$userId : 0,
+                    $userName,
+                    $userEmail !== '' ? $userEmail : null,
+                    $userPhone !== '' ? $userPhone : null,
+                    $userLocation !== '' ? $userLocation : null,
+                    $category,
+                    $isGuest ? 1 : 0,
+                    $statusOpen,
+                    date('Y-m-d H:i:s'),
+                    date('Y-m-d H:i:s'),
+                ];
+
+                if ($hasUserIdStringColumn) {
+                    $columns[] = 'user_id_string';
+                    $values[] = is_numeric($userId) ? null : $userId;
+                }
+                if ($hasDeviceInfoColumn) {
+                    $columns[] = 'device_info';
+                    $values[] = $deviceInfo !== '' ? $deviceInfo : null;
+                }
+                if ($hasIpColumn) {
+                    $columns[] = 'ip_address';
+                    $values[] = $ipAddress !== '' ? $ipAddress : null;
+                }
+                if ($hasUserAgentColumn) {
+                    $columns[] = 'user_agent';
+                    $values[] = $userAgent !== '' ? $userAgent : null;
+                }
+                if ($hasAssignedToColumn && $assignedTo !== null) {
+                    $columns[] = 'assigned_to';
+                    $values[] = $assignedTo;
+                }
+                if ($hasCategoryColumn) {
+                    $columns[] = 'category';
+                    $values[] = $category;
+                }
+                if ($hasPriorityColumn) {
+                    $columns[] = 'priority';
+                    $values[] = $priority;
+                }
+
+                $insertSql = "INSERT INTO conversations (" . implode(',', $columns) . ")
+                              VALUES (" . twc_placeholders($values) . ")";
+                $insertStmt = $pdo->prepare($insertSql);
+                $insertStmt->execute($values);
+                $conversationId = (int)$pdo->lastInsertId();
+            }
+        }
+
+        if ($conversationId === null || $conversationId <= 0) {
+            throw new RuntimeException('Unable to resolve conversation for emergency routing.');
+        }
+
+        $messageId = null;
+        try {
+            $dedupeStmt = $pdo->prepare("
+                SELECT message_id
+                FROM chat_messages
+                WHERE conversation_id = ?
+                  AND sender_type = 'user'
+                  AND sender_id = ?
+                  AND message_text = ?
+                  AND created_at >= (NOW() - INTERVAL 20 SECOND)
+                ORDER BY message_id DESC
+                LIMIT 1
+            ");
+            $dedupeStmt->execute([$conversationId, $userId, $message]);
+            $existingMessageId = $dedupeStmt->fetchColumn();
+            if ($existingMessageId) {
+                $messageId = (int)$existingMessageId;
+            }
+        } catch (Throwable $e) {
+            // Non-blocking dedupe guard.
+        }
+
+        if ($messageId === null) {
+            $messageId = chatbot_insert_chat_message($pdo, [
+                'conversationId' => $conversationId,
+                'senderId' => $userId,
+                'senderName' => $userName,
+                'senderType' => 'user',
+                'messageText' => $message,
+                'isRead' => false,
+                'ipAddress' => $ipAddress,
+                'deviceInfo' => $deviceInfo,
+            ]);
+        }
+
+        $statusInProgress = twc_status_for_db($pdo, 'in_progress');
+        $updateParts = [
+            'last_message = ?',
+            'last_message_time = NOW()',
+            'updated_at = NOW()',
+            'status = ?',
+            'user_concern = ?',
+        ];
+        $updateParams = [$message, $statusInProgress, $category];
+
+        if ($hasCategoryColumn) {
+            $updateParts[] = 'category = ?';
+            $updateParams[] = $category;
+        }
+        if ($hasPriorityColumn) {
+            $updateParts[] = 'priority = ?';
+            $updateParams[] = $priority;
+        }
+        if ($hasAssignedToColumn) {
+            if ($assignedTo === null) {
+                $assignedTo = twc_pick_assignee($pdo);
+            }
+            if ($assignedTo !== null) {
+                $updateParts[] = 'assigned_to = ?';
+                $updateParams[] = $assignedTo;
+            }
+        }
+
+        $updateParams[] = $conversationId;
+        $updateSql = "UPDATE conversations SET " . implode(', ', $updateParts) . " WHERE conversation_id = ?";
+        $updateStmt = $pdo->prepare($updateSql);
+        $updateStmt->execute($updateParams);
+
+        if (twc_table_exists($pdo, 'chat_queue')) {
+            $queueHasAssigned = twc_column_exists($pdo, 'chat_queue', 'assigned_to');
+            $queueColumns = [
+                'conversation_id',
+                'user_id',
+                'user_name',
+                'user_email',
+                'user_phone',
+                'user_location',
+                'user_concern',
+                'is_guest',
+                'message',
+                'status',
+                'created_at',
+            ];
+            $queueValues = [
+                $conversationId,
+                $userId,
+                $userName,
+                $userEmail !== '' ? $userEmail : null,
+                $userPhone !== '' ? $userPhone : null,
+                $userLocation !== '' ? $userLocation : null,
+                $category,
+                $isGuest ? 1 : 0,
+                $message,
+                'pending',
+                date('Y-m-d H:i:s'),
+            ];
+            if ($queueHasAssigned) {
+                $queueColumns[] = 'assigned_to';
+                $queueValues[] = $assignedTo;
+            }
+
+            $queueSql = "INSERT INTO chat_queue (" . implode(',', $queueColumns) . ")
+                         VALUES (" . twc_placeholders($queueValues) . ")
+                         ON DUPLICATE KEY UPDATE
+                            message = VALUES(message),
+                            status = 'pending',
+                            updated_at = NOW()";
+            if ($queueHasAssigned) {
+                $queueSql .= ", assigned_to = VALUES(assigned_to)";
+            }
+            $queueStmt = $pdo->prepare($queueSql);
+            $queueStmt->execute($queueValues);
+        }
+
+        $pdo->commit();
+
+        $riskNotification = twc_emit_chat_risk_notification($pdo, [
+            'message' => $message,
+            'category' => $category,
+            'priority' => $priority,
+            'riskLevel' => $riskLevel,
+            'conversationId' => $conversationId,
+            'userName' => $userName,
+            'userLocation' => $userLocation,
+            'assignedTo' => $assignedTo,
+            'ipAddress' => $ipAddress,
+            'snippet' => $message,
+        ]);
+
+        $result['routed'] = true;
+        $result['reason'] = 'routed';
+        $result['conversationId'] = $conversationId;
+        $result['messageId'] = $messageId;
+        $result['createdConversation'] = $createdConversation;
+        $result['assignedTo'] = $assignedTo;
+        $result['riskNotification'] = $riskNotification;
+        return $result;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('chatbot-assistant emergency routing failed: ' . $e->getMessage());
+        $result['reason'] = 'route_failed';
+        return $result;
+    }
+}
+
 try {
     $raw = file_get_contents('php://input');
     $input = json_decode((string)$raw, true);
@@ -1054,6 +1568,7 @@ try {
         echo json_encode(['success' => false, 'message' => 'Message is required']);
         exit;
     }
+    $userContext = chatbot_resolve_user_context($input);
 
     $assistantEnabled = chatbot_to_bool(getSecureConfig('CHAT_ASSISTANT_ENABLED', true));
     if (!$assistantEnabled) {
@@ -1285,12 +1800,51 @@ try {
     $reply = chatbot_finalize_reply($reply, $preferredLanguage, $followUpHint);
     $reply = chatbot_limit_reply_length($reply, 1800);
 
+    $adminRouting = [
+        'routed' => false,
+        'reason' => $isEmergency ? 'not_routed' : 'not_emergency',
+        'conversationId' => null,
+        'messageId' => null,
+        'createdConversation' => false,
+        'assignedTo' => null,
+        'riskLevel' => $isEmergency ? 'high' : 'normal',
+        'riskNotification' => null,
+    ];
+    if ($isEmergency) {
+        $adminRouting = chatbot_route_emergency_to_admin([
+            'message' => $message,
+            'reply' => $reply,
+            'incidentType' => $incidentType,
+            'incidentLabel' => $incidentLabel,
+            'languageCode' => $preferredLanguage,
+            'userId' => (string)($userContext['userId'] ?? ''),
+            'userName' => (string)($userContext['userName'] ?? ''),
+            'userEmail' => (string)($userContext['userEmail'] ?? ''),
+            'userPhone' => (string)($userContext['userPhone'] ?? ''),
+            'userLocation' => (string)($userContext['userLocation'] ?? ''),
+            'isGuest' => !empty($userContext['isGuest']),
+            'conversationId' => $userContext['conversationId'] ?? null,
+            'ipAddress' => (string)($userContext['ipAddress'] ?? ''),
+            'deviceInfo' => (string)($userContext['deviceInfo'] ?? ''),
+            'userAgent' => (string)($userContext['userAgent'] ?? ''),
+        ]);
+    }
+
+    $resolvedConversationIdForLog = '';
+    if (!empty($adminRouting['conversationId'])) {
+        $resolvedConversationIdForLog = (string)$adminRouting['conversationId'];
+    } elseif (!empty($userContext['conversationId'])) {
+        $resolvedConversationIdForLog = (string)$userContext['conversationId'];
+    } elseif (!empty($input['conversationId'])) {
+        $resolvedConversationIdForLog = (string)$input['conversationId'];
+    }
+
     $replyLanguageDetected = chatbot_detect_language_from_text($reply);
     $resolvedModel = $usedRuleFallback ? 'rule-fallback' : $configuredModel;
     $loggedToNeon = chatbot_log_interaction([
         'session_key' => (string)($input['sessionId'] ?? $input['sessionKey'] ?? ''),
-        'user_id' => (string)($input['userId'] ?? ''),
-        'conversation_id' => (string)($input['conversationId'] ?? ''),
+        'user_id' => (string)($userContext['userId'] ?? ''),
+        'conversation_id' => $resolvedConversationIdForLog,
         'request_text' => $message,
         'response_text' => $reply,
         'incident_type' => $incidentType,
@@ -1308,6 +1862,7 @@ try {
             'history_count' => count($historyLines),
             'emergency_number' => $emergencyNumber,
             'call_link' => $callLink,
+            'admin_routing' => $adminRouting,
         ],
     ]);
 
@@ -1326,7 +1881,9 @@ try {
         'replyLanguage' => $replyLanguageDetected,
         'locationScope' => $locationScope,
         'matchedQcBarangays' => $matchedQcBarangays,
-        'loggedToNeon' => $loggedToNeon
+        'loggedToNeon' => $loggedToNeon,
+        'conversationId' => $resolvedConversationIdForLog,
+        'adminRouting' => $adminRouting,
     ]);
 } catch (Throwable $e) {
     error_log('chatbot-assistant error: ' . $e->getMessage());
