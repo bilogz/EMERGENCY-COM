@@ -500,16 +500,26 @@ $pageTitle = 'Automated Warnings Analytics';
             if (!confirm(`Send MOCK CRITICAL ${pretty.toUpperCase()} alert and queue broadcast to all active citizens?`)) {
                 return;
             }
-            fetch('../api/automated-warnings.php', {
+            fetch('../api/automated-warnings.php?action=mock_alert', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
                 body: JSON.stringify({ action: 'mock_alert', type: type })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    throw new Error(data.message || 'Failed to send mock alert');
+            .then(async response => {
+                const raw = await response.text();
+                let data = null;
+                try {
+                    data = raw ? JSON.parse(raw) : {};
+                } catch (parseErr) {
+                    throw new Error(`HTTP ${response.status}: ${raw.slice(0, 180) || 'Invalid JSON response'}`);
                 }
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || `HTTP ${response.status}`);
+                }
+                return data;
+            })
+            .then(data => {
                 alert(data.message || 'Mock alert sent.');
                 loadAnalytics();
                 loadDispatchHistory();

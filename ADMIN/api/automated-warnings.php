@@ -40,12 +40,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = json_decode(file_get_contents('php://input'), true);
         }
         
-        $jsonAction = $isJson ? ($data['action'] ?? '') : '';
+        $effectiveAction = '';
+        if (isset($_GET['action'])) {
+            $effectiveAction = (string)$_GET['action'];
+        } elseif (isset($_POST['action'])) {
+            $effectiveAction = (string)$_POST['action'];
+        }
+        if ($isJson && is_array($data) && isset($data['action'])) {
+            $effectiveAction = (string)$data['action'];
+        }
+        $effectiveAction = strtolower(trim($effectiveAction));
 
         // Handle JSON toggle action
-        if ($jsonAction === 'toggle') {
-            $source = $data['source'] ?? '';
-            $enabled = $data['enabled'] ?? false;
+        if ($effectiveAction === 'toggle') {
+            $source = '';
+            if ($isJson && is_array($data) && isset($data['source'])) {
+                $source = (string)$data['source'];
+            } elseif (isset($_POST['source'])) {
+                $source = (string)$_POST['source'];
+            }
+
+            $enabled = false;
+            if ($isJson && is_array($data) && isset($data['enabled'])) {
+                $enabled = (bool)$data['enabled'];
+            } elseif (isset($_POST['enabled'])) {
+                $enabled = (bool)$_POST['enabled'];
+            }
             $adminId = $_SESSION['admin_user_id'] ?? null;
             
             if ($pdo === null) {
@@ -80,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 http_response_code(500);
                 echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
             }
-        } elseif ($jsonAction === 'mock_alert') {
+        } elseif ($effectiveAction === 'mock_alert') {
             if ($pdo === null) {
                 throw new Exception('Database connection not available');
             }
@@ -88,7 +108,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception('Unauthorized');
             }
 
-            $mockType = strtolower(trim((string)($data['type'] ?? 'weather')));
+            $mockType = 'weather';
+            if ($isJson && is_array($data) && isset($data['type'])) {
+                $mockType = strtolower(trim((string)$data['type']));
+            } elseif (isset($_POST['type'])) {
+                $mockType = strtolower(trim((string)$_POST['type']));
+            } elseif (isset($_GET['type'])) {
+                $mockType = strtolower(trim((string)$_GET['type']));
+            }
             if (!in_array($mockType, ['weather', 'earthquake'], true)) {
                 throw new Exception('Invalid mock alert type. Allowed: weather, earthquake');
             }
@@ -125,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'warning_id' => $warningId,
                 'dispatch' => $dispatchResult
             ]);
-        } elseif ($jsonAction === 'ingest_critical') {
+        } elseif ($effectiveAction === 'ingest_critical') {
             if ($pdo === null) {
                 throw new Exception('Database connection not available');
             }
@@ -133,14 +160,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception('Unauthorized');
             }
 
-            $domain = strtolower(trim((string)($data['domain'] ?? $data['type'] ?? 'weather')));
+            $domain = 'weather';
+            if ($isJson && is_array($data)) {
+                $domain = strtolower(trim((string)($data['domain'] ?? $data['type'] ?? 'weather')));
+            } elseif (isset($_POST['domain'])) {
+                $domain = strtolower(trim((string)$_POST['domain']));
+            } elseif (isset($_POST['type'])) {
+                $domain = strtolower(trim((string)$_POST['type']));
+            } elseif (isset($_GET['domain'])) {
+                $domain = strtolower(trim((string)$_GET['domain']));
+            } elseif (isset($_GET['type'])) {
+                $domain = strtolower(trim((string)$_GET['type']));
+            }
             if (!in_array($domain, ['weather', 'earthquake'], true)) {
                 throw new Exception('Invalid critical domain. Allowed: weather, earthquake');
             }
 
             $template = buildCriticalWarningTemplate($domain, false);
-            $title = trim((string)($data['title'] ?? ''));
-            $content = trim((string)($data['content'] ?? ''));
+            $title = '';
+            $content = '';
+            if ($isJson && is_array($data)) {
+                $title = trim((string)($data['title'] ?? ''));
+                $content = trim((string)($data['content'] ?? ''));
+            } else {
+                $title = trim((string)($_POST['title'] ?? $_GET['title'] ?? ''));
+                $content = trim((string)($_POST['content'] ?? $_GET['content'] ?? ''));
+            }
             if ($title === '') $title = $template['title'];
             if ($content === '') $content = $template['content'];
 
@@ -171,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'warning_id' => $warningId,
                 'dispatch' => $dispatchResult
             ]);
-        } else {
+        } elseif ($effectiveAction === '' || $effectiveAction === 'save' || $effectiveAction === 'save_settings') {
             // Save settings from FormData
             $syncInterval = $_POST['sync_interval'] ?? 15;
             $autoPublish = isset($_POST['auto_publish']) ? 1 : 0;
@@ -234,6 +279,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 http_response_code(500);
                 echo json_encode(['success' => false, 'message' => 'Database error occurred: ' . $e->getMessage()]);
             }
+        } else {
+            ob_clean();
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'message' => "Unknown action: {$effectiveAction}"
+            ]);
         }
     } catch (Exception $e) {
         ob_clean();
