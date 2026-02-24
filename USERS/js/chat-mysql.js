@@ -1095,6 +1095,30 @@
                 // Immediately add the sent message to the chat UI
                 if (window.addMessageToChat) {
                     const timestamp = new Date().toISOString();
+                    let immediateAttachmentUrl = data.imageUrl || (data.attachment && data.attachment.url) || null;
+                    let immediateAttachmentMime = data.attachment ? data.attachment.mime : null;
+                    let immediateAttachmentSize = data.attachment ? data.attachment.size : null;
+
+                    // Render local media immediately after successful upload.
+                    // This avoids broken previews when stream URL resolution is delayed.
+                    if (hasAttachment && fileToSend instanceof File) {
+                        const fileMime = String(fileToSend.type || '').toLowerCase();
+                        const isPreviewableLocalMedia = fileMime.indexOf('image/') === 0 || fileMime.indexOf('video/') === 0;
+                        if (isPreviewableLocalMedia && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+                            try {
+                                immediateAttachmentUrl = URL.createObjectURL(fileToSend);
+                                immediateAttachmentMime = fileMime || immediateAttachmentMime;
+                                immediateAttachmentSize = fileToSend.size || immediateAttachmentSize;
+                                if (!Array.isArray(window.__chatBlobPreviewUrls)) {
+                                    window.__chatBlobPreviewUrls = [];
+                                }
+                                window.__chatBlobPreviewUrls.push(immediateAttachmentUrl);
+                            } catch (previewError) {
+                                console.warn('Unable to create local attachment preview URL:', previewError);
+                            }
+                        }
+                    }
+
                     window.addMessageToChat(
                         normalizedText,
                         'user',
@@ -1102,9 +1126,9 @@
                         data.messageId,
                         null,
                         {
-                            imageUrl: data.imageUrl || (data.attachment && data.attachment.url) || null,
-                            attachmentMime: data.attachment ? data.attachment.mime : null,
-                            attachmentSize: data.attachment ? data.attachment.size : null
+                            imageUrl: immediateAttachmentUrl,
+                            attachmentMime: immediateAttachmentMime,
+                            attachmentSize: immediateAttachmentSize
                         }
                     );
                     console.log('Message added to chat UI immediately');
