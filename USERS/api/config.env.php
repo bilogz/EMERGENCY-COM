@@ -67,7 +67,11 @@ function getSecureConfig($key, $default = null) {
     // First, try environment variable
     $envValue = getenv($key);
     if ($envValue !== false) {
-        return $envValue;
+        $trimmed = trim((string)$envValue);
+        // Ignore blank/null-like env values so they don't override valid file config.
+        if ($trimmed !== '' && strcasecmp($trimmed, 'null') !== 0) {
+            return $envValue;
+        }
     }
     
     // Second, try local config file (not committed to Git)
