@@ -1294,6 +1294,12 @@
             if (!url) return null;
             const raw = String(url).trim();
             if (!raw) return null;
+            if (/^blob:/i.test(raw)) {
+                return raw;
+            }
+            if (/^data:(image|video)\//i.test(raw)) {
+                return raw;
+            }
             if (raw.startsWith('/')) {
                 if (
                     appBasePath &&
@@ -1323,17 +1329,26 @@
         const attachmentMimeValue = attachment ? (attachment.attachmentMime || attachment.mime || '') : '';
         const attachmentMimeRaw = String(attachmentMimeValue == null ? '' : attachmentMimeValue).trim().toLowerCase();
         const attachmentMime = attachmentMimeRaw || null;
+        const attachmentHintMatch = normalizedText.match(/^\[(photo|video|email|attachment)\]/i);
+        const attachmentHint = attachmentHintMatch ? attachmentHintMatch[1].toLowerCase() : '';
         const isImageAttachment = !!(attachmentUrl && (
             (attachmentMime && attachmentMime.indexOf('image/') === 0) ||
-            (!attachmentMime && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(attachmentUrl))
+            (!attachmentMime && (
+                attachmentHint === 'photo' ||
+                /\.(png|jpe?g|gif|webp|bmp|avif)(\?|$)/i.test(attachmentUrl)
+            ))
         ));
         const isVideoAttachment = !!(attachmentUrl && (
             (attachmentMime && attachmentMime.indexOf('video/') === 0) ||
-            (!attachmentMime && /\.(mp4|webm|ogv|mov|avi|mkv)(\?|$)/i.test(attachmentUrl))
+            (!attachmentMime && (
+                attachmentHint === 'video' ||
+                /\.(mp4|webm|ogv|mov|avi|mkv)(\?|$)/i.test(attachmentUrl)
+            ))
         ));
         const isEmailAttachment = !!(attachmentUrl && (
             attachmentMime === 'message/rfc822' ||
             attachmentMime === 'application/eml' ||
+            (!attachmentMime && attachmentHint === 'email') ||
             /\.eml(\?|$)/i.test(attachmentUrl)
         ));
         const hidePlaceholder = attachmentUrl && /^\[(photo|video|email|attachment)\]/i.test(normalizedText);
@@ -1345,7 +1360,7 @@
         }
         if (attachmentUrl) {
             if (isVideoAttachment) {
-                htmlParts.push(`<a href="${attachmentUrl}" target="_blank" rel="noopener noreferrer" class="chat-message-video-link"><video class="chat-message-video" controls preload="metadata"><source src="${attachmentUrl}"${attachmentMime ? ` type="${attachmentMime}"` : ''}>Your browser does not support video playback.</video></a>`);
+                htmlParts.push(`<div class="chat-message-video-link"><video class="chat-message-video" controls preload="metadata" playsinline><source src="${attachmentUrl}"${attachmentMime ? ` type="${attachmentMime}"` : ''}>Your browser does not support video playback.</video></div>`);
             } else if (isImageAttachment) {
                 htmlParts.push(`<a href="${attachmentUrl}" target="_blank" rel="noopener noreferrer" class="chat-message-image-link"><img src="${attachmentUrl}" class="chat-message-image" alt="Incident attachment"></a>`);
             } else {

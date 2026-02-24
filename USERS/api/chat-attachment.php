@@ -36,8 +36,54 @@ if (!is_string($data) || $data === '') {
     exit;
 }
 
+$size = max(0, $size);
+$rangeHeader = isset($_SERVER['HTTP_RANGE']) ? trim((string)$_SERVER['HTTP_RANGE']) : '';
+$statusCode = 200;
+$start = 0;
+$end = $size > 0 ? ($size - 1) : 0;
+$chunk = $data;
+
+if ($size > 0 && $rangeHeader !== '' && preg_match('/^bytes=(\d*)-(\d*)$/i', $rangeHeader, $matches) === 1) {
+    $requestedStart = $matches[1] !== '' ? (int)$matches[1] : null;
+    $requestedEnd = $matches[2] !== '' ? (int)$matches[2] : null;
+
+    if ($requestedStart === null && $requestedEnd !== null) {
+        $suffixLength = min($size, max(0, $requestedEnd));
+        $start = $suffixLength > 0 ? ($size - $suffixLength) : 0;
+        $end = $size - 1;
+    } else {
+        $start = max(0, (int)($requestedStart ?? 0));
+        $end = $requestedEnd !== null ? (int)$requestedEnd : ($size - 1);
+    }
+
+    if ($start >= $size || $end < $start) {
+        http_response_code(416);
+        header('Accept-Ranges: bytes');
+        header('Content-Range: bytes */' . $size);
+        exit;
+    }
+
+    $end = min($size - 1, $end);
+    $length = ($end - $start) + 1;
+    $chunk = substr($data, $start, $length);
+    if (!is_string($chunk)) {
+        $chunk = '';
+    }
+    $statusCode = 206;
+}
+
+while (ob_get_level() > 0) {
+    ob_end_clean();
+}
+
+http_response_code($statusCode);
 header('Content-Type: ' . ($mime !== '' ? $mime : 'application/octet-stream'));
-header('Content-Length: ' . (string)max(0, $size));
+header('Content-Disposition: inline');
+header('Accept-Ranges: bytes');
 header('Cache-Control: public, max-age=604800, immutable');
-echo $data;
+if ($statusCode === 206) {
+    header('Content-Range: bytes ' . $start . '-' . $end . '/' . $size);
+}
+header('Content-Length: ' . strlen($chunk));
+echo $chunk;
 

@@ -288,8 +288,17 @@ try {
                 throw new RuntimeException('Failed to save uploaded attachment (filesystem + PostgreSQL fallback both failed).');
             }
 
-            $attachmentMime = $detectedMime !== '' ? $detectedMime : 'application/octet-stream';
-            $attachmentUrl = twc_chat_upload_url($newFileName);
+            if ($savedAttachmentAbsolutePath && is_file($savedAttachmentAbsolutePath)) {
+                // Keep uploaded files readable when Apache/PHP run under different users.
+                @chmod($savedAttachmentAbsolutePath, 0644);
+            }
+
+            if ($attachmentMime === null || trim((string)$attachmentMime) === '') {
+                $attachmentMime = $detectedMime !== '' ? $detectedMime : 'application/octet-stream';
+            }
+            if ($attachmentUrl === null) {
+                $attachmentUrl = twc_chat_upload_url($newFileName);
+            }
         }
     }
 

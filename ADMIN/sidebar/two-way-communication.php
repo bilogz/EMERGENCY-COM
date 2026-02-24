@@ -1017,17 +1017,26 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const normalizedText = (msg.text || '').toString().trim();
             const attachmentMimeRaw = (msg.attachmentMime || msg.attachment_mime || '').toString().trim().toLowerCase();
             const attachmentMime = attachmentMimeRaw || null;
+            const attachmentHintMatch = normalizedText.match(/^\[(photo|video|email|attachment)\]/i);
+            const attachmentHint = attachmentHintMatch ? attachmentHintMatch[1].toLowerCase() : '';
             const isImageAttachment = !!(attachmentUrl && (
                 (attachmentMime && attachmentMime.indexOf('image/') === 0) ||
-                (!attachmentMime && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(attachmentUrl))
+                (!attachmentMime && (
+                    attachmentHint === 'photo' ||
+                    /\.(png|jpe?g|gif|webp|bmp|avif)(\?|$)/i.test(attachmentUrl)
+                ))
             ));
             const isVideoAttachment = !!(attachmentUrl && (
                 (attachmentMime && attachmentMime.indexOf('video/') === 0) ||
-                (!attachmentMime && /\.(mp4|webm|ogv|mov|avi|mkv)(\?|$)/i.test(attachmentUrl))
+                (!attachmentMime && (
+                    attachmentHint === 'video' ||
+                    /\.(mp4|webm|ogv|mov|avi|mkv)(\?|$)/i.test(attachmentUrl)
+                ))
             ));
             const isEmailAttachment = !!(attachmentUrl && (
                 attachmentMime === 'message/rfc822' ||
                 attachmentMime === 'application/eml' ||
+                (!attachmentMime && attachmentHint === 'email') ||
                 /\.eml(\?|$)/i.test(attachmentUrl)
             ));
             const hideAttachmentPlaceholder = attachmentUrl && /^\[(photo|video|email|attachment)\]/i.test(normalizedText);
@@ -1039,12 +1048,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (attachmentUrl) {
                 if (isVideoAttachment) {
                     bodyHtml += `
-                        <a href="${attachmentUrl}" target="_blank" rel="noopener noreferrer" class="message-attachment-link">
-                            <video class="message-attachment-image" controls preload="metadata">
+                        <div class="message-attachment-link">
+                            <video class="message-attachment-image" controls preload="metadata" playsinline>
                                 <source src="${attachmentUrl}"${attachmentMime ? ` type="${attachmentMime}"` : ''}>
                                 Your browser does not support video playback.
                             </video>
-                        </a>
+                        </div>
                     `;
                 } else if (isImageAttachment) {
                     bodyHtml += `
@@ -1088,6 +1097,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (!url) return null;
             const raw = String(url).trim();
             if (!raw) return null;
+            if (/^blob:/i.test(raw)) {
+                return raw;
+            }
+            if (/^data:(image|video)\//i.test(raw)) {
+                return raw;
+            }
             const path = String(window.location.pathname || '').replace(/\\/g, '/');
             const lower = path.toLowerCase();
             let appBasePath = '';
