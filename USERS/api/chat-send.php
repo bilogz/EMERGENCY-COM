@@ -253,11 +253,17 @@ try {
 
             if (!$savedToDisk) {
                 $debugContext = [
+                    'storageDriver' => $storageDriver,
                     'tmpFile' => $tmpFile,
                     'tmpFileExists' => is_file($tmpFile),
                     'uploadDir' => $uploadDir,
                     'uploadDirWritable' => is_writable($uploadDir),
                     'destination' => $savedAttachmentAbsolutePath,
+                    'pdoPgsqlLoaded' => extension_loaded('pdo_pgsql'),
+                    'pgImgUrlConfigured' => trim((string)twc_secure_cfg('PG_IMG_URL', '')) !== '',
+                    'pgImgHostConfigured' => trim((string)twc_secure_cfg('PG_IMG_HOST', '')) !== '',
+                    'pgImgDbConfigured' => trim((string)twc_secure_cfg('PG_IMG_DB', '')) !== '',
+                    'pgImgUserConfigured' => trim((string)twc_secure_cfg('PG_IMG_USER', '')) !== '',
                 ];
                 if (is_array($lastUploadWarning) && !empty($lastUploadWarning['message'])) {
                     $debugContext['phpWarning'] = $lastUploadWarning['message'];

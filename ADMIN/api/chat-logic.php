@@ -433,9 +433,6 @@ if (!function_exists('twc_postgres_image_pdo')) {
         }
         $attempted = true;
 
-        if (!twc_postgres_image_storage_enabled()) {
-            return null;
-        }
         if (!extension_loaded('pdo_pgsql')) {
             error_log('TWC PostgreSQL image storage disabled: pdo_pgsql extension not loaded');
             return null;
@@ -453,6 +450,11 @@ if (!function_exists('twc_postgres_image_pdo')) {
         // Optional full URL override, e.g.:
         // postgresql://user:pass@host:5432/dbname?sslmode=require&channel_binding=require
         $pgUrl = trim((string)twc_secure_cfg('PG_IMG_URL', ''));
+        if (!twc_postgres_image_storage_enabled() && $pgUrl === '') {
+            // Driver is not postgres and no explicit PG URL is configured.
+            // Keep default behavior (no PG connection) unless PG config is provided.
+            return null;
+        }
         if ($pgUrl !== '') {
             $parts = @parse_url($pgUrl);
             if (is_array($parts)) {
