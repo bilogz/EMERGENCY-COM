@@ -1252,13 +1252,39 @@
             return output;
         };
 
+        const appBasePath = (() => {
+            const path = String(window.location.pathname || '').replace(/\\/g, '/');
+            const lower = path.toLowerCase();
+            const markers = ['/users/', '/admin/', '/php/'];
+            for (const marker of markers) {
+                const idx = lower.indexOf(marker);
+                if (idx === 0) return '';
+                if (idx > 0) return path.slice(0, idx).replace(/\/+$/, '');
+            }
+            const dir = path.replace(/\/[^/]*$/, '');
+            if (!dir || dir === '/') return '';
+            return dir.replace(/\/+$/, '');
+        })();
+
         const sanitizeAttachmentUrl = (url) => {
             if (!url) return null;
             const raw = String(url).trim();
             if (!raw) return null;
-            if (raw.startsWith('/')) return raw;
+            if (raw.startsWith('/')) {
+                if (
+                    appBasePath &&
+                    /^\/(USERS|ADMIN|PHP)\//i.test(raw) &&
+                    raw.indexOf(appBasePath + '/') !== 0
+                ) {
+                    return appBasePath + raw;
+                }
+                return raw;
+            }
+            if (/^(USERS|ADMIN|PHP)\//i.test(raw)) {
+                return appBasePath ? (appBasePath + '/' + raw) : ('/' + raw);
+            }
             try {
-                const parsed = new URL(raw, window.location.origin);
+                const parsed = new URL(raw, window.location.href);
                 if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
                     return parsed.href;
                 }

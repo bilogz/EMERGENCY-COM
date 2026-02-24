@@ -735,9 +735,42 @@ $admin_username = $admin['username'] ?? 'Admin';
             if (!url) return null;
             const raw = String(url).trim();
             if (!raw) return null;
-            if (raw.startsWith('/')) return raw;
+            const path = String(window.location.pathname || '').replace(/\\/g, '/');
+            const lower = path.toLowerCase();
+            let appBasePath = '';
+            for (const marker of ['/users/', '/admin/', '/php/']) {
+                const idx = lower.indexOf(marker);
+                if (idx === 0) {
+                    appBasePath = '';
+                    break;
+                }
+                if (idx > 0) {
+                    appBasePath = path.slice(0, idx).replace(/\/+$/, '');
+                    break;
+                }
+            }
+            if (!appBasePath) {
+                const dir = path.replace(/\/[^/]*$/, '');
+                if (dir && dir !== '/') {
+                    appBasePath = dir.replace(/\/+$/, '');
+                }
+            }
+
+            if (raw.startsWith('/')) {
+                if (
+                    appBasePath &&
+                    /^\/(USERS|ADMIN|PHP)\//i.test(raw) &&
+                    raw.indexOf(appBasePath + '/') !== 0
+                ) {
+                    return appBasePath + raw;
+                }
+                return raw;
+            }
+            if (/^(USERS|ADMIN|PHP)\//i.test(raw)) {
+                return appBasePath ? (appBasePath + '/' + raw) : ('/' + raw);
+            }
             try {
-                const parsed = new URL(raw, window.location.origin);
+                const parsed = new URL(raw, window.location.href);
                 if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
                     return parsed.href;
                 }
