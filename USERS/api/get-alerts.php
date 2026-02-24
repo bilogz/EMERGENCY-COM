@@ -179,13 +179,13 @@ function usersHasReadableTable(PDO $pdo, string $tableName): bool {
     }
 }
 
-function usersResolveAlertsTable(PDO $pdo): string {
-    if (usersHasReadableTable($pdo, 'alerts')) {
-        return 'alerts';
+function usersEnsureRuntimeAlertsTable(PDO $pdo, string $tableName): bool {
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
+        return false;
     }
 
     $runtimeSql = "
-        CREATE TABLE IF NOT EXISTS alerts_runtime (
+        CREATE TABLE IF NOT EXISTS {$tableName} (
             id INT(11) NOT NULL AUTO_INCREMENT,
             category_id INT(11) DEFAULT NULL,
             incident_id INT(11) DEFAULT NULL,
@@ -210,7 +210,8 @@ function usersResolveAlertsTable(PDO $pdo): string {
 
     try {
         $pdo->exec($runtimeSql);
-        $pdo->query("SELECT 1 FROM alerts_runtime LIMIT 1");
+        $pdo->query("SELECT 1 FROM {$tableName} LIMIT 1");
+        return true;
     } catch (Throwable $e) {
         $msg = strtolower($e->getMessage());
         $isTablespaceIssue = (strpos($msg, '1813') !== false)
@@ -219,15 +220,36 @@ function usersResolveAlertsTable(PDO $pdo): string {
             || (strpos($msg, 'tablespace for table') !== false);
         if ($isTablespaceIssue) {
             try {
-                $pdo->exec("DROP TABLE IF EXISTS alerts_runtime");
+                $pdo->exec("DROP TABLE IF EXISTS {$tableName}");
                 $pdo->exec($runtimeSql);
+                $pdo->query("SELECT 1 FROM {$tableName} LIMIT 1");
+                return true;
             } catch (Throwable $rebuildEx) {
-                // Ignore; final readable check below decides.
+                return false;
             }
+        }
+        return false;
+    }
+}
+
+function usersResolveAlertsTable(PDO $pdo): string {
+    if (usersHasReadableTable($pdo, 'alerts')) {
+        return 'alerts';
+    }
+
+    foreach (['alerts_runtime', 'alerts_runtime_fallback'] as $candidate) {
+        if (usersHasReadableTable($pdo, $candidate)) {
+            return $candidate;
         }
     }
 
-    return usersHasReadableTable($pdo, 'alerts_runtime') ? 'alerts_runtime' : 'alerts';
+    foreach (['alerts_runtime', 'alerts_runtime_fallback'] as $candidate) {
+        if (usersEnsureRuntimeAlertsTable($pdo, $candidate) && usersHasReadableTable($pdo, $candidate)) {
+            return $candidate;
+        }
+    }
+
+    return 'alerts';
 }
 
 function usersTableHasColumn(PDO $pdo, string $tableName, string $column): bool {

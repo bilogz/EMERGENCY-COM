@@ -246,11 +246,14 @@
     function isAutomatedHighPriorityAlert(alert) {
         const severity = normalizeText(alert.severity);
         const source = normalizeText(alert.source);
+        const title = normalizeText(alert.title);
         const message = normalizeText(alert.message);
+        const content = normalizeText(alert.content);
         const automatedSources = ['pagasa', 'phivolcs', 'automated_warning', 'automated', 'ai_warning', 'ai'];
         const isAutomatedSource = automatedSources.includes(source);
-        const hasPrioritySeverity = severity === 'high' || severity === 'critical' || severity === 'extreme';
-        const emergencyBulletinPattern = message.includes('emergency bulletin');
+        const emergencyBulletinPattern = message.includes('emergency bulletin') || content.includes('emergency bulletin');
+        const inferredPriority = title.includes('critical') || message.includes('critical') || content.includes('critical') || emergencyBulletinPattern;
+        const hasPrioritySeverity = severity === 'high' || severity === 'critical' || severity === 'extreme' || (!severity && inferredPriority);
 
         return hasPrioritySeverity && (isAutomatedSource || emergencyBulletinPattern);
     }
@@ -372,7 +375,7 @@
 
         try {
             const sep = state.apiEndpoint.includes('?') ? '&' : '?';
-            const url = state.apiEndpoint + sep + 'status=active&limit=20';
+            const url = state.apiEndpoint + sep + 'status=active&time_filter=all&limit=20';
 
             const response = await fetch(url, {
                 cache: 'no-cache',

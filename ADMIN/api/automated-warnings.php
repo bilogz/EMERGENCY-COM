@@ -1244,6 +1244,26 @@ function resolveAlertCategoryId(PDO $pdo, string $type): ?int {
     }
 }
 
+function getTableColumnMap(PDO $pdo, string $tableName): array {
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
+        return [];
+    }
+    $columns = [];
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM {$tableName}");
+        $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        foreach ($rows as $row) {
+            $field = strtolower((string)($row['Field'] ?? ''));
+            if ($field !== '') {
+                $columns[$field] = true;
+            }
+        }
+    } catch (Throwable $e) {
+        error_log("{$tableName} column read failed: " . $e->getMessage());
+    }
+    return $columns;
+}
+
 function autoPublishCriticalWarningToCitizens(PDO $pdo, array $warning, ?int $adminId = null): array {
     $channels = getAutomatedWarningChannels($pdo);
     ensureNotificationQueueTableForAutomatedWarnings($pdo);
@@ -1257,43 +1277,65 @@ function autoPublishCriticalWarningToCitizens(PDO $pdo, array $warning, ?int $ad
     // Create alert row for feeds/translation.
     $alertsTable = resolveAlertsTable($pdo);
     $categoryId = resolveAlertCategoryId($pdo, $type);
-    $hasSeverityCol = false;
-    try {
-        $hasSeverityCol = $pdo->query("SHOW COLUMNS FROM {$alertsTable} LIKE 'severity'")->rowCount() > 0;
-    } catch (Throwable $e) {
-        $hasSeverityCol = false;
+    $categoryLabel = in_array(strtolower($type), ['earthquake', 'tsunami'], true) ? 'Earthquake' : 'Weather';
+    $alertColumns = getTableColumnMap($pdo, $alertsTable);
+    $hasTitle = isset($alertColumns['title']);
+    $hasMessage = isset($alertColumns['message']);
+    $hasContent = isset($alertColumns['content']);
+    if (!$hasTitle || (!$hasMessage && !$hasContent)) {
+        throw new RuntimeException("{$alertsTable} is missing required alert feed columns");
     }
 
-    $alertCols = ['title', 'message', 'content', 'category_id', 'status', 'created_at'];
-    $alertVals = [$title, $message, $message, $categoryId, 'active'];
-    $placeholders = ['?', '?', '?', '?', '?', 'NOW()'];
+    $alertCols = [];
+    $alertVals = [];
+    $placeholders = [];
 
-    $hasCategoryCol = false;
-    $hasSourceCol = false;
-    try {
-        $hasCategoryCol = $pdo->query("SHOW COLUMNS FROM {$alertsTable} LIKE 'category'")->rowCount() > 0;
-        $hasSourceCol = $pdo->query("SHOW COLUMNS FROM {$alertsTable} LIKE 'source'")->rowCount() > 0;
-    } catch (Throwable $e) {
-        $hasCategoryCol = false;
-        $hasSourceCol = false;
+    $alertCols[] = 'title';
+    $alertVals[] = $title;
+    $placeholders[] = '?';
+
+    if ($hasMessage) {
+        $alertCols[] = 'message';
+        $alertVals[] = $message;
+        $placeholders[] = '?';
     }
-
-    if ($hasSeverityCol) {
-        array_splice($alertCols, 5, 0, ['severity']);
-        array_splice($alertVals, 5, 0, [ucfirst($severity)]);
-        array_splice($placeholders, 5, 0, ['?']);
+    if ($hasContent) {
+        $alertCols[] = 'content';
+        $alertVals[] = $message;
+        $placeholders[] = '?';
     }
-
-    if ($hasCategoryCol) {
-        $categoryLabel = in_array(strtolower($type), ['earthquake', 'tsunami'], true) ? 'Earthquake' : 'Weather';
+    if (isset($alertColumns['category_id'])) {
+        $alertCols[] = 'category_id';
+        $alertVals[] = $categoryId;
+        $placeholders[] = '?';
+    }
+    if (isset($alertColumns['category'])) {
         $alertCols[] = 'category';
         $alertVals[] = $categoryLabel;
         $placeholders[] = '?';
     }
-    if ($hasSourceCol) {
+    if (isset($alertColumns['source'])) {
         $alertCols[] = 'source';
         $alertVals[] = (string)($warning['source'] ?? 'automated_warning');
         $placeholders[] = '?';
+    }
+    if (isset($alertColumns['severity'])) {
+        $alertCols[] = 'severity';
+        $alertVals[] = ucfirst($severity);
+        $placeholders[] = '?';
+    }
+    if (isset($alertColumns['status'])) {
+        $alertCols[] = 'status';
+        $alertVals[] = 'active';
+        $placeholders[] = '?';
+    }
+    if (isset($alertColumns['created_at'])) {
+        $alertCols[] = 'created_at';
+        $placeholders[] = 'NOW()';
+    }
+    if (isset($alertColumns['updated_at'])) {
+        $alertCols[] = 'updated_at';
+        $placeholders[] = 'NOW()';
     }
 
     $stmtAlert = $pdo->prepare("INSERT INTO {$alertsTable} (" . implode(', ', $alertCols) . ") VALUES (" . implode(', ', $placeholders) . ")");
@@ -1535,48 +1577,41 @@ function buildCriticalCitizenMessage(array $warning): string {
     return $prefix . "\n" . $base . "\n\n" . $actions;
 }
 
-function ensureAlertsTableHealthy(PDO $pdo): bool {
-    $tableExists = false;
-    try {
-        $existsStmt = $pdo->query("SHOW TABLES LIKE 'alerts'");
-        $tableExists = (bool)($existsStmt && $existsStmt->fetchColumn());
-    } catch (PDOException $e) {
-        error_log("alerts exists check failed: " . $e->getMessage());
+function alertsTableReadable(PDO $pdo, string $tableName): bool {
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
+        return false;
     }
-
-    if (!$tableExists) {
-        return createAlertsTable($pdo, 'alerts');
-    }
-
     try {
-        $pdo->query("SELECT 1 FROM alerts LIMIT 1");
-        return true;
-    } catch (PDOException $e) {
-        $msg = strtolower($e->getMessage());
-        $isEngineCorruption = (strpos($msg, "doesn't exist in engine") !== false) || (strpos($msg, '1932') !== false);
-        if (!$isEngineCorruption) {
-            error_log("alerts health check failed: " . $e->getMessage());
+        $existsStmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($tableName));
+        if (!$existsStmt || !$existsStmt->fetchColumn()) {
             return false;
         }
+        $pdo->query("SELECT 1 FROM {$tableName} LIMIT 1");
+        return true;
+    } catch (Throwable $e) {
         return false;
     }
 }
 
-function ensureAlertsRuntimeTableHealthy(PDO $pdo): bool {
+function ensureNamedAlertsTableHealthy(PDO $pdo, string $tableName, bool $allowRebuild): bool {
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
+        return false;
+    }
+
     $tableExists = false;
     try {
-        $existsStmt = $pdo->query("SHOW TABLES LIKE 'alerts_runtime'");
+        $existsStmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($tableName));
         $tableExists = (bool)($existsStmt && $existsStmt->fetchColumn());
     } catch (PDOException $e) {
-        error_log("alerts_runtime exists check failed: " . $e->getMessage());
+        error_log("{$tableName} exists check failed: " . $e->getMessage());
     }
 
     if (!$tableExists) {
-        return createAlertsTable($pdo, 'alerts_runtime');
+        return createAlertsTable($pdo, $tableName) && alertsTableReadable($pdo, $tableName);
     }
 
     try {
-        $pdo->query("SELECT 1 FROM alerts_runtime LIMIT 1");
+        $pdo->query("SELECT 1 FROM {$tableName} LIMIT 1");
         return true;
     } catch (PDOException $e) {
         $msg = strtolower($e->getMessage());
@@ -1585,18 +1620,35 @@ function ensureAlertsRuntimeTableHealthy(PDO $pdo): bool {
             || (strpos($msg, '1813') !== false)
             || (strpos($msg, 'tablespace for table') !== false);
         if (!$isEngineCorruption) {
-            error_log("alerts_runtime health check failed: " . $e->getMessage());
+            error_log("{$tableName} health check failed: " . $e->getMessage());
             return false;
         }
 
-        error_log("alerts_runtime table unhealthy. Attempting rebuild.");
-        try {
-            $pdo->exec("DROP TABLE IF EXISTS alerts_runtime");
-        } catch (PDOException $dropEx) {
-            error_log("alerts_runtime drop failed during rebuild: " . $dropEx->getMessage());
+        if (!$allowRebuild) {
+            return false;
         }
-        return createAlertsTable($pdo, 'alerts_runtime');
+
+        error_log("{$tableName} table unhealthy. Attempting rebuild.");
+        try {
+            $pdo->exec("DROP TABLE IF EXISTS {$tableName}");
+        } catch (PDOException $dropEx) {
+            error_log("{$tableName} drop failed during rebuild: " . $dropEx->getMessage());
+        }
+        return createAlertsTable($pdo, $tableName) && alertsTableReadable($pdo, $tableName);
     }
+}
+
+function ensureAlertsTableHealthy(PDO $pdo): bool {
+    // Avoid dropping primary alerts table automatically to prevent accidental data loss.
+    return ensureNamedAlertsTableHealthy($pdo, 'alerts', false);
+}
+
+function ensureAlertsRuntimeTableHealthy(PDO $pdo): bool {
+    return ensureNamedAlertsTableHealthy($pdo, 'alerts_runtime', true);
+}
+
+function ensureAlertsRuntimeFallbackTableHealthy(PDO $pdo): bool {
+    return ensureNamedAlertsTableHealthy($pdo, 'alerts_runtime_fallback', true);
 }
 
 function createAlertsTable(PDO $pdo, string $tableName): bool {
@@ -1648,11 +1700,24 @@ function createAlertsTable(PDO $pdo, string $tableName): bool {
 }
 
 function resolveAlertsTable(PDO $pdo): string {
-    if (ensureAlertsTableHealthy($pdo)) {
+    if (ensureAlertsTableHealthy($pdo) && alertsTableReadable($pdo, 'alerts')) {
         return 'alerts';
     }
-    ensureAlertsRuntimeTableHealthy($pdo);
-    return 'alerts_runtime';
+    if (ensureAlertsRuntimeTableHealthy($pdo) && alertsTableReadable($pdo, 'alerts_runtime')) {
+        return 'alerts_runtime';
+    }
+    if (ensureAlertsRuntimeFallbackTableHealthy($pdo) && alertsTableReadable($pdo, 'alerts_runtime_fallback')) {
+        return 'alerts_runtime_fallback';
+    }
+
+    // Last-chance create attempts for unstable environments.
+    foreach (['alerts_runtime_fallback', 'alerts_runtime', 'alerts'] as $candidate) {
+        if (createAlertsTable($pdo, $candidate) && alertsTableReadable($pdo, $candidate)) {
+            return $candidate;
+        }
+    }
+
+    throw new RuntimeException('No healthy alerts table available for write operations.');
 }
 ?>
 
