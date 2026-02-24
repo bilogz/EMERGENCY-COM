@@ -1286,6 +1286,79 @@ function getTableColumnMap(PDO $pdo, string $tableName): array {
     return $columns;
 }
 
+function severityRank(string $value): int {
+    $normalized = strtolower(trim($value));
+    if ($normalized === 'extreme') return 5;
+    if ($normalized === 'critical') return 4;
+    if ($normalized === 'high' || $normalized === 'severe') return 3;
+    if ($normalized === 'medium' || $normalized === 'moderate') return 2;
+    if ($normalized === 'low') return 1;
+    return 0;
+}
+
+function resolveSeverityValueForAlertsTable(PDO $pdo, string $tableName, string $desiredSeverity): ?string {
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
+        return strtolower(trim($desiredSeverity));
+    }
+
+    $desired = strtolower(trim($desiredSeverity));
+    if ($desired === '') {
+        $desired = 'medium';
+    }
+
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM {$tableName} LIKE 'severity'");
+        $col = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : null;
+        if (!$col) {
+            return $desired;
+        }
+
+        $type = (string)($col['Type'] ?? '');
+        if (!preg_match('/^enum\((.*)\)$/i', $type, $m)) {
+            return $desired;
+        }
+
+        $enumRaw = $m[1] ?? '';
+        $enumValues = str_getcsv($enumRaw, ',', "'");
+        $enumValues = array_values(array_filter(array_map('trim', $enumValues), function ($v) {
+            return $v !== '';
+        }));
+        if (empty($enumValues)) {
+            return $desired;
+        }
+
+        $byLower = [];
+        foreach ($enumValues as $v) {
+            $byLower[strtolower($v)] = $v;
+        }
+
+        if (isset($byLower[$desired])) {
+            return $byLower[$desired];
+        }
+
+        $desiredRank = severityRank($desired);
+        if ($desiredRank > 0) {
+            $best = null;
+            $bestRank = -1;
+            foreach ($enumValues as $candidate) {
+                $r = severityRank($candidate);
+                if ($r <= $desiredRank && $r > $bestRank) {
+                    $best = $candidate;
+                    $bestRank = $r;
+                }
+            }
+            if ($best !== null) {
+                return $best;
+            }
+        }
+
+        return $enumValues[0];
+    } catch (Throwable $e) {
+        error_log("{$tableName} severity resolution failed: " . $e->getMessage());
+        return $desired;
+    }
+}
+
 function autoPublishCriticalWarningToCitizens(PDO $pdo, array $warning, ?int $adminId = null): array {
     $channels = getAutomatedWarningChannels($pdo);
     ensureNotificationQueueTableForAutomatedWarnings($pdo);
@@ -1342,8 +1415,9 @@ function autoPublishCriticalWarningToCitizens(PDO $pdo, array $warning, ?int $ad
         $placeholders[] = '?';
     }
     if (isset($alertColumns['severity'])) {
+        $safeSeverity = resolveSeverityValueForAlertsTable($pdo, $alertsTable, $severity);
         $alertCols[] = 'severity';
-        $alertVals[] = ucfirst($severity);
+        $alertVals[] = $safeSeverity;
         $placeholders[] = '?';
     }
     if (isset($alertColumns['status'])) {
