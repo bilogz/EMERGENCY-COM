@@ -13,8 +13,38 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit();
 }
 
+// Resolve role from session first, then refresh from DB when possible
+$userRole = strtolower(trim((string)($_SESSION['admin_role'] ?? 'admin')));
+
+// Refresh role from admin_user table so DB role updates are reflected immediately.
+$adminSessionId = isset($_SESSION['admin_user_id']) ? (int)$_SESSION['admin_user_id'] : 0;
+if ($adminSessionId > 0) {
+    try {
+        require_once __DIR__ . '/../api/db_connect.php';
+        if (isset($pdo) && $pdo instanceof PDO) {
+            try {
+                $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
+                $stmt = $pdo->prepare("SELECT role, status FROM admin_user WHERE id = ? LIMIT 1");
+                $stmt->execute([$adminSessionId]);
+                $adminAccount = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($adminAccount && ($adminAccount['status'] ?? '') === 'active') {
+                    $dbRole = strtolower(trim((string)($adminAccount['role'] ?? 'admin')));
+                    if ($dbRole !== '') {
+                        $userRole = $dbRole;
+                        $_SESSION['admin_role'] = $dbRole;
+                    }
+                }
+            } catch (Throwable $e) {
+                // Keep session role as fallback when admin_user is unavailable.
+            }
+        }
+    } catch (Throwable $e) {
+        // Keep session role as fallback when DB is unavailable.
+    }
+}
+
 // Check if user is super_admin
-$userRole = $_SESSION['admin_role'] ?? 'admin';
 $isSuperAdmin = ($userRole === 'super_admin');
 
 $pageTitle = 'User Management';

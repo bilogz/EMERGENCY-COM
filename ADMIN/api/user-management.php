@@ -15,14 +15,6 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit();
 }
 
-// Check if user is super_admin
-$userRole = $_SESSION['admin_role'] ?? 'admin';
-if ($userRole !== 'super_admin') {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'Access denied. Super admin privileges required.']);
-    exit();
-}
-
 // Include database connection
 try {
     require_once 'db_connect.php';
@@ -33,6 +25,35 @@ try {
 
 if (!isset($pdo) || $pdo === null) {
     echo json_encode(['success' => false, 'message' => 'Database connection failed']);
+    exit();
+}
+
+// Resolve role from session first, then refresh from DB when possible.
+$userRole = strtolower(trim((string)($_SESSION['admin_role'] ?? 'admin')));
+$adminSessionId = isset($_SESSION['admin_user_id']) ? (int)$_SESSION['admin_user_id'] : 0;
+if ($adminSessionId > 0) {
+    try {
+        $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
+        $stmt = $pdo->prepare("SELECT role, status FROM admin_user WHERE id = ? LIMIT 1");
+        $stmt->execute([$adminSessionId]);
+        $adminAccount = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($adminAccount && ($adminAccount['status'] ?? '') === 'active') {
+            $dbRole = strtolower(trim((string)($adminAccount['role'] ?? 'admin')));
+            if ($dbRole !== '') {
+                $userRole = $dbRole;
+                $_SESSION['admin_role'] = $dbRole;
+            }
+        }
+    } catch (Throwable $e) {
+        // Keep session role as fallback when admin_user is unavailable.
+    }
+}
+
+// Check if user is super_admin
+if ($userRole !== 'super_admin') {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Access denied. Super admin privileges required.']);
     exit();
 }
 

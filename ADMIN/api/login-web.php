@@ -324,7 +324,13 @@ try {
         $_SESSION['admin_user_table_id'] = $useAdminUserTable ? $admin['id'] : null; // Store admin_user.id separately
         $_SESSION['admin_username'] = $admin['name'];
         $_SESSION['admin_email'] = $admin['email'];
-        $_SESSION['admin_role'] = $useAdminUserTable ? ($admin['role'] ?? 'admin') : 'admin';
+        $resolvedRole = $useAdminUserTable
+            ? strtolower(trim((string)($admin['role'] ?? 'admin')))
+            : 'admin';
+        if ($resolvedRole === '') {
+            $resolvedRole = 'admin';
+        }
+        $_SESSION['admin_role'] = $resolvedRole;
         $_SESSION['admin_token'] = bin2hex(random_bytes(16));
         
         // Log successful login - use admin_user.id for admin_user table, otherwise use user id
@@ -349,7 +355,7 @@ try {
             "user_id" => $admin['id'],
             "username" => $admin['name'],
             "email" => $admin['email'],
-            "role" => $useAdminUserTable ? ($admin['role'] ?? 'admin') : 'admin'
+            "role" => $resolvedRole
         ]);
     } else {
         // Log failed login attempt
