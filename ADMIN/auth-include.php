@@ -170,7 +170,7 @@ $departmentNames = [
     'public_safety_department' => 'Public Safety Department',
     'health_and_safety_department' => 'Health & Safety Department',
     'disaster_preparedness_department' => 'Disaster Preparedness Department',
-    'emergency_communication_department' =>z 'Emergency Communication Department',
+    'emergency_communication_department' => 'Emergency Communication Department',
 ];
 
 // ============================================
@@ -337,9 +337,8 @@ function getTokenRefreshScript()
         setInterval(checkTokenExpiration, 60000);
         checkTokenExpiration();
 
-        // Store user data in localStorage
-        const userData = <?php echo json_encode($user); ?>;
-        localStorage.setItem('user_data', JSON.stringify(userData));
+        // Ensure previous persisted user details are cleared.
+        localStorage.removeItem('user_data');
     </script>
     <?php
     return ob_get_clean();

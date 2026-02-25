@@ -246,30 +246,10 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
 
         .form-options {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-end;
             align-items: center;
             margin-bottom: 1.5rem;
             font-size: 13px;
-        }
-
-        .remember-me {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            cursor: pointer;
-        }
-
-        .remember-me input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-            accent-color: var(--primary-color-1);
-        }
-
-        .remember-me label {
-            cursor: pointer;
-            color: var(--text-color-1);
-            user-select: none;
         }
 
         .forgot-password {
@@ -638,10 +618,6 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             </div>
 
             <div class="form-options">
-                <label class="remember-me">
-                    <input type="checkbox" id="rememberMe" name="rememberMe">
-                    <label for="rememberMe">Remember me</label>
-                </label>
                 <a href="#" class="forgot-password" id="forgotPassword">Forgot Password?</a>
             </div>
 
@@ -682,7 +658,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 <div class="form-group">
                     <label for="otp" class="form-label"><i class="fas fa-key"></i> Verification Code</label>
                     <input type="text" id="otp" name="otp" class="form-control" placeholder="Enter 6-digit code" maxlength="6" pattern="[0-9]{6}" required autocomplete="one-time-code" style="text-align: center; font-size: 1.5rem; letter-spacing: 0.5rem;">
-                    <small class="form-text" style="margin-top: 0.25rem; font-size: 12px; color: var(--text-secondary-1);">Enter the 6-digit code sent to your email</small>
+                    <small class="form-text" style="margin-top: 0.25rem; font-size: 12px; color: var(--text-secondary-1);">Enter the 6-digit code sent to your email (valid for 1 minute)</small>
                 </div>
 
                 <div class="error-message" id="otpModalErrorMessage" style="display: none;">
@@ -878,7 +854,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
         let pendingLoginData = null;
         let otpResendTimer = null;
 
-        function openOtpModal(email, password, recaptchaResponse, rememberMe) {
+        function openOtpModal(email, password) {
             document.getElementById('otpModal').style.display = 'flex';
             document.getElementById('otpEmailDisplay').textContent = email;
             document.getElementById('otp').value = '';
@@ -888,9 +864,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             // Store login data for later use
             pendingLoginData = {
                 email: email,
-                password: password,
-                recaptcha_response: recaptchaResponse,
-                rememberMe: rememberMe
+                password: password
             };
         }
 
@@ -999,6 +973,9 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                     }
                 }, 3000);
             }
+
+            localStorage.removeItem('admin_remember');
+            localStorage.removeItem('admin_email');
         });
         
         // Get reCAPTCHA v3 token
@@ -1037,7 +1014,6 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
 
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
-            const rememberMe = document.getElementById('rememberMe').checked;
             const attempts = getLoginAttempts();
 
             // Validation
@@ -1095,15 +1071,6 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                     localStorage.removeItem(SECURITY_CONFIG.LOCKOUT_KEY);
                     localStorage.removeItem(SECURITY_CONFIG.LOCKOUT_TIME_KEY);
                     
-                    // Store session data
-                    if (rememberMe) {
-                        localStorage.setItem('admin_remember', 'true');
-                        localStorage.setItem('admin_email', email);
-                    } else {
-                        localStorage.removeItem('admin_remember');
-                        localStorage.removeItem('admin_email');
-                    }
-
                     // Log successful login attempt (for security monitoring)
                     console.log('Admin login successful:', email, new Date().toISOString());
 
@@ -1149,7 +1116,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                                 document.getElementById('otpSentBanner').style.display = 'block';
                             }
 
-                            openOtpModal(email, password, recaptchaResponse, rememberMe);
+                            openOtpModal(email, password);
                             startResendCooldown(60);
                         } else {
                             Swal.fire({
@@ -1296,15 +1263,6 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                     localStorage.removeItem(SECURITY_CONFIG.LOCKOUT_KEY);
                     localStorage.removeItem(SECURITY_CONFIG.LOCKOUT_TIME_KEY);
                     
-                    // Store session data
-                    if (pendingLoginData.rememberMe) {
-                        localStorage.setItem('admin_remember', 'true');
-                        localStorage.setItem('admin_email', pendingLoginData.email);
-                    } else {
-                        localStorage.removeItem('admin_remember');
-                        localStorage.removeItem('admin_email');
-                    }
-
                     Swal.fire({
                         icon: 'success',
                         title: 'Login Successful!',
@@ -1380,28 +1338,13 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
         document.addEventListener('DOMContentLoaded', function() {
             // Clear any autofilled data on page load for security
             setTimeout(function() {
-                if (passwordInput.value && !document.getElementById('rememberMe').checked) {
-                    // Only clear if not remembered
-                    const remembered = localStorage.getItem('admin_remember');
-                    if (remembered !== 'true') {
-                        passwordInput.value = '';
-                    }
+                if (passwordInput.value) {
+                    passwordInput.value = '';
                 }
             }, 100);
 
             // Note: Developer tools are enabled for debugging purposes
             // You can re-enable the restrictions below if needed for production
-        });
-
-        // Check if email was remembered
-        document.addEventListener('DOMContentLoaded', function() {
-            const remembered = localStorage.getItem('admin_remember');
-            const rememberedEmail = localStorage.getItem('admin_email');
-            
-            if (remembered === 'true' && rememberedEmail) {
-                document.getElementById('email').value = rememberedEmail;
-                document.getElementById('rememberMe').checked = true;
-            }
         });
 
         // Forgot Password (placeholder)
