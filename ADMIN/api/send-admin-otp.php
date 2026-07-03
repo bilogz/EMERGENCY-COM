@@ -242,7 +242,7 @@ try {
     
     // Insert new OTP
     $query = "INSERT INTO otp_verifications (email, otp_code, purpose, expires_at, status, attempts, ip_address) 
-              VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE), 'pending', 0, ?)";
+              VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 1 MINUTE), 'pending', 0, ?)";
     
     $stmt = $pdo->prepare($query);
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
@@ -254,7 +254,7 @@ try {
     $sessionKey = $purpose === 'login' ? 'admin_login_otp' : 'admin_create_otp';
     $_SESSION[$sessionKey . '_code'] = $otp_code;
     $_SESSION[$sessionKey . '_email'] = $email;
-    $_SESSION[$sessionKey . '_expires'] = time() + 600; // 10 minutes
+    $_SESSION[$sessionKey . '_expires'] = time() + 60; // 1 minute
     $_SESSION[$sessionKey . '_purpose'] = $purpose;
     
     // Prepare email content
@@ -267,7 +267,7 @@ try {
     // Email body personalized for the admin
     $emailBody = "Hello {$name},\n\n";
     $emailBody .= "Your verification code for admin {$purposeText} is: {$otp_code}\n\n";
-    $emailBody .= "This code will expire in 10 minutes.\n\n";
+    $emailBody .= "This code will expire in 1 minute.\n\n";
     $emailBody .= "If you did not request this code, please ignore this email and contact your system administrator.\n\n";
     $emailBody .= "Thank you,\n";
     $emailBody .= "Emergency Communication System\n";
