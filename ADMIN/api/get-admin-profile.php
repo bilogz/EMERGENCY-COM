@@ -14,7 +14,7 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 }
 
 require_once 'db_connect.php';
-require_once __DIR__ . '/../services/AdminService.php';
+require_once __DIR__ . '/../app/services/AdminService.php';
 
 try {
     $adminId = $_SESSION['admin_user_id'];

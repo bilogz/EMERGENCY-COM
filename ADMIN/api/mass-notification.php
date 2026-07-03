@@ -250,7 +250,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         $recipientsStr = is_array($recipients) ? implode(',', $recipients) : $recipients;
         
         // Create alert entry in database for translation tracking
-        require_once __DIR__ . '/../repositories/AlertRepository.php';
+        require_once __DIR__ . '/../app/repositories/AlertRepository.php';
         $alertRepository = new AlertRepository($pdo);
         
         $categoryId = null;
@@ -325,7 +325,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         $translationHelper = new AlertTranslationHelper($pdo);
         
         // Get all subscribers based on recipient selection (using repository)
-        require_once __DIR__ . '/../repositories/SubscriberRepository.php';
+        require_once __DIR__ . '/../app/repositories/SubscriberRepository.php';
         $subscriberRepository = new SubscriberRepository($pdo);
         
         $subscribers = [];

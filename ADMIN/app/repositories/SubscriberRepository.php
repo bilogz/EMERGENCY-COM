@@ -7,7 +7,7 @@
  * @package ADMIN\Repositories
  */
 
-require_once __DIR__ . '/../api/db_connect.php';
+require_once __DIR__ . '/../../api/db_connect.php';
 
 class SubscriberRepository
 {

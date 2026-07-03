@@ -34,11 +34,7 @@ if (!isset($_SESSION['admin_username']) || !isset($_SESSION['admin_email'])) {
                 global $pdo;
                 if (isset($pdo) && $pdo) {
                     // Load service classes
-                    $servicePath = __DIR__ . '/../../services/AdminService.php';
-                    if (!file_exists($servicePath)) {
-                        $servicePath = __DIR__ . '/../services/AdminService.php';
-                    }
-                    
+                    $servicePath = __DIR__ . '/../../app/services/AdminService.php';
                     if (file_exists($servicePath)) {
                         require_once $servicePath;
                         $adminService = new AdminService($pdo);
@@ -1260,8 +1256,8 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Emergency Alert System -->
 <script src="<?php echo $headerBase; ?>../header/js/emergency-alert.js"></script>
 <!-- Replace browser alert() with themed modal -->
-<script src="<?php echo $headerBase; ?>../shared/js/ui-alert.js?v=<?php echo filemtime(__DIR__ . '/../../shared/js/ui-alert.js'); ?>"></script>
-<script src="<?php echo $headerBase; ?>../shared/js/module-analytics-strip.js?v=<?php echo filemtime(__DIR__ . '/../../shared/js/module-analytics-strip.js'); ?>"></script>
+<script src="<?php echo $headerBase; ?>../assets/shared/js/ui-alert.js?v=<?php echo filemtime(__DIR__ . '/../../assets/shared/js/ui-alert.js'); ?>"></script>
+<script src="<?php echo $headerBase; ?>../assets/shared/js/module-analytics-strip.js?v=<?php echo filemtime(__DIR__ . '/../../assets/shared/js/module-analytics-strip.js'); ?>"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="<?php echo $headerBase; ?>js/report-pdf-export.js?v=<?php echo filemtime(__DIR__ . '/../js/report-pdf-export.js'); ?>"></script>
 <script>

@@ -61,7 +61,7 @@ if ($userRole !== 'super_admin') {
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $action = $_GET['action'] ?? 'list';
     
-    require_once __DIR__ . '/../services/AdminService.php';
+    require_once __DIR__ . '/../app/services/AdminService.php';
     $adminService = new AdminService($pdo);
     
     if ($action === 'list') {

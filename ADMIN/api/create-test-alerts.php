@@ -7,7 +7,7 @@
 
 header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
-require_once __DIR__ . '/../repositories/AlertRepository.php';
+require_once __DIR__ . '/../app/repositories/AlertRepository.php';
 require_once 'push-notification-helper.php';
 
 session_start();

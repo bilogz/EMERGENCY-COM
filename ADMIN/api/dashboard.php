@@ -6,7 +6,7 @@
 
 header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
-require_once __DIR__ . '/../services/DashboardService.php';
+require_once __DIR__ . '/../app/services/DashboardService.php';
 
 try {
     $dashboardService = new DashboardService($pdo);

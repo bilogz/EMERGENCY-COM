@@ -306,4 +306,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<script src="<?php echo $sidebarBase; ?>../shared/js/draft-persist.js?v=<?php echo filemtime(__DIR__ . '/../../shared/js/draft-persist.js'); ?>"></script>
+<script src="<?php echo $sidebarBase; ?>../assets/shared/js/draft-persist.js?v=<?php echo filemtime(__DIR__ . '/../../assets/shared/js/draft-persist.js'); ?>"></script>
