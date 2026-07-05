@@ -115,9 +115,13 @@ error_log("reCAPTCHA Debug - OTP verified: " . ($otpVerified ? 'YES' : 'NO'));
 error_log("reCAPTCHA Debug - Is test key: " . ($isTestKey ? 'YES' : 'NO'));
 
 if (!$otpVerified && empty($recaptchaResponse) && !$isTestKey) {
-    error_log("reCAPTCHA error: No response token provided and not using test key");
-    echo json_encode(["success" => false, "message" => "Security verification failed. Please refresh the page and try again."]);
-    exit();
+    if ($requireOtp) {
+        error_log("reCAPTCHA warning: No response token provided, but OTP is required so login may continue");
+    } else {
+        error_log("reCAPTCHA error: No response token provided and not using test key");
+        echo json_encode(["success" => false, "message" => "Security verification failed. Please refresh the page and try again."]);
+        exit();
+    }
 }
 
 // Validate reCAPTCHA v3 with Google (skip if OTP already verified)
@@ -136,8 +140,13 @@ if ($otpVerified) {
         $recaptchaValid = true;
         error_log("reCAPTCHA test key detected - skipping verification");
     } else if (empty($recaptchaSecretKey)) {
-        echo json_encode(["success" => false, "message" => "Security verification is not configured. Please contact an administrator."]);
-        exit();
+        if ($requireOtp) {
+            error_log("reCAPTCHA warning: secret key missing, but OTP is required so login may continue");
+            $recaptchaValid = true;
+        } else {
+            echo json_encode(["success" => false, "message" => "Security verification is not configured. Please contact an administrator."]);
+            exit();
+        }
     } else {
         $recaptchaUrl = 'https://www.google.com/recaptcha/api/siteverify';
         $recaptchaData = [
@@ -161,8 +170,13 @@ if ($otpVerified) {
         // Log the raw response for debugging
         if ($recaptchaResult === false) {
             error_log('reCAPTCHA API request failed - unable to reach Google servers');
-            echo json_encode(["success" => false, "message" => "Security verification service unavailable. Please try again."]);
-            exit();
+            if ($requireOtp) {
+                error_log("reCAPTCHA warning: service unavailable, but OTP is required so login may continue");
+                $recaptchaValid = true;
+            } else {
+                echo json_encode(["success" => false, "message" => "Security verification service unavailable. Please try again."]);
+                exit();
+            }
         }
         
         $recaptchaJson = json_decode($recaptchaResult, true);
@@ -185,12 +199,17 @@ if ($otpVerified) {
                 error_log("reCAPTCHA v3 passed - Score: {$recaptchaScore}, Action: {$recaptchaAction}");
             } else {
                 error_log("reCAPTCHA v3 score too low - Score: {$recaptchaScore}, Action: {$recaptchaAction}, Required: {$minScore}");
-                echo json_encode([
-                    "success" => false, 
-                    "message" => "Security verification failed. Please try again or contact support.",
-                    "debug_info" => "Score: {$recaptchaScore}, Required: {$minScore}"
-                ]);
-                exit();
+                if ($requireOtp) {
+                    error_log("reCAPTCHA warning: low score, but OTP is required so login may continue");
+                    $recaptchaValid = true;
+                } else {
+                    echo json_encode([
+                        "success" => false,
+                        "message" => "Security verification failed. Please try again or contact support.",
+                        "debug_info" => "Score: {$recaptchaScore}, Required: {$minScore}"
+                    ]);
+                    exit();
+                }
             }
         } else {
             $errorCodes = $recaptchaJson['error-codes'] ?? [];
@@ -209,8 +228,13 @@ if ($otpVerified) {
                 $errorMessage = "Security verification expired. Please refresh the page and try again.";
             }
             
-            echo json_encode(["success" => false, "message" => $errorMessage]);
-            exit();
+            if ($requireOtp) {
+                error_log("reCAPTCHA warning: verification failed ({$errorMessage}), but OTP is required so login may continue");
+                $recaptchaValid = true;
+            } else {
+                echo json_encode(["success" => false, "message" => $errorMessage]);
+                exit();
+            }
         }
     }
 }

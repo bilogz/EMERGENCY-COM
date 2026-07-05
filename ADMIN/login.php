@@ -942,14 +942,14 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             // Initialize security warnings
             updateSecurityWarnings();
             
-            // Block login if captcha keys are not configured
+            // If captcha keys are not configured, only block when OTP is disabled.
             if (!RECAPTCHA_SITE_KEY) {
                 const recaptchaError = document.getElementById('recaptcha-error');
                 if (recaptchaError) {
                     recaptchaError.style.display = 'block';
                     recaptchaError.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Security verification is not configured. Please contact the administrator.';
                 }
-                if (loginButton) loginButton.disabled = true;
+                if (!REQUIRE_OTP && loginButton) loginButton.disabled = true;
                 return;
             }
             
@@ -1022,27 +1022,22 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 return;
             }
 
-            if (!RECAPTCHA_SITE_KEY) {
-                showError('Security verification is not configured. Please contact your administrator.');
-                return;
+            // reCAPTCHA v3 validation - get token, but allow OTP fallback if captcha is unavailable.
+            let recaptchaResponse = '';
+            if (RECAPTCHA_SITE_KEY && recaptchaLoaded) {
+                try {
+                    recaptchaResponse = await getRecaptchaToken('admin_login');
+                } catch (error) {
+                    console.error('Failed to get reCAPTCHA token:', error);
+                }
             }
 
-            // reCAPTCHA v3 validation - get token
-            if (!recaptchaLoaded) {
-                showError('Security verification is loading. Please wait a moment and try again.');
-                return;
-            }
-            
-            // Get fresh reCAPTCHA v3 token
-            let recaptchaResponse = '';
-            try {
-                recaptchaResponse = await getRecaptchaToken('admin_login');
-            } catch (error) {
-                console.error('Failed to get reCAPTCHA token:', error);
-            }
-            
-            if (!recaptchaResponse) {
-                showError('Security verification failed. Please refresh the page and try again.');
+            if (!recaptchaResponse && !REQUIRE_OTP) {
+                if (!RECAPTCHA_SITE_KEY) {
+                    showError('Security verification is not configured. Please contact your administrator.');
+                } else {
+                    showError('Security verification failed. Please refresh the page and try again.');
+                }
                 return;
             }
 
