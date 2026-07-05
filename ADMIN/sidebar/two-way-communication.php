@@ -16,6 +16,7 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 $pageTitle = $pageTitle ?? 'Two-Way Communication Interface';
 $pageHeading = $pageHeading ?? 'Two-Way Communication Interface';
 $pageDescription = $pageDescription ?? 'Interactive communication platform allowing administrators and citizens to exchange messages in real-time.';
+$pageMode = $pageMode ?? 'full';
 $assetBaseUrl = $assetBaseUrl ?? '';
 $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 ?>
@@ -52,11 +53,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
        =================================== -->
     <div class="main-content">
         <div class="main-container">
-            <div class="title">
-                <nav aria-label="Breadcrumb">
-                    <ol class="breadcrumb-list">
-                        <li class="breadcrumb-item">
-                            <a href="dashboard.php" class="breadcrumb-link">Dashboard</a>
+        <div class="title">
+            <nav aria-label="Breadcrumb">
+                <ol class="breadcrumb-list">
+                    <li class="breadcrumb-item">
+                        <a href="dashboard.php" class="breadcrumb-link">Dashboard</a>
                         </li>
                         <li class="breadcrumb-item active" aria-current="page">Two-Way Communication</li>
                     </ol>
@@ -65,6 +66,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 <p><?php echo htmlspecialchars($pageDescription); ?></p>
             </div>
 
+            <?php if ($pageMode !== 'citizen_reports'): ?>
             <div class="twc-primary-switch" id="twcPrimarySwitch" aria-label="Two-way communication views">
                 <button type="button" class="twc-primary-chip active" data-twc-view="conversations">
                     <i class="fas fa-comments"></i>
@@ -75,6 +77,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     <span>Chatbot Logs</span>
                 </button>
             </div>
+            <?php endif; ?>
 
             <div id="twcConversationsShell">
             <div class="department-top-nav" id="departmentTopNav" aria-label="Department Navigation">
@@ -223,6 +226,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             </div>
             </div>
 
+            <?php if ($pageMode !== 'citizen_reports'): ?>
             <div class="twc-chatbot-logs-shell" id="twcChatbotLogsShell" hidden>
                 <div class="twc-logs-intro">
                     <h3><i class="fas fa-robot"></i> Chatbot Interaction Logs</h3>
@@ -336,6 +340,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     </div>
                 </div>
             </div>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -371,6 +376,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const API_BASE = '../api/';
         const ADMIN_USERNAME = <?php echo json_encode($adminUsername); ?>;
         const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=4c8a89&color=fff&size=128`;
+        const PAGE_MODE = <?php echo json_encode($pageMode); ?>;
         
         // State Management
         let currentStatus = 'open';
@@ -488,6 +494,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         function updateMainViewQueryParam(view) {
+            if (PAGE_MODE === 'citizen_reports') {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('view');
+                window.history.replaceState({}, '', url.toString());
+                return;
+            }
             const url = new URL(window.location.href);
             if (view === 'chatbotLogs') {
                 url.searchParams.set('view', 'chatbotLogs');
@@ -498,7 +510,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         function setPrimaryView(view, updateUrl = true) {
-            const normalized = view === 'chatbotLogs' ? 'chatbotLogs' : 'conversations';
+            const normalized = (PAGE_MODE === 'citizen_reports') ? 'conversations' : (view === 'chatbotLogs' ? 'chatbotLogs' : 'conversations');
             currentMainView = normalized;
 
             const conversationShell = document.getElementById('twcConversationsShell');
@@ -2001,7 +2013,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
 
             const initialView = new URLSearchParams(window.location.search).get('view');
-            if (initialView === 'chatbotLogs') {
+            if (PAGE_MODE === 'citizen_reports') {
+                setPrimaryView('conversations', false);
+            } else if (initialView === 'chatbotLogs') {
                 setPrimaryView('chatbotLogs', false);
             } else {
                 setPrimaryView('conversations', false);
