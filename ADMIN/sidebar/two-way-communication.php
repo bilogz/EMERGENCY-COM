@@ -13,7 +13,10 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit();
 }
 
-$pageTitle = 'Two-Way Communication Interface';
+$pageTitle = $pageTitle ?? 'Two-Way Communication Interface';
+$pageHeading = $pageHeading ?? 'Two-Way Communication Interface';
+$pageDescription = $pageDescription ?? 'Interactive communication platform allowing administrators and citizens to exchange messages in real-time.';
+$assetBaseUrl = $assetBaseUrl ?? '';
 $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 ?>
 <!DOCTYPE html>
@@ -22,6 +25,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($pageTitle); ?></title>
+    <?php if (!empty($assetBaseUrl)): ?>
+    <base href="<?php echo htmlspecialchars($assetBaseUrl, ENT_QUOTES, 'UTF-8'); ?>">
+    <?php endif; ?>
     <link rel="icon" type="image/x-icon" href="images/favicon.ico">
     <link rel="stylesheet" href="css/global.css?v=<?php echo filemtime(__DIR__ . '/css/global.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -55,8 +61,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         <li class="breadcrumb-item active" aria-current="page">Two-Way Communication</li>
                     </ol>
                 </nav>
-                <h1><i class="fas fa-comments" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Two-Way Communication Interface</h1>
-                <p>Interactive communication platform allowing administrators and citizens to exchange messages in real-time.</p>
+                <h1><i class="fas fa-comments" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> <?php echo htmlspecialchars($pageHeading); ?></h1>
+                <p><?php echo htmlspecialchars($pageDescription); ?></p>
             </div>
 
             <div class="twc-primary-switch" id="twcPrimarySwitch" aria-label="Two-way communication views">

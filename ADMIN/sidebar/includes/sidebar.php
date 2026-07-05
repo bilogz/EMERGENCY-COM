@@ -14,6 +14,23 @@
 // Determine base path for links based on current directory
 $currentDir = basename(dirname($_SERVER['PHP_SELF']));
 $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
+
+if (!function_exists('sidebarCurrentRoutePath')) {
+    function sidebarCurrentRoutePath() {
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+        $path = parse_url($requestUri, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            $path = $_SERVER['PHP_SELF'] ?? '';
+        }
+        return strtolower(rtrim($path, '/'));
+    }
+}
+
+if (!function_exists('sidebarRouteContains')) {
+    function sidebarRouteContains($needle) {
+        return strpos(sidebarCurrentRoutePath(), strtolower($needle)) !== false;
+    }
+}
 ?>
 
 <!-- Sidebar Component -->
@@ -104,13 +121,34 @@ $sidebarBase = ($currentDir == 'multilingual-support') ? '../' : '';
                     
                     <!-- Two-Way Communication -->
                     <?php
-                    $isTwoWayPage = basename($_SERVER['PHP_SELF']) == 'two-way-communication.php';
+                    $isTwoWayPage = (
+                        basename($_SERVER['PHP_SELF']) == 'two-way-communication.php'
+                        || basename($_SERVER['PHP_SELF']) == 'two-way-communication-new.php'
+                        || sidebarRouteContains('/sidebar/two-way-comm/')
+                    );
+                    $isTwoWayCitizenActive = sidebarRouteContains('/sidebar/two-way-comm/citizen');
+                    $isTwoWayDepartmentsActive = sidebarRouteContains('/sidebar/two-way-comm/departments');
                     ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>two-way-communication.php" class="sidebar-link sidebar-accent-2way <?php echo $isTwoWayPage ? 'active' : ''; ?>">
+                        <a href="<?php echo $sidebarBase; ?>two-way-comm/citizen/" class="sidebar-link sidebar-submenu-toggle sidebar-accent-2way <?php echo $isTwoWayPage ? 'active' : ''; ?>" data-sidebar-dropdown="twc" aria-expanded="<?php echo $isTwoWayPage ? 'true' : 'false'; ?>" aria-controls="twcSidebarSubmenu">
                             <i class="fas fa-comments sidebar-icon" aria-hidden="true"></i>
                             <span>Two-Way Communication</span>
+                            <i class="fas fa-chevron-down submenu-icon" aria-hidden="true"></i>
                         </a>
+                        <ul class="sidebar-submenu <?php echo ($isTwoWayCitizenActive || $isTwoWayDepartmentsActive || $isTwoWayPage) ? 'sidebar-submenu-open' : ''; ?>" id="twcSidebarSubmenu">
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-comm/citizen/" class="sidebar-link sidebar-accent-2way <?php echo $isTwoWayCitizenActive ? 'active' : ''; ?>">
+                                    <i class="fas fa-file-alt sidebar-icon" aria-hidden="true"></i>
+                                    <span>Citizen Reports</span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-comm/departments/" class="sidebar-link sidebar-accent-2way <?php echo $isTwoWayDepartmentsActive ? 'active' : ''; ?>">
+                                    <i class="fas fa-comments-dots sidebar-icon" aria-hidden="true"></i>
+                                    <span>Department Chat</span>
+                                </a>
+                            </li>
+                        </ul>
                     </li>
 
                     <!-- Automated Warnings -->
@@ -246,11 +284,13 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             const submenu = this.nextElementSibling;
             const icon = this.querySelector('.submenu-icon');
+            const submenuKey = this.getAttribute('data-sidebar-dropdown') || '';
             
             if (submenu) {
                 const isOpen = submenu.classList.contains('sidebar-submenu-open');
                 submenu.classList.toggle('sidebar-submenu-open');
                 this.classList.toggle('active', !isOpen);
+                this.setAttribute('aria-expanded', submenu.classList.contains('sidebar-submenu-open') ? 'true' : 'false');
                 
                 // Toggle icon based on new state
                 if (icon) {
@@ -263,6 +303,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         icon.classList.remove('fa-chevron-up');
                         icon.classList.add('fa-chevron-down');
                     }
+                }
+
+                if (submenuKey === 'twc') {
+                    try {
+                        localStorage.setItem('admin_sidebar_twc_open', submenu.classList.contains('sidebar-submenu-open') ? '1' : '0');
+                    } catch (error) {}
                 }
             }
         });
@@ -285,7 +331,37 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-    
+
+    // Restore the TWC dropdown state unless a child route is already active.
+    const twcToggle = document.querySelector('a[data-sidebar-dropdown="twc"]');
+    if (twcToggle) {
+        const twcSubmenu = twcToggle.nextElementSibling;
+        if (twcSubmenu && twcSubmenu.classList.contains('sidebar-submenu')) {
+            const twcHasActiveChild = twcSubmenu.querySelector('.sidebar-link.active');
+            let twcShouldOpen = twcHasActiveChild;
+            if (!twcShouldOpen) {
+                try {
+                    twcShouldOpen = localStorage.getItem('admin_sidebar_twc_open') === '1';
+                } catch (error) {
+                    twcShouldOpen = false;
+                }
+            }
+
+            if (twcShouldOpen) {
+                twcSubmenu.classList.add('sidebar-submenu-open');
+                twcToggle.classList.add('active');
+                twcToggle.setAttribute('aria-expanded', 'true');
+                const icon = twcToggle.querySelector('.submenu-icon');
+                if (icon) {
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-up');
+                }
+            } else {
+                twcToggle.setAttribute('aria-expanded', 'false');
+            }
+        }
+    }
+
     // Also check if the parent link should be active (for automated-warnings submenu)
     const automatedWarningsToggle = document.querySelector('a[href="automated-warnings.php"].sidebar-submenu-toggle');
     if (automatedWarningsToggle) {
