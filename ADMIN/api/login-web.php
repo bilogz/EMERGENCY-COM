@@ -221,35 +221,31 @@ if (!$recaptchaValid && !$otpVerified) {
 }
 
 try {
-    // Check if admin_user table exists, otherwise fall back to users table
+    // Prefer admin_user, but fall back to legacy users table if the account still lives there.
     $useAdminUserTable = false;
+    $admin = null;
+
     try {
-        $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
-        $useAdminUserTable = true;
+        $stmt = $pdo->prepare("SELECT id, user_id, name, email, password, role, status FROM admin_user WHERE email = ? LIMIT 1");
+        $stmt->execute([$email]);
+        $admin = $stmt->fetch();
+        if ($admin) {
+            $useAdminUserTable = true;
+        }
     } catch (PDOException $e) {
-        // admin_user table doesn't exist, use users table (backward compatibility)
-    }
-    
-    if ($useAdminUserTable) {
-        // Query from admin_user table
-        $stmt = $pdo->prepare("SELECT id, user_id, name, email, password, role, status FROM admin_user WHERE email = ?");
-    } else {
-        // Fallback to users table for backward compatibility
-        $stmt = $pdo->prepare("SELECT id, name, email, password, user_type, status FROM users WHERE email = ? AND user_type = 'admin'");
-    }
-    
-    if (!$stmt) {
-        $errorInfo = $pdo->errorInfo();
-        error_log("PDO Prepare Error: " . $errorInfo[2]);
-        echo json_encode([
-            "success" => false,
-            "message" => "Database prepare error: " . $errorInfo[2]
-        ]);
-        exit();
+        error_log('Admin user lookup failed: ' . $e->getMessage());
     }
 
-    $stmt->execute([$email]);
-    $admin = $stmt->fetch();
+    if (!$admin) {
+        try {
+            $stmt = $pdo->prepare("SELECT id, name, email, password, user_type, status FROM users WHERE email = ? AND user_type = 'admin' LIMIT 1");
+            $stmt->execute([$email]);
+            $admin = $stmt->fetch();
+            $useAdminUserTable = false;
+        } catch (PDOException $e) {
+            error_log('Legacy admin user lookup failed: ' . $e->getMessage());
+        }
+    }
 
     // Verify password
     if ($admin && password_verify($plainPassword, $admin['password'])) {

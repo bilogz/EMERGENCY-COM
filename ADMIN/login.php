@@ -1138,6 +1138,18 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                         resetRecaptcha();
                     }
                 } else {
+                    const message = (data.message || '').toLowerCase();
+                    const isAuthFailure = message.includes('invalid email or password') || message.includes('invalid credentials');
+                    const isSecurityFailure = message.includes('security verification') || message.includes('unauthorized request') || message.includes('database error') || message.includes('server error');
+
+                    if (!isAuthFailure && isSecurityFailure) {
+                        showError(data.message || 'Security verification failed. Please refresh and try again.');
+                        resetRecaptcha();
+                        loginButton.classList.remove('loading');
+                        loginButton.disabled = false;
+                        return;
+                    }
+
                     // Increment failed login attempts
                     const newAttempts = incrementLoginAttempts();
                     

@@ -197,25 +197,26 @@ try {
     
     // For login, check if admin exists in admin_user table
     if ($purpose === 'login') {
-        // Check if admin_user table exists
-        $useAdminUserTable = false;
+        // Prefer admin_user, but fall back to legacy users table if needed.
+        $admin = null;
+
         try {
-            $pdo->query("SELECT 1 FROM admin_user LIMIT 1");
-            $useAdminUserTable = true;
-        } catch (PDOException $e) {
-            // admin_user table doesn't exist, use users table (backward compatibility)
-        }
-        
-        if ($useAdminUserTable) {
-            // Query from admin_user table
             $stmt = $pdo->prepare("SELECT id, name, email, role, status FROM admin_user WHERE email = ? LIMIT 1");
-        } else {
-            // Fallback to users table
-            $stmt = $pdo->prepare("SELECT id, name, email, user_type, status FROM users WHERE email = ? AND user_type = 'admin' LIMIT 1");
+            $stmt->execute([$email]);
+            $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log('Admin OTP admin_user lookup failed: ' . $e->getMessage());
         }
-        
-        $stmt->execute([$email]);
-        $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$admin) {
+            try {
+                $stmt = $pdo->prepare("SELECT id, name, email, user_type, status FROM users WHERE email = ? AND user_type = 'admin' LIMIT 1");
+                $stmt->execute([$email]);
+                $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+            } catch (PDOException $e) {
+                error_log('Admin OTP legacy users lookup failed: ' . $e->getMessage());
+            }
+        }
         
         if (!$admin) {
             throw new Exception('No admin account found with this email address');
