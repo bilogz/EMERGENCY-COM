@@ -1,0 +1,11 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Do not rewrite if the requested resource points to a physical file or directory
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    
+    # Rewrite clean URLs to the index.php gateway router internally
+    # e.g., /api/alerts -> /api/index.php?module=alerts
+    RewriteRule ^([^/]+)/?$ index.php?module=$1 [QSA,L]
+</IfModule>
