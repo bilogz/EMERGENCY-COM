@@ -25,6 +25,124 @@ $assetBase = '../ADMIN/header/';
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <!-- Emergency Alert System -->
     <link rel="stylesheet" href="../ADMIN/header/css/emergency-alert.css">
+    <style>
+        .incident-report-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 100002;
+            background: rgba(15, 23, 42, 0.58);
+            padding: 1rem;
+        }
+
+        .incident-report-card {
+            width: min(560px, 94vw);
+            max-height: min(720px, 92vh);
+            margin: 5vh auto 0;
+            background: var(--card-bg-1, #fff);
+            color: var(--text-color-1, #1f2937);
+            border: 1px solid var(--border-color-1, #d7e4e3);
+            border-radius: 12px;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, 0.32);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .incident-report-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1rem 1.1rem;
+            border-bottom: 1px solid var(--border-color-1, #d7e4e3);
+        }
+
+        .incident-report-head h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 800;
+        }
+
+        .incident-report-close {
+            border: 0;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 8px;
+        }
+
+        .incident-report-body {
+            padding: 1rem 1.1rem;
+            overflow-y: auto;
+            display: grid;
+            gap: 0.85rem;
+        }
+
+        .incident-report-body label {
+            display: grid;
+            gap: 0.35rem;
+            font-weight: 700;
+            font-size: 0.86rem;
+            color: var(--text-color-1, #1f2937);
+        }
+
+        .incident-report-body input,
+        .incident-report-body textarea,
+        .incident-report-body select {
+            width: 100%;
+            border: 1px solid var(--border-color-1, #d7e4e3);
+            border-radius: 8px;
+            padding: 0.72rem 0.8rem;
+            font: inherit;
+            background: var(--bg-color-1, #f7fbfb);
+            color: inherit;
+        }
+
+        .incident-report-body textarea {
+            min-height: 130px;
+            resize: vertical;
+        }
+
+        .incident-report-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.65rem;
+            padding: 1rem 1.1rem;
+            border-top: 1px solid var(--border-color-1, #d7e4e3);
+        }
+
+        @media (max-width: 480px) {
+            .incident-report-modal {
+                padding: 0.5rem;
+            }
+            .incident-report-card {
+                margin: 2vh auto 0;
+                width: 100%;
+                max-height: 96vh;
+            }
+            .incident-report-body {
+                padding: 0.75rem;
+                gap: 0.6rem;
+            }
+            .incident-report-body label {
+                font-size: 0.8rem;
+            }
+            .incident-report-body input,
+            .incident-report-body textarea,
+            .incident-report-body select {
+                padding: 0.55rem 0.7rem;
+            }
+            .incident-report-body textarea {
+                min-height: 90px;
+            }
+            .incident-report-actions {
+                padding: 0.75rem;
+            }
+        }
+    </style>
     <script>
         // Set global API base path for all JS files
         window.API_BASE_PATH = 'api/';
@@ -116,7 +234,7 @@ $assetBase = '../ADMIN/header/';
                     <h1 data-translate="emergency.title">Call for Emergency</h1>
                     <p data-translate="emergency.subtitle">Use data or WiFi to connect with responders via Internet calling.</p>
                     <div class="hero-buttons action-buttons">
-                        <button class="btn btn-primary" onclick="startInternetCall()"><i class="fas fa-headset"></i> <span>Start Internet Call</span></button>
+                        <button class="btn btn-primary" onclick="startInternetCall()"><i class="fas fa-headset"></i> <span>Call for Emergency via Internet</span></button>
                     </div>
                 </div>
             </div>
@@ -129,17 +247,17 @@ $assetBase = '../ADMIN/header/';
                     <p>Use data or WiFi when cellular signal is weak. Connect with emergency responders via VoIP or web-based calling.</p>
                     <div class="cards-grid">
                         <div class="card">
-                            <h3>Web/VoIP Call</h3>
+                            <h3>Call for Emergency or Report</h3>
                             <p>Start a voice call over WiFi or mobile data. Connect directly with emergency dispatchers.</p>
                             <button class="btn btn-primary" onclick="startInternetCall()">
-                                <i class="fas fa-headset"></i> <span>Start Internet Call</span>
+                                <i class="fas fa-headset"></i> <span>Call for Emergency via Internet</span>
                             </button>
                         </div>
                         <div class="card">
-                            <h3>Two-Way Chat</h3>
-                            <p>Send incident details and get dispatcher replies over data. Real-time communication with emergency services.</p>
-                            <button class="btn btn-secondary" onclick="openEmergencyChat()">
-                                <i class="fas fa-comments"></i> <span>Open Chat</span>
+                            <h3>Report Incident</h3>
+                            <p>Submit incident details, photos, files, or related links so dispatchers can review and respond.</p>
+                            <button class="btn btn-secondary" onclick="openIncidentReport()">
+                                <i class="fas fa-triangle-exclamation"></i> <span>Report Incident</span>
                             </button>
                         </div>
                     </div>
@@ -188,6 +306,52 @@ $assetBase = '../ADMIN/header/';
                 <button id="endCallBtn" class="btn btn-secondary" disabled style="opacity:0.6; pointer-events:none; min-height:44px; padding:10px 16px;">End Call</button>
             </div>
         </div>
+    </div>
+    <div class="incident-report-modal" id="incidentReportModal" aria-hidden="true">
+        <form class="incident-report-card" id="incidentReportForm" enctype="multipart/form-data">
+            <div class="incident-report-head">
+                <h3><i class="fas fa-triangle-exclamation"></i> Report Incident</h3>
+                <button type="button" class="incident-report-close" onclick="closeIncidentReport()" aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="incident-report-body">
+                <label>
+                    Incident Type
+                    <select id="incidentReportType" name="incidentType">
+                        <option value="Emergency">Emergency</option>
+                        <option value="Medical Emergency">Medical Emergency</option>
+                        <option value="Fire Emergency">Fire Emergency</option>
+                        <option value="Vehicular Accident">Vehicular Accident</option>
+                        <option value="Flood or Weather Incident">Flood or Weather Incident</option>
+                        <option value="Crime or Public Safety">Crime or Public Safety</option>
+                        <option value="Other Incident">Other Incident</option>
+                    </select>
+                </label>
+                <label>
+                    Location or Landmark
+                    <input type="text" id="incidentReportLocation" name="location" placeholder="Street, barangay, building, or nearby landmark">
+                </label>
+                <label>
+                    Incident Details
+                    <textarea id="incidentReportMessage" name="message" required placeholder="Describe what happened, who is affected, and any immediate danger."></textarea>
+                </label>
+                <label>
+                    Related Link
+                    <input type="url" id="incidentReportLink" name="relatedLink" placeholder="https://example.com/photo-video-post">
+                </label>
+                <label>
+                    Attach Photo or File
+                    <input type="file" id="incidentReportAttachment" name="attachment" accept="image/*,video/*,.pdf,.doc,.docx,.txt,.eml">
+                </label>
+            </div>
+            <div class="incident-report-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeIncidentReport()">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="incidentReportSubmitBtn">
+                    <i class="fas fa-paper-plane"></i> Submit Report
+                </button>
+            </div>
+        </form>
     </div>
     <audio id="remote" autoplay></audio>
 
@@ -787,31 +951,120 @@ $assetBase = '../ADMIN/header/';
             document.getElementById("call").click();
         }
 
-        function openEmergencyChat() {
-            // Use the global function from sidebar if available
-            if (typeof window.openChat === 'function') {
-                window.openChat();
-                // Initialize Firebase chat if not already done
-                if (window.initFirebaseChat && !window.chatInitialized) {
-                    setTimeout(() => {
-                        window.initFirebaseChat();
-                    }, 100);
+        function openIncidentReport() {
+            const modal = document.getElementById('incidentReportModal');
+            if (!modal) return;
+            modal.style.display = 'block';
+            modal.setAttribute('aria-hidden', 'false');
+            const locationInput = document.getElementById('incidentReportLocation');
+            if (locationInput && locationData && !locationInput.value) {
+                const parts = [
+                    locationData.address,
+                    locationData.latitude && locationData.longitude ? `${locationData.latitude}, ${locationData.longitude}` : ''
+                ].filter(Boolean);
+                locationInput.value = parts.join(' | ');
+            }
+            setTimeout(() => document.getElementById('incidentReportMessage')?.focus(), 50);
+        }
+
+        function closeIncidentReport() {
+            const modal = document.getElementById('incidentReportModal');
+            if (!modal) return;
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        function buildIncidentReportText(type, details, location, relatedLink) {
+            const lines = [
+                `Incident Type: ${type}`,
+                location ? `Location: ${location}` : '',
+                '',
+                details,
+                relatedLink ? `Related Link: ${relatedLink}` : ''
+            ].filter(line => line !== '');
+            return lines.join('\n');
+        }
+
+        async function submitIncidentReport(event) {
+            event.preventDefault();
+            const submitBtn = document.getElementById('incidentReportSubmitBtn');
+            const type = document.getElementById('incidentReportType')?.value || 'Emergency';
+            const location = document.getElementById('incidentReportLocation')?.value.trim() || '';
+            const details = document.getElementById('incidentReportMessage')?.value.trim() || '';
+            const relatedLink = document.getElementById('incidentReportLink')?.value.trim() || '';
+            const attachment = document.getElementById('incidentReportAttachment')?.files?.[0] || null;
+
+            if (!details && !attachment) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Add incident details',
+                    text: 'Please describe the incident or attach a photo/file before submitting.'
+                });
+                return;
+            }
+
+            const reportText = buildIncidentReportText(type, details, location, relatedLink);
+            const formData = new FormData();
+            formData.append('text', reportText);
+            formData.append('userId', userProfile?.id || 'guest');
+            formData.append('userName', userProfile?.name || 'Guest User');
+            formData.append('userEmail', userProfile?.email || '');
+            formData.append('userPhone', userProfile?.phone || '');
+            formData.append('userLocation', location);
+            formData.append('userConcern', 'incident_report');
+            formData.append('category', type);
+            formData.append('forceNewConversation', '1');
+            formData.append('isGuest', userProfile?.id ? '0' : '1');
+            if (attachment) {
+                formData.append('attachment', attachment);
+            }
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+            }
+
+            try {
+                const response = await fetch('api/chat-send.php', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Failed to submit incident report.');
                 }
-            } else {
-                // Fallback: try to find and click the chat button
-                const chatFab = document.getElementById('chatFab');
-                if (chatFab) {
-                    chatFab.click();
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Chat Not Available',
-                        text: 'Chat feature is loading. Please wait a moment and try again.',
-                        confirmButtonText: 'OK'
-                    });
+
+                document.getElementById('incidentReportForm')?.reset();
+                closeIncidentReport();
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Incident Report Submitted',
+                    text: 'Your report was sent to emergency dispatch for review.',
+                    confirmButtonText: 'OK'
+                });
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Submission Failed',
+                    text: error.message || 'Please try again.'
+                });
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Report';
                 }
             }
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('incidentReportForm')?.addEventListener('submit', submitIncidentReport);
+            document.getElementById('incidentReportModal')?.addEventListener('click', (event) => {
+                if (event.target && event.target.id === 'incidentReportModal') {
+                    closeIncidentReport();
+                }
+            });
+        });
     </script>
     
     <!-- Emergency Alert System -->

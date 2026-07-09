@@ -225,6 +225,147 @@ if (!function_exists('twc_normalize_priority')) {
     }
 }
 
+if (!function_exists('twc_incident_priority_config')) {
+    function twc_incident_priority_config(): array {
+        return [
+            'critical' => ['label' => 'CRITICAL', 'color' => 'red', 'hex' => '#dc2626'],
+            'high' => ['label' => 'HIGH', 'color' => 'orange', 'hex' => '#f97316'],
+            'urgent' => ['label' => 'URGENT', 'color' => 'yellow', 'hex' => '#eab308'],
+            'moderate' => ['label' => 'MODERATE', 'color' => 'blue', 'hex' => '#2563eb'],
+            'low' => ['label' => 'LOW', 'color' => 'green', 'hex' => '#16a34a'],
+        ];
+    }
+}
+
+if (!function_exists('twc_incident_priority_from_score')) {
+    function twc_incident_priority_from_score(int $score): array {
+        $score = max(0, min(110, $score));
+        if ($score >= 90) $key = 'critical';
+        elseif ($score >= 70) $key = 'high';
+        elseif ($score >= 45) $key = 'urgent';
+        elseif ($score >= 20) $key = 'moderate';
+        else $key = 'low';
+
+        $meta = twc_incident_priority_config()[$key];
+        return [
+            'score' => $score,
+            'priority' => $key,
+            'label' => $meta['label'],
+            'color' => $meta['color'],
+            'hex' => $meta['hex'],
+        ];
+    }
+}
+
+if (!function_exists('twc_score_by_patterns')) {
+    function twc_score_by_patterns(string $text, array $rules, int $default): int {
+        $hay = strtolower($text);
+        foreach ($rules as $rule) {
+            foreach ($rule['patterns'] as $pattern) {
+                if (preg_match($pattern, $hay)) {
+                    return (int)$rule['score'];
+                }
+            }
+        }
+        return $default;
+    }
+}
+
+if (!function_exists('twc_calculate_incident_priority')) {
+    function twc_calculate_incident_priority(array $data): array {
+        $text = strtolower(trim(implode(' ', array_filter([
+            $data['incident_type'] ?? '',
+            $data['type'] ?? '',
+            $data['category'] ?? '',
+            $data['userConcern'] ?? '',
+            $data['user_concern'] ?? '',
+            $data['message'] ?? '',
+            $data['text'] ?? '',
+            $data['last_message'] ?? '',
+            $data['description'] ?? '',
+            $data['severity'] ?? '',
+            $data['threat'] ?? '',
+            $data['verification'] ?? '',
+        ], static fn($v) => trim((string)$v) !== ''))));
+
+        $incidentType = twc_score_by_patterns($text, [
+            ['score' => 40, 'patterns' => ['/\bbomb\b/', '/active\s+shooter/', '/gunman/', '/shooting/']],
+            ['score' => 38, 'patterns' => ['/structural\s+fire/', '/building\s+fire/', '/major\s+fire/', '/building\s+collapse/', '/collapsed?\s+building/']],
+            ['score' => 35, 'patterns' => ['/chemical\s+spill/', '/hazardous\s+material/', '/hazmat/', '/earthquake/']],
+            ['score' => 33, 'patterns' => ['/landslide/']],
+            ['score' => 32, 'patterns' => ['/flash\s+flood/', '/flood/']],
+            ['score' => 30, 'patterns' => ['/typhoon/', '/storm\s+damage/', '/gas\s+leak/']],
+            ['score' => 28, 'patterns' => ['/medical/', '/heart\s+attack/', '/stroke/', '/unconscious/', '/injur/']],
+            ['score' => 25, 'patterns' => ['/vehicular/', '/vehicle/', '/car\s+accident/', '/collision/', '/crash/']],
+            ['score' => 20, 'patterns' => ['/missing\s+person/', '/missing\s+child/']],
+            ['score' => 10, 'patterns' => ['/animal\s+rescue/', '/stray\s+animal/']],
+            ['score' => 8, 'patterns' => ['/power\s+outage/', '/blackout/']],
+            ['score' => 3, 'patterns' => ['/noise/', '/minor\s+disturbance/', '/disturbance/']],
+        ], 3);
+
+        $threat = twc_score_by_patterns($text, [
+            ['score' => 30, 'patterns' => ['/multiple\s+lives/', '/many\s+people.*danger/', '/immediate\s+danger/', '/life.?threat/']],
+            ['score' => 25, 'patterns' => ['/trapped/', '/seriously\s+injured/', '/critical\s+injur/']],
+            ['score' => 15, 'patterns' => ['/nearby\s+people/', '/possible\s+danger/', '/risk\s+to\s+people/']],
+            ['score' => 0, 'patterns' => ['/false\s+alarm/', '/hoax/']],
+        ], 5);
+
+        $severity = twc_score_by_patterns($text, [
+            ['score' => 20, 'patterns' => ['/catastrophic/', '/massive/', '/destroyed/', '/severe/']],
+            ['score' => 15, 'patterns' => ['/major/', '/large/', '/serious/']],
+            ['score' => 10, 'patterns' => ['/moderate/']],
+            ['score' => 2, 'patterns' => ['/very\s+minor/']],
+        ], 5);
+
+        $population = twc_score_by_patterns($text, [
+            ['score' => 10, 'patterns' => ['/(more\s+than\s+)?500\+?\s+(people|persons|residents)/', '/hundreds\s+of\s+people/']],
+            ['score' => 8, 'patterns' => ['/\b[1-4]\d\d\s+(people|persons|residents)/', '/100\s*-\s*500/']],
+            ['score' => 6, 'patterns' => ['/\b[2-9]\d\s+(people|persons|residents)/', '/20\s*-\s*99/']],
+            ['score' => 4, 'patterns' => ['/\b(5|6|7|8|9|1\d)\s+(people|persons|residents)/', '/5\s*-\s*19/']],
+        ], 2);
+
+        $verification = twc_score_by_patterns($text, [
+            ['score' => 10, 'patterns' => ['/verified/', '/official\s+source/', '/emergency\s+personnel/', '/cctv/']],
+            ['score' => 8, 'patterns' => ['/multiple\s+witness/', '/many\s+witness/']],
+            ['score' => 5, 'patterns' => ['/identified\s+witness/', '/reported\s+by\s+.*witness/']],
+            ['score' => 0, 'patterns' => ['/confirmed\s+false/', '/false\s+report/']],
+        ], 2);
+
+        $score = $incidentType + $threat + $severity + $population + $verification;
+        $result = twc_incident_priority_from_score($score);
+        $result['breakdown'] = [
+            'incident_type' => $incidentType,
+            'threat_to_life' => $threat,
+            'severity' => $severity,
+            'population_affected' => $population,
+            'verification' => $verification,
+        ];
+        return $result;
+    }
+}
+
+if (!function_exists('twc_ensure_incident_priority_columns')) {
+    function twc_ensure_incident_priority_columns(PDO $pdo): void {
+        if (!twc_table_exists($pdo, 'conversations')) return;
+        $columns = [
+            'incident_priority_score' => "ALTER TABLE conversations ADD COLUMN incident_priority_score INT NOT NULL DEFAULT 0",
+            'incident_priority_level' => "ALTER TABLE conversations ADD COLUMN incident_priority_level VARCHAR(20) NOT NULL DEFAULT 'low'",
+            'incident_priority_color' => "ALTER TABLE conversations ADD COLUMN incident_priority_color VARCHAR(20) NOT NULL DEFAULT 'green'",
+            'incident_priority_breakdown' => "ALTER TABLE conversations ADD COLUMN incident_priority_breakdown TEXT NULL",
+            'incident_priority_manual' => "ALTER TABLE conversations ADD COLUMN incident_priority_manual TINYINT(1) NOT NULL DEFAULT 0",
+        ];
+        foreach ($columns as $name => $ddl) {
+            if (twc_column_exists($pdo, 'conversations', $name)) continue;
+            try {
+                $pdo->exec($ddl);
+                twc_column_exists($pdo, 'conversations', $name, true);
+            } catch (Throwable $e) {
+                error_log("TWC incident priority column warning ($name): " . $e->getMessage());
+            }
+        }
+    }
+}
+
 if (!function_exists('twc_priority_rank')) {
     function twc_priority_rank(string $priority): int {
         return strtolower(trim($priority)) === 'urgent' ? 0 : 1;

@@ -80,6 +80,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             <?php endif; ?>
 
             <div id="twcConversationsShell">
+            <?php if ($pageMode !== 'citizen_reports'): ?>
             <div class="department-top-nav" id="departmentTopNav" aria-label="Department Navigation">
                 <button type="button" class="dept-nav-chip active" data-dept="all">
                     <i class="fas fa-layer-group"></i>
@@ -132,6 +133,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     <span class="dept-nav-count" data-dept-count="emergency_comm">0</span>
                 </button>
             </div>
+            <?php endif; ?>
             
             <div class="sub-container">
                 <div class="page-content">
@@ -142,14 +144,17 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 <div class="chat-tab active" onclick="switchTab('open')">
                                     <i class="fas fa-inbox"></i> Open <span id="openCount" class="badge"></span>
                                 </div>
+                                <?php if ($pageMode !== 'citizen_reports'): ?>
                                 <div class="chat-tab" onclick="switchTab('assigned')">
                                     <i class="fas fa-user-check"></i> Assigned
                                 </div>
                                 <div class="chat-tab" onclick="switchTab('closed')">
                                     <i class="fas fa-check-circle"></i> Closed
                                 </div>
+                                <?php endif; ?>
                             </div>
                             <div class="chat-filters">
+                                <?php if ($pageMode !== 'citizen_reports'): ?>
                                 <label for="deptFilter">Department</label>
                                 <select id="deptFilter">
                                     <option value="all">All Departments</option>
@@ -163,15 +168,26 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                     <option value="disaster_preparedness">Disaster Preparedness Training</option>
                                     <option value="emergency_comm">Emergency Communication</option>
                                 </select>
+                                <?php endif; ?>
+                                <?php if ($pageMode !== 'citizen_reports'): ?>
                                 <label for="topicFilter">Topic</label>
                                 <select id="topicFilter">
                                     <option value="all">All Topics</option>
                                 </select>
+                                <?php endif; ?>
                                 <label for="priorityFilter">Priority</label>
                                 <select id="priorityFilter">
                                     <option value="all">All Priorities</option>
+                                    <?php if ($pageMode === 'citizen_reports'): ?>
+                                    <option value="critical">Critical</option>
+                                    <option value="high">High</option>
+                                    <option value="urgent">Urgent</option>
+                                    <option value="moderate">Moderate</option>
+                                    <option value="low">Low</option>
+                                    <?php else: ?>
                                     <option value="urgent">Urgent</option>
                                     <option value="normal">Normal</option>
+                                    <?php endif; ?>
                                 </select>
                             </div>
                             <div class="conversations-list" id="scrollableList">
@@ -203,9 +219,41 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                     </div>
                                 </div>
                                 <div class="chat-actions">
+                                    <?php if ($pageMode === 'citizen_reports'): ?>
+                                    <div class="incident-priority-control" id="incidentPriorityControl" style="display:none;">
+                                        <button type="button" class="incident-priority-button" id="incidentPriorityButton" aria-haspopup="menu" aria-expanded="false">
+                                            <span id="incidentPriorityBadge" class="incident-priority-badge incident-priority-low">LOW 0</span>
+                                            <i class="fas fa-chevron-down"></i>
+                                        </button>
+                                        <div class="incident-priority-menu" id="incidentPriorityMenu" role="menu" hidden>
+                                            <button type="button" role="menuitem" data-priority="critical">
+                                                <span class="incident-priority-badge incident-priority-critical">CRITICAL</span>
+                                                <small>90-110</small>
+                                            </button>
+                                            <button type="button" role="menuitem" data-priority="high">
+                                                <span class="incident-priority-badge incident-priority-high">HIGH</span>
+                                                <small>70-89</small>
+                                            </button>
+                                            <button type="button" role="menuitem" data-priority="urgent">
+                                                <span class="incident-priority-badge incident-priority-urgent">URGENT</span>
+                                                <small>45-69</small>
+                                            </button>
+                                            <button type="button" role="menuitem" data-priority="moderate">
+                                                <span class="incident-priority-badge incident-priority-moderate">MODERATE</span>
+                                                <small>20-44</small>
+                                            </button>
+                                            <button type="button" role="menuitem" data-priority="low">
+                                                <span class="incident-priority-badge incident-priority-low">LOW</span>
+                                                <small>0-19</small>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <?php endif; ?>
+                                    <?php if ($pageMode !== 'citizen_reports'): ?>
                                     <button class="btn btn-sm btn-secondary" id="toggleStatusBtn" style="display: none;">
                                         <i class="fas fa-check"></i> Close Chat
                                     </button>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <div class="chat-messages" id="chatMessages">
@@ -439,6 +487,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         // --- View Management ---
         
         function switchTab(status) {
+            if (PAGE_MODE === 'citizen_reports' && status !== 'open') {
+                status = 'open';
+            }
             if (currentStatus === status) return;
             currentStatus = status;
             
@@ -1048,6 +1099,39 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             });
         }
 
+        function incidentPriorityMeta(convOrPriority) {
+            const p = convOrPriority?.incidentPriority || convOrPriority || {};
+            const level = String(p.priority || p.level || convOrPriority?.incidentPriorityLevel || 'low').toLowerCase();
+            const score = Number(p.score ?? convOrPriority?.incidentPriorityScore ?? 0);
+            const labels = {
+                critical: 'CRITICAL',
+                high: 'HIGH',
+                urgent: 'URGENT',
+                moderate: 'MODERATE',
+                low: 'LOW'
+            };
+            return {
+                level: labels[level] ? level : 'low',
+                label: labels[level] || 'LOW',
+                score: Number.isFinite(score) ? score : 0,
+                manual: Boolean(p.manual ?? convOrPriority?.incidentPriorityManual)
+            };
+        }
+
+        function sortCitizenReports(conversations) {
+            return [...conversations].sort((a, b) => {
+                const scoreDiff = incidentPriorityMeta(b).score - incidentPriorityMeta(a).score;
+                if (scoreDiff !== 0) return scoreDiff;
+                return getConversationTimestamp(b) - getConversationTimestamp(a);
+            });
+        }
+
+        function incidentPriorityBadgeHtml(conv) {
+            if (PAGE_MODE !== 'citizen_reports') return '';
+            const meta = incidentPriorityMeta(conv);
+            return `<span class="incident-priority-badge incident-priority-${meta.level}">${meta.label} ${meta.score}</span>`;
+        }
+
         function orderedDeptKeysByRecency(grouped) {
             const fallbackOrder = deptOrder();
             return Object.keys(grouped).sort((a, b) => {
@@ -1088,6 +1172,19 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (!listContainer) return;
 
             if (!append) listContainer.innerHTML = '';
+
+            if (PAGE_MODE === 'citizen_reports') {
+                const existingIds = new Set(
+                    Array.from(listContainer.querySelectorAll('.conversation-item')).map(node => String(node.getAttribute('data-conversation-id')))
+                );
+                sortCitizenReports(conversations).forEach(conv => {
+                    const convId = String(conv.id);
+                    if (existingIds.has(convId)) return;
+                    listContainer.appendChild(createConversationElement(conv));
+                    existingIds.add(convId);
+                });
+                return;
+            }
 
             const grouped = {};
             sortConversationsNewest(conversations).forEach(conv => {
@@ -1140,6 +1237,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     page: currentPage,
                     limit: pageLimit
                 });
+                if (PAGE_MODE === 'citizen_reports') {
+                    params.set('scope', 'citizen_reports');
+                }
                 if (currentDept !== 'all') {
                     params.set('category', currentDept);
                 }
@@ -1298,6 +1398,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         function createConversationElement(conv) {
             const item = document.createElement('div');
             item.className = 'conversation-item';
+            if (PAGE_MODE === 'citizen_reports') {
+                item.classList.add(`incident-row-priority-${incidentPriorityMeta(conv).level}`);
+            }
             if (currentStatus === 'closed') item.classList.add('closed');
             if (String(conv.id) === String(currentConversationId)) item.classList.add('active');
             
@@ -1319,9 +1422,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const callBadge = conv.hasCall ? '<span class="list-chip list-chip-call"><i class="fas fa-phone"></i>Call</span>' : '';
             const unreadBadge = conv.unreadCount > 0 ? `<span class="list-chip list-chip-unread">${conv.unreadCount}</span>` : '';
             const deptKey = mapConversationDept(conv);
-            const deptTag = deptKey ? `<span class="dept-badge">${deptLabel(deptKey)}</span>` : '';
+            const deptTag = (PAGE_MODE !== 'citizen_reports' && deptKey) ? `<span class="dept-badge">${deptLabel(deptKey)}</span>` : '';
             const topicKey = mapConversationTopic(conv);
-            const topicTag = topicKey ? `<span class="topic-badge">${topicLabel(topicKey)}</span>` : '';
+            const topicTag = (PAGE_MODE !== 'citizen_reports' && topicKey) ? `<span class="topic-badge">${topicLabel(topicKey)}</span>` : '';
             const workflowRaw = (conv.workflowStatus || '').toLowerCase();
             const workflowLabelMap = {
                 open: 'Open',
@@ -1342,6 +1445,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             };
             const workflowClass = workflowClassMap[workflowRaw] || 'workflow-open';
             const statusBadge = `<span class="workflow-pill ${workflowClass}">${workflowLabel}</span>`;
+            const incidentBadge = incidentPriorityBadgeHtml(conv);
             const statusDot = `<span class="status-dot"></span>`;
 
             const timestamp = getConversationTimestamp(conv);
@@ -1376,9 +1480,87 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     ${userInfo.join(' &nbsp; ')} &nbsp; ${conv.userLocation || ''}
                 </div>
                 <div style="margin-top: 0.45rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                    ${statusBadge} ${deptTag} ${topicTag}
+                    ${incidentBadge} ${statusBadge} ${deptTag} ${topicTag}
                 </div>
             `;
+        }
+
+        function updateIncidentPriorityControl(data) {
+            const control = document.getElementById('incidentPriorityControl');
+            const badge = document.getElementById('incidentPriorityBadge');
+            const button = document.getElementById('incidentPriorityButton');
+            const menu = document.getElementById('incidentPriorityMenu');
+            if (!control || !badge || !button || !menu) return;
+
+            if (PAGE_MODE !== 'citizen_reports' || !data) {
+                control.style.display = 'none';
+                menu.hidden = true;
+                button.setAttribute('aria-expanded', 'false');
+                return;
+            }
+
+            const meta = incidentPriorityMeta(data);
+            badge.className = `incident-priority-badge incident-priority-${meta.level}`;
+            badge.textContent = `${meta.label} ${meta.score}`;
+            button.dataset.priority = meta.level;
+            button.disabled = false;
+            control.style.display = 'inline-flex';
+        }
+
+        async function updateIncidentPriorityManual(level) {
+            if (!currentConversationId || PAGE_MODE !== 'citizen_reports') return;
+            const button = document.getElementById('incidentPriorityButton');
+            const menu = document.getElementById('incidentPriorityMenu');
+            if (button) button.disabled = true;
+            if (menu) {
+                menu.hidden = true;
+                button?.setAttribute('aria-expanded', 'false');
+            }
+            try {
+                const res = await fetch(API_BASE + 'chat-update-incident-priority.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ conversationId: currentConversationId, priority: level })
+                });
+                const d = await res.json();
+                if (!d.success) throw new Error(d.message || 'Priority update failed');
+
+                const item = document.querySelector(`.conversation-item[data-conversation-id="${currentConversationId}"]`);
+                if (item && item._conversationData) {
+                    item._conversationData.incidentPriority = d.incidentPriority;
+                    item._conversationData.incidentPriorityScore = d.incidentPriority.score;
+                    item._conversationData.incidentPriorityLevel = d.incidentPriority.priority;
+                    item._conversationData.incidentPriorityColor = d.incidentPriority.color;
+                    item._conversationData.incidentPriorityManual = true;
+                    item.classList.remove(
+                        'incident-row-priority-critical',
+                        'incident-row-priority-high',
+                        'incident-row-priority-urgent',
+                        'incident-row-priority-moderate',
+                        'incident-row-priority-low'
+                    );
+                    item.classList.add(`incident-row-priority-${d.incidentPriority.priority}`);
+                    item.innerHTML = getConversationHTML(item._conversationData);
+                    updateIncidentPriorityControl(item._conversationData);
+                } else {
+                    updateIncidentPriorityControl({ incidentPriority: d.incidentPriority });
+                }
+                resetConversationsAndReload();
+            } catch (e) {
+                console.error(e);
+                alert('Failed to update incident priority');
+            } finally {
+                if (button) button.disabled = false;
+            }
+        }
+
+        function toggleIncidentPriorityMenu(forceOpen = null) {
+            const button = document.getElementById('incidentPriorityButton');
+            const menu = document.getElementById('incidentPriorityMenu');
+            if (!button || !menu) return;
+            const shouldOpen = forceOpen === null ? menu.hidden : Boolean(forceOpen);
+            menu.hidden = !shouldOpen;
+            button.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
         }
 
         // --- Chat Interaction ---
@@ -1425,6 +1607,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (devStr) details.push(devStr);
             
             statusEl.textContent = details.join(' | ') || 'Online';
+            updateIncidentPriorityControl(data);
             
             // Input/Button State
             const isClosed = (data.status === 'closed');
@@ -1452,6 +1635,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         function setupCloseButton(isClosed) {
             const btn = document.getElementById('toggleStatusBtn');
             if (!btn) return;
+            if (PAGE_MODE === 'citizen_reports') {
+                btn.style.display = 'none';
+                return;
+            }
             
             btn.style.display = 'inline-flex';
             btn.className = isClosed ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-success';
@@ -1499,6 +1686,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         document.getElementById('chatMessages').innerHTML = '<div style="text-align: center; color: var(--text-secondary-1); padding: 3rem; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;"><div style="font-size: 3rem; opacity: 0.2; margin-bottom: 1rem;"><i class="fas fa-comments"></i></div><p>Select a conversation from the list to start messaging</p></div>';
                         document.getElementById('chatUserName').textContent = 'Select a conversation';
                         document.getElementById('chatUserStatus').textContent = '';
+                        updateIncidentPriorityControl(null);
                         document.getElementById('messageInput').disabled = true;
                         document.getElementById('messageInput').placeholder = 'Type a message...';
                         document.getElementById('sendButton').disabled = true;
@@ -1521,6 +1709,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             };
         }
         
+        function linkify(text) {
+            const urlPattern = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+            return text.replace(urlPattern, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #4c8a89; text-decoration: underline;">$1</a>');
+        }
+
         async function loadMessages(id, initial = false) {
             const container = document.getElementById('chatMessages');
             if (initial) {
@@ -1689,7 +1882,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
             let bodyHtml = '';
             if (normalizedText && !hideAttachmentPlaceholder) {
-                bodyHtml += `<div class="message-text">${escapeHtml(normalizedText)}</div>`;
+                bodyHtml += `<div class="message-text">${linkify(escapeHtml(normalizedText))}</div>`;
             }
             if (attachmentUrl) {
                 if (isVideoAttachment) {
@@ -1718,7 +1911,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 }
             }
             if (!bodyHtml) {
-                bodyHtml = `<div class="message-text">${escapeHtml(normalizedText || 'Attachment')}</div>`;
+                bodyHtml = `<div class="message-text">${linkify(escapeHtml(normalizedText || 'Attachment'))}</div>`;
             }
             
             div.innerHTML = `
@@ -2009,6 +2202,25 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 priorityFilter.addEventListener('change', () => {
                     currentPriority = priorityFilter.value || 'all';
                     resetConversationsAndReload();
+                });
+            }
+            const incidentPriorityButton = document.getElementById('incidentPriorityButton');
+            const incidentPriorityMenu = document.getElementById('incidentPriorityMenu');
+            if (incidentPriorityButton && incidentPriorityMenu) {
+                incidentPriorityButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    toggleIncidentPriorityMenu();
+                });
+                incidentPriorityMenu.addEventListener('click', (event) => {
+                    const option = event.target.closest('[data-priority]');
+                    if (!option) return;
+                    event.stopPropagation();
+                    updateIncidentPriorityManual(option.getAttribute('data-priority'));
+                });
+                document.addEventListener('click', (event) => {
+                    const control = document.getElementById('incidentPriorityControl');
+                    if (!control || control.contains(event.target)) return;
+                    toggleIncidentPriorityMenu(false);
                 });
             }
 

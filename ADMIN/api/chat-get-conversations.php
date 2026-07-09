@@ -30,6 +30,7 @@ try {
     $categoryFilter = twc_normalize_category($_GET['category'] ?? ($_GET['department'] ?? ''));
     $priorityFilter = twc_normalize_priority($_GET['priority'] ?? '');
     $search = trim((string)($_GET['q'] ?? $_GET['search'] ?? ''));
+    $scope = strtolower(trim((string)($_GET['scope'] ?? '')));
     $assignedTo = twc_safe_int($_GET['assigned_to'] ?? null);
     $assignedToMe = filter_var($_GET['assigned_to_me'] ?? false, FILTER_VALIDATE_BOOLEAN);
     $adminSessionId = twc_safe_int($_SESSION['admin_user_id'] ?? null);
@@ -55,6 +56,8 @@ try {
 
     $hasCategoryColumn = twc_column_exists($pdo, 'conversations', 'category');
     $hasPriorityColumn = twc_column_exists($pdo, 'conversations', 'priority');
+    twc_ensure_incident_priority_columns($pdo);
+    $hasIncidentPriority = twc_column_exists($pdo, 'conversations', 'incident_priority_score');
 
     $categorySqlExpr = $hasCategoryColumn
         ? "LOWER(COALESCE(NULLIF(c.category, ''), c.user_concern, 'general'))"
@@ -73,13 +76,28 @@ try {
     $whereSql = " WHERE 1=1 ";
     $whereSql .= twc_status_filter_clause($statusFilter, $params, 'c');
 
+    if ($scope === 'citizen_reports') {
+        $whereSql .= " AND EXISTS (
+            SELECT 1
+            FROM chat_messages citizen_msg
+            WHERE citizen_msg.conversation_id = c.conversation_id
+              AND LOWER(COALESCE(citizen_msg.sender_type, '')) IN ('user', 'citizen', 'guest')
+        ) ";
+    }
+
     if ($categoryFilter !== '' && $categoryFilter !== 'all') {
         $whereSql .= " AND $categorySqlExpr = ? ";
         $params[] = $categoryFilter;
     }
 
     if (isset($_GET['priority']) && trim((string)$_GET['priority']) !== '' && $_GET['priority'] !== 'all') {
-        if ($priorityFilter === 'urgent' || $priorityFilter === 'normal') {
+        if ($scope === 'citizen_reports' && $hasIncidentPriority) {
+            $incidentPriorityFilter = strtolower(trim((string)$_GET['priority']));
+            if (in_array($incidentPriorityFilter, ['critical', 'high', 'urgent', 'moderate', 'low'], true)) {
+                $whereSql .= " AND LOWER(COALESCE(c.incident_priority_level, 'low')) = ? ";
+                $params[] = $incidentPriorityFilter;
+            }
+        } elseif ($priorityFilter === 'urgent' || $priorityFilter === 'normal') {
             $whereSql .= " AND $prioritySqlExpr = ? ";
             $params[] = $priorityFilter;
         }
@@ -145,7 +163,18 @@ try {
                 ) THEN 1 ELSE 0
             END AS has_call,
             $categorySqlExpr AS category_value,
-            $prioritySqlExpr AS priority_value
+            $prioritySqlExpr AS priority_value" .
+            ($hasIncidentPriority ? ",
+            c.incident_priority_score,
+            c.incident_priority_level,
+            c.incident_priority_color,
+            c.incident_priority_breakdown,
+            c.incident_priority_manual" : ",
+            0 AS incident_priority_score,
+            '' AS incident_priority_level,
+            '' AS incident_priority_color,
+            NULL AS incident_priority_breakdown,
+            0 AS incident_priority_manual") . "
         FROM conversations c
         LEFT JOIN (
             SELECT cm1.conversation_id, cm1.message_text, cm1.created_at
@@ -166,6 +195,7 @@ try {
         ) uc ON c.conversation_id = uc.conversation_id
         $whereSql
         ORDER BY
+            " . ($scope === 'citizen_reports' && $hasIncidentPriority ? "COALESCE(c.incident_priority_score, 0) DESC," : "") . "
             COALESCE(lm.created_at, c.last_message_time, c.updated_at, c.created_at) DESC,
             c.conversation_id DESC
         LIMIT ? OFFSET ?
@@ -189,6 +219,27 @@ try {
         $uiStatus = twc_ui_conversation_status($workflowStatus);
         $category = twc_normalize_category($conv['category_value'] ?? $conv['user_concern'] ?? '');
         $priority = twc_normalize_priority($conv['priority_value'] ?? '', (string)($conv['last_message'] ?? ''), $category);
+        $incidentPriority = [
+            'score' => (int)($conv['incident_priority_score'] ?? 0),
+            'priority' => strtolower((string)($conv['incident_priority_level'] ?? '')),
+            'color' => strtolower((string)($conv['incident_priority_color'] ?? '')),
+            'manual' => (bool)($conv['incident_priority_manual'] ?? false),
+            'breakdown' => null,
+        ];
+        if ($incidentPriority['score'] <= 0 || $incidentPriority['priority'] === '') {
+            $incidentPriority = twc_calculate_incident_priority([
+                'category' => $category,
+                'user_concern' => $conv['user_concern'] ?? '',
+                'last_message' => $conv['last_message'] ?? '',
+            ]);
+            $incidentPriority['manual'] = false;
+        } else {
+            $decodedBreakdown = json_decode((string)($conv['incident_priority_breakdown'] ?? ''), true);
+            $incidentPriority['breakdown'] = is_array($decodedBreakdown) ? $decodedBreakdown : null;
+            $meta = twc_incident_priority_config()[$incidentPriority['priority']] ?? null;
+            $incidentPriority['label'] = $meta['label'] ?? strtoupper($incidentPriority['priority']);
+            $incidentPriority['hex'] = $meta['hex'] ?? '#64748b';
+        }
 
         return [
             'id' => (int)$conv['conversation_id'],
@@ -201,6 +252,11 @@ try {
             'category' => $category,
             'department' => $category,
             'priority' => $priority,
+            'incidentPriority' => $incidentPriority,
+            'incidentPriorityScore' => $incidentPriority['score'],
+            'incidentPriorityLevel' => $incidentPriority['priority'],
+            'incidentPriorityColor' => $incidentPriority['color'],
+            'incidentPriorityManual' => (bool)($incidentPriority['manual'] ?? false),
             'isGuest' => (bool)$conv['is_guest'],
             'deviceInfo' => $deviceInfoParsed,
             'ipAddress' => $conv['ip_address'] ?? null,

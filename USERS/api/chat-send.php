@@ -37,6 +37,7 @@ try {
     $userPhone = $input['userPhone'] ?? $_POST['userPhone'] ?? null;
     $userLocation = $input['userLocation'] ?? $_POST['userLocation'] ?? null;
     $userConcern = $input['userConcern'] ?? $_POST['userConcern'] ?? null;
+    $isIncidentReport = strtolower(trim((string)$userConcern)) === 'incident_report';
     $rawCategory = $input['category'] ?? $_POST['category'] ?? $userConcern;
     $rawPriority = $input['priority'] ?? $_POST['priority'] ?? null;
     $isGuest = isset($input['isGuest'])
@@ -149,6 +150,10 @@ try {
             'video/quicktime' => 'mov',
             'video/x-msvideo' => 'avi',
             'video/x-matroska' => 'mkv',
+            'application/pdf' => 'pdf',
+            'text/plain' => 'txt',
+            'application/msword' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
             'message/rfc822' => 'eml',
             'application/eml' => 'eml',
         ];
@@ -158,8 +163,19 @@ try {
             $resolvedExtension = 'eml';
             $detectedMime = 'message/rfc822';
         }
+        if ($resolvedExtension === null && $lowerName !== '' && preg_match('/\.(pdf|doc|docx|txt)$/', $lowerName, $fileMatch) === 1) {
+            $resolvedExtension = strtolower($fileMatch[1]);
+            if ($detectedMime === '' || $detectedMime === 'application/octet-stream') {
+                $detectedMime = [
+                    'pdf' => 'application/pdf',
+                    'doc' => 'application/msword',
+                    'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'txt' => 'text/plain',
+                ][$resolvedExtension] ?? 'application/octet-stream';
+            }
+        }
         if ($resolvedExtension === null) {
-            throw new RuntimeException('Only image, video, or .eml email attachments are allowed.');
+            throw new RuntimeException('Only image, video, PDF, Word, text, or .eml email attachments are allowed.');
         }
 
         if (strpos($detectedMime, 'image/') === 0) {
@@ -174,6 +190,10 @@ try {
             $attachmentKind = 'email';
             $attachmentPreviewTag = '[Email]';
             $attachmentPreviewText = '[Email] Incident email attached.';
+        } elseif (in_array($resolvedExtension, ['pdf', 'doc', 'docx', 'txt'], true)) {
+            $attachmentKind = 'file';
+            $attachmentPreviewTag = '[File]';
+            $attachmentPreviewText = '[File] Incident file attached.';
         } else {
             $attachmentKind = 'file';
         }
@@ -370,6 +390,21 @@ try {
     $hasUserIdStringColumn = twc_column_exists($pdo, 'conversations', 'user_id_string');
     $hasAssignedToColumn = twc_column_exists($pdo, 'conversations', 'assigned_to');
     $hasAttachmentColumns = twc_ensure_chat_attachment_columns($pdo);
+    twc_ensure_incident_priority_columns($pdo);
+    $incidentPriority = twc_calculate_incident_priority([
+        'category' => $category,
+        'userConcern' => $userConcern,
+        'message' => $messageForPriority,
+        'severity' => $input['severity'] ?? $_POST['severity'] ?? '',
+        'threat' => $input['threat'] ?? $_POST['threat'] ?? '',
+        'verification' => $input['verification'] ?? $_POST['verification'] ?? '',
+        'people_affected' => $input['people_affected'] ?? $_POST['people_affected'] ?? '',
+    ]);
+    if ($incidentPriority['priority'] === 'critical') {
+        $riskLevel = 'critical';
+    } elseif ($incidentPriority['priority'] === 'high' && $riskLevel !== 'critical') {
+        $riskLevel = 'high';
+    }
     $statusOpen = twc_status_for_db($pdo, 'open');
     $statusInProgress = twc_status_for_db($pdo, 'in_progress');
 
@@ -551,7 +586,7 @@ try {
             $conversationId = (int)$existingConv['conversation_id'];
         } else {
             $allowedProofKinds = ['image', 'video'];
-            if (!$hasAttachment || !in_array($attachmentKind, $allowedProofKinds, true)) {
+            if (!$isIncidentReport && (!$hasAttachment || !in_array($attachmentKind, $allowedProofKinds, true))) {
                 throw new RuntimeException('Incident photo or video proof is required before starting a new conversation.');
             }
 
@@ -603,6 +638,16 @@ try {
             if ($hasPriorityColumn) {
                 $columns[] = 'priority';
                 $values[] = $priority;
+            }
+            if (twc_column_exists($pdo, 'conversations', 'incident_priority_score')) {
+                $columns[] = 'incident_priority_score';
+                $values[] = $incidentPriority['score'];
+                $columns[] = 'incident_priority_level';
+                $values[] = $incidentPriority['priority'];
+                $columns[] = 'incident_priority_color';
+                $values[] = $incidentPriority['color'];
+                $columns[] = 'incident_priority_breakdown';
+                $values[] = json_encode($incidentPriority['breakdown']);
             }
 
             $insertSql = "INSERT INTO conversations (" . implode(',', $columns) . ")
@@ -684,6 +729,16 @@ try {
         $updateParts[] = "priority = ?";
         $updateParams[] = $priority;
     }
+    if (twc_column_exists($pdo, 'conversations', 'incident_priority_score')) {
+        $updateParts[] = "incident_priority_score = CASE WHEN COALESCE(incident_priority_manual, 0) = 1 THEN incident_priority_score ELSE ? END";
+        $updateParams[] = $incidentPriority['score'];
+        $updateParts[] = "incident_priority_level = CASE WHEN COALESCE(incident_priority_manual, 0) = 1 THEN incident_priority_level ELSE ? END";
+        $updateParams[] = $incidentPriority['priority'];
+        $updateParts[] = "incident_priority_color = CASE WHEN COALESCE(incident_priority_manual, 0) = 1 THEN incident_priority_color ELSE ? END";
+        $updateParams[] = $incidentPriority['color'];
+        $updateParts[] = "incident_priority_breakdown = CASE WHEN COALESCE(incident_priority_manual, 0) = 1 THEN incident_priority_breakdown ELSE ? END";
+        $updateParams[] = json_encode($incidentPriority['breakdown']);
+    }
 
     $updateParams[] = $conversationId;
     $updateSql = "UPDATE conversations SET " . implode(', ', $updateParts) . " WHERE conversation_id = ?";
@@ -742,6 +797,7 @@ try {
         'workflowStatus' => $statusInProgress,
         'category' => $category,
         'priority' => $priority,
+        'incidentPriority' => $incidentPriority,
         'riskLevel' => $riskLevel,
         'riskNotification' => $riskNotification,
         'assignedTo' => $assignedTo,

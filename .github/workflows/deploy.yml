@@ -1,0 +1,28 @@
+name: PHP CI/CD
+ 
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+   deploy:
+     runs-on: ubuntu-latest 
+
+     steps:
+      - name: Checkout Repository
+        uses: action/checkout@v4
+
+      - name: Check PHP Syntax
+        run: |
+          find . -name "*.php" -exec php -l {} \;
+
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /var/www/html/emergency_communication_alertaraqc
+            git pull origin main

@@ -61,10 +61,18 @@ function sendAdminOTPEmail($to, $subject, $body, $fromEmail, $fromName, &$error 
     // Try PHPMailer if available
     $composerAutoload1 = __DIR__ . '/../../vendor/autoload.php';
     $composerAutoload2 = __DIR__ . '/../../VENDOR/autoload.php';
-    if (file_exists($composerAutoload1)) {
-        require_once $composerAutoload1;
-    } elseif (file_exists($composerAutoload2)) {
-        require_once $composerAutoload2;
+    if (PHP_VERSION_ID >= 80200) {
+        try {
+            if (file_exists($composerAutoload1)) {
+                require_once $composerAutoload1;
+            } elseif (file_exists($composerAutoload2)) {
+                require_once $composerAutoload2;
+            }
+        } catch (Throwable $e) {
+            error_log("Composer autoload unavailable for admin OTP mailer: " . $e->getMessage());
+        }
+    } else {
+        error_log("Skipping Composer autoload for admin OTP mailer: PHP " . PHP_VERSION . " is below Composer platform requirement");
     }
     
     // Also try direct path to PHPMailer-master

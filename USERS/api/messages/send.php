@@ -9,6 +9,7 @@
 header('Content-Type: application/json');
 require_once __DIR__ . '/../api/db_connect.php';
 require_once __DIR__ . '/../api/device_tracking.php';
+require_once __DIR__ . '/../../../ADMIN/api/chat-logic.php';
 
 if (!$pdo) {
     http_response_code(500);
@@ -63,6 +64,9 @@ try {
 
     $ipAddress = function_exists('getClientIP') ? getClientIP() : null;
     $deviceInfo = function_exists('formatDeviceInfoForDB') ? formatDeviceInfoForDB() : null;
+    twc_ensure_incident_priority_columns($pdo);
+    $hasIncidentPriority = twc_column_exists($pdo, 'conversations', 'incident_priority_score');
+    $incidentPriority = twc_calculate_incident_priority(['message' => $content]);
 
     // Insert message
     $stmt = $pdo->prepare("
@@ -72,12 +76,27 @@ try {
     $stmt->execute([$conversationId, $userId, $content, $ipAddress, $deviceInfo]);
 
     // Update conversation last message and queue for admin
-    $stmt = $pdo->prepare("
+    $updateSql = "
         UPDATE conversations 
-        SET last_message = ?, last_message_time = NOW(), updated_at = NOW()
-        WHERE conversation_id = ?
-    ");
-    $stmt->execute([$content, $conversationId]);
+        SET last_message = ?,
+            last_message_time = NOW(),
+            updated_at = NOW()";
+    $updateParams = [$content];
+    if ($hasIncidentPriority) {
+        $updateSql .= ",
+            incident_priority_score = CASE WHEN COALESCE(incident_priority_manual, 0) = 1 THEN incident_priority_score ELSE ? END,
+            incident_priority_level = CASE WHEN COALESCE(incident_priority_manual, 0) = 1 THEN incident_priority_level ELSE ? END,
+            incident_priority_color = CASE WHEN COALESCE(incident_priority_manual, 0) = 1 THEN incident_priority_color ELSE ? END,
+            incident_priority_breakdown = CASE WHEN COALESCE(incident_priority_manual, 0) = 1 THEN incident_priority_breakdown ELSE ? END";
+        $updateParams[] = $incidentPriority['score'];
+        $updateParams[] = $incidentPriority['priority'];
+        $updateParams[] = $incidentPriority['color'];
+        $updateParams[] = json_encode($incidentPriority['breakdown']);
+    }
+    $updateSql .= " WHERE conversation_id = ?";
+    $updateParams[] = $conversationId;
+    $stmt = $pdo->prepare($updateSql);
+    $stmt->execute($updateParams);
 
     $stmt = $pdo->prepare("
         INSERT INTO chat_queue (conversation_id, user_id, user_name, message, status, created_at)
@@ -86,7 +105,28 @@ try {
     ");
     $stmt->execute([$conversationId, $userId, $content]);
 
-    echo json_encode(['success' => true, 'message' => 'Message sent']);
+    $riskLevel = $incidentPriority['priority'] === 'critical'
+        ? 'critical'
+        : ($incidentPriority['priority'] === 'high' ? 'high' : 'normal');
+    $riskNotification = twc_emit_chat_risk_notification($pdo, [
+        'message' => $content,
+        'category' => '',
+        'priority' => $incidentPriority['priority'],
+        'riskLevel' => $riskLevel,
+        'conversationId' => $conversationId,
+        'userName' => '',
+        'userLocation' => '',
+        'assignedTo' => null,
+        'ipAddress' => (string)$ipAddress,
+        'snippet' => $content,
+    ]);
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'Message sent',
+        'incidentPriority' => $incidentPriority,
+        'riskNotification' => $riskNotification,
+    ]);
 } catch (Throwable $e) {
     error_log('messages/send error: ' . $e->getMessage());
     http_response_code(500);
