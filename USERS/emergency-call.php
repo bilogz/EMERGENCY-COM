@@ -31,22 +31,25 @@ $assetBase = '../ADMIN/header/';
             position: fixed;
             inset: 0;
             z-index: 100002;
-            background: rgba(15, 23, 42, 0.58);
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(8px);
             padding: 1rem;
+            transition: all 0.3s ease;
         }
 
         .incident-report-card {
             width: min(560px, 94vw);
             max-height: min(720px, 92vh);
             margin: 5vh auto 0;
-            background: var(--card-bg-1, #fff);
-            color: var(--text-color-1, #1f2937);
-            border: 1px solid var(--border-color-1, #d7e4e3);
-            border-radius: 12px;
-            box-shadow: 0 24px 70px rgba(15, 23, 42, 0.32);
+            background: var(--bg-primary, #ffffff);
+            color: var(--text-primary, #1f2937);
+            border: 1px solid var(--border-primary, #e5e7eb);
+            border-radius: 16px;
+            box-shadow: var(--shadow-xl, 0 20px 25px rgba(0, 0, 0, 0.15));
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .incident-report-head {
@@ -54,64 +57,445 @@ $assetBase = '../ADMIN/header/';
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
-            padding: 1rem 1.1rem;
-            border-bottom: 1px solid var(--border-color-1, #d7e4e3);
+            padding: 1rem 1.25rem;
+            background: var(--bg-secondary, #f8fafc);
+            border-bottom: 1px solid var(--border-primary, #e5e7eb);
         }
 
-        .incident-report-head h3 {
+        .chat-header-info {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }
+
+        .chat-header-avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 1.15rem;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+            position: relative;
+        }
+
+        .chat-header-avatar::after {
+            content: '';
+            position: absolute;
+            bottom: 1px;
+            right: 1px;
+            width: 10px;
+            height: 10px;
+            background: var(--success-color, #10b981);
+            border: 2px solid var(--bg-secondary, #f8fafc);
+            border-radius: 50%;
+            animation: pulse-green 2s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+
+        .chat-header-info h3 {
             margin: 0;
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             font-weight: 800;
+            color: var(--text-primary, #1f2937);
+        }
+
+        .chat-header-info small {
+            font-size: 0.8rem;
+            color: var(--success-color, #10b981);
+            font-weight: 600;
         }
 
         .incident-report-close {
             border: 0;
             background: transparent;
-            color: inherit;
+            color: var(--text-muted, #6b7280);
             cursor: pointer;
-            width: 2rem;
-            height: 2rem;
-            border-radius: 8px;
+            width: 2.2rem;
+            height: 2.2rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .incident-report-close:hover {
+            background: var(--bg-tertiary, #f1f5f9);
+            color: var(--text-primary, #1f2937);
         }
 
         .incident-report-body {
-            padding: 1rem 1.1rem;
+            flex: 1;
+            padding: 1.25rem;
             overflow-y: auto;
-            display: grid;
-            gap: 0.85rem;
-        }
-
-        .incident-report-body label {
-            display: grid;
-            gap: 0.35rem;
-            font-weight: 700;
-            font-size: 0.86rem;
-            color: var(--text-color-1, #1f2937);
-        }
-
-        .incident-report-body input,
-        .incident-report-body textarea,
-        .incident-report-body select {
-            width: 100%;
-            border: 1px solid var(--border-color-1, #d7e4e3);
-            border-radius: 8px;
-            padding: 0.72rem 0.8rem;
-            font: inherit;
-            background: var(--bg-color-1, #f7fbfb);
-            color: inherit;
-        }
-
-        .incident-report-body textarea {
-            min-height: 130px;
-            resize: vertical;
-        }
-
-        .incident-report-actions {
             display: flex;
-            justify-content: flex-end;
+            flex-direction: column;
+            gap: 1rem;
+            background: var(--bg-primary, #ffffff);
+            scroll-behavior: smooth;
+        }
+
+        /* Messenger bubbles styling */
+        .chat-bubble {
+            max-width: 82%;
+            padding: 0.75rem 1.05rem;
+            border-radius: 18px;
+            font-size: 0.92rem;
+            line-height: 1.45;
+            word-break: break-word;
+            position: relative;
+            box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+            animation: fadeInBubble 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes fadeInBubble {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .chat-bubble.bot {
+            align-self: flex-start;
+            background: var(--bg-secondary, #f8fafc);
+            color: var(--text-primary, #1f2937);
+            border-bottom-left-radius: 4px;
+            border: 1px solid var(--border-primary, #e5e7eb);
+        }
+
+        .chat-bubble.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, var(--primary-color, #8e44ad) 0%, #764ba2 100%);
+            color: #ffffff;
+            border-bottom-right-radius: 4px;
+            box-shadow: 0 4px 12px rgba(142, 68, 173, 0.25);
+        }
+
+        .chat-system-message {
+            align-self: center;
+            background: var(--bg-tertiary, #f1f5f9);
+            color: var(--text-secondary, #4b5563);
+            font-size: 0.76rem;
+            font-weight: 700;
+            padding: 0.35rem 0.85rem;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin: 0.5rem 0;
+            box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+            border: 1px solid var(--border-primary, #e5e7eb);
+        }
+
+        /* Option items (rendered inside bot bubbles) */
+        .chat-options-bubble {
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+            margin-top: 0.6rem;
+            width: 100%;
+            min-width: 220px;
+        }
+
+        .chat-options-bubble .chat-option-btn {
+            width: 100%;
+            padding: 0.72rem 1.1rem;
+            background: var(--bg-primary, #ffffff);
+            border: 1px solid var(--border-secondary, #d1d5db);
+            color: var(--text-primary, #1f2937);
+            border-radius: 12px;
+            text-align: left;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+        }
+
+        .chat-options-bubble .chat-option-btn i {
+            font-size: 1rem;
+            width: 1.25rem;
+            text-align: center;
+        }
+
+        .chat-options-bubble .chat-option-btn:hover {
+            background: var(--primary-light, rgba(142, 68, 173, 0.08));
+            border-color: var(--primary-color, #8e44ad);
+            color: var(--primary-color, #8e44ad);
+            transform: translateX(4px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Location custom interface inside bot bubbles */
+        .chat-location-input-bubble {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-top: 0.6rem;
+            width: 100%;
+            min-width: 240px;
+        }
+
+        .chat-location-input-bubble input {
+            width: 100%;
+            padding: 0.65rem 0.9rem;
+            border: 1px solid var(--border-secondary, #d1d5db);
+            border-radius: 10px;
+            background: var(--bg-primary, #ffffff);
+            color: var(--text-primary, #1f2937);
+            font-size: 0.88rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .chat-location-input-bubble input:focus {
+            border-color: var(--primary-color, #8e44ad);
+            box-shadow: 0 0 0 3px var(--primary-light, rgba(142, 68, 173, 0.15));
+        }
+
+        .chat-location-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .chat-location-btn {
+            flex: 1;
+            padding: 0.55rem 0.85rem;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            transition: all 0.2s ease;
+        }
+
+        .chat-location-btn.primary {
+            background: var(--primary-color, #8e44ad);
+            color: #ffffff;
+            border: none;
+            box-shadow: 0 3px 8px rgba(142, 68, 173, 0.2);
+        }
+
+        .chat-location-btn.primary:hover {
+            background: var(--primary-hover, #7d3d9a);
+            transform: translateY(-1px);
+        }
+
+        .chat-location-btn.secondary {
+            background: var(--bg-secondary, #f8fafc);
+            color: var(--text-primary, #1f2937);
+            border: 1px solid var(--border-secondary, #d1d5db);
+        }
+
+        .chat-location-btn.secondary:hover {
+            background: var(--bg-tertiary, #f1f5f9);
+            transform: translateY(-1px);
+        }
+
+        /* Input Area styles */
+        .incident-chat-input-area {
+            padding: 0.85rem 1.25rem;
+            background: var(--bg-secondary, #f8fafc);
+            border-top: 1px solid var(--border-primary, #e5e7eb);
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+        }
+
+        .incident-chat-input-row {
+            display: flex;
+            align-items: flex-end;
             gap: 0.65rem;
-            padding: 1rem 1.1rem;
-            border-top: 1px solid var(--border-color-1, #d7e4e3);
+        }
+
+        .chat-action-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1px solid var(--border-secondary, #d1d5db);
+            background: var(--bg-primary, #ffffff);
+            color: var(--text-secondary, #4b5563);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            margin-bottom: 2px;
+        }
+
+        .chat-action-btn:hover {
+            background: var(--bg-tertiary, #f1f5f9);
+            color: var(--primary-color, #8e44ad);
+            border-color: var(--primary-color, #8e44ad);
+        }
+
+        .chat-action-btn.active {
+            background: var(--primary-color, #8e44ad);
+            color: #ffffff;
+            border-color: var(--primary-color, #8e44ad);
+        }
+
+        #incidentChatInput {
+            flex: 1;
+            min-height: 42px;
+            max-height: 140px;
+            padding: 0.6rem 1.1rem;
+            border: 1px solid var(--border-secondary, #d1d5db);
+            border-radius: 22px;
+            background: var(--bg-primary, #ffffff);
+            color: var(--text-primary, #1f2937);
+            font-size: 0.92rem;
+            resize: none;
+            line-height: 1.4;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            box-sizing: border-box;
+            scrollbar-width: none;
+        }
+
+        #incidentChatInput::-webkit-scrollbar {
+            display: none;
+        }
+
+        #incidentChatInput:focus {
+            border-color: var(--primary-color, #8e44ad);
+            box-shadow: 0 0 0 3px var(--primary-light, rgba(142, 68, 173, 0.12));
+        }
+
+        .chat-send-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: none;
+            background: var(--primary-color, #8e44ad);
+            color: #ffffff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
+            margin-bottom: 2px;
+        }
+
+        .chat-send-btn:hover:not(:disabled) {
+            background: var(--primary-hover, #7d3d9a);
+            transform: scale(1.05);
+        }
+
+        .chat-send-btn:disabled {
+            background: var(--border-secondary, #d1d5db);
+            color: var(--text-muted, #6b7280);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Link Input Drawer */
+        .incident-link-drawer {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-primary, #ffffff);
+            border-radius: 10px;
+            border: 1px solid var(--border-primary, #e5e7eb);
+            margin-bottom: 0.25rem;
+            animation: slideDown 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .incident-link-drawer input {
+            flex: 1;
+            padding: 0.45rem 0.75rem;
+            border: 1px solid var(--border-secondary, #d1d5db);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            background: var(--bg-secondary, #f8fafc);
+            color: var(--text-primary, #1f2937);
+            outline: none;
+        }
+
+        .incident-link-drawer input:focus {
+            border-color: var(--primary-color, #8e44ad);
+        }
+
+        /* Attachment Preview */
+        .incident-attachment-preview {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.45rem 0.85rem;
+            background: var(--primary-light, rgba(142, 68, 173, 0.06));
+            border: 1px solid var(--primary-color, #8e44ad);
+            border-radius: 10px;
+            margin-top: 0.25rem;
+            animation: slideDown 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .attachment-name {
+            font-size: 0.84rem;
+            font-weight: 700;
+            color: var(--primary-color, #8e44ad);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 82%;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .remove-attachment-btn {
+            border: none;
+            background: transparent;
+            color: var(--primary-color, #8e44ad);
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            transition: background 0.2s ease;
+        }
+
+        .remove-attachment-btn:hover {
+            background: rgba(142, 68, 173, 0.12);
+        }
+
+        /* Custom Scrollbar for modern feel */
+        .incident-report-body::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .incident-report-body::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .incident-report-body::-webkit-scrollbar-thumb {
+            background-color: var(--border-secondary, #d1d5db);
+            border-radius: 10px;
+        }
+
+        .incident-report-body::-webkit-scrollbar-thumb:hover {
+            background-color: var(--text-muted, #6b7280);
         }
 
         @media (max-width: 480px) {
@@ -122,24 +506,27 @@ $assetBase = '../ADMIN/header/';
                 margin: 2vh auto 0;
                 width: 100%;
                 max-height: 96vh;
+                border-radius: 14px;
             }
             .incident-report-body {
-                padding: 0.75rem;
-                gap: 0.6rem;
+                padding: 0.85rem;
+                gap: 0.85rem;
             }
-            .incident-report-body label {
-                font-size: 0.8rem;
+            .chat-bubble {
+                max-width: 90%;
+                font-size: 0.88rem;
+                padding: 0.65rem 0.9rem;
             }
-            .incident-report-body input,
-            .incident-report-body textarea,
-            .incident-report-body select {
-                padding: 0.55rem 0.7rem;
+            .incident-chat-input-area {
+                padding: 0.65rem 0.85rem;
             }
-            .incident-report-body textarea {
-                min-height: 90px;
+            #incidentChatInput {
+                min-height: 38px;
+                padding: 0.55rem 0.95rem;
             }
-            .incident-report-actions {
-                padding: 0.75rem;
+            .chat-action-btn, .chat-send-btn {
+                width: 36px;
+                height: 36px;
             }
         }
     </style>
@@ -308,50 +695,57 @@ $assetBase = '../ADMIN/header/';
         </div>
     </div>
     <div class="incident-report-modal" id="incidentReportModal" aria-hidden="true">
-        <form class="incident-report-card" id="incidentReportForm" enctype="multipart/form-data">
+        <div class="incident-report-card">
+            <!-- Chat Header -->
             <div class="incident-report-head">
-                <h3><i class="fas fa-triangle-exclamation"></i> Report Incident</h3>
+                <div class="chat-header-info">
+                    <div class="chat-header-avatar">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <div>
+                        <h3>Emergency Response Chat</h3>
+                        <small id="chatConnectionStatus">Active Connection</small>
+                    </div>
+                </div>
                 <button type="button" class="incident-report-close" onclick="closeIncidentReport()" aria-label="Close">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="incident-report-body">
-                <label>
-                    Incident Type
-                    <select id="incidentReportType" name="incidentType">
-                        <option value="Emergency">Emergency</option>
-                        <option value="Medical Emergency">Medical Emergency</option>
-                        <option value="Fire Emergency">Fire Emergency</option>
-                        <option value="Vehicular Accident">Vehicular Accident</option>
-                        <option value="Flood or Weather Incident">Flood or Weather Incident</option>
-                        <option value="Crime or Public Safety">Crime or Public Safety</option>
-                        <option value="Other Incident">Other Incident</option>
-                    </select>
-                </label>
-                <label>
-                    Location or Landmark
-                    <input type="text" id="incidentReportLocation" name="location" placeholder="Street, barangay, building, or nearby landmark">
-                </label>
-                <label>
-                    Incident Details
-                    <textarea id="incidentReportMessage" name="message" required placeholder="Describe what happened, who is affected, and any immediate danger."></textarea>
-                </label>
-                <label>
-                    Related Link
-                    <input type="url" id="incidentReportLink" name="relatedLink" placeholder="https://example.com/photo-video-post">
-                </label>
-                <label>
-                    Attach Photo or File
-                    <input type="file" id="incidentReportAttachment" name="attachment" accept="image/*,video/*,.pdf,.doc,.docx,.txt,.eml">
-                </label>
+            
+            <!-- Chat Message Log -->
+            <div class="incident-report-body" id="incidentChatMessages">
+                <!-- Dynamic chat bubbles go here -->
             </div>
-            <div class="incident-report-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeIncidentReport()">Cancel</button>
-                <button type="submit" class="btn btn-primary" id="incidentReportSubmitBtn">
-                    <i class="fas fa-paper-plane"></i> Submit Report
-                </button>
+
+            <!-- Chat Input Area -->
+            <div class="incident-chat-input-area" id="incidentChatInputArea">
+                <div class="incident-chat-input-row">
+                    <button type="button" class="chat-action-btn" id="incidentLinkBtn" title="Add related link">
+                        <i class="fas fa-link"></i>
+                    </button>
+                    <button type="button" class="chat-action-btn" id="incidentFileBtn" title="Attach file or photo">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+                    <input type="file" id="incidentFileFile" style="display:none;" accept="image/*,video/*,.pdf,.doc,.docx,.txt,.eml">
+                    <textarea id="incidentChatInput" placeholder="Describe the incident details..." rows="1" required></textarea>
+                    <button type="button" class="chat-send-btn" id="incidentSendBtn" onclick="onIncidentSendClick()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                
+                <!-- Link input drawer -->
+                <div class="incident-link-drawer" id="incidentLinkDrawer" style="display:none;">
+                    <input type="url" id="incidentLinkInput" placeholder="Paste related link (e.g. Facebook/TikTok)...">
+                    <button type="button" class="btn btn-sm btn-primary" onclick="saveIncidentLink()">Add</button>
+                </div>
+                
+                <!-- Attachment preview -->
+                <div class="incident-attachment-preview" id="incidentAttachmentPreview" style="display:none;">
+                    <span class="attachment-name" id="incidentAttachmentName">file.jpg</span>
+                    <button type="button" class="remove-attachment-btn" onclick="clearIncidentAttachment()"><i class="fas fa-times"></i></button>
+                </div>
             </div>
-        </form>
+        </div>
     </div>
     <audio id="remote" autoplay></audio>
 
@@ -951,28 +1345,260 @@ $assetBase = '../ADMIN/header/';
             document.getElementById("call").click();
         }
 
-        function openIncidentReport() {
-            const modal = document.getElementById('incidentReportModal');
-            if (!modal) return;
-            modal.style.display = 'block';
-            modal.setAttribute('aria-hidden', 'false');
-            const locationInput = document.getElementById('incidentReportLocation');
-            if (locationInput && locationData && !locationInput.value) {
-                const parts = [
-                    locationData.address,
-                    locationData.latitude && locationData.longitude ? `${locationData.latitude}, ${locationData.longitude}` : ''
-                ].filter(Boolean);
-                locationInput.value = parts.join(' | ');
-            }
-            setTimeout(() => document.getElementById('incidentReportMessage')?.focus(), 50);
+        let incidentReportStep = 1;
+        let selectedCategory = '';
+        let selectedLocation = '';
+        let selectedDetails = '';
+        let selectedLink = '';
+        let selectedAttachment = null;
+        let activeIncidentConversationId = sessionStorage.getItem('active_incident_conversation_id') || null;
+        let incidentChatPollInterval = null;
+        let lastIncidentMessageId = 0;
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
-        function closeIncidentReport() {
-            const modal = document.getElementById('incidentReportModal');
-            if (!modal) return;
-            modal.style.display = 'none';
-            modal.setAttribute('aria-hidden', 'true');
+        function linkify(text) {
+            const urlPattern = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+            return text.replace(urlPattern, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; text-decoration: underline;">$1</a>');
         }
+
+        function appendBotMessage(html) {
+            const container = document.getElementById('incidentChatMessages');
+            if (!container) return;
+            const bubble = document.createElement('div');
+            bubble.className = 'chat-bubble bot';
+            bubble.innerHTML = html;
+            container.appendChild(bubble);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function appendUserMessage(text) {
+            const container = document.getElementById('incidentChatMessages');
+            if (!container) return;
+            const bubble = document.createElement('div');
+            bubble.className = 'chat-bubble user';
+            bubble.textContent = text;
+            container.appendChild(bubble);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function appendSystemMessage(text) {
+            const container = document.getElementById('incidentChatMessages');
+            if (!container) return;
+            const bubble = document.createElement('div');
+            bubble.className = 'chat-system-message';
+            bubble.textContent = text;
+            container.appendChild(bubble);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function startIncidentBot() {
+            const container = document.getElementById('incidentChatMessages');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            incidentReportStep = 1;
+            selectedCategory = '';
+            selectedLocation = '';
+            selectedDetails = '';
+            selectedLink = '';
+            selectedAttachment = null;
+            clearIncidentAttachment();
+            
+            const chatInput = document.getElementById('incidentChatInput');
+            if (chatInput) {
+                chatInput.value = '';
+                chatInput.style.height = '';
+                chatInput.disabled = true;
+                chatInput.placeholder = "Please follow the chat bot prompts...";
+            }
+            
+            document.getElementById('incidentSendBtn').disabled = true;
+            document.getElementById('incidentLinkBtn').disabled = true;
+            document.getElementById('incidentFileBtn').disabled = true;
+
+            appendBotMessage("Hello! I am your Emergency Chat Assistant. Please select the type of incident you want to report:");
+
+            const optionsHtml = `
+                <div class="chat-options-bubble" id="botIncidentTypeOptions">
+                    <button class="chat-option-btn" onclick="selectIncidentType('Medical Emergency', 'Medical Emergency')">
+                        <i class="fas fa-heartbeat"></i> Medical Emergency
+                    </button>
+                    <button class="chat-option-btn" onclick="selectIncidentType('Fire Emergency', 'Fire Emergency')">
+                        <i class="fas fa-fire"></i> Fire Emergency
+                    </button>
+                    <button class="chat-option-btn" onclick="selectIncidentType('Vehicular Accident', 'Vehicular Accident')">
+                        <i class="fas fa-car-crash"></i> Vehicular Accident
+                    </button>
+                    <button class="chat-option-btn" onclick="selectIncidentType('Flood or Weather', 'Flood or Weather Incident')">
+                        <i class="fas fa-cloud-showers-heavy"></i> Flood or Weather
+                    </button>
+                    <button class="chat-option-btn" onclick="selectIncidentType('Crime/Public Safety', 'Crime or Public Safety')">
+                        <i class="fas fa-shield-alt"></i> Crime/Public Safety
+                    </button>
+                    <button class="chat-option-btn" onclick="selectIncidentType('Other Emergency', 'Other Incident')">
+                        <i class="fas fa-exclamation-triangle"></i> Other Incident
+                    </button>
+                </div>
+            `;
+            appendBotMessage(optionsHtml);
+        }
+
+        window.selectIncidentType = function(label, value) {
+            const options = document.getElementById('botIncidentTypeOptions');
+            if (options) options.remove();
+
+            selectedCategory = value;
+            appendUserMessage(label);
+
+            incidentReportStep = 2;
+            setTimeout(() => {
+                appendBotMessage("Got it. Where did the incident occur? Please enter the location or landmark below:");
+                const locationBubbleHtml = `
+                    <div class="chat-location-input-bubble" id="botLocationBubble">
+                        <input type="text" id="botLocationInput" placeholder="Enter street, barangay, or landmark...">
+                        <div class="chat-location-buttons">
+                            <button class="chat-location-btn primary" onclick="confirmIncidentLocation()">
+                                <i class="fas fa-check"></i> Confirm
+                            </button>
+                            <button class="chat-location-btn secondary" onclick="getBotCurrentLocation()">
+                                <i class="fas fa-location-arrow"></i> Use Current
+                            </button>
+                        </div>
+                    </div>
+                `;
+                appendBotMessage(locationBubbleHtml);
+                setTimeout(() => {
+                    const inp = document.getElementById('botLocationInput');
+                    if (inp) {
+                        if (locationData && locationData.address) {
+                            inp.value = locationData.address;
+                        }
+                        inp.focus();
+                        inp.onkeypress = e => { if (e.key === 'Enter') confirmIncidentLocation(); };
+                    }
+                }, 50);
+            }, 500);
+        };
+
+        window.getBotCurrentLocation = async function() {
+            const inp = document.getElementById('botLocationInput');
+            if (inp) inp.value = "Fetching location...";
+            try {
+                const loc = await tryGetLocation();
+                if (loc && loc.address) {
+                    if (inp) inp.value = loc.address;
+                } else {
+                    if (inp) inp.value = "Location not found, please type manually.";
+                }
+            } catch (err) {
+                if (inp) inp.value = "Failed to get location, please type manually.";
+            }
+        };
+
+        window.confirmIncidentLocation = function() {
+            const inp = document.getElementById('botLocationInput');
+            const val = inp ? inp.value.trim() : '';
+            if (!val) {
+                Swal.fire({ icon: 'warning', title: 'Location Required', text: 'Please enter a location.' });
+                return;
+            }
+            selectedLocation = val;
+
+            const bubble = document.getElementById('botLocationBubble');
+            if (bubble) bubble.remove();
+
+            appendUserMessage(`Location: ${val}`);
+
+            incidentReportStep = 3;
+            setTimeout(() => {
+                appendBotMessage("Understood. Finally, please describe the incident in detail in the chat input below. You can attach a photo/file or paste a link using the buttons next to the input, then click Send to submit.");
+                const chatInput = document.getElementById('incidentChatInput');
+                if (chatInput) {
+                    chatInput.disabled = false;
+                    chatInput.placeholder = "Describe the incident details...";
+                    chatInput.focus();
+                }
+                document.getElementById('incidentSendBtn').disabled = false;
+                document.getElementById('incidentLinkBtn').disabled = false;
+                document.getElementById('incidentFileBtn').disabled = false;
+            }, 500);
+        };
+
+        window.saveIncidentLink = function() {
+            const input = document.getElementById('incidentLinkInput');
+            const val = input ? input.value.trim() : '';
+            if (val) {
+                selectedLink = val;
+                appendSystemMessage(`Added related link: ${val}`);
+            }
+            document.getElementById('incidentLinkDrawer').style.display = 'none';
+            document.getElementById('incidentLinkBtn').classList.remove('active');
+        };
+
+        window.clearIncidentAttachment = function() {
+            selectedAttachment = null;
+            document.getElementById('incidentFileFile').value = '';
+            const preview = document.getElementById('incidentAttachmentPreview');
+            if (preview) preview.style.display = 'none';
+        };
+
+        window.onIncidentSendClick = async function() {
+            const input = document.getElementById('incidentChatInput');
+            const text = input ? input.value.trim() : '';
+
+            if (incidentReportStep === 3) {
+                if (!text && !selectedAttachment) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Details required',
+                        text: 'Please describe the incident or attach a photo/file.'
+                    });
+                    return;
+                }
+                selectedDetails = text;
+                input.value = '';
+                input.style.height = '';
+
+                appendUserMessage(text);
+                
+                document.getElementById('incidentChatInput').disabled = true;
+                document.getElementById('incidentSendBtn').disabled = true;
+                document.getElementById('incidentLinkBtn').disabled = true;
+                document.getElementById('incidentFileBtn').disabled = true;
+                
+                appendBotMessage("Submitting your incident report. Please wait...");
+                
+                const success = await sendIncidentReportData();
+                if (success) {
+                    incidentReportStep = 4;
+                    document.getElementById('incidentChatInput').disabled = false;
+                    document.getElementById('incidentSendBtn').disabled = false;
+                    document.getElementById('incidentLinkBtn').disabled = false;
+                    document.getElementById('incidentFileBtn').disabled = false;
+                    document.getElementById('incidentChatInput').placeholder = "Type message to responder...";
+                    document.getElementById('incidentChatInput').focus();
+                } else {
+                    document.getElementById('incidentChatInput').disabled = false;
+                    document.getElementById('incidentSendBtn').disabled = false;
+                    document.getElementById('incidentLinkBtn').disabled = false;
+                    document.getElementById('incidentFileBtn').disabled = false;
+                }
+            } else if (incidentReportStep === 4) {
+                if (!text && !selectedAttachment) return;
+                input.value = '';
+                input.style.height = '';
+                
+                appendUserMessage(text);
+                
+                await sendLiveChatMessage(text, selectedAttachment);
+                clearIncidentAttachment();
+            }
+        };
 
         function buildIncidentReportText(type, details, location, relatedLink) {
             const lines = [
@@ -985,43 +1611,21 @@ $assetBase = '../ADMIN/header/';
             return lines.join('\n');
         }
 
-        async function submitIncidentReport(event) {
-            event.preventDefault();
-            const submitBtn = document.getElementById('incidentReportSubmitBtn');
-            const type = document.getElementById('incidentReportType')?.value || 'Emergency';
-            const location = document.getElementById('incidentReportLocation')?.value.trim() || '';
-            const details = document.getElementById('incidentReportMessage')?.value.trim() || '';
-            const relatedLink = document.getElementById('incidentReportLink')?.value.trim() || '';
-            const attachment = document.getElementById('incidentReportAttachment')?.files?.[0] || null;
-
-            if (!details && !attachment) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Add incident details',
-                    text: 'Please describe the incident or attach a photo/file before submitting.'
-                });
-                return;
-            }
-
-            const reportText = buildIncidentReportText(type, details, location, relatedLink);
+        async function sendIncidentReportData() {
+            const reportText = buildIncidentReportText(selectedCategory, selectedDetails, selectedLocation, selectedLink);
             const formData = new FormData();
             formData.append('text', reportText);
             formData.append('userId', userProfile?.id || 'guest');
             formData.append('userName', userProfile?.name || 'Guest User');
             formData.append('userEmail', userProfile?.email || '');
             formData.append('userPhone', userProfile?.phone || '');
-            formData.append('userLocation', location);
+            formData.append('userLocation', selectedLocation);
             formData.append('userConcern', 'incident_report');
-            formData.append('category', type);
+            formData.append('category', selectedCategory);
             formData.append('forceNewConversation', '1');
             formData.append('isGuest', userProfile?.id ? '0' : '1');
-            if (attachment) {
-                formData.append('attachment', attachment);
-            }
-
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+            if (selectedAttachment) {
+                formData.append('attachment', selectedAttachment);
             }
 
             try {
@@ -1035,35 +1639,207 @@ $assetBase = '../ADMIN/header/';
                     throw new Error(data.message || 'Failed to submit incident report.');
                 }
 
-                document.getElementById('incidentReportForm')?.reset();
-                closeIncidentReport();
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Incident Report Submitted',
-                    text: 'Your report was sent to emergency dispatch for review.',
-                    confirmButtonText: 'OK'
-                });
+                activeIncidentConversationId = data.conversationId;
+                sessionStorage.setItem('active_incident_conversation_id', data.conversationId);
+                
+                clearIncidentAttachment();
+                selectedLink = '';
+                
+                appendBotMessage("Incident Report Submitted successfully! We have opened a live connection to a dispatcher. You can chat here in real time.");
+                appendSystemMessage("Connected to Dispatcher");
+                
+                startIncidentChatPolling(activeIncidentConversationId);
+                return true;
             } catch (error) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Submission Failed',
-                    text: error.message || 'Please try again.'
+                appendBotMessage(`Error: ${error.message || 'Submission failed. Please try again.'}`);
+                return false;
+            }
+        }
+
+        async function sendLiveChatMessage(text, attachment) {
+            if (!activeIncidentConversationId) return;
+            const formData = new FormData();
+            formData.append('text', text);
+            formData.append('conversationId', activeIncidentConversationId);
+            formData.append('userId', userProfile?.id || 'guest');
+            formData.append('userName', userProfile?.name || 'Guest User');
+            formData.append('userEmail', userProfile?.email || '');
+            formData.append('userPhone', userProfile?.phone || '');
+            formData.append('userConcern', 'incident_report');
+            formData.append('category', selectedCategory);
+            if (attachment) {
+                formData.append('attachment', attachment);
+            }
+
+            try {
+                const response = await fetch('api/chat-send.php', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin'
                 });
-            } finally {
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Report';
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Failed to send message.');
                 }
+                if (data.messageId) {
+                    lastIncidentMessageId = Math.max(lastIncidentMessageId, data.messageId);
+                }
+            } catch (error) {
+                appendSystemMessage(`Failed to send: ${error.message}`);
+            }
+        }
+
+        function startIncidentChatPolling(conversationId) {
+            if (incidentChatPollInterval) clearInterval(incidentChatPollInterval);
+            lastIncidentMessageId = 0;
+            
+            const fetchMessages = async () => {
+                if (activeIncidentConversationId !== conversationId) return;
+                try {
+                    const response = await fetch(`api/chat-get-messages.php?conversationId=${conversationId}&lastMessageId=${lastIncidentMessageId}`);
+                    const data = await response.json();
+                    if (data.success && Array.isArray(data.messages)) {
+                        data.messages.forEach(msg => {
+                            if (msg.id > lastIncidentMessageId) {
+                                lastIncidentMessageId = Math.max(lastIncidentMessageId, msg.id);
+                                if (msg.senderType === 'admin' || msg.senderType === 'sent') {
+                                    appendBotMessage(linkify(escapeHtml(msg.text)));
+                                }
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error polling messages:', e);
+                }
+            };
+            
+            fetchMessages();
+            incidentChatPollInterval = setInterval(fetchMessages, 3000);
+        }
+
+        async function loadActiveIncidentMessages(conversationId) {
+            try {
+                const response = await fetch(`api/chat-get-messages.php?conversationId=${conversationId}&lastMessageId=0`);
+                const data = await response.json();
+                if (data.success && Array.isArray(data.messages)) {
+                    data.messages.forEach(msg => {
+                        lastIncidentMessageId = Math.max(lastIncidentMessageId, msg.id);
+                        if (msg.senderType === 'admin' || msg.senderType === 'sent') {
+                            appendBotMessage(linkify(escapeHtml(msg.text)));
+                        } else {
+                            appendUserMessage(msg.text);
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('Error loading previous messages:', e);
+            }
+            startIncidentChatPolling(conversationId);
+        }
+
+        function openIncidentReport() {
+            const modal = document.getElementById('incidentReportModal');
+            if (!modal) return;
+            modal.style.display = 'block';
+            modal.setAttribute('aria-hidden', 'false');
+            
+            tryGetLocation().then(loc => {
+                if (loc) locationData = loc;
+            });
+
+            activeIncidentConversationId = sessionStorage.getItem('active_incident_conversation_id') || null;
+            if (activeIncidentConversationId) {
+                incidentReportStep = 4;
+                const container = document.getElementById('incidentChatMessages');
+                if (container) container.innerHTML = '';
+                appendSystemMessage("Resumed Active Connection");
+                const chatInput = document.getElementById('incidentChatInput');
+                if (chatInput) {
+                    chatInput.disabled = false;
+                    chatInput.placeholder = "Type message to responder...";
+                }
+                document.getElementById('incidentSendBtn').disabled = false;
+                document.getElementById('incidentLinkBtn').disabled = false;
+                document.getElementById('incidentFileBtn').disabled = false;
+                loadActiveIncidentMessages(activeIncidentConversationId);
+            } else {
+                startIncidentBot();
+            }
+        }
+
+        function closeIncidentReport() {
+            const modal = document.getElementById('incidentReportModal');
+            if (!modal) return;
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+            if (incidentChatPollInterval) {
+                clearInterval(incidentChatPollInterval);
+                incidentChatPollInterval = null;
             }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('incidentReportForm')?.addEventListener('submit', submitIncidentReport);
-            document.getElementById('incidentReportModal')?.addEventListener('click', (event) => {
-                if (event.target && event.target.id === 'incidentReportModal') {
-                    closeIncidentReport();
-                }
-            });
+            const linkBtn = document.getElementById('incidentLinkBtn');
+            if (linkBtn) {
+                linkBtn.onclick = () => {
+                    const drawer = document.getElementById('incidentLinkDrawer');
+                    if (!drawer) return;
+                    const isHidden = drawer.style.display === 'none';
+                    drawer.style.display = isHidden ? 'flex' : 'none';
+                    linkBtn.classList.toggle('active', isHidden);
+                    if (isHidden) {
+                        document.getElementById('incidentLinkInput').focus();
+                    }
+                };
+            }
+
+            const fileBtn = document.getElementById('incidentFileBtn');
+            if (fileBtn) {
+                fileBtn.onclick = () => {
+                    document.getElementById('incidentFileFile').click();
+                };
+            }
+
+            const fileInput = document.getElementById('incidentFileFile');
+            if (fileInput) {
+                fileInput.onchange = (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                        selectedAttachment = file;
+                        const preview = document.getElementById('incidentAttachmentPreview');
+                        const name = document.getElementById('incidentAttachmentName');
+                        if (preview && name) {
+                            name.textContent = file.name;
+                            preview.style.display = 'flex';
+                        }
+                    }
+                };
+            }
+
+            const chatInput = document.getElementById('incidentChatInput');
+            if (chatInput) {
+                chatInput.onkeypress = e => { 
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        onIncidentSendClick(); 
+                    }
+                };
+                
+                // Auto-resize chat input as user types
+                chatInput.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = this.scrollHeight + 'px';
+                });
+            }
+
+            const modal = document.getElementById('incidentReportModal');
+            if (modal) {
+                modal.addEventListener('click', (event) => {
+                    if (event.target && event.target.id === 'incidentReportModal') {
+                        closeIncidentReport();
+                    }
+                });
+            }
         });
     </script>
     
