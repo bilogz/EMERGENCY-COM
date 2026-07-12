@@ -903,7 +903,10 @@ $assetBase = '../ADMIN/header/';
 
         async function ensureCallConversationId() {
             if (callConversationId) return callConversationId;
-            if (!userProfile || !userProfile.id) return null;
+            if (!userProfile || !userProfile.id) {
+                console.log('[DEBUG] No user profile or ID');
+                return null;
+            }
 
             try {
                 const params = new URLSearchParams({
@@ -915,13 +918,19 @@ $assetBase = '../ADMIN/header/';
                     userConcern: 'emergency',
                     isGuest: '0'
                 });
+                console.log('[DEBUG] Fetching conversation with params:', params.toString());
                 const res = await fetch(`api/chat-get-conversation.php?${params.toString()}`);
+                console.log('[DEBUG] Conversation API response status:', res.status);
                 const data = await res.json();
+                console.log('[DEBUG] Conversation API response data:', data);
                 if (data && data.success && data.conversationId) {
                     callConversationId = data.conversationId;
+                    console.log('[DEBUG] Conversation ID set:', callConversationId);
                     return callConversationId;
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.error('[DEBUG] Error fetching conversation:', e);
+            }
 
             return null;
         }
@@ -1304,6 +1313,7 @@ $assetBase = '../ADMIN/header/';
                 // Add initial message to conversation so it appears in admin citizen reports
                 try {
                     const convId = await ensureCallConversationId();
+                    console.log('[DEBUG] Conversation ID:', convId);
                     if (convId) {
                         const formData = new FormData();
                         formData.append('text', '[CALL_STARTED] Emergency call initiated via Internet calling');
@@ -1314,13 +1324,19 @@ $assetBase = '../ADMIN/header/';
                         formData.append('conversationId', convId);
                         formData.append('userConcern', 'emergency');
 
-                        await fetch('api/chat-send.php', {
+                        console.log('[DEBUG] Sending message to chat-send.php');
+                        const response = await fetch('api/chat-send.php', {
                             method: 'POST',
                             body: formData
                         });
+                        console.log('[DEBUG] chat-send.php response:', response.status);
+                        const result = await response.json();
+                        console.log('[DEBUG] chat-send.php result:', result);
+                    } else {
+                        console.log('[DEBUG] No conversation ID available');
                     }
                 } catch (e) {
-                    console.error('Failed to log call start message:', e);
+                    console.error('[DEBUG] Failed to log call start message:', e);
                 }
 
                 initPeer();
