@@ -2333,8 +2333,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     })();
     const SOCKET_IO_PATH = '/socket.io';
     const LOCAL_SOCKET_PORT = 3000;
-    const SIGNALING_HOST = '127.0.0.1';
-    // Always use explicit port for local development to avoid 502 errors
+    const SIGNALING_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
+    // For production, use explicit port to avoid 502 errors from Apache proxy
     const SIGNALING_URL = `${window.location.protocol}//${SIGNALING_HOST}:${LOCAL_SOCKET_PORT}`;
     const SOCKET_HEALTH_URL = `${window.location.origin}${APP_BASE_PATH}/ADMIN/api/socket-health.php`;
     const room = "emergency-room";

@@ -74,6 +74,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.SOCKET_PORT ? Number(process.env.SOCKET_PORT) : 3000;
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Socket.IO signaling server listening on 127.0.0.1:${PORT}`);
+const HOST = process.env.SOCKET_HOST || '0.0.0.0'; // Listen on all interfaces for production
+server.listen(PORT, HOST, () => {
+  console.log(`Socket.IO signaling server listening on ${HOST}:${PORT}`);
 });
