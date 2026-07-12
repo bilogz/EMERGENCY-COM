@@ -1301,6 +1301,28 @@ $assetBase = '../ADMIN/header/';
 
                 await ensureCallConversationId();
 
+                // Add initial message to conversation so it appears in admin citizen reports
+                try {
+                    const convId = await ensureCallConversationId();
+                    if (convId) {
+                        const formData = new FormData();
+                        formData.append('text', '[CALL_STARTED] Emergency call initiated via Internet calling');
+                        formData.append('userId', userProfile?.id || 'guest');
+                        formData.append('userName', userProfile?.name || 'Guest User');
+                        formData.append('userEmail', userProfile?.email || '');
+                        formData.append('userPhone', userProfile?.phone || '');
+                        formData.append('conversationId', convId);
+                        formData.append('userConcern', 'emergency');
+
+                        await fetch('api/chat-send.php', {
+                            method: 'POST',
+                            body: formData
+                        });
+                    }
+                } catch (e) {
+                    console.error('Failed to log call start message:', e);
+                }
+
                 initPeer();
                 s.emit("join", room);
 
