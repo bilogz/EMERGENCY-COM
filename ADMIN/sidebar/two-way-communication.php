@@ -16,7 +16,7 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 $pageTitle = $pageTitle ?? 'Two-Way Communication Interface';
 $pageHeading = $pageHeading ?? 'Two-Way Communication Interface';
 $pageDescription = $pageDescription ?? 'Interactive communication platform allowing administrators and citizens to exchange messages in real-time.';
-$pageMode = $pageMode ?? 'full';
+$pageMode = $pageMode ?? 'citizen_reports';
 $assetBaseUrl = $assetBaseUrl ?? '';
 $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 ?>
@@ -40,6 +40,82 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
         <link rel="stylesheet" href="css/module-two-way-communication.css?v=<?php echo filemtime(__DIR__ . '/css/module-two-way-communication.css'); ?>">
+    <style>
+        /* Table Layout and Responsive Columns for Desktop */
+        @media (min-width: 769px) {
+            .communication-container:not(.chat-active) {
+                grid-template-columns: 1fr !important;
+            }
+            .communication-container:not(.chat-active) .chat-window {
+                display: none !important;
+            }
+            .communication-container.chat-active {
+                grid-template-columns: 1.25fr 1fr !important;
+            }
+            .communication-container.chat-active .chat-window {
+                display: flex !important;
+            }
+        }
+
+        /* Unified Table Styling */
+        .twc-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 0.9rem;
+            color: var(--text-color-1);
+        }
+        .twc-table th {
+            padding: 0.85rem 0.75rem;
+            font-weight: 700;
+            color: var(--text-secondary-1);
+            background: var(--bg-color-2);
+            border-bottom: 2px solid var(--border-color-1);
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .twc-table td {
+            padding: 0.85rem 0.75rem;
+            border-bottom: 1px solid var(--border-color-1);
+            vertical-align: middle;
+        }
+        .twc-table tr.conversation-item {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .twc-table tr.conversation-item:hover td {
+            background: rgba(76, 138, 137, 0.05);
+        }
+        .twc-table tr.conversation-item.active td {
+            background: color-mix(in srgb, var(--primary-color-1) 12%, var(--card-bg-1)) !important;
+            border-bottom-color: color-mix(in srgb, var(--primary-color-1) 25%, var(--border-color-1)) !important;
+        }
+        .twc-table tr.conversation-item.active td strong {
+            color: var(--primary-color-1) !important;
+        }
+
+        /* Pulsing Status Dot */
+        .twc-table .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            background-color: #2ecc71;
+            box-shadow: 0 0 0 rgba(46, 204, 113, 0.4);
+            animation: pulseStatus 2s infinite;
+        }
+        .twc-table tr.closed .status-dot {
+            background-color: #95a5a6;
+            animation: none;
+            box-shadow: none;
+        }
+        @keyframes pulseStatus {
+            0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(46, 204, 113, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+        }
+    </style>
 </head>
 <body class="twc-page">
     <!-- Include Sidebar Component -->
@@ -66,7 +142,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 <p><?php echo htmlspecialchars($pageDescription); ?></p>
             </div>
 
-            <?php if ($pageMode !== 'citizen_reports'): ?>
             <div class="twc-primary-switch" id="twcPrimarySwitch" aria-label="Two-way communication views">
                 <button type="button" class="twc-primary-chip active" data-twc-view="conversations">
                     <i class="fas fa-comments"></i>
@@ -77,63 +152,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     <span>Chatbot Logs</span>
                 </button>
             </div>
-            <?php endif; ?>
 
             <div id="twcConversationsShell">
-            <?php if ($pageMode !== 'citizen_reports'): ?>
-            <div class="department-top-nav" id="departmentTopNav" aria-label="Department Navigation">
-                <button type="button" class="dept-nav-chip active" data-dept="all">
-                    <i class="fas fa-layer-group"></i>
-                    <span>All Conversations</span>
-                    <span class="dept-nav-count" data-dept-count="all">0</span>
-                </button>
-                <button type="button" class="dept-nav-chip" data-dept="incident_nlp">
-                    <i class="fas fa-microscope"></i>
-                    <span>Incident &amp; NLP</span>
-                    <span class="dept-nav-count" data-dept-count="incident_nlp">0</span>
-                </button>
-                <button type="button" class="dept-nav-chip" data-dept="traffic_transport">
-                    <i class="fas fa-traffic-light"></i>
-                    <span>Traffic &amp; Transport</span>
-                    <span class="dept-nav-count" data-dept-count="traffic_transport">0</span>
-                </button>
-                <button type="button" class="dept-nav-chip" data-dept="emergency_response">
-                    <i class="fas fa-ambulance"></i>
-                    <span>Emergency Response</span>
-                    <span class="dept-nav-count" data-dept-count="emergency_response">0</span>
-                </button>
-                <button type="button" class="dept-nav-chip" data-dept="community_policing">
-                    <i class="fas fa-shield-alt"></i>
-                    <span>Community Policing</span>
-                    <span class="dept-nav-count" data-dept-count="community_policing">0</span>
-                </button>
-                <button type="button" class="dept-nav-chip" data-dept="crime_analytics">
-                    <i class="fas fa-chart-line"></i>
-                    <span>Crime Analytics</span>
-                    <span class="dept-nav-count" data-dept-count="crime_analytics">0</span>
-                </button>
-                <button type="button" class="dept-nav-chip" data-dept="public_safety_campaign">
-                    <i class="fas fa-bullhorn"></i>
-                    <span>Public Safety</span>
-                    <span class="dept-nav-count" data-dept-count="public_safety_campaign">0</span>
-                </button>
-                <button type="button" class="dept-nav-chip" data-dept="health_inspection">
-                    <i class="fas fa-notes-medical"></i>
-                    <span>Health &amp; Safety</span>
-                    <span class="dept-nav-count" data-dept-count="health_inspection">0</span>
-                </button>
-                <button type="button" class="dept-nav-chip" data-dept="disaster_preparedness">
-                    <i class="fas fa-hard-hat"></i>
-                    <span>Disaster Preparedness</span>
-                    <span class="dept-nav-count" data-dept-count="disaster_preparedness">0</span>
-                </button>
-                <button type="button" class="dept-nav-chip" data-dept="emergency_comm">
-                    <i class="fas fa-broadcast-tower"></i>
-                    <span>Emergency Comms</span>
-                    <span class="dept-nav-count" data-dept-count="emergency_comm">0</span>
-                </button>
-            </div>
-            <?php endif; ?>
+
             
             <div class="sub-container">
                 <div class="page-content">
@@ -144,37 +165,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 <div class="chat-tab active" onclick="switchTab('open')">
                                     <i class="fas fa-inbox"></i> Open <span id="openCount" class="badge"></span>
                                 </div>
-                                <?php if ($pageMode !== 'citizen_reports'): ?>
                                 <div class="chat-tab" onclick="switchTab('assigned')">
                                     <i class="fas fa-user-check"></i> Assigned
                                 </div>
                                 <div class="chat-tab" onclick="switchTab('closed')">
                                     <i class="fas fa-check-circle"></i> Closed
                                 </div>
-                                <?php endif; ?>
                             </div>
                             <div class="chat-filters">
-                                <?php if ($pageMode !== 'citizen_reports'): ?>
-                                <label for="deptFilter">Department</label>
-                                <select id="deptFilter">
-                                    <option value="all">All Departments</option>
-                                    <option value="incident_nlp">Incident & NLP Investigation</option>
-                                    <option value="traffic_transport">Traffic & Transport Management</option>
-                                    <option value="emergency_response">Emergency Response & Recovery</option>
-                                    <option value="community_policing">Community Policing & Surveillance</option>
-                                    <option value="crime_analytics">Crime Data Analytics</option>
-                                    <option value="public_safety_campaign">Public Safety Campaign</option>
-                                    <option value="health_inspection">Health & Safety Inspection</option>
-                                    <option value="disaster_preparedness">Disaster Preparedness Training</option>
-                                    <option value="emergency_comm">Emergency Communication</option>
-                                </select>
-                                <?php endif; ?>
-                                <?php if ($pageMode !== 'citizen_reports'): ?>
-                                <label for="topicFilter">Topic</label>
-                                <select id="topicFilter">
-                                    <option value="all">All Topics</option>
-                                </select>
-                                <?php endif; ?>
+
                                 <label for="priorityFilter">Priority</label>
                                 <select id="priorityFilter">
                                     <option value="all">All Priorities</option>
@@ -190,12 +189,24 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                     <?php endif; ?>
                                 </select>
                             </div>
-                            <div class="conversations-list" id="scrollableList">
+                            <div class="conversations-list-table-wrapper" id="scrollableList" style="flex: 1; overflow-y: auto; overflow-x: auto; padding: 0.75rem;">
                                 <div id="incomingEmergencyCallRow" style="display:none;"></div>
-                                <div id="conversationsList">
-                                    <!-- Conversations will be loaded here -->
-                                </div>
-                                <div id="loadMoreContainer" class="load-more-container" style="display: none;">
+                                <table class="twc-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Citizen</th>
+                                            <th>Location</th>
+                                            <th>Last Message</th>
+                                            <th>Priority</th>
+                                            <th>Status</th>
+                                            <th style="text-align: right;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="conversationsList">
+                                        <!-- Conversations will be loaded here -->
+                                    </tbody>
+                                </table>
+                                <div id="loadMoreContainer" class="load-more-container" style="display: none; padding: 1rem; text-align: center;">
                                     <button class="btn-load-more" onclick="loadMoreConversations()">
                                         Load More
                                     </button>
@@ -249,12 +260,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                         </div>
                                     </div>
                                     <?php endif; ?>
-                                    <?php if ($pageMode !== 'citizen_reports'): ?>
-                                    <button class="btn btn-sm btn-secondary" id="toggleStatusBtn" style="display: none;">
-                                        <i class="fas fa-check"></i> Close Chat
-                                    </button>
-                                    <?php endif; ?>
-                                </div>
+                                     <button class="btn btn-sm btn-secondary" id="toggleStatusBtn" style="display: none;">
+                                         <i class="fas fa-check"></i> Close Chat
+                                     </button>
+                                     <button onclick="closeChatPanel()" class="btn btn-sm btn-secondary" style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 6px; border: 1px solid var(--border-color-1); background: var(--bg-color-1); color: var(--text-color-2); cursor: pointer; margin-left: 0.5rem;" title="Hide Chat">
+                                         <i class="fas fa-times"></i>
+                                     </button>
+                                 </div>
                             </div>
                             <div class="chat-messages" id="chatMessages">
                                 <div style="text-align: center; color: var(--text-secondary-1); padding: 3rem; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
@@ -274,7 +286,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             </div>
             </div>
 
-            <?php if ($pageMode !== 'citizen_reports'): ?>
+
             <div class="twc-chatbot-logs-shell" id="twcChatbotLogsShell" hidden>
                 <div class="twc-logs-intro">
                     <h3><i class="fas fa-robot"></i> Chatbot Interaction Logs</h3>
@@ -388,7 +400,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     </div>
                 </div>
             </div>
-            <?php endif; ?>
+
         </div>
     </div>
 
@@ -487,9 +499,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         // --- View Management ---
         
         function switchTab(status) {
-            if (PAGE_MODE === 'citizen_reports' && status !== 'open') {
-                status = 'open';
-            }
             if (currentStatus === status) return;
             currentStatus = status;
             
@@ -510,6 +519,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         function closeMobileChat() {
             document.getElementById('communicationContainer').classList.remove('chat-active');
             // Allow polling to refresh list again if needed, but keep current ID active in background
+        }
+
+        function closeChatPanel() {
+            closeMobileChat();
+            document.querySelectorAll('.conversation-item').forEach(i => i.classList.remove('active'));
+            currentConversationId = null;
         }
 
         function clearConversationIdQueryParam() {
@@ -545,12 +560,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         function updateMainViewQueryParam(view) {
-            if (PAGE_MODE === 'citizen_reports') {
-                const url = new URL(window.location.href);
-                url.searchParams.delete('view');
-                window.history.replaceState({}, '', url.toString());
-                return;
-            }
             const url = new URL(window.location.href);
             if (view === 'chatbotLogs') {
                 url.searchParams.set('view', 'chatbotLogs');
@@ -561,7 +570,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         function setPrimaryView(view, updateUrl = true) {
-            const normalized = (PAGE_MODE === 'citizen_reports') ? 'conversations' : (view === 'chatbotLogs' ? 'chatbotLogs' : 'conversations');
+            const normalized = view === 'chatbotLogs' ? 'chatbotLogs' : 'conversations';
             currentMainView = normalized;
 
             const conversationShell = document.getElementById('twcConversationsShell');
@@ -1173,45 +1182,18 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
             if (!append) listContainer.innerHTML = '';
 
-            if (PAGE_MODE === 'citizen_reports') {
-                const existingIds = new Set(
-                    Array.from(listContainer.querySelectorAll('.conversation-item')).map(node => String(node.getAttribute('data-conversation-id')))
-                );
-                sortCitizenReports(conversations).forEach(conv => {
-                    const convId = String(conv.id);
-                    if (existingIds.has(convId)) return;
-                    listContainer.appendChild(createConversationElement(conv));
-                    existingIds.add(convId);
-                });
-                return;
-            }
+            const existingIds = new Set(
+                Array.from(listContainer.querySelectorAll('.conversation-item')).map(node => String(node.getAttribute('data-conversation-id')))
+            );
 
-            const grouped = {};
-            sortConversationsNewest(conversations).forEach(conv => {
-                const key = mapConversationDept(conv) || 'unassigned';
-                if (!grouped[key]) grouped[key] = [];
-                grouped[key].push(conv);
-            });
+            // Sort conversations (by priority if citizen reports, or by recency)
+            const sorted = PAGE_MODE === 'citizen_reports' ? sortCitizenReports(conversations) : sortConversationsNewest(conversations);
 
-            Object.keys(grouped).forEach(key => {
-                grouped[key] = sortConversationsNewest(grouped[key]);
-            });
-
-            orderedDeptKeysByRecency(grouped).forEach(key => {
-                if (!grouped[key] || grouped[key].length === 0) return;
-                const section = ensureDeptSection(listContainer, key);
-                const list = section.querySelector('.dept-section-list');
-                const existingIds = new Set(
-                    Array.from(list.querySelectorAll('.conversation-item')).map(node => String(node.getAttribute('data-conversation-id')))
-                );
-                grouped[key].forEach(conv => {
-                    const convId = String(conv.id);
-                    if (existingIds.has(convId)) return;
-                    list.appendChild(createConversationElement(conv));
-                    existingIds.add(convId);
-                });
-                const count = section.querySelector(`#dept-${key}-count`);
-                if (count) count.textContent = String(list.children.length);
+            sorted.forEach(conv => {
+                const convId = String(conv.id);
+                if (existingIds.has(convId)) return;
+                listContainer.appendChild(createConversationElement(conv));
+                existingIds.add(convId);
             });
         }
 
@@ -1396,8 +1378,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         // --- DOM Helpers ---
 
         function createConversationElement(conv) {
-            const item = document.createElement('div');
-            item.className = 'conversation-item';
+            const item = document.createElement('tr');
+            item.className = 'conversation-item conversation-row-item';
             if (PAGE_MODE === 'citizen_reports') {
                 item.classList.add(`incident-row-priority-${incidentPriorityMeta(conv).level}`);
             }
@@ -1417,14 +1399,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         
         function getConversationHTML(conv) {
-            const guestBadge = conv.isGuest ? '<span class="list-chip list-chip-guest">GUEST</span>' : '';
-            const concernBadge = conv.userConcern ? `<span class="list-chip list-chip-concern">${conv.userConcern}</span>` : '';
-            const callBadge = conv.hasCall ? '<span class="list-chip list-chip-call"><i class="fas fa-phone"></i>Call</span>' : '';
-            const unreadBadge = conv.unreadCount > 0 ? `<span class="list-chip list-chip-unread">${conv.unreadCount}</span>` : '';
-            const deptKey = mapConversationDept(conv);
-            const deptTag = (PAGE_MODE !== 'citizen_reports' && deptKey) ? `<span class="dept-badge">${deptLabel(deptKey)}</span>` : '';
-            const topicKey = mapConversationTopic(conv);
-            const topicTag = (PAGE_MODE !== 'citizen_reports' && topicKey) ? `<span class="topic-badge">${topicLabel(topicKey)}</span>` : '';
+            const guestBadge = conv.isGuest ? '<span class="list-chip list-chip-guest" style="background: #e67e22; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; margin-left: 0.25rem;">GUEST</span>' : '';
+            const concernBadge = conv.userConcern ? `<span class="list-chip list-chip-concern" style="background: #2ecc71; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; margin-left: 0.25rem;">${conv.userConcern}</span>` : '';
+            const callBadge = conv.hasCall ? '<span class="list-chip list-chip-call" style="background: #3498db; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; margin-left: 0.25rem;"><i class="fas fa-phone"></i> Call</span>' : '';
+            const unreadBadge = conv.unreadCount > 0 ? `<span class="list-chip list-chip-unread" style="background: #e74c3c; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; margin-left: 0.25rem;">${conv.unreadCount}</span>` : '';
             const workflowRaw = (conv.workflowStatus || '').toLowerCase();
             const workflowLabelMap = {
                 open: 'Open',
@@ -1450,38 +1428,39 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
             const timestamp = getConversationTimestamp(conv);
             const displayTime = timestamp
-                ? `<small style="opacity:0.75;font-size:0.72rem;white-space:nowrap;display:block;text-align:right;line-height:1.25;">
-                        ${new Date(timestamp).toLocaleDateString([], { month: 'short', day: '2-digit', year: 'numeric' })}
-                        ${new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                   </small>`
+                ? `${new Date(timestamp).toLocaleDateString([], { month: 'short', day: '2-digit' })} ${new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
                 : '';
 
-            // User Info Line
-            const userInfo = [];
-            // Prioritize User Name/Email/Phone in bold
-            // Secondary info in small text
-            
-            if (conv.userPhone) userInfo.push(`<i class="fas fa-phone"></i>`);
-            if (conv.userLocation) userInfo.push(`<i class="fas fa-map-marker-alt"></i>`);
-            if (conv.ipAddress) userInfo.push(`<i class="fas fa-network-wired"></i>`);
-            
+            const location = conv.userLocation || '<span style="opacity:0.5;">Not specified</span>';
+            const lastMsg = conv.lastMessage || '<span style="opacity:0.5;font-style:italic;">No messages</span>';
+
             return `
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
-                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 0.5rem; font-size: 0.95rem;">
+                <td style="padding: 0.85rem 0.75rem; vertical-align: middle;">
+                    <div style="display: flex; align-items: center; gap: 0.35rem;">
                         ${statusDot}
-                        <strong>${conv.userName || 'Unknown'}</strong>${guestBadge}${concernBadge}${callBadge}${unreadBadge}
+                        <strong>${conv.userName || 'Unknown'}</strong>
+                        ${guestBadge} ${concernBadge} ${callBadge} ${unreadBadge}
                     </div>
-                    ${displayTime}
-                </div>
-                <p style="margin: 0; font-size: 0.85rem; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    ${conv.lastMessage || 'No messages'}
-                </p>
-                <div style="margin-top: 0.5rem; font-size: 0.75rem; opacity: 0.6;">
-                    ${userInfo.join(' &nbsp; ')} &nbsp; ${conv.userLocation || ''}
-                </div>
-                <div style="margin-top: 0.45rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                    ${incidentBadge} ${statusBadge} ${deptTag} ${topicTag}
-                </div>
+                    ${conv.userPhone ? `<div style="font-size: 0.75rem; opacity: 0.6; margin-top: 0.15rem;"><i class="fas fa-phone" style="font-size:0.7rem;"></i> ${conv.userPhone}</div>` : ''}
+                </td>
+                <td style="padding: 0.85rem 0.75rem; vertical-align: middle; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    <i class="fas fa-map-marker-alt" style="color: var(--primary-color-1); font-size:0.8rem;"></i> ${location}
+                </td>
+                <td style="padding: 0.85rem 0.75rem; vertical-align: middle; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    ${lastMsg}
+                    <div style="font-size: 0.7rem; opacity: 0.5; margin-top: 0.15rem;">${displayTime}</div>
+                </td>
+                <td style="padding: 0.85rem 0.75rem; vertical-align: middle;">
+                    ${incidentBadge}
+                </td>
+                <td style="padding: 0.85rem 0.75rem; vertical-align: middle;">
+                    ${statusBadge}
+                </td>
+                <td style="padding: 0.85rem 0.75rem; vertical-align: middle; text-align: right;">
+                    <button class="btn btn-primary respond-btn" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 4px; cursor: pointer; background: var(--primary-color-1); color: white; border: none;">
+                        <i class="fas fa-reply"></i> Open Chat
+                    </button>
+                </td>
             `;
         }
 
@@ -1757,7 +1736,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             };
             
             await fetchMsgs(initial); // Initial call with passed state
-            messageInterval = setInterval(() => fetchMsgs(false), 3000); // Poll with false
+            messageInterval = setInterval(() => fetchMsgs(false), 1500); // Poll faster for real-time responsiveness
         }
         
         function appendMessage(msg) {
@@ -2225,16 +2204,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
 
             const initialView = new URLSearchParams(window.location.search).get('view');
-            if (PAGE_MODE === 'citizen_reports') {
-                setPrimaryView('conversations', false);
-            } else if (initialView === 'chatbotLogs') {
+            if (initialView === 'chatbotLogs') {
                 setPrimaryView('chatbotLogs', false);
             } else {
                 setPrimaryView('conversations', false);
             }
 
             loadConversations(true);
-            pollInterval = setInterval(pollUpdates, 5000);
+            pollInterval = setInterval(pollUpdates, 3000); // Poll faster for real-time list updates
         });
         
     </script>

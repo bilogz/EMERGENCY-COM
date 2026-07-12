@@ -44,7 +44,6 @@ $pageTitle = 'Weather Monitoring';
         }
     </style>
     <?php endif; ?>
-    
 </head>
 <body class="<?php echo $publicView ? 'public-view' : ''; ?>" data-disable-auto-darkmode="true">
     <?php if (!$publicView): ?>
@@ -60,58 +59,53 @@ $pageTitle = 'Weather Monitoring';
             </div>
             
             <div class="weather-container">
-                <!-- Map Section -->
-                <div class="map-section">
-                    <div id="weatherMap"></div>
-                    
-                    <div id="mapLoading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; background: rgba(255,255,255,0.9); padding: 1rem; border-radius: 8px; display: none;">
-                        <i class="fas fa-spinner fa-spin"></i> Loading map...
+                <!-- Weather Bulletin Board Section -->
+                <div class="map-section" style="padding: 1.5rem; overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--border-color-1); padding-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <h2 style="margin: 0; font-size: 1.25rem; color: var(--text-color-1); font-weight: 700; text-transform: uppercase;"><i class="fas fa-bullhorn" style="color: #2980b9;"></i> PAGASA Weather Bulletin Board</h2>
+                            <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-weight: 700; color: #27ae60;">
+                                <span style="width:8px;height:8px;border-radius:50%;background:#27ae60;display:inline-block;animation:wxPulse 2s infinite;"></span> LIVE
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <span id="wxLastRefresh" style="font-size: 0.75rem; color: var(--text-secondary-1);">Updated just now</span>
+                            <button onclick="fetchPagasaBulletins(null)" style="background: var(--bg-color-1); border: 1px solid var(--border-color-1); color: var(--text-color-1); padding: 0.45rem 0.75rem; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; font-weight: 600;"><i class="fas fa-sync-alt"></i> Refresh</button>
+                            <button onclick="openWeatherMapModal()" class="btn btn-primary" style="background: linear-gradient(135deg, #2980b9, #3498db); color: white; padding: 0.5rem 1rem; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 0.82rem;"><i class="fas fa-map-marked-alt"></i> Open Weather Map</button>
+                        </div>
                     </div>
-                    
-                    <div id="zoomIndicator">Zoom: 11</div>
-                    
-                    <!-- Quezon City Focus Status -->
-                    <div id="quezonCityStatus" class="quezon-city-status" onclick="focusQuezonCity()" style="cursor: pointer;" title="Click to focus on Quezon City">
-                        <i class="fas fa-map-marker-alt"></i>
-                        <span>Focused on Quezon City</span>
+
+                    <!-- Active Warning Status -->
+                    <div id="autoWarningStatus" class="auto-warning-status" style="display: none; margin-bottom: 1rem; padding: 1rem; background: rgba(231, 76, 60, 0.15); border-left: 4px solid #e74c3c; border-radius: 4px;">
+                        <i class="fas fa-exclamation-triangle" style="color: #e74c3c; margin-right: 0.5rem;"></i>
+                        <span id="warningMessage" style="font-weight: 600; color: var(--text-color-1);"></span>
                     </div>
-                    
-                    <!-- Map Controls -->
-                    <div class="map-controls">
-                        <button id="windFlowBtn" class="map-control-btn" title="Toggle Wind Flow Animation">
-                            <i class="fas fa-wind"></i>
-                            <span>Wind Flow</span>
-                        </button>
-                        <button id="radarBtn" class="map-control-btn" title="Toggle Weather Radar">
-                            <i class="fas fa-radar"></i>
-                            <span>Radar</span>
-                        </button>
-                        <button id="precipitationBtn" class="map-control-btn" title="Toggle Precipitation Layer">
-                            <i class="fas fa-cloud-rain"></i>
-                            <span>Precipitation</span>
-                        </button>
-                        <button id="humidityBtn" class="map-control-btn" title="Toggle Humidity Layer">
-                            <i class="fas fa-tint"></i>
-                            <span>Humidity</span>
-                        </button>
-                        <button id="temperatureBtn" class="map-control-btn" title="Toggle Temperature Layer">
-                            <i class="fas fa-thermometer-half"></i>
-                            <span>Temperature</span>
-                        </button>
-                        <button id="windSpeedBtn" class="map-control-btn" title="Toggle Wind Speed Layer">
-                            <i class="fas fa-wind"></i>
-                            <span>Wind Speed</span>
-                        </button>
-                        <button id="cloudsBtn" class="map-control-btn" title="Toggle Cloud Cover">
-                            <i class="fas fa-cloud"></i>
-                            <span>Clouds</span>
-                        </button>
+
+                    <!-- PAGASA Real-time Bulletins Feed -->
+                    <div id="pagasaBulletinsFeed" class="pagasa-bulletins-feed">
+                        <div style="text-align: center; padding: 3rem; opacity: 0.7;">
+                            <i class="fas fa-circle-notch fa-spin" style="font-size: 2.5rem; margin-bottom: 1rem; color: #2980b9;"></i>
+                            <p style="font-size: 1.1rem; font-weight: 500; color: var(--text-color-1);">Retrieving latest weather advisories from PAGASA...</p>
+                        </div>
                     </div>
-                    
-                    <!-- Automated Warning Status -->
-                    <div id="autoWarningStatus" class="auto-warning-status" style="display: none;">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <span id="warningMessage"></span>
+
+                    <!-- PAGASA Weather Alert Archive Collapsible -->
+                    <div style="margin-top: 1.5rem; border-top: 1px solid var(--border-color-1); padding-top: 1rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                            <h3 style="margin: 0; font-size: 1rem; color: var(--text-color-1); font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
+                                <i class="fas fa-history" style="color: #2980b9;"></i> PAGASA Weather Alert Archive
+                            </h3>
+                            <button onclick="togglePagasaArchive()" id="toggleArchiveBtn" style="background: var(--bg-color-1); border: 1px solid var(--border-color-1); color: var(--text-color-1); padding: 0.35rem 0.65rem; border-radius: 5px; cursor: pointer; font-size: 0.76rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.3rem;">
+                                <i class="fas fa-eye"></i> Show Archive
+                            </button>
+                        </div>
+                        <div id="pagasaHistoryWrapper" style="display: none;">
+                            <div id="pagasaHistoryFeed" style="max-height: 300px; overflow-y: auto; background: var(--bg-color-1); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color-1);">
+                                <div style="text-align: center; padding: 1.5rem; opacity: 0.5; color: var(--text-color-2);">
+                                    <i class="fas fa-spinner fa-spin" style="margin-bottom: 0.3rem;"></i> Loading bulletin archive...
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -143,6 +137,7 @@ $pageTitle = 'Weather Monitoring';
                             <div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
                         </div>
                     </div>
+                    
                     
                     <!-- AI Analysis -->
                     <div class="weather-card ai-analysis-card">
@@ -204,6 +199,9 @@ $pageTitle = 'Weather Monitoring';
         let temperatureLayer = null;
         let windSpeedLayer = null;
         let cloudsLayer = null;
+        let satelliteLayer = null;
+        let parPolygon = null;
+        let satelliteEnabled = false;
         let windFlowCanvas = null;
         let windFlowCtx = null;
         let windParticles = [];
@@ -228,6 +226,23 @@ $pageTitle = 'Weather Monitoring';
                 maxZoom: 19
             });
             currentTileLayer.addTo(map);
+            
+            // Draw PAR (Philippine Area of Responsibility) boundary red line
+            const parCoords = [
+                [25.0, 120.0],
+                [25.0, 135.0],
+                [5.0, 135.0],
+                [5.0, 115.0],
+                [15.0, 115.0],
+                [21.0, 120.0]
+            ];
+            parPolygon = L.polygon(parCoords, {
+                color: '#ff3b30',
+                weight: 2,
+                dashArray: '5, 8',
+                fill: false,
+                attribution: 'PAGASA PAR Boundary'
+            }).addTo(map);
             
             // Ensure map shows green land and blue ocean clearly
             document.getElementById('weatherMap').style.filter = 'none';
@@ -293,17 +308,10 @@ $pageTitle = 'Weather Monitoring';
             // Initialize wind flow canvas
             initWindFlowCanvas();
             
-            // Load weather data
+            // Load map markers data
             setTimeout(() => {
-                loadWeatherDetails(14.6488, 121.0509, 'Quezon City');
-                loadWeatherForecast(14.6488, 121.0509, 'Quezon City');
                 loadMapData();
-                
-                // Start automated warnings after initial load
-                setTimeout(() => {
-                    checkWeatherConditions();
-                }, 2000);
-            }, 500);
+            }, 300);
         }
         
         // Initialize weather layers
@@ -348,6 +356,7 @@ $pageTitle = 'Weather Monitoring';
         
         // Setup layer toggle buttons
         function setupLayerButtons() {
+            document.getElementById('satelliteBtn')?.addEventListener('click', toggleSatellite);
             document.getElementById('windFlowBtn')?.addEventListener('click', toggleWindFlow);
             document.getElementById('radarBtn')?.addEventListener('click', toggleRadar);
             document.getElementById('precipitationBtn')?.addEventListener('click', togglePrecipitation);
@@ -370,6 +379,7 @@ $pageTitle = 'Weather Monitoring';
             temperatureEnabled = false;
             windSpeedEnabled = false;
             cloudsEnabled = false;
+            satelliteEnabled = false;
             
             // Remove all layers
             if (radarLayer && map.hasLayer(radarLayer)) {
@@ -390,6 +400,9 @@ $pageTitle = 'Weather Monitoring';
             if (cloudsLayer && map.hasLayer(cloudsLayer)) {
                 map.removeLayer(cloudsLayer);
             }
+            if (satelliteLayer && map.hasLayer(satelliteLayer)) {
+                map.removeLayer(satelliteLayer);
+            }
             stopWindFlowAnimation();
             
             // Remove active class from all buttons
@@ -398,6 +411,39 @@ $pageTitle = 'Weather Monitoring';
             });
         }
         
+        function toggleSatellite() {
+            const btn = document.getElementById('satelliteBtn');
+            if (satelliteEnabled) {
+                satelliteEnabled = false;
+                btn.classList.remove('active');
+                if (satelliteLayer && map.hasLayer(satelliteLayer)) {
+                    map.removeLayer(satelliteLayer);
+                }
+            } else {
+                disableAllMapModes();
+                satelliteEnabled = true;
+                btn.classList.add('active');
+                
+                if (!satelliteLayer) {
+                    satelliteLayer = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Himawari_AHI_Band13_Clean_Infrared/default/default/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png', {
+                        attribution: 'NASA GIBS / JMA Himawari-9',
+                        maxZoom: 9,
+                        minZoom: 1,
+                        opacity: 0.65,
+                        zIndex: 250
+                    });
+                }
+                satelliteLayer.addTo(map);
+                
+                // Fly to regional view to see the PAR boundary and satellite clouds
+                if (map) {
+                    map.flyTo([13.0, 122.0], 5, {
+                        duration: 1.5
+                    });
+                }
+            }
+        }
+
         // Toggle functions - Only one mode can be active at a time
         function toggleWindFlow() {
             const btn = document.getElementById('windFlowBtn');
@@ -2032,7 +2078,26 @@ Keep concise and actionable.`;
         document.addEventListener('DOMContentLoaded', function() {
             // Check AI status first
             checkAIAnalysisStatus();
-            initMap();
+            
+            // Load sidebar weather data immediately on page load
+            loadWeatherDetails(14.6488, 121.0509, 'Quezon City');
+            loadWeatherForecast(14.6488, 121.0509, 'Quezon City');
+            
+            // Fetch bulletins
+            fetchPagasaBulletins(null);
+            
+            // Real-time auto-refresh for PAGASA bulletins (every 60 seconds)
+            setInterval(() => {
+                fetchPagasaBulletins(null);
+                if (archiveLoaded) {
+                    loadPagasaHistory();
+                }
+            }, 60000);
+            
+            // Start automated warnings check
+            setTimeout(() => {
+                checkWeatherConditions();
+            }, 2500);
             
             document.querySelectorAll('.weather-tab').forEach(tab => {
                 tab.addEventListener('click', function() {
@@ -2153,8 +2218,385 @@ Keep concise and actionable.`;
                 }
             });
         }
+
+        let activePagasaData = null;
+
+        async function fetchPagasaBulletins(event) {
+            let btn = null;
+            if (event && event.target) {
+                btn = event.target.closest('button');
+            }
+            const originalHTML = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+                btn.disabled = true;
+            }
+
+            const container = document.getElementById('pagasaBulletinsFeed');
+            if (container && !activePagasaData) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; opacity: 0.7;">
+                        <i class="fas fa-circle-notch fa-spin" style="font-size: 2.5rem; margin-bottom: 1rem; color: #2980b9;"></i>
+                        <p style="font-size: 1.1rem; font-weight: 500; color: var(--text-color-1);">Retrieving latest weather advisories from PAGASA...</p>
+                    </div>
+                `;
+            }
+
+            try {
+                const response = await fetch('../api/pagasa-bulletin-parser.php');
+                const data = await response.json();
+
+                if (btn) {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                }
+
+                if (data.success && data.bulletins) {
+                    activePagasaData = data;
+                    renderPagasaBulletins(data.bulletins, data.is_mock);
+                } else {
+                    if (container) {
+                        container.innerHTML = `
+                            <div style="text-align: center; padding: 2rem; border: 1px solid #e74c3c; border-radius: 8px; background: rgba(231, 76, 60, 0.05); margin: 1rem 0;">
+                                <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #e74c3c; margin-bottom: 0.5rem;"></i>
+                                <p style="color: #e74c3c; font-weight: 600; margin: 0.25rem 0;">Error fetching bulletins</p>
+                                <p style="font-size: 0.85rem; margin: 0 0 1rem 0; color: var(--text-color-1);">${data.message || 'Unable to parse bulletin feed.'}</p>
+                                <button onclick="fetchPagasaBulletins(event)" class="btn btn-primary" style="background: #2980b9; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">
+                                    <i class="fas fa-sync-alt"></i> Try Again
+                                </button>
+                            </div>
+                        `;
+                    }
+                }
+            } catch (error) {
+                if (btn) {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                }
+                if (container) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; border: 1px solid #e74c3c; border-radius: 8px; background: rgba(231, 76, 60, 0.05); margin: 1rem 0;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #e74c3c; margin-bottom: 0.5rem;"></i>
+                            <p style="color: #e74c3c; font-weight: 600; margin: 0.25rem 0;">Network Error</p>
+                            <p style="font-size: 0.85rem; margin: 0 0 1rem 0; color: var(--text-color-1);">${error.message}</p>
+                            <button onclick="fetchPagasaBulletins(event)" class="btn btn-primary" style="background: #2980b9; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">
+                                <i class="fas fa-sync-alt"></i> Try Again
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        function renderPagasaBulletins(bulletins, isMock) {
+            const container = document.getElementById('pagasaBulletinsFeed');
+            if (!container) return;
+
+            // Update refresh timestamp
+            const wxRef = document.getElementById('wxLastRefresh');
+            if (wxRef) wxRef.textContent = 'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+            if (!bulletins || bulletins.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; background: var(--bg-color-2); border-radius: 8px; border: 1px dashed var(--border-color-1);">
+                        <i class="fas fa-sun" style="font-size: 3rem; color: #f39c12; margin-bottom: 1rem;"></i>
+                        <p style="font-size: 1.1rem; font-weight: 600; margin: 0; color: var(--text-color-1);">No Active Tropical Cyclones</p>
+                        <p style="font-size: 0.9rem; opacity: 0.8; margin: 0.25rem 0 0 0; color: var(--text-color-2);">No active weather alerts or typhoon warning bulletins are currently issued by PAGASA.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            if (isMock) {
+                html += `<div style="background: #7f8c8d; color: white; font-size: 0.72rem; font-weight: 700; padding: 0.3rem 0.65rem; border-radius: 4px; display: inline-block; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em;"><i class="fas fa-info-circle"></i> Mock Failsafe Active (PAGASA Feed Offline)</div>`;
+            }
+
+            bulletins.forEach((b, index) => {
+                const qc = b.quezon_city_impact || {};
+                const level = qc.level || 'Priority';
+                const severity = qc.severity || 'Medium';
+                const summary = qc.summary || '';
+                const actionSteps = qc.action_steps || [];
+
+                let sevColor = '#27ae60';
+                if (severity === 'Critical') sevColor = '#c0392b';
+                else if (severity === 'High') sevColor = '#d35400';
+                else if (severity === 'Medium') sevColor = '#f39c12';
+
+                let lvlColor = '#3498db';
+                if (level === 'Urgent') lvlColor = '#e74c3c';
+                else if (level === 'Prioritized') lvlColor = '#e67e22';
+
+                // Cyclone name from title
+                let cycloneName = '';
+                const nameMatch = (b.title || '').match(/"([^"]+)"/);
+                if (nameMatch) cycloneName = nameMatch[1];
+
+                html += `
+                <div style="margin-bottom: 1.25rem; background: var(--bg-color-2); border-radius: 10px; border: 1px solid var(--border-color-1); overflow: hidden;">
+                    <!-- Bulletin Header -->
+                    <div style="background: linear-gradient(135deg, #2c3e50, #34495e); color: white; padding: 1rem 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <div style="font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.75; margin-bottom: 0.3rem;"><i class="fas fa-satellite-dish"></i> PAGASA Weather Bulletin</div>
+                                <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; line-height: 1.3;">${b.title}</h3>
+                            </div>
+                            <div style="text-align: right; flex-shrink: 0;">
+                                <div style="font-size: 0.72rem; opacity: 0.8;"><i class="fas fa-clock"></i> ${b.issued_at || 'N/A'}</div>
+                                ${cycloneName ? '<div style="margin-top: 0.25rem;"><span style="background: rgba(255,255,255,0.2); padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.72rem; font-weight: 600;">' + cycloneName + '</span></div>' : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bulletin Content -->
+                    <div style="padding: 1.25rem;">
+                        <p style="font-size: 0.88rem; line-height: 1.7; color: var(--text-color-1); margin: 0 0 1rem 0; white-space: pre-wrap;">${b.description}</p>
+
+                        <!-- QC Impact -->
+                        <div style="background: var(--bg-color-1); padding: 1rem; border-radius: 8px; border-left: 3px solid ${lvlColor}; margin-bottom: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <span style="font-size: 0.82rem; font-weight: 700; text-transform: uppercase; color: var(--text-color-1); letter-spacing: 0.3px;"><i class="fas fa-shield-alt" style="color: ${lvlColor};"></i> Quezon City LGU Impact</span>
+                                <div style="display: flex; gap: 0.35rem;">
+                                    <span style="background: ${lvlColor}15; color: ${lvlColor}; border: 1px solid ${lvlColor}55; font-weight: 700; padding: 0.15rem 0.45rem; font-size: 0.68rem; border-radius: 4px; text-transform: uppercase;">Level: ${level}</span>
+                                    <span style="background: ${sevColor}15; color: ${sevColor}; border: 1px solid ${sevColor}55; font-weight: 700; padding: 0.15rem 0.45rem; font-size: 0.68rem; border-radius: 4px; text-transform: uppercase;">Severity: ${severity}</span>
+                                </div>
+                            </div>
+                            <p style="margin: 0; font-size: 0.85rem; line-height: 1.5; color: var(--text-color-1);">${summary}</p>
+                            ${actionSteps.length > 0 ? `
+                            <div style="margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid var(--border-color-1);">
+                                <div style="font-size: 0.78rem; font-weight: 700; color: var(--text-color-1); margin-bottom: 0.35rem;">Recommended LGU Actions:</div>
+                                <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.82rem; line-height: 1.6; color: var(--text-secondary-1);">
+                                    ${actionSteps.map(s => '<li>' + s + '</li>').join('')}
+                                </ul>
+                            </div>` : ''}
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button onclick="pushPagasaStatusToRespondTeamAtIndex(${index}, event)" style="background: #27ae60; color: white; font-weight: 600; padding: 0.45rem 0.85rem; border-radius: 5px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem;"><i class="fas fa-share-square"></i> Push to Respond Team</button>
+                            <button onclick="convertPagasaToBroadcastAlert(${index})" style="background: #8e44ad; color: white; font-weight: 600; padding: 0.45rem 0.85rem; border-radius: 5px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem;"><i class="fas fa-paper-plane"></i> Convert to Broadcast Alert</button>
+                            ${b.link ? '<a href="' + b.link + '" target="_blank" style="background: var(--bg-color-1); color: var(--text-color-1); border: 1px solid var(--border-color-1); font-weight: 600; padding: 0.45rem 0.85rem; border-radius: 5px; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem;"><i class="fas fa-file-pdf"></i> View Official PDF</a>' : ''}
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function pushPagasaStatusToRespondTeamAtIndex(bulletinIndex, event) {
+            if (!activePagasaData || !activePagasaData.bulletins || !activePagasaData.bulletins[bulletinIndex]) return;
+            const b = activePagasaData.bulletins[bulletinIndex];
+            const btn = event.target.closest('button');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Pushing...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('../api/push-monitoring-status.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        source: 'pagasa_parser',
+                        type: 'weather_bulletin',
+                        data: b
+                    })
+                });
+                const resData = await response.json();
+
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+
+                if (resData.success) {
+                    alert('✅ Success: PAGASA Bulletin details pushed to the Emergency Response Team!');
+                } else {
+                    alert('❌ Error: ' + (resData.message || 'Failed to push bulletin status.'));
+                }
+            } catch (e) {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                alert('❌ Error pushing status: ' + e.message);
+            }
+        }
+
+        async function convertPagasaToBroadcastAlert(bulletinIndex) {
+            if (!activePagasaData || !activePagasaData.bulletins || !activePagasaData.bulletins[bulletinIndex]) return;
+            const btn = document.querySelector('button[onclick*="convertPagasaToBroadcastAlert"]');
+            const originalHTML = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Broadcasting...';
+            }
+            
+            try {
+                const response = await fetch('../api/pagasa-auto-alert.php?action=force');
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ Success: Weather bulletin converted and broadcasted to ${data.recipients || 0} citizens successfully!`);
+                    if (typeof archiveLoaded !== 'undefined' && archiveLoaded) {
+                        loadPagasaHistory();
+                    }
+                } else {
+                    alert('❌ Failed to broadcast alert: ' + (data.message || 'Unknown error'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert('❌ Network error: Could not complete the broadcast request.');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHTML;
+                }
+            }
+        }
+
+        function openWeatherMapModal() {
+            const modal = document.getElementById('weatherMapModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                if (!mapInitialized) {
+                    initMap();
+                } else if (map) {
+                    setTimeout(() => {
+                        map.invalidateSize();
+                    }, 100);
+                }
+            }
+        }
+
+        function closeWeatherMapModal() {
+            const modal = document.getElementById('weatherMapModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        let archiveLoaded = false;
+        function togglePagasaArchive() {
+            const wrapper = document.getElementById('pagasaHistoryWrapper');
+            const btn = document.getElementById('toggleArchiveBtn');
+            if (!wrapper || !btn) return;
+            
+            if (wrapper.style.display === 'none') {
+                wrapper.style.display = 'block';
+                btn.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Archive';
+                if (!archiveLoaded) {
+                    loadPagasaHistory();
+                    archiveLoaded = true;
+                }
+            } else {
+                wrapper.style.display = 'none';
+                btn.innerHTML = '<i class="fas fa-eye"></i> Show Archive';
+            }
+        }
+
+        async function loadPagasaHistory() {
+            const feed = document.getElementById('pagasaHistoryFeed');
+            if (!feed) return;
+
+            try {
+                const response = await fetch('../api/pagasa-auto-alert.php?action=history&limit=10');
+                const data = await response.json();
+
+                if (data.success && data.logs && data.logs.length > 0) {
+                    let html = '<div style="display: flex; flex-direction: column; gap: 0.75rem;">';
+                    data.logs.forEach(log => {
+                        let badgeColor = '#27ae60';
+                        if (log.severity === 'critical') badgeColor = '#c0392b';
+                        else if (log.severity === 'high') badgeColor = '#d35400';
+                        else if (log.severity === 'medium') badgeColor = '#f39c12';
+
+                        const formattedTime = new Date(log.created_at).toLocaleString('en-PH', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                        });
+
+                        html += `
+                        <div style="padding: 1rem; background: var(--bg-color-2); border: 1px solid var(--border-color-1); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 250px;">
+                                <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-color-1); margin-bottom: 0.25rem;">${log.bulletin_title}</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary-1); display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+                                    <span><i class="fas fa-clock"></i> ${formattedTime}</span>
+                                    <span style="background: ${badgeColor}22; color: ${badgeColor}; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: 700; font-size: 0.65rem; border: 1px solid ${badgeColor}44; text-transform: uppercase;">${log.severity}</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; flex-shrink: 0; align-items: center;">
+                                ${log.bulletin_link ? `<a href="${log.bulletin_link}" target="_blank" style="background: linear-gradient(135deg, #2980b9, #3498db); color: white; padding: 0.45rem 0.85rem; border-radius: 5px; text-decoration: none; font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;"><i class="fas fa-file-pdf"></i> View PDF</a>` : '<span style="font-size: 0.75rem; color: var(--text-secondary-1); font-style: italic;"><i class="fas fa-times-circle"></i> No PDF Link</span>'}
+                            </div>
+                        </div>
+                        `;
+                    });
+                    html += '</div>';
+                    feed.innerHTML = html;
+                } else {
+                    feed.innerHTML = `
+                    <div style="text-align: center; padding: 2rem; background: var(--bg-color-2); border-radius: 8px; border: 1px dashed var(--border-color-1);">
+                        <i class="fas fa-history" style="font-size: 2rem; color: var(--text-secondary-1); margin-bottom: 0.5rem;"></i>
+                        <p style="margin: 0; font-size: 0.88rem; color: var(--text-color-2);">No archived weather alerts found.</p>
+                    </div>
+                    `;
+                }
+            } catch (e) {
+                console.error('Failed to load PAGASA history:', e);
+                feed.innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: #e74c3c;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                    <p style="margin: 0; font-size: 0.88rem; font-weight: 600;">Error loading archive</p>
+                </div>
+                `;
+            }
+        }
     </script>
+
+    <!-- Interactive Weather Map Modal -->
+    <div id="weatherMapModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 99999; background: rgba(0,0,0,0.8); align-items: center; justify-content: center;">
+        <div onclick="closeWeatherMapModal()" style="position: absolute; width: 100%; height: 100%; cursor: pointer; z-index: 99998; background: transparent;"></div>
+        <div style="position: relative; width: 90%; max-width: 1000px; height: 80%; background: var(--card-bg-1); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--border-color-1); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3); z-index: 99999;">
+            <div class="modal-header" style="padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color-1); background: var(--bg-color-2); z-index: 100000;">
+                <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-color-1); display: flex; align-items: center; gap: 0.5rem;"><i class="fas fa-map-marked-alt" style="color: #2980b9;"></i> Interactive Weather Map Monitor</h2>
+                <button onclick="closeWeatherMapModal()" style="background: none; border: none; font-size: 2rem; cursor: pointer; color: var(--text-color-2); line-height: 1; padding: 0;">&times;</button>
+            </div>
+            <div class="modal-body" style="flex: 1; position: relative; padding: 0; background: #e5e5e5; display: flex; flex-direction: column; min-height: 400px; z-index: 100000;">
+                <div id="weatherMap" style="width: 100%; height: 100%; flex: 1; z-index: 1;"></div>
+                
+                <div id="mapLoading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; background: rgba(255,255,255,0.9); padding: 1rem; border-radius: 8px; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <i class="fas fa-spinner fa-spin"></i> Loading map...
+                </div>
+                
+                <!-- Map Controls Overlay inside Modal -->
+                <div class="modal-map-controls-panel" style="position: absolute !important; bottom: 20px !important; left: 20px !important; top: auto !important; right: auto !important; z-index: 1000 !important; display: flex !important; flex-wrap: wrap !important; gap: 0.5rem !important; background: rgba(24, 24, 27, 0.85) !important; padding: 0.5rem !important; border-radius: 8px !important; backdrop-filter: blur(4px) !important; flex-direction: row !important; border: 1px solid rgba(255,255,255,0.15) !important; width: auto !important; max-width: calc(100% - 40px) !important;">
+                    <button id="satelliteBtn" class="map-control-btn" title="Toggle Satellite Infrared Imagery" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-satellite"></i> Satellite</button>
+                    <button id="windFlowBtn" class="map-control-btn" title="Toggle Wind Flow Animation" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-wind"></i> Wind Flow</button>
+                    <button id="radarBtn" class="map-control-btn" title="Toggle Weather Radar" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-satellite-dish"></i> Radar</button>
+                    <button id="precipitationBtn" class="map-control-btn" title="Toggle Precipitation Layer" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-cloud-rain"></i> Rain</button>
+                    <button id="humidityBtn" class="map-control-btn" title="Toggle Humidity Layer" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-tint"></i> Humidity</button>
+                    <button id="temperatureBtn" class="map-control-btn" title="Toggle Temperature Layer" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-thermometer-half"></i> Temp</button>
+                    <button id="windSpeedBtn" class="map-control-btn" title="Toggle Wind Speed Layer" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-wind"></i> Wind Speed</button>
+                    <button id="cloudsBtn" class="map-control-btn" title="Toggle Cloud Cover" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-cloud"></i> Clouds</button>
+                </div>
+                
+                <div id="quezonCityStatus" class="quezon-city-status" onclick="focusQuezonCity()" style="position: absolute !important; top: 20px !important; right: 20px !important; bottom: auto !important; left: auto !important; z-index: 1000 !important; background: rgba(0,0,0,0.7) !important; color: white !important; padding: 0.5rem 0.75rem !important; border-radius: 6px !important; cursor: pointer !important; font-size: 0.85rem !important; display: flex !important; align-items: center !important; gap: 0.35rem !important; height: auto !important; width: auto !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;" title="Click to focus on Quezon City">
+                    <i class="fas fa-map-marker-alt" style="color: #e74c3c;"></i>
+                    <span>QC Focus</span>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <?php include 'includes/admin-footer.php'; ?>
+    <style>
+        @keyframes wxPulse {
+            0% { box-shadow: 0 0 0 0 rgba(39,174,96,0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(39,174,96,0); }
+            100% { box-shadow: 0 0 0 0 rgba(39,174,96,0); }
+        }
+    </style>
 </body>
 </html>

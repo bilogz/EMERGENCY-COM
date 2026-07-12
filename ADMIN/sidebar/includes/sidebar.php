@@ -126,29 +126,12 @@ if (!function_exists('sidebarRouteContains')) {
                         || basename($_SERVER['PHP_SELF']) == 'two-way-communication-new.php'
                         || sidebarRouteContains('/sidebar/two-way-comm/')
                     );
-                    $isTwoWayCitizenActive = sidebarRouteContains('/sidebar/two-way-comm/citizen');
-                    $isTwoWayDepartmentsActive = sidebarRouteContains('/sidebar/two-way-comm/departments');
                     ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>two-way-comm/citizen/" class="sidebar-link sidebar-submenu-toggle sidebar-accent-2way <?php echo $isTwoWayPage ? 'active' : ''; ?>" data-sidebar-dropdown="twc" aria-expanded="<?php echo $isTwoWayPage ? 'true' : 'false'; ?>" aria-controls="twcSidebarSubmenu">
+                        <a href="<?php echo $sidebarBase; ?>two-way-comm/citizen/" class="sidebar-link sidebar-accent-2way <?php echo $isTwoWayPage ? 'active' : ''; ?>">
                             <i class="fas fa-comments sidebar-icon" aria-hidden="true"></i>
                             <span>Two-Way Communication</span>
-                            <i class="fas fa-chevron-down submenu-icon" aria-hidden="true"></i>
                         </a>
-                        <ul class="sidebar-submenu <?php echo ($isTwoWayCitizenActive || $isTwoWayDepartmentsActive || $isTwoWayPage) ? 'sidebar-submenu-open' : ''; ?>" id="twcSidebarSubmenu">
-                            <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>two-way-comm/citizen/" class="sidebar-link sidebar-accent-2way <?php echo $isTwoWayCitizenActive ? 'active' : ''; ?>">
-                                    <i class="fas fa-file-alt sidebar-icon" aria-hidden="true"></i>
-                                    <span>Citizen Reports</span>
-                                </a>
-                            </li>
-                            <li class="sidebar-menu-item">
-                                <a href="<?php echo $sidebarBase; ?>two-way-comm/departments/" class="sidebar-link sidebar-accent-2way <?php echo $isTwoWayDepartmentsActive ? 'active' : ''; ?>">
-                                    <i class="fas fa-comments-dots sidebar-icon" aria-hidden="true"></i>
-                                    <span>Department Chat</span>
-                                </a>
-                            </li>
-                        </ul>
                     </li>
 
                     <!-- Automated Warnings -->

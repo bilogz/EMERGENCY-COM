@@ -1,4 +1,5 @@
-﻿<?php
+<?php
+require_once __DIR__ . '/../session-config.php';
 $assetBase = '../ADMIN/header/';
 $current = 'alerts.php';
 ?>

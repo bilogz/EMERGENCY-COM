@@ -53,15 +53,20 @@ $pageTitle = 'Mass Notification System';
     
     <div class="main-content">
         <div class="main-container">
-            <div class="title">
-                <nav class="breadcrumb" aria-label="Breadcrumb">
-                    <ol class="breadcrumb-list">
-                        <li class="breadcrumb-item"><a href="dashboard.php" class="breadcrumb-link">Dashboard</a></li>
-                        <li class="breadcrumb-item active" aria-current="page">Mass Notification</li>
-                    </ol>
-                </nav>
-                <h1><i class="fas fa-broadcast-tower" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Mass Notification System</h1>
-                <p>Broadcast emergency alerts across multiple channels to targeted audiences.</p>
+            <div class="title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+                <div>
+                    <nav class="breadcrumb" aria-label="Breadcrumb" style="margin-bottom: 0.5rem;">
+                        <ol class="breadcrumb-list">
+                            <li class="breadcrumb-item"><a href="dashboard.php" class="breadcrumb-link">Dashboard</a></li>
+                            <li class="breadcrumb-item active" aria-current="page">Mass Notification</li>
+                        </ol>
+                    </nav>
+                    <h1 style="margin: 0;"><i class="fas fa-broadcast-tower" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Mass Notification System</h1>
+                    <p style="margin: 0.25rem 0 0 0; font-size: 0.9rem; color: var(--text-secondary-1);">Broadcast emergency alerts across multiple channels to targeted audiences.</p>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="openDispatchWizard()" style="padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                    <i class="fas fa-plus"></i> Create New Alert
+                </button>
             </div>
             
             <div class="sub-container">
@@ -101,68 +106,6 @@ $pageTitle = 'Mass Notification System';
                         </div>
                     </div>
 
-                    <div class="mn-process" aria-label="How mass notification works">
-                        <div class="mn-process-title">How Mass Notification Works</div>
-                        <div class="mn-process-track">
-                            <div class="mn-process-step">
-                                <div class="mn-process-icon" aria-hidden="true"><i class="fas fa-paper-plane"></i></div>
-                                <h4>Admin Sends Alert</h4>
-                                <p>Choose target, channels, category, and severity (QC-ready).</p>
-                            </div>
-                            <div class="mn-process-arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></div>
-                            <div class="mn-process-step">
-                                <div class="mn-process-icon" aria-hidden="true"><i class="fas fa-tower-broadcast"></i></div>
-                                <h4>System Dispatches</h4>
-                                <p>Queues and sends via SMS / Email / Push / PA with live preview.</p>
-                            </div>
-                            <div class="mn-process-arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></div>
-                            <div class="mn-process-step">
-                                <div class="mn-process-icon" aria-hidden="true"><i class="fas fa-mobile-screen-button"></i></div>
-                                <h4>Citizens Receive</h4>
-                                <p>Residents see the alert on their preferred channels and language.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mn-cta" aria-label="Start dispatch wizard">
-                        <div>
-                            <div class="mn-cta-title">Create a New Alert (Recommended)</div>
-                            <div class="mn-cta-sub">Use the guided wizard to avoid mistakes. Drafts auto-save if you refresh or your browser crashes.</div>
-                        </div>
-                        <button type="button" class="btn btn-primary" onclick="openDispatchWizard()">
-                            <i class="fas fa-wand-magic" style="margin-right: 0.5rem;"></i> Start Dispatch Wizard
-                        </button>
-                    </div>
-
-                    <div class="mn-templates" aria-label="Starter templates">
-                        <div class="mn-templates-head">
-                            <div class="mn-templates-title"><i class="fas fa-bolt" aria-hidden="true"></i> Starter Templates</div>
-                            <div class="mn-stat-sub">Click "Use Template" to auto-fill the wizard. You can still edit before sending.</div>
-                        </div>
-                        <div class="mn-template-grid">
-                            <div class="mn-template">
-                                <div class="mn-template-name"><i class="fas fa-cloud-rain"></i> Weather Signal Alert</div>
-                                <div class="mn-template-desc">Sets a Weather category + Signal 1-5, then generates a QC-ready draft message.</div>
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="mnApplyStarterTemplate('weather_signal')">Use Template</button>
-                            </div>
-                            <div class="mn-template">
-                                <div class="mn-template-name"><i class="fas fa-fire"></i> Fire Alert Level</div>
-                                <div class="mn-template-desc">Sets a Fire category + Level 1-5, then generates a QC-ready draft message.</div>
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="mnApplyStarterTemplate('fire_level')">Use Template</button>
-                            </div>
-                            <div class="mn-template">
-                                <div class="mn-template-name"><i class="fas fa-bullhorn"></i> General Advisory</div>
-                                <div class="mn-template-desc">Quick general advisory for any category (keeps wording clean and action-focused).</div>
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="mnApplyStarterTemplate('general')">Use Template</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="ui-actions" style="justify-content: flex-end; margin-bottom: 1.25rem;">
-                        <button type="button" class="btn btn-secondary" onclick="openDispatchWizard()">
-                            <i class="fas fa-wand-magic" style="margin-right: 0.5rem;"></i> Open Wizard
-                        </button>
-                    </div>
                     
                     <div id="mnFormHost" style="display:none;">
                     <form id="dispatchForm" data-draft-key="admin-mn-dispatch" data-draft-status="#mnDraftStatus">

@@ -173,6 +173,106 @@ $pageTitle = 'Automated Warning Integration';
                         </div>
                     </div>
 
+                    <!-- PAGASA Auto-Alert Module -->
+                    <div class="module-card" id="pagasaAutoAlertCard">
+                        <div class="module-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                            <h2><i class="fas fa-satellite-dish"></i> PAGASA Auto-Alert System</h2>
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <span id="pagasaAutoAlertStatusDot" style="width:10px;height:10px;border-radius:50%;background:#95a5a6;display:inline-block;" title="Disabled"></span>
+                                <span id="pagasaAutoAlertStatusLabel" style="font-size:0.82rem;font-weight:600;color:var(--text-secondary-1);">Disabled</span>
+                            </div>
+                        </div>
+                        <div style="padding: 1.5rem;">
+                            <div class="info-box" style="margin-bottom: 1.25rem;">
+                                <i class="fas fa-info-circle"></i>
+                                <div>
+                                    <strong>Automatic Bulletin Alerts:</strong> When enabled, the system polls PAGASA's RSS feed at a set interval. If a new or updated weather bulletin is detected, a mass notification is automatically sent to all subscribed citizens via the selected channels.
+                                </div>
+                            </div>
+
+                            <!-- Controls Row -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+                                <!-- Enable Toggle -->
+                                <div style="background: var(--bg-color-1); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border-color-1);">
+                                    <label style="font-weight:700; font-size:0.85rem; color:var(--text-secondary-1); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.75rem; display:block;">Auto-Alert</label>
+                                    <label class="switch" style="margin-top:0.25rem;">
+                                        <input type="checkbox" id="pagasaAutoAlertToggle">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <div style="font-size:0.78rem; color:var(--text-secondary-1); margin-top:0.5rem;">Enable automatic mass notifications</div>
+                                </div>
+
+                                <!-- Channels -->
+                                <div style="background: var(--bg-color-1); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border-color-1);">
+                                    <label style="font-weight:700; font-size:0.85rem; color:var(--text-secondary-1); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.75rem; display:block;">Channels</label>
+                                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                                        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;"><input type="checkbox" id="paaChPush" value="push" checked> <i class="fas fa-bell" style="color:#3498db;"></i> Push</label>
+                                        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;"><input type="checkbox" id="paaChEmail" value="email" checked> <i class="fas fa-envelope" style="color:#e67e22;"></i> Email</label>
+                                        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;"><input type="checkbox" id="paaChSms" value="sms"> <i class="fas fa-sms" style="color:#2ecc71;"></i> SMS</label>
+                                    </div>
+                                </div>
+
+                                <!-- Check Interval -->
+                                <div style="background: var(--bg-color-1); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border-color-1);">
+                                    <label for="paaInterval" style="font-weight:700; font-size:0.85rem; color:var(--text-secondary-1); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.75rem; display:block;">Check Interval</label>
+                                    <select id="paaInterval" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid var(--border-color-1); background:var(--card-bg-1); color:var(--text-color-1); font-size:0.88rem;">
+                                        <option value="3">Every 3 minutes</option>
+                                        <option value="5" selected>Every 5 minutes</option>
+                                        <option value="10">Every 10 minutes</option>
+                                        <option value="15">Every 15 minutes</option>
+                                        <option value="30">Every 30 minutes</option>
+                                        <option value="360">Every 6 hours</option>
+                                    </select>
+                                    <div style="font-size:0.78rem; color:var(--text-secondary-1); margin-top:0.5rem;">How often to poll the PAGASA feed</div>
+                                </div>
+
+                                <!-- Last Check Info -->
+                                <div style="background: var(--bg-color-1); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border-color-1);">
+                                    <label style="font-weight:700; font-size:0.85rem; color:var(--text-secondary-1); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.75rem; display:block;">Status</label>
+                                    <div style="font-size:0.88rem; color:var(--text-color-1);">
+                                        <div>Last Check: <strong id="paaLastCheck" style="color:var(--primary-color-1);">Never</strong></div>
+                                        <div style="margin-top:0.25rem;">Alerts (24h): <strong id="paaAlerts24h" style="color:var(--primary-color-1);">0</strong></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                                <button type="button" class="btn btn-primary" id="paaSaveSettingsBtn" onclick="savePagasaAutoAlertSettings()" style="padding:0.75rem 1.5rem;">
+                                    <i class="fas fa-save"></i> Save Settings
+                                </button>
+                                <button type="button" class="btn btn-success" id="paaCheckNowBtn" onclick="checkPagasaNow()" style="padding:0.75rem 1.5rem; background:#27ae60; border-color:#27ae60;">
+                                    <i class="fas fa-sync-alt"></i> Check Now
+                                </button>
+                                <button type="button" class="btn btn-warning" id="paaForceAlertBtn" onclick="forcePagasaAlert()" style="padding:0.75rem 1.5rem; background:#f59e0b; border-color:#f59e0b; color:#fff;">
+                                    <i class="fas fa-bullhorn"></i> Force Send Alert
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Recent Auto-Alert History -->
+                        <div style="border-top: 1px solid var(--border-color-1); padding: 1.5rem;">
+                            <h3 style="margin:0 0 1rem 0; font-size:1rem;"><i class="fas fa-history" style="color:var(--primary-color-1);"></i> Recent Auto-Alerts</h3>
+                            <div style="overflow-x: auto;">
+                                <table class="data-table" id="paaHistoryTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Bulletin</th>
+                                            <th>Severity</th>
+                                            <th>Recipients</th>
+                                            <th>Channels</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="paaHistoryBody">
+                                        <tr><td colspan="6" style="text-align:center; padding:1.5rem; color:var(--text-secondary-1);">Loading history...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- AI Disaster Monitoring Analysis Card -->
                     <div class="module-card">
                         <div class="module-card-header">
@@ -194,9 +294,12 @@ $pageTitle = 'Automated Warning Integration';
                                 </div>
                             </div>
                             
-                            <div class="ai-footer">
-                                <button onclick="refreshWeatherAnalysis()" class="btn btn-primary" style="width: 100%; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-weight: 600;">
+                            <div class="ai-footer" style="display: flex; gap: 0.5rem; width: 100%;">
+                                <button onclick="refreshWeatherAnalysis()" class="btn btn-primary" style="flex: 1; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-weight: 600;">
                                     <i class="fas fa-sync-alt"></i> Refresh AI Analysis
+                                </button>
+                                <button onclick="pushMonitoringStatusToRespondTeam(event)" class="btn btn-success" style="flex: 1; background: #27ae60; border: 1px solid #2ecc71; font-weight: 600; color: #fff;">
+                                    <i class="fas fa-share-square"></i> Push to Respond Team
                                 </button>
                             </div>
                         </div>
@@ -1051,15 +1154,358 @@ $pageTitle = 'Automated Warning Integration';
             }, 2000);
         }
 
+        async function pushMonitoringStatusToRespondTeam(event) {
+            const btn = event.target.closest('button');
+            const originalHTML = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Pushing...';
+                btn.disabled = true;
+            }
+
+            try {
+                const response = await fetch('../api/push-monitoring-status.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        source: 'automated_warnings',
+                        type: 'disaster_monitoring'
+                    })
+                });
+                const data = await response.json();
+
+                if (btn) {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                }
+
+                if (data.success) {
+                    alert('✅ Success: Monitoring status successfully pushed to the Emergency Response Team!');
+                } else {
+                    alert('❌ Error: ' + (data.message || 'Failed to push status.'));
+                }
+            } catch (error) {
+                if (btn) {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                }
+                alert('❌ Error pushing status: ' + error.message);
+            }
+        }
+
+        // ============================================================
+        // PAGASA Auto-Alert System
+        // ============================================================
+        
+        let paaPollingTimer = null;
+        const PAA_API = '../api/pagasa-auto-alert.php';
+
+        async function loadPagasaAutoAlertStatus() {
+            try {
+                const res = await fetch(PAA_API + '?action=status');
+                const data = await res.json();
+                if (!data.success) return;
+
+                // Update toggle
+                const toggle = document.getElementById('pagasaAutoAlertToggle');
+                if (toggle) toggle.checked = data.enabled;
+
+                // Update status dot & label
+                const dot = document.getElementById('pagasaAutoAlertStatusDot');
+                const label = document.getElementById('pagasaAutoAlertStatusLabel');
+                if (dot && label) {
+                    if (data.enabled) {
+                        dot.style.background = '#2ecc71';
+                        dot.style.boxShadow = '0 0 0 3px rgba(46,204,113,0.3)';
+                        dot.title = 'Active';
+                        label.textContent = 'Active';
+                        label.style.color = '#2ecc71';
+                    } else {
+                        dot.style.background = '#95a5a6';
+                        dot.style.boxShadow = 'none';
+                        dot.title = 'Disabled';
+                        label.textContent = 'Disabled';
+                        label.style.color = 'var(--text-secondary-1)';
+                    }
+                }
+
+                // Update channels
+                const channelStr = data.channels || 'push,email';
+                const channelArr = channelStr.split(',').map(c => c.trim());
+                const pushCh = document.getElementById('paaChPush');
+                const emailCh = document.getElementById('paaChEmail');
+                const smsCh = document.getElementById('paaChSms');
+                if (pushCh) pushCh.checked = channelArr.includes('push');
+                if (emailCh) emailCh.checked = channelArr.includes('email');
+                if (smsCh) smsCh.checked = channelArr.includes('sms');
+
+                // Update interval
+                const intervalSel = document.getElementById('paaInterval');
+                if (intervalSel && data.check_interval_minutes) {
+                    intervalSel.value = String(data.check_interval_minutes);
+                }
+
+                // Update last check
+                const lastCheckEl = document.getElementById('paaLastCheck');
+                if (lastCheckEl) {
+                    lastCheckEl.textContent = data.last_check_at || 'Never';
+                }
+
+                // Update 24h count
+                const alerts24h = document.getElementById('paaAlerts24h');
+                if (alerts24h) {
+                    alerts24h.textContent = data.alerts_last_24h || '0';
+                }
+
+                // Start/stop background polling based on enabled status
+                setupPagasaAutoPolling(data.enabled, data.check_interval_minutes || 5);
+
+            } catch (e) {
+                console.error('Failed to load PAGASA auto-alert status:', e);
+            }
+        }
+
+        function setupPagasaAutoPolling(enabled, intervalMinutes) {
+            // Clear existing timer
+            if (paaPollingTimer) {
+                clearInterval(paaPollingTimer);
+                paaPollingTimer = null;
+            }
+
+            if (!enabled) return;
+
+            const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
+            paaPollingTimer = setInterval(async () => {
+                try {
+                    const res = await fetch(PAA_API + '?action=check');
+                    const data = await res.json();
+                    if (data.alerted) {
+                        // Show notification toast
+                        showPagasaAlertToast(data.bulletin_title, data.recipients);
+                        loadPagasaAutoAlertHistory();
+                        loadPagasaAutoAlertStatus();
+                    }
+                    // Update last check time
+                    const lastCheckEl = document.getElementById('paaLastCheck');
+                    if (lastCheckEl && data.checked_at) {
+                        lastCheckEl.textContent = data.checked_at;
+                    }
+                } catch (e) {
+                    console.error('PAGASA auto-check failed:', e);
+                }
+            }, intervalMs);
+        }
+
+        function showPagasaAlertToast(title, recipients) {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed; bottom: 2rem; right: 2rem; z-index: 10000;
+                background: linear-gradient(135deg, #27ae60, #2ecc71); color: #fff;
+                padding: 1.25rem 1.75rem; border-radius: 12px;
+                box-shadow: 0 8px 32px rgba(39,174,96,0.4);
+                font-size: 0.92rem; font-weight: 600;
+                max-width: 420px; animation: slideInRight 0.4s ease;
+            `;
+            toast.innerHTML = `
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <i class="fas fa-check-circle" style="font-size:1.5rem;"></i>
+                    <div>
+                        <div style="font-size:0.78rem;opacity:0.85;text-transform:uppercase;letter-spacing:0.5px;">PAGASA Auto-Alert Sent</div>
+                        <div style="margin-top:0.25rem;">${title || 'New Bulletin'}</div>
+                        <div style="font-size:0.78rem;opacity:0.85;margin-top:0.15rem;">${recipients || 0} citizens notified</div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100px)';
+                toast.style.transition = 'all 0.4s ease';
+                setTimeout(() => toast.remove(), 500);
+            }, 6000);
+        }
+
+        async function savePagasaAutoAlertSettings() {
+            const btn = document.getElementById('paaSaveSettingsBtn');
+            const origHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            btn.disabled = true;
+
+            // Gather channels
+            const channels = [];
+            if (document.getElementById('paaChPush')?.checked) channels.push('push');
+            if (document.getElementById('paaChEmail')?.checked) channels.push('email');
+            if (document.getElementById('paaChSms')?.checked) channels.push('sms');
+
+            const enabled = document.getElementById('pagasaAutoAlertToggle')?.checked || false;
+            const interval = parseInt(document.getElementById('paaInterval')?.value || '5', 10);
+
+            try {
+                const res = await fetch(PAA_API + '?action=toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        enabled: enabled,
+                        channels: channels.join(','),
+                        check_interval_minutes: interval
+                    })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    btn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+                    btn.style.background = '#27ae60';
+                    btn.style.borderColor = '#27ae60';
+                    loadPagasaAutoAlertStatus();
+                } else {
+                    alert('Error: ' + (data.message || 'Failed to save.'));
+                }
+            } catch (e) {
+                alert('Network error: ' + e.message);
+            } finally {
+                setTimeout(() => {
+                    btn.innerHTML = origHTML;
+                    btn.disabled = false;
+                    btn.style.background = '';
+                    btn.style.borderColor = '';
+                }, 2000);
+            }
+        }
+
+        async function checkPagasaNow() {
+            const btn = document.getElementById('paaCheckNowBtn');
+            const origHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(PAA_API + '?action=check');
+                const data = await res.json();
+
+                if (data.alerted) {
+                    alert('✅ New PAGASA bulletin detected!\n\n' + (data.bulletin_title || '') + '\n\nSeverity: ' + (data.severity || 'N/A') + '\nRecipients: ' + (data.recipients || 0));
+                    showPagasaAlertToast(data.bulletin_title, data.recipients);
+                    loadPagasaAutoAlertHistory();
+                } else {
+                    alert('ℹ️ ' + (data.message || 'No new bulletins.'));
+                }
+
+                // Update last check
+                const lastCheckEl = document.getElementById('paaLastCheck');
+                if (lastCheckEl && data.checked_at) {
+                    lastCheckEl.textContent = data.checked_at;
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                setTimeout(() => {
+                    btn.innerHTML = origHTML;
+                    btn.disabled = false;
+                }, 1500);
+            }
+        }
+
+        async function forcePagasaAlert() {
+            if (!confirm('⚠️ This will immediately send the latest PAGASA bulletin as a mass notification to ALL subscribed citizens.\n\nContinue?')) return;
+
+            const btn = document.getElementById('paaForceAlertBtn');
+            const origHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(PAA_API + '?action=force', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'force' })
+                });
+                const data = await res.json();
+
+                if (data.success && data.alerted) {
+                    alert('✅ Force alert sent!\n\n' + (data.bulletin_title || '') + '\n\nRecipients: ' + (data.recipients || 0));
+                    showPagasaAlertToast(data.bulletin_title, data.recipients);
+                    loadPagasaAutoAlertHistory();
+                    loadPagasaAutoAlertStatus();
+                } else {
+                    alert('❌ ' + (data.message || 'Failed to send.'));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                setTimeout(() => {
+                    btn.innerHTML = origHTML;
+                    btn.disabled = false;
+                }, 1500);
+            }
+        }
+
+        async function loadPagasaAutoAlertHistory() {
+            try {
+                const res = await fetch(PAA_API + '?action=history&limit=10');
+                const data = await res.json();
+                const tbody = document.getElementById('paaHistoryBody');
+                if (!tbody) return;
+
+                if (!data.success || !data.logs || data.logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1.5rem; color:var(--text-secondary-1);">No auto-alerts sent yet.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = '';
+                data.logs.forEach(log => {
+                    const severityColors = {
+                        critical: '#e74c3c',
+                        high: '#e67e22',
+                        medium: '#f1c40f',
+                        low: '#2ecc71'
+                    };
+                    const sColor = severityColors[log.severity] || '#95a5a6';
+                    const channelIcons = (log.channels || '').split(',').map(ch => {
+                        ch = ch.trim();
+                        if (ch === 'push') return '<i class="fas fa-bell" title="Push" style="color:#3498db;"></i>';
+                        if (ch === 'email') return '<i class="fas fa-envelope" title="Email" style="color:#e67e22;"></i>';
+                        if (ch === 'sms') return '<i class="fas fa-sms" title="SMS" style="color:#2ecc71;"></i>';
+                        return ch;
+                    }).join(' ');
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><small>${log.created_at || ''}</small></td>
+                        <td style="max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${(log.bulletin_title || '').replace(/"/g, '&quot;')}">
+                            <strong>${log.bulletin_title || 'Unknown'}</strong>
+                        </td>
+                        <td><span class="badge" style="background:${sColor}; color:#fff; padding:0.2rem 0.6rem; border-radius:4px; font-size:0.75rem; text-transform:uppercase;">${log.severity || 'N/A'}</span></td>
+                        <td><strong>${log.recipients_count || 0}</strong></td>
+                        <td>${channelIcons}</td>
+                        <td><span class="badge" style="background:rgba(46,204,113,0.15); color:#27ae60; padding:0.2rem 0.6rem; border-radius:4px; font-size:0.75rem;">${log.status || 'sent'}</span></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (e) {
+                console.error('Failed to load PAGASA auto-alert history:', e);
+            }
+        }
+
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadIntegrationStatus();
             loadWarnings();
             loadAISettings();
             loadWeatherAnalysis();
+            
+            // PAGASA Auto-Alert
+            loadPagasaAutoAlertStatus();
+            loadPagasaAutoAlertHistory();
         });
 
     </script>
+
+    <!-- slideInRight animation for toast -->
+    <style>
+        @keyframes slideInRight {
+            from { transform: translateX(100px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
 </body>
 </html>
 

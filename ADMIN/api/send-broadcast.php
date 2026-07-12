@@ -599,7 +599,7 @@ try {
     }
 
     $alertCols[] = 'created_at';
-    $alertPlaceholders[] = 'NOW()';
+    $alertPlaceholders[] = 'DATE_SUB(NOW(), INTERVAL 5 HOUR)';
 
     $aStmt = $pdo->prepare("INSERT INTO alerts (" . implode(', ', $alertCols) . ") VALUES (" . implode(', ', $alertPlaceholders) . ")");
     $aStmt->execute($alertVals);

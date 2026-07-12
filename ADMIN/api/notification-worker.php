@@ -91,7 +91,7 @@ try {
 
     if (empty($jobs)) {
         // echo "No pending jobs.\n";
-        exit;
+        return;
     }
 
     foreach ($jobs as $job) {
