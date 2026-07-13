@@ -106,10 +106,8 @@ $admin_username = $admin['username'] ?? 'Admin';
     <script>
         // Configuration
         const API_BASE = './api/';
-        const IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
         const SOCKET_IO_PATH = '/socket.io';
-        const LIVE_SIGNALING_URL = 'https://emergency-comm.alertaraqc.com:3000';
-        const SIGNALING_URL = LIVE_SIGNALING_URL;
+        const SIGNALING_URL = 'https://emergency-comm.alertaraqc.com';
         const room = "emergency-room";
         const ADMIN_USERNAME = "<?php echo htmlspecialchars($admin_username); ?>";
         const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=3b82f6&color=fff&size=64`;

@@ -2320,21 +2320,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-    const IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-    const APP_BASE_PATH = (() => {
-        const path = String(window.location.pathname || '').replace(/\\/g, '/');
-        const lower = path.toLowerCase();
-        for (const marker of ['/users/', '/admin/', '/php/']) {
-            const idx = lower.indexOf(marker);
-            if (idx === 0) return '';
-            if (idx > 0) return path.slice(0, idx).replace(/\/+$/, '');
-        }
-        return '';
-    })();
     const SOCKET_IO_PATH = '/socket.io';
-    const LIVE_SIGNALING_URL = 'https://emergency-comm.alertaraqc.com:3000';
-    const SIGNALING_URL = LIVE_SIGNALING_URL;
-    const SOCKET_HEALTH_URL = `${SIGNALING_URL}/health`;
+    const SIGNALING_URL = 'https://emergency-comm.alertaraqc.com';
+    const SOCKET_HEALTH_URL = `${SIGNALING_URL}${SOCKET_IO_PATH}/?EIO=4&transport=polling`;
     const room = "emergency-room";
 
     let socket = null;
@@ -2389,7 +2377,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             try {
                 const controller = new AbortController();
                 const timer = setTimeout(() => controller.abort(), 1800);
-                const response = await fetch(SOCKET_HEALTH_URL, {
+                const healthUrl = `${SOCKET_HEALTH_URL}&t=${Date.now()}`;
+                const response = await fetch(healthUrl, {
                     method: 'GET',
                     mode: 'cors',
                     cache: 'no-store',
@@ -2397,12 +2386,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 });
                 clearTimeout(timer);
                 if (response.ok) {
-                    try {
-                        const data = await response.json();
-                        reachable = !!(data && (data.available === true || data.ok === true));
-                    } catch (_) {
-                        reachable = false;
-                    }
+                    reachable = true;
                 } else {
                     reachable = false;
                 }

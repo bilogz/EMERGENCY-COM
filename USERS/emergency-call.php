@@ -751,10 +751,8 @@ $assetBase = '../ADMIN/header/';
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        const IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
         const SOCKET_IO_PATH = '/socket.io';
-        const LIVE_SIGNALING_URL = 'https://emergency-comm.alertaraqc.com:3000';
-        const SIGNALING_URL = LIVE_SIGNALING_URL;
+        const SIGNALING_URL = 'https://emergency-comm.alertaraqc.com';
         let socket = null;
         let socketBound = false;
         const room = "emergency-room";
@@ -1289,7 +1287,7 @@ $assetBase = '../ADMIN/header/';
 
             const s = ensureSocket();
             if (!s) {
-                setStatus('Call service unavailable. Start the signaling server on port 3000.');
+                setStatus('Call service unavailable. Please try again.');
                 setEndEnabled(true);
                 setCancelVisible(false);
                 return;
