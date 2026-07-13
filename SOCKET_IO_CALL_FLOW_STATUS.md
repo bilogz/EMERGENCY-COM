@@ -35,11 +35,9 @@ This documents the internet call flow between:
 - Important: your new endpoints in `PHP/api/user/call_event.php` and `PHP/api/user/call_history.php` are **not** currently used by this web call UI flow. The web UI uses `USERS/api/*` and `ADMIN/api/*` paths.
 
 ## Is it currently working?
-Current status on this machine: **NOT working right now**.
+Current status on this machine: **WORKING** (as of Jul 13, 2026).
 
-Reason verified:
-- `php check-socket-server.php` returned connection refused to `127.0.0.1:3000`.
-- That means Socket.IO signaling server is not running, so call setup cannot complete.
+The Socket.IO signaling server is now running on port 3000. The issue was that Node.js dependencies (express and socket.io) were not installed. Running `npm install` resolved the dependency issue, and the server is now operational.
 
 ## Additional deployment caveat
 `server.js` listens on `127.0.0.1` only. This is fine for local development on one machine, but for remote/multi-device usage it will fail unless you:

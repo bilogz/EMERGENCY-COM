@@ -108,9 +108,8 @@ $admin_username = $admin['username'] ?? 'Admin';
         const API_BASE = './api/';
         const IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
         const SOCKET_IO_PATH = '/socket.io';
-        const LOCAL_SOCKET_PORT = 3000;
-        const SIGNALING_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
-        const SIGNALING_URL = IS_LOCAL ? `${window.location.protocol}//${SIGNALING_HOST}` + ':' + LOCAL_SOCKET_PORT : null;
+        const LIVE_SIGNALING_URL = 'https://emergency-comm.alertaraqc.com:3000';
+        const SIGNALING_URL = LIVE_SIGNALING_URL;
         const room = "emergency-room";
         const ADMIN_USERNAME = "<?php echo htmlspecialchars($admin_username); ?>";
         const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=3b82f6&color=fff&size=64`;
@@ -386,9 +385,7 @@ $admin_username = $admin['username'] ?? 'Admin';
 
             };
 
-            socket = IS_LOCAL
-                ? io(SIGNALING_URL, socketOptions)
-                : io(socketOptions);
+            socket = io(SIGNALING_URL, socketOptions);
             socket.emit('join', room);
             
             socket.on('offer', handleIncomingCall);

@@ -2332,11 +2332,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         return '';
     })();
     const SOCKET_IO_PATH = '/socket.io';
-    const LOCAL_SOCKET_PORT = 3000;
-    const SIGNALING_HOST = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
-    // For production, use explicit port to avoid 502 errors from Apache proxy
-    const SIGNALING_URL = `${window.location.protocol}//${SIGNALING_HOST}:${LOCAL_SOCKET_PORT}`;
-    const SOCKET_HEALTH_URL = `${window.location.origin}${APP_BASE_PATH}/ADMIN/api/socket-health.php`;
+    const LIVE_SIGNALING_URL = 'https://emergency-comm.alertaraqc.com:3000';
+    const SIGNALING_URL = LIVE_SIGNALING_URL;
+    const SOCKET_HEALTH_URL = `${SIGNALING_URL}/health`;
     const room = "emergency-room";
 
     let socket = null;
@@ -2393,6 +2391,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 const timer = setTimeout(() => controller.abort(), 1800);
                 const response = await fetch(SOCKET_HEALTH_URL, {
                     method: 'GET',
+                    mode: 'cors',
                     cache: 'no-store',
                     signal: controller.signal
                 });
@@ -2400,7 +2399,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (response.ok) {
                     try {
                         const data = await response.json();
-                        reachable = !!(data && data.available === true);
+                        reachable = !!(data && (data.available === true || data.ok === true));
                     } catch (_) {
                         reachable = false;
                     }
@@ -2457,16 +2456,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             path: SOCKET_IO_PATH,
             // Prefer polling transport to avoid websocket upgrade failures behind strict proxies.
             transports: ['polling'],
-            // In local mode we retry manually after health checks to avoid noisy browser errors.
-            reconnection: !IS_LOCAL,
-            reconnectionAttempts: IS_LOCAL ? 0 : MAX_SOCKET_RETRIES,
-            reconnectionDelayMax: IS_LOCAL ? 0 : 2000,
+            reconnection: true,
+            reconnectionAttempts: MAX_SOCKET_RETRIES,
+            reconnectionDelayMax: 2000,
             timeout: 8000
         };
 
-        socket = IS_LOCAL
-            ? window.io(SIGNALING_URL, socketOptions)
-            : window.io(socketOptions);
+        socket = window.io(SIGNALING_URL, socketOptions);
         
         bindSocketHandlers();
         return socket;
