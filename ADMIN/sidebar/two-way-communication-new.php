@@ -107,7 +107,8 @@ $admin_username = $admin['username'] ?? 'Admin';
         // Configuration
         const API_BASE = './api/';
         const SOCKET_IO_PATH = '/socket.io';
-        const SIGNALING_URL = 'https://emergency-comm.alertaraqc.com';
+        const SIGNALING_URL = window.location.origin;
+        console.log('[call][admin-new] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
         const room = "emergency-room";
         const ADMIN_USERNAME = "<?php echo htmlspecialchars($admin_username); ?>";
         const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=3b82f6&color=fff&size=64`;

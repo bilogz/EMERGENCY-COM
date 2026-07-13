@@ -2321,8 +2321,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
     const SOCKET_IO_PATH = '/socket.io';
-    const SIGNALING_URL = 'https://emergency-comm.alertaraqc.com';
+    const SIGNALING_URL = window.location.origin;
     const SOCKET_HEALTH_URL = `${SIGNALING_URL}${SOCKET_IO_PATH}/?EIO=4&transport=polling`;
+    console.log('[call][admin] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
     const room = "emergency-room";
 
     let socket = null;
