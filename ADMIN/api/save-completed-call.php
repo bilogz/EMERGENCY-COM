@@ -37,8 +37,10 @@ $callId = $input['callId'] ?? null;
 $userId = $input['userId'] ?? null;
 $userName = $input['userName'] ?? 'Unknown User';
 $userPhone = $input['userPhone'] ?? null;
+$userLocation = trim((string)($input['userLocation'] ?? ($input['location']['address'] ?? '')));
 $duration = $input['duration'] ?? null;
 $endedAt = $input['endedAt'] ?? time();
+$event = strtolower(trim((string)($input['event'] ?? 'ended')));
 $providedConversationId = $input['conversationId'] ?? null; // Use provided conversation ID if available
 
 if (!$callId) {
@@ -119,27 +121,43 @@ try {
                 $conversationId = $existingConv['conversation_id'];
             }
         }
+
+        if (!$conversationId && $userLocation !== '') {
+            $stmt = $pdo->prepare("
+                SELECT conversation_id FROM conversations
+                WHERE user_location = ?
+                ORDER BY updated_at DESC LIMIT 1
+            ");
+            $stmt->execute([$userLocation]);
+            $existingConv = $stmt->fetch();
+            if ($existingConv) {
+                $conversationId = $existingConv['conversation_id'];
+            }
+        }
     }
     
     // If still no conversation, create a new one
     if (!$conversationId) {
         // Build last message text
-        $lastMessage = "Emergency call completed (Duration: " . ($duration ? gmdate('H:i:s', $duration) : 'N/A') . ")";
+        $lastMessage = $event === 'declined'
+            ? 'Emergency call declined by admin'
+            : "Emergency call completed (Duration: " . ($duration ? gmdate('H:i:s', $duration) : 'N/A') . ")";
         
         // Determine if user is guest (no user_id means guest)
         $isGuest = empty($userId) ? 1 : 0;
         
         $stmt = $pdo->prepare("
             INSERT INTO conversations (
-                user_id, user_name, user_phone, is_guest, status, 
+                user_id, user_name, user_phone, user_location, is_guest, status, 
                 last_message, last_message_time, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, 'closed', ?, FROM_UNIXTIME(?), NOW(), NOW())
+            ) VALUES (?, ?, ?, ?, ?, 'open', ?, FROM_UNIXTIME(?), NOW(), NOW())
         ");
         
         $stmt->execute([
             $userId ?: null,
             $userName,
             $userPhone ?: null,
+            $userLocation ?: null,
             $isGuest,
             $lastMessage,
             $endedAt
@@ -147,15 +165,17 @@ try {
         
         $conversationId = $pdo->lastInsertId();
     } else {
-        // Update existing conversation with call ended message
-        $lastMessage = "Emergency call completed (Duration: " . ($duration ? gmdate('H:i:s', $duration) : 'N/A') . ")";
+        // Update existing conversation with call ended/declined message
+        $lastMessage = $event === 'declined'
+            ? 'Emergency call declined by admin'
+            : "Emergency call completed (Duration: " . ($duration ? gmdate('H:i:s', $duration) : 'N/A') . ")";
         
         $stmt = $pdo->prepare("
             UPDATE conversations 
             SET last_message = ?, 
                 last_message_time = FROM_UNIXTIME(?), 
                 updated_at = NOW(),
-                status = 'closed'
+                status = 'open'
             WHERE conversation_id = ?
         ");
         $stmt->execute([$lastMessage, $endedAt, $conversationId]);
@@ -163,19 +183,22 @@ try {
     
     // Add "Call ended" system message to the conversation
     $durationStr = $duration ? gmdate('H:i:s', $duration) : 'N/A';
-    $callEndedMessage = "[CALL_ENDED]Call ended • Duration: " . $durationStr;
+    $adminName = $_SESSION['admin_username'] ?? $_SESSION['admin_name'] ?? 'Administrator';
+    $callEndedMessage = $event === 'declined'
+        ? "[CALL_DECLINED]Call declined by {$adminName}"
+        : "[CALL_ENDED]Call ended - Duration: " . $durationStr;
     
     $stmt = $pdo->prepare("
         INSERT INTO chat_messages 
         (conversation_id, sender_id, sender_name, sender_type, message_text, is_read, created_at)
-        VALUES (?, 'system', 'System', 'system', ?, 1, FROM_UNIXTIME(?))
+        VALUES (?, 'system', ?, 'user', ?, 0, FROM_UNIXTIME(?))
     ");
-    $stmt->execute([$conversationId, $callEndedMessage, $endedAt]);
+    $stmt->execute([$conversationId, $userName ?: 'Emergency Call User', $callEndedMessage, $endedAt]);
     
     // Update conversation's last message
     $stmt = $pdo->prepare("
         UPDATE conversations 
-        SET last_message = ?, last_message_time = FROM_UNIXTIME(?), updated_at = NOW()
+        SET last_message = ?, last_message_time = FROM_UNIXTIME(?), updated_at = NOW(), status = 'open'
         WHERE conversation_id = ?
     ");
     $stmt->execute([$callEndedMessage, $endedAt, $conversationId]);

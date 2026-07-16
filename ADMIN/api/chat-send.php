@@ -56,7 +56,7 @@ try {
     }
 
     $convStmt = $pdo->prepare("
-        SELECT conversation_id, status, user_concern
+        SELECT conversation_id, status, user_concern, assigned_to
         FROM conversations
         WHERE conversation_id = ?
         LIMIT 1
@@ -75,11 +75,42 @@ try {
         exit;
     }
 
+    $assignedTo = twc_safe_int($conversation['assigned_to'] ?? null);
+    if ($assignedTo !== null && $adminId !== null && $assignedTo !== $adminId) {
+        http_response_code(409);
+        echo json_encode([
+            'success' => false,
+            'locked' => true,
+            'message' => 'This report is already being handled by another admin.'
+        ]);
+        exit;
+    }
+
     $category = twc_normalize_category($rawCategory ?? $conversation['user_concern'] ?? '');
     $priority = twc_normalize_priority($rawPriority ?? '', $text, $category);
     $targetStatus = twc_status_for_db($pdo, 'waiting_user');
 
     $pdo->beginTransaction();
+
+    if ($adminId !== null) {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS twc_assignment_audit (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                conversation_id INT NOT NULL,
+                action VARCHAR(40) NOT NULL,
+                admin_id INT NULL,
+                admin_name VARCHAR(255) NULL,
+                previous_admin_id INT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_conversation_id (conversation_id),
+                INDEX idx_created_at (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        if ($assignedTo === null) {
+            $pdo->prepare("INSERT INTO twc_assignment_audit (conversation_id, action, admin_id, admin_name, previous_admin_id) VALUES (?, 'claimed_on_reply', ?, ?, NULL)")
+                ->execute([$conversationId, $adminId, $adminName]);
+        }
+    }
 
     $insertStmt = $pdo->prepare("
         INSERT INTO chat_messages

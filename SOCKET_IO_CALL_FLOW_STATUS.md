@@ -39,15 +39,80 @@ Current status on this machine: **WORKING** (as of Jul 13, 2026).
 
 The Socket.IO signaling server is now running on port 3000. The issue was that Node.js dependencies (express and socket.io) were not installed. Running `npm install` resolved the dependency issue, and the server is now operational.
 
-## Additional deployment caveat
-`server.js` listens on `127.0.0.1` only. This is fine for local development on one machine, but for remote/multi-device usage it will fail unless you:
-- run a reverse proxy that forwards `/socket.io` and `/health` to the Node process, or
-- bind to `0.0.0.0` and secure access properly.
+## Production deployment caveat
+`server.js` is a plain HTTP Socket.IO server on port 3000. The browser should not connect to `https://...:3000` directly in production. The public HTTPS site must reverse proxy:
+- `/socket.io/` -> `http://127.0.0.1:3000/socket.io/`
+- `/health` -> `http://127.0.0.1:3000/health`
 
-Also, frontend logic uses:
-- local: explicit `http(s)://<host>:3000`
-- non-local: `io()` on same host/path (`/socket.io`) with no explicit `:3000`
-So production needs proper proxying if Node is not served from the same origin.
+Current frontend logic uses the same HTTPS origin as the page:
+- `https://emergency-comm.alertaraqc.com/socket.io`
+
+If the browser console shows `502 Bad Gateway` for `/socket.io`, the PHP/frontend code is reaching the web server correctly, but the web server cannot reach the Node signaling process.
+
+## Ubuntu live-server fix for `/socket.io` 502
+Run these on the Ubuntu server:
+
+1. Confirm the Node process is running:
+   - `pm2 status`
+   - `pm2 logs emergency-com --lines 100`
+   - If PM2 is not used: `ps aux | grep "node server.js"`
+
+2. Start or restart the signaling server from the project directory:
+   - `cd /path/to/EMERGENCY-COM`
+   - `npm install`
+   - `pm2 start server.js --name emergency-com`
+   - `pm2 save`
+   - `pm2 startup`
+
+3. Confirm port 3000 responds locally:
+   - `curl -i http://127.0.0.1:3000/health`
+   - Expected: `{"ok":true}`
+   - `curl -i "http://127.0.0.1:3000/socket.io/?EIO=4&transport=polling"`
+   - Expected: HTTP 200 with a Socket.IO open packet.
+
+4. Confirm the public HTTPS proxy works:
+   - `curl -i https://emergency-comm.alertaraqc.com/health`
+   - `curl -i "https://emergency-comm.alertaraqc.com/socket.io/?EIO=4&transport=polling"`
+   - Expected: HTTP 200. If this returns 502, fix the web-server proxy.
+
+5. Nginx proxy example:
+   ```nginx
+   location /socket.io/ {
+       proxy_pass http://127.0.0.1:3000/socket.io/;
+       proxy_http_version 1.1;
+       proxy_set_header Upgrade $http_upgrade;
+       proxy_set_header Connection "upgrade";
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+       proxy_read_timeout 86400;
+   }
+
+   location /health {
+       proxy_pass http://127.0.0.1:3000/health;
+       proxy_http_version 1.1;
+       proxy_set_header Host $host;
+       proxy_set_header X-Forwarded-Proto $scheme;
+   }
+   ```
+
+   Then reload:
+   - `sudo nginx -t`
+   - `sudo systemctl reload nginx`
+
+6. Apache proxy example:
+   ```apache
+   ProxyPreserveHost On
+   ProxyPass /socket.io/ http://127.0.0.1:3000/socket.io/
+   ProxyPassReverse /socket.io/ http://127.0.0.1:3000/socket.io/
+   ProxyPass /health http://127.0.0.1:3000/health
+   ProxyPassReverse /health http://127.0.0.1:3000/health
+   ```
+
+   Required modules:
+   - `sudo a2enmod proxy proxy_http proxy_wstunnel rewrite headers`
+   - `sudo systemctl reload apache2`
 
 ## Quick checklist to make it work now
 1. Start signaling server:

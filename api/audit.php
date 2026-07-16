@@ -63,6 +63,76 @@ try {
         
     } 
     // Action 2: Connected Departments API request logs Audit Trail
+    elseif ($type === 'transfers' || $type === 'transfer') {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS transfer_call_audit (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                call_id VARCHAR(128) NULL,
+                conversation_id INT NULL,
+                emergency_type VARCHAR(80) NULL,
+                caller_name VARCHAR(255) NULL,
+                caller_phone VARCHAR(80) NULL,
+                caller_address TEXT NULL,
+                payload JSON NULL,
+                integration_url TEXT NULL,
+                integration_status INT NULL,
+                integration_response MEDIUMTEXT NULL,
+                status VARCHAR(30) NOT NULL DEFAULT 'prepared',
+                response_status VARCHAR(80) NULL,
+                response_status_note TEXT NULL,
+                status_requested_at DATETIME NULL,
+                status_updated_at DATETIME NULL,
+                requested_by VARCHAR(255) NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_call_id (call_id),
+                INDEX idx_conversation_id (conversation_id),
+                INDEX idx_created_at (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+
+        $query = "SELECT id, call_id, conversation_id, emergency_type, caller_name, caller_phone, caller_address, integration_url, integration_status, status, response_status, response_status_note, status_requested_at, status_updated_at, requested_by, created_at FROM transfer_call_audit";
+        $countQuery = "SELECT COUNT(*) FROM transfer_call_audit";
+
+        $status = isset($_GET['status']) && $_GET['status'] !== '' ? trim($_GET['status']) : null;
+        $where = [];
+        if ($status) {
+            $where[] = "status = ?";
+            $params[] = $status;
+        }
+
+        if (!empty($where)) {
+            $clause = " WHERE " . implode(" AND ", $where);
+            $query .= $clause;
+            $countQuery .= $clause;
+        }
+
+        $query .= " ORDER BY id DESC LIMIT ? OFFSET ?";
+    }
+    elseif ($type === 'assignments' || $type === 'twc_assignments') {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS twc_assignment_audit (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                conversation_id INT NOT NULL,
+                action VARCHAR(40) NOT NULL,
+                admin_id INT NULL,
+                admin_name VARCHAR(255) NULL,
+                previous_admin_id INT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_conversation_id (conversation_id),
+                INDEX idx_created_at (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+
+        $query = "SELECT id, conversation_id, action, admin_id, admin_name, previous_admin_id, created_at FROM twc_assignment_audit";
+        $countQuery = "SELECT COUNT(*) FROM twc_assignment_audit";
+        $conversationId = isset($_GET['conversation_id']) ? (int)$_GET['conversation_id'] : 0;
+        if ($conversationId > 0) {
+            $query .= " WHERE conversation_id = ?";
+            $countQuery .= " WHERE conversation_id = ?";
+            $params[] = $conversationId;
+        }
+        $query .= " ORDER BY id DESC LIMIT ? OFFSET ?";
+    }
     elseif ($type === 'api' || $type === 'requests') {
         try {
             $pdo->query("SELECT 1 FROM department_api_logs LIMIT 1");
@@ -94,7 +164,7 @@ try {
 
         $query .= " ORDER BY id DESC LIMIT ? OFFSET ?";
     } else {
-        sendJsonResponse(false, 'Bad Request: Invalid type parameter. Use notifications or api.', [], 400);
+        sendJsonResponse(false, 'Bad Request: Invalid type parameter. Use notifications, transfers, assignments, or api.', [], 400);
     }
 
     // Get Total Count

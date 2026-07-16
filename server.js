@@ -37,9 +37,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('offer', (payload, room) => {
-    if (typeof room === 'string' && room.length > 0) {
-      activeOffersByRoom.set(room, { payload, ts: Date.now() });
-      console.log(`[signal] offer room=${room} callId=${payload?.callId || ''}`);
+    const signalRoom = typeof payload?.room === 'string' && payload.room.length > 0 ? payload.room : room;
+    if (typeof signalRoom === 'string' && signalRoom.length > 0) {
+      activeOffersByRoom.set(signalRoom, { payload, ts: Date.now() });
+      console.log(`[signal] offer room=${signalRoom} broadcast=${room} callId=${payload?.callId || ''}`);
     }
     socket.to(room).emit('offer', payload);
   });
@@ -56,6 +57,7 @@ io.on('connection', (socket) => {
   socket.on('hangup', (payload, room) => {
     if (typeof room === 'string' && room.length > 0) {
       activeOffersByRoom.delete(room);
+      if (typeof payload?.room === 'string') activeOffersByRoom.delete(payload.room);
       console.log(`[signal] hangup room=${room} callId=${payload?.callId || ''}`);
     }
     socket.to(room).emit('hangup', payload);
@@ -65,6 +67,15 @@ io.on('connection', (socket) => {
     if (typeof room === 'string' && room.length > 0) {
       console.log(`[message] room=${room} callId=${payload?.callId || ''} sender=${payload?.sender || 'unknown'}`);
       socket.to(room).emit('call-message', payload);
+    }
+  });
+
+  socket.on('call-transfer', (payload, room) => {
+    if (typeof room === 'string' && room.length > 0) {
+      activeOffersByRoom.delete(room);
+      if (typeof payload?.room === 'string') activeOffersByRoom.delete(payload.room);
+      console.log(`[transfer] room=${room} callId=${payload?.callId || ''}`);
+      socket.to(room).emit('call-transfer', payload);
     }
   });
 

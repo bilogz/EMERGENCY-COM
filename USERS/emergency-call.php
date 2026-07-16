@@ -669,7 +669,7 @@ $assetBase = '../ADMIN/header/';
             <div id="callActiveBanner" style="display:none; margin:-6px 0 12px; padding:8px 12px; border-radius:12px; background:rgba(220,38,38,0.18); border:1px solid rgba(220,38,38,0.45); color:#fecaca; font-weight:800; letter-spacing:0.6px; text-transform:uppercase; text-align:center;">CALL ON ACTIVE</div>
             <!-- Call Header -->
             <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
-                <div style="width:44px; height:44px; border-radius:12px; background:rgba(76,138,137,0.2); display:flex; align-items:center; justify-content:center;">
+                <div id="userLocalMicIndicator" title="Your microphone activity" style="width:44px; height:44px; border-radius:12px; background:rgba(76,138,137,0.2); display:flex; align-items:center; justify-content:center; transition:box-shadow .18s ease, background .18s ease;">
                     <i class="fas fa-headset" style="color:#4c8a89;"></i>
                 </div>
                 <div style="flex:1;">
@@ -677,6 +677,24 @@ $assetBase = '../ADMIN/header/';
                     <div id="callStatus" style="opacity:0.85; font-size:13px;">Connecting…</div>
                 </div>
                 <div id="callTimer" style="font-variant-numeric:tabular-nums; font-weight:700;">00:00</div>
+            </div>
+
+            <div id="guestCallerFields" style="display:none; margin-top:14px; padding:12px; border:1px solid rgba(255,255,255,0.10); border-radius:12px; background:rgba(255,255,255,0.04);">
+                <div style="font-size:12px; opacity:0.8; margin-bottom:8px;">Caller information</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <input id="guestCallerName" type="text" placeholder="Name" autocomplete="name" style="min-width:0; padding:10px 12px; border:1px solid rgba(255,255,255,0.18); border-radius:10px; background:rgba(255,255,255,0.08); color:#fff; outline:none;">
+                    <input id="guestCallerPhone" type="tel" placeholder="Phone number" autocomplete="tel" style="min-width:0; padding:10px 12px; border:1px solid rgba(255,255,255,0.18); border-radius:10px; background:rgba(255,255,255,0.08); color:#fff; outline:none;">
+                    <input id="guestCallerLocation" type="text" placeholder="Location or address" autocomplete="street-address" style="grid-column:1 / -1; min-width:0; padding:10px 12px; border:1px solid rgba(255,255,255,0.18); border-radius:10px; background:rgba(255,255,255,0.08); color:#fff; outline:none;">
+                </div>
+            </div>
+
+            <div style="display:flex; gap:8px; margin-top:10px; font-size:12px; opacity:0.9;">
+                <div id="userSpeakingLabel" style="display:flex; align-items:center; gap:6px; padding:6px 9px; border-radius:999px; background:rgba(255,255,255,0.06); transition:background .18s ease, color .18s ease;">
+                    <i class="fas fa-microphone"></i><span>You</span>
+                </div>
+                <div id="adminSpeakingLabel" style="display:flex; align-items:center; gap:6px; padding:6px 9px; border-radius:999px; background:rgba(255,255,255,0.06); transition:background .18s ease, color .18s ease;">
+                    <i class="fas fa-headset"></i><span>Admin</span>
+                </div>
             </div>
             
             <!-- Messages Area -->
@@ -689,8 +707,8 @@ $assetBase = '../ADMIN/header/';
             
             <!-- Call Controls -->
             <div style="margin-top:14px; display:flex; gap:10px; justify-content:flex-end; flex-shrink:0;">
-                <button id="cancelCallBtn" class="btn btn-secondary" style="min-height:44px; padding:10px 16px;">Cancel</button>
-                <button id="endCallBtn" class="btn btn-secondary" disabled style="opacity:0.6; pointer-events:none; min-height:44px; padding:10px 16px;">End Call</button>
+                <button id="cancelCallBtn" class="btn btn-secondary" style="min-height:44px; padding:10px 16px;"><i class="fas fa-ban"></i> Cancel Call</button>
+                <button id="endCallBtn" class="btn btn-secondary" disabled style="opacity:0.6; pointer-events:none; min-height:44px; padding:10px 16px;"><i class="fas fa-phone-slash"></i> End Call</button>
             </div>
         </div>
     </div>
@@ -756,9 +774,14 @@ $assetBase = '../ADMIN/header/';
         console.log('[call][user] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
         let socket = null;
         let socketBound = false;
-        const room = "emergency-room";
+        const CALL_LOBBY_ROOM = "emergency-lobby";
+        let activeCallRoom = null;
         let socketRetryCount = 0;
         const MAX_SOCKET_RETRIES = 5;
+
+        function getCallRoom(id = callId) {
+            return id ? `emergency-call-${id}` : CALL_LOBBY_ROOM;
+        }
 
         function waitForSocketConnected(s, timeoutMs = 8000) {
             return new Promise((resolve, reject) => {
@@ -822,7 +845,7 @@ $assetBase = '../ADMIN/header/';
 
             socket.on('connect', () => {
                 console.log('[call][user] socket connected', socket.id);
-                socket.emit('join', room);
+                socket.emit('join', activeCallRoom || CALL_LOBBY_ROOM);
                 socketRetryCount = 0; // Reset retry count on successful connection
             });
 
@@ -870,6 +893,14 @@ $assetBase = '../ADMIN/header/';
                 if (callId) endCall(false);
             });
 
+            socket.on('call-transfer', async payload => {
+                const incomingCallId = payload && payload.callId ? payload.callId : null;
+                if (incomingCallId && incomingCallId !== callId) return;
+                if (!callId) return;
+                if (payload && payload.room) activeCallRoom = payload.room;
+                await prepareTransferredCallOffer();
+            });
+
             socket.on('call-message', payload => {
                 const incomingCallId = payload && payload.callId ? payload.callId : null;
                 if (incomingCallId && incomingCallId !== callId) return;
@@ -890,12 +921,81 @@ $assetBase = '../ADMIN/header/';
         let localStream = null;
         let callId = null;
         let callConversationId = null;
+        let transferInProgress = false;
         let callStartedAt = null;
         let callConnectedAt = null;
         let timerInterval = null;
         let locationData = null;
         let userProfile = null;
         let messages = [];
+        let audioActivityMonitors = [];
+
+        function setSpeakingIndicator(labelId, indicatorId, active) {
+            const label = document.getElementById(labelId);
+            if (label) {
+                label.style.background = active ? 'rgba(76,138,137,0.32)' : 'rgba(255,255,255,0.06)';
+                label.style.color = active ? '#dffdfc' : '#fff';
+            }
+            const indicator = indicatorId ? document.getElementById(indicatorId) : null;
+            if (indicator) {
+                indicator.style.background = active ? 'rgba(76,138,137,0.42)' : 'rgba(76,138,137,0.2)';
+                indicator.style.boxShadow = active ? '0 0 0 6px rgba(76,138,137,0.22)' : 'none';
+            }
+        }
+
+        function monitorAudioActivity(stream, labelId, indicatorId = null) {
+            if (!stream || !stream.getAudioTracks || stream.getAudioTracks().length === 0) return;
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                const ctx = new AudioContext();
+                const source = ctx.createMediaStreamSource(stream);
+                const analyser = ctx.createAnalyser();
+                analyser.fftSize = 512;
+                source.connect(analyser);
+                const data = new Uint8Array(analyser.frequencyBinCount);
+                let stopped = false;
+                const tick = () => {
+                    if (stopped) return;
+                    analyser.getByteTimeDomainData(data);
+                    let sum = 0;
+                    for (const value of data) {
+                        const diff = value - 128;
+                        sum += diff * diff;
+                    }
+                    const rms = Math.sqrt(sum / data.length);
+                    setSpeakingIndicator(labelId, indicatorId, rms > 7);
+                    requestAnimationFrame(tick);
+                };
+                tick();
+                audioActivityMonitors.push(() => {
+                    stopped = true;
+                    setSpeakingIndicator(labelId, indicatorId, false);
+                    try { source.disconnect(); } catch (e) {}
+                    try { ctx.close(); } catch (e) {}
+                });
+            } catch (e) {}
+        }
+
+        function stopAudioActivityMonitors() {
+            audioActivityMonitors.forEach(stop => {
+                try { stop(); } catch (e) {}
+            });
+            audioActivityMonitors = [];
+        }
+
+        function getGuestCallerInfo() {
+            const name = document.getElementById('guestCallerName')?.value.trim() || '';
+            const phone = document.getElementById('guestCallerPhone')?.value.trim() || '';
+            const address = document.getElementById('guestCallerLocation')?.value.trim() || '';
+            return { name, phone, address, isGuest: true };
+        }
+
+        function updateGuestFieldsVisibility() {
+            const el = document.getElementById('guestCallerFields');
+            if (!el) return;
+            el.style.display = userProfile && userProfile.id ? 'none' : 'block';
+        }
 
         async function ensureCallConversationId() {
             if (callConversationId) return callConversationId;
@@ -992,10 +1092,11 @@ $assetBase = '../ADMIN/header/';
                 s.emit('call-message', {
                     text,
                     callId,
+                    room: activeCallRoom || getCallRoom(),
                     sender: 'user',
                     senderName: userProfile?.name || 'User',
                     timestamp: Date.now()
-                }, room);
+                }, activeCallRoom || getCallRoom());
             }
             
             // Log to database using existing chat-send structure
@@ -1037,6 +1138,8 @@ $assetBase = '../ADMIN/header/';
                 }
             } catch (e) {
                 console.error('Failed to load user profile:', e);
+            } finally {
+                updateGuestFieldsVisibility();
             }
         }
 
@@ -1089,7 +1192,7 @@ $assetBase = '../ADMIN/header/';
             await logCall('cancelled');
             const s = ensureSocket();
             if (s && callId) {
-                s.emit('hangup', { callId }, room);
+                s.emit('hangup', { callId, room: activeCallRoom }, activeCallRoom || getCallRoom());
             }
             setStatus('Call cancelled');
             setTimeout(() => {
@@ -1123,7 +1226,7 @@ $assetBase = '../ADMIN/header/';
                 const payload = {
                     callId,
                     userId: userProfile?.id || null,
-                    room,
+                    room: activeCallRoom || getCallRoom(),
                     role: 'user',
                     event,
                     location: locationData,
@@ -1153,6 +1256,7 @@ $assetBase = '../ADMIN/header/';
 
         function cleanupCall() {
             stopTimer();
+            stopAudioActivityMonitors();
             setEndEnabled(false);
             setCancelVisible(false);
             setCallActiveBannerVisible(false);
@@ -1181,6 +1285,7 @@ $assetBase = '../ADMIN/header/';
             callConnectedAt = null;
             callStartedAt = null;
             callId = null;
+            activeCallRoom = null;
             locationData = null;
             setTimer(0);
             setStartButtonsDisabled(false);
@@ -1192,7 +1297,7 @@ $assetBase = '../ADMIN/header/';
             if (notifyPeer && callId) {
                 const s = ensureSocket();
                 if (s) {
-                    s.emit('hangup', { callId }, room);
+                    s.emit('hangup', { callId, room: activeCallRoom }, activeCallRoom || getCallRoom());
                 }
             }
             setStatus('Call ended');
@@ -1200,6 +1305,72 @@ $assetBase = '../ADMIN/header/';
                 setOverlayVisible(false);
                 cleanupCall();
             }, 800);
+        }
+
+        async function prepareTransferredCallOffer() {
+            if (!callId) return;
+
+            transferInProgress = true;
+            setStatus('Transferred. Waiting for response team...');
+            setEndEnabled(false);
+            setCancelVisible(false);
+            stopAudioActivityMonitors();
+
+            if (pc) {
+                try { pc.onconnectionstatechange = null; pc.close(); } catch (e) {}
+                pc = null;
+            }
+
+            try {
+                if (!localStream) {
+                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                }
+
+                initPeer();
+                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                monitorAudioActivity(localStream, 'userSpeakingLabel', 'userLocalMicIndicator');
+
+                const s = ensureSocket();
+                if (s) s.emit('join', activeCallRoom || getCallRoom());
+
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+
+                const guestCaller = getGuestCallerInfo();
+                const caller = userProfile ? {
+                    id: userProfile.id ?? null,
+                    name: userProfile.name ?? null,
+                    email: userProfile.email ?? null,
+                    phone: userProfile.phone ?? null,
+                    nationality: userProfile.nationality ?? null,
+                    district: userProfile.district ?? null,
+                    barangay: userProfile.barangay ?? null,
+                    house_number: userProfile.house_number ?? null,
+                    street: userProfile.street ?? null,
+                    address: userProfile.address ?? null
+                } : guestCaller;
+
+                if (s) {
+                    s.emit("offer", {
+                        sdp: offer,
+                        callId,
+                        conversationId: callConversationId,
+                        userId: userProfile?.id || null,
+                        userName: userProfile?.name || guestCaller.name || null,
+                        caller,
+                        location: locationData || null,
+                        transferred: true
+                    }, activeCallRoom || getCallRoom());
+                }
+
+                await logCall('transfer_waiting_for_response_team');
+            } catch (e) {
+                console.error('[call][user] failed to prepare transferred call', e);
+                setStatus('Transfer failed. Please stay on this page or call again.');
+                setEndEnabled(true);
+            } finally {
+                transferInProgress = false;
+            }
         }
 
         function renderCallInputRow() {
@@ -1250,13 +1421,18 @@ $assetBase = '../ADMIN/header/';
                 ]
             });
             pc.ontrack = e => {
-                document.getElementById("remote").srcObject = e.streams[0];
+                const remoteStream = e.streams[0];
+                document.getElementById("remote").srcObject = remoteStream;
+                monitorAudioActivity(remoteStream, 'adminSpeakingLabel');
             };
             pc.onicecandidate = e => {
                 if (!e.candidate) return;
                 const s = ensureSocket();
                 if (s) {
-                    s.emit('candidate', { candidate: e.candidate, callId }, room);
+                    s.emit('candidate', { candidate: e.candidate, callId, room: activeCallRoom }, activeCallRoom || getCallRoom());
+                    if (!callConnectedAt) {
+                        s.emit('candidate', { candidate: e.candidate, callId, room: activeCallRoom }, CALL_LOBBY_ROOM);
+                    }
                 }
             };
             pc.onconnectionstatechange = () => {
@@ -1271,6 +1447,7 @@ $assetBase = '../ADMIN/header/';
                     logCall('connected');
                 }
                 if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+                    if (transferInProgress) return;
                     if (callId) endCall();
                 }
             };
@@ -1299,6 +1476,7 @@ $assetBase = '../ADMIN/header/';
             try {
                 await waitForSocketConnected(s);
                 callId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `call_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+                activeCallRoom = getCallRoom(callId);
                 callStartedAt = Date.now();
                 setStartButtonsDisabled(true);
                 locationData = await tryGetLocation();
@@ -1336,14 +1514,16 @@ $assetBase = '../ADMIN/header/';
                 }
 
                 initPeer();
-                s.emit("join", room);
+                s.emit("join", activeCallRoom);
 
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                monitorAudioActivity(localStream, 'userSpeakingLabel', 'userLocalMicIndicator');
 
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
-                console.log('[call][user] emitting offer', { callId, room });
+                console.log('[call][user] emitting offer', { callId, room: activeCallRoom });
+                const guestCaller = getGuestCallerInfo();
                 const caller = userProfile ? {
                     id: userProfile.id ?? null,
                     name: userProfile.name ?? null,
@@ -1355,17 +1535,22 @@ $assetBase = '../ADMIN/header/';
                     house_number: userProfile.house_number ?? null,
                     street: userProfile.street ?? null,
                     address: userProfile.address ?? null
-                } : null;
+                } : guestCaller;
+
+                if (!userProfile && guestCaller.address && locationData) {
+                    locationData.address = guestCaller.address;
+                }
 
                 s.emit("offer", {
                     sdp: offer,
                     callId,
+                    room: activeCallRoom,
                     conversationId: callConversationId,
                     userId: userProfile?.id || null,
-                    userName: userProfile?.name || null,
+                    userName: userProfile?.name || guestCaller.name || null,
                     caller,
                     location: locationData || null
-                }, room);
+                }, CALL_LOBBY_ROOM);
             } catch (e) {
                 console.error('[call][user] call failed', e);
                 setStatus('Call failed');

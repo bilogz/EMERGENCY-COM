@@ -151,6 +151,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     <i class="fas fa-robot"></i>
                     <span>Chatbot Logs</span>
                 </button>
+                <button type="button" class="twc-primary-chip" data-twc-view="transfers">
+                    <i class="fas fa-share-from-square"></i>
+                    <span>Transferred</span>
+                </button>
             </div>
 
             <div id="twcConversationsShell">
@@ -260,6 +264,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                         </div>
                                     </div>
                                     <?php endif; ?>
+                                     <button class="btn btn-sm btn-secondary" id="transferConversationBtn" style="display: none;">
+                                         <i class="fas fa-share-from-square"></i> Transfer
+                                     </button>
+                                     <button class="btn btn-sm btn-secondary" id="releaseConversationBtn" style="display: none;">
+                                         <i class="fas fa-user-clock"></i> Pass to Admin
+                                     </button>
                                      <button class="btn btn-sm btn-secondary" id="toggleStatusBtn" style="display: none;">
                                          <i class="fas fa-check"></i> Close Chat
                                      </button>
@@ -284,6 +294,31 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     </div>
                 </div>
             </div>
+            </div>
+
+            <div class="twc-chatbot-logs-shell" id="twcTransferredShell" hidden>
+                <div class="twc-logs-intro">
+                    <h3><i class="fas fa-share-from-square"></i> Transferred Calls and Reports</h3>
+                    <p>Confirmed call/message transfers sent from two-way communication to the response team system.</p>
+                </div>
+                <div class="twc-logs-table-wrap">
+                    <table class="twc-table">
+                        <thead>
+                            <tr>
+                                <th>Transferred At</th>
+                                <th>Caller</th>
+                                <th>Type</th>
+                                <th>Conversation</th>
+                                <th>Status</th>
+                                <th>Emergency Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="twcTransferredBody">
+                            <tr><td colspan="7" class="twc-logs-empty">No transferred records loaded.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
 
@@ -435,12 +470,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <script>
         const API_BASE = '../api/';
         const ADMIN_USERNAME = <?php echo json_encode($adminUsername); ?>;
+        const ADMIN_ID = <?php echo json_encode($_SESSION['admin_user_id'] ?? null); ?>;
         const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=4c8a89&color=fff&size=128`;
         const PAGE_MODE = <?php echo json_encode($pageMode); ?>;
         
         // State Management
         let currentStatus = 'open';
         let currentConversationId = null;
+        let currentConversationData = null;
         let lastMessageId = 0;
         let currentPage = 1;
         const pageLimit = 20; // Load 20 at a time for speed
@@ -525,6 +562,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             closeMobileChat();
             document.querySelectorAll('.conversation-item').forEach(i => i.classList.remove('active'));
             currentConversationId = null;
+            currentConversationData = null;
+            const transferBtn = document.getElementById('transferConversationBtn');
+            if (transferBtn) transferBtn.style.display = 'none';
         }
 
         function clearConversationIdQueryParam() {
@@ -561,8 +601,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         function updateMainViewQueryParam(view) {
             const url = new URL(window.location.href);
-            if (view === 'chatbotLogs') {
-                url.searchParams.set('view', 'chatbotLogs');
+            if (view === 'chatbotLogs' || view === 'transfers') {
+                url.searchParams.set('view', view);
             } else {
                 url.searchParams.delete('view');
             }
@@ -570,16 +610,20 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         function setPrimaryView(view, updateUrl = true) {
-            const normalized = view === 'chatbotLogs' ? 'chatbotLogs' : 'conversations';
+            const normalized = view === 'chatbotLogs' || view === 'transfers' ? view : 'conversations';
             currentMainView = normalized;
 
             const conversationShell = document.getElementById('twcConversationsShell');
             const chatbotLogsShell = document.getElementById('twcChatbotLogsShell');
+            const transferredShell = document.getElementById('twcTransferredShell');
             if (conversationShell) {
                 conversationShell.hidden = normalized !== 'conversations';
             }
             if (chatbotLogsShell) {
                 chatbotLogsShell.hidden = normalized !== 'chatbotLogs';
+            }
+            if (transferredShell) {
+                transferredShell.hidden = normalized !== 'transfers';
             }
 
             document.querySelectorAll('.twc-primary-chip').forEach((chip) => {
@@ -593,10 +637,89 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (normalized === 'chatbotLogs') {
                 loadChatbotLogs(false);
                 startChatbotLogsRealtime();
+            } else if (normalized === 'transfers') {
+                stopChatbotLogsRealtime();
+                loadTransferredRecords();
             } else {
                 stopChatbotLogsRealtime();
             }
         }
+
+        async function loadTransferredRecords() {
+            const body = document.getElementById('twcTransferredBody');
+            if (!body) return;
+            body.innerHTML = '<tr><td colspan="7" class="twc-logs-empty">Loading transferred records...</td></tr>';
+            try {
+                const res = await fetch('../../api/transfer-call.php?limit=50');
+                const data = await res.json();
+                const rows = Array.isArray(data.transfers) ? data.transfers : [];
+                if (!data.success || rows.length === 0) {
+                    body.innerHTML = '<tr><td colspan="7" class="twc-logs-empty">No transferred calls or reports yet.</td></tr>';
+                    return;
+                }
+                body.innerHTML = rows.map(row => {
+                    const payload = row.payload || {};
+                    const created = row.created_at ? new Date(row.created_at).toLocaleString() : '';
+                    const callerName = row.caller_name || payload.caller?.name || 'Unknown';
+                    const callerPhone = row.caller_phone || payload.caller?.phone || '';
+                    const responseStatus = row.response_status || 'not_requested';
+                    const responseNote = row.response_status_note || '';
+                    return `
+                        <tr>
+                            <td>${escapeHtml(created)}</td>
+                            <td><strong>${escapeHtml(callerName)}</strong>${callerPhone ? `<div style="font-size:12px;opacity:.7;">${escapeHtml(callerPhone)}</div>` : ''}</td>
+                            <td>${escapeHtml(row.emergency_type || payload.emergencyType || 'n/a')}</td>
+                            <td>${escapeHtml(String(row.conversation_id || payload.conversationId || 'n/a'))}</td>
+                            <td>${escapeHtml(row.status || 'prepared')} ${row.integration_status ? `(${escapeHtml(String(row.integration_status))})` : ''}</td>
+                            <td><strong>${escapeHtml(responseStatus.replace(/_/g, ' '))}</strong>${responseNote ? `<div style="font-size:12px;opacity:.7;">${escapeHtml(responseNote)}</div>` : ''}</td>
+                            <td>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="requestTransferEmergencyStatus(${Number(row.id)})">Request Status</button>
+                                <button type="button" class="btn btn-primary btn-sm" onclick="updateTransferEmergencyStatus(${Number(row.id)})">Update</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="7" class="twc-logs-empty">Failed to load transferred records.</td></tr>';
+            }
+        }
+
+        async function requestTransferEmergencyStatus(transferId) {
+            try {
+                const res = await fetch('../../api/transfer-call.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'request_status', transferId })
+                });
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || (data.success ? 'Status requested.' : 'Status request failed.'));
+                loadTransferredRecords();
+            } catch (e) {
+                alert('Status request failed.');
+            }
+        }
+
+        async function updateTransferEmergencyStatus(transferId) {
+            const allowed = 'requested, received, fake_call, rescue_ongoing, responders_dispatched, arrived_on_scene, resolved, cancelled, unable_to_locate, duplicate';
+            const responseStatus = prompt(`Enter emergency status:\n${allowed}`, 'rescue_ongoing');
+            if (!responseStatus) return;
+            const note = prompt('Optional status note:', '') || '';
+            try {
+                const res = await fetch('../../api/transfer-call.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'update_status', transferId, responseStatus, note })
+                });
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || (data.success ? 'Status updated.' : 'Status update failed.'));
+                loadTransferredRecords();
+            } catch (e) {
+                alert('Status update failed.');
+            }
+        }
+
+        window.requestTransferEmergencyStatus = requestTransferEmergencyStatus;
+        window.updateTransferEmergencyStatus = updateTransferEmergencyStatus;
 
         function stopChatbotLogsRealtime() {
             if (chatbotLogsRealtimeTimer) {
@@ -1391,7 +1514,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             
             item.innerHTML = getConversationHTML(conv);
             
-            item.addEventListener('click', function() {
+            item.addEventListener('click', function(event) {
+                if (event.target.closest('.transfer-report-btn')) {
+                    event.stopPropagation();
+                    transferConversationReport(this._conversationData || conv);
+                    return;
+                }
                 openConversation(conv.id, this._conversationData, this);
             });
             
@@ -1457,6 +1585,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     ${statusBadge}
                 </td>
                 <td style="padding: 0.85rem 0.75rem; vertical-align: middle; text-align: right;">
+                    <button class="btn btn-secondary transfer-report-btn" data-conversation-id="${conv.id}" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 4px; cursor: pointer; margin-right:0.35rem;">
+                        <i class="fas fa-share-from-square"></i> Transfer
+                    </button>
                     <button class="btn btn-primary respond-btn" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 4px; cursor: pointer; background: var(--primary-color-1); color: white; border: none;">
                         <i class="fas fa-reply"></i> Open Chat
                     </button>
@@ -1469,6 +1600,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const badge = document.getElementById('incidentPriorityBadge');
             const button = document.getElementById('incidentPriorityButton');
             const menu = document.getElementById('incidentPriorityMenu');
+            const transferBtn = document.getElementById('transferConversationBtn');
+            if (transferBtn) {
+                transferBtn.style.display = data ? 'inline-flex' : 'none';
+                transferBtn.disabled = !data;
+            }
             if (!control || !badge || !button || !menu) return;
 
             if (PAGE_MODE !== 'citizen_reports' || !data) {
@@ -1484,6 +1620,112 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             button.dataset.priority = meta.level;
             button.disabled = false;
             control.style.display = 'inline-flex';
+        }
+
+        async function transferConversationReport(conversationData = null) {
+            const data = conversationData || currentConversationData;
+            const conversationId = data?.id || currentConversationId;
+            if (!conversationId) {
+                alert('No report selected to transfer.');
+                return;
+            }
+            if (!confirm('Transfer this report/messages to the response team?')) return;
+
+            const payload = {
+                callId: data?.callId || null,
+                conversationId,
+                room: data?.callId ? getCallRoom(data.callId) : null,
+                socketUrl: data?.callId ? SIGNALING_URL : null,
+                socketPath: data?.callId ? SOCKET_IO_PATH : null,
+                emergencyType: data?.category || data?.department || data?.userConcern || '',
+                caller: {
+                    id: data?.userId || null,
+                    name: data?.userName || null,
+                    phone: data?.userPhone || null,
+                    email: data?.userEmail || null,
+                    address: data?.userLocation || null,
+                    isGuest: !!data?.isGuest
+                },
+                location: {
+                    address: data?.userLocation || null
+                }
+            };
+
+            try {
+                const res = await fetch('../../api/transfer-call.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json().catch(() => ({}));
+                if (!result.success) {
+                    alert(result.message || 'Transfer failed.');
+                    return;
+                }
+                alert(result.integration?.configured ? 'Transfer notification sent.' : 'Transfer payload prepared.');
+                resetConversationsAndReload();
+                if (currentMainView === 'transfers') {
+                    loadTransferredRecords();
+                }
+            } catch (e) {
+                alert('Transfer failed.');
+            }
+        }
+
+        function setConversationLocked(locked, message = '') {
+            const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendButton');
+            if (input) {
+                input.disabled = locked;
+                input.placeholder = locked ? (message || 'Locked by another admin') : 'Type a message...';
+                input.style.cursor = locked ? 'not-allowed' : 'text';
+            }
+            if (sendBtn) sendBtn.disabled = locked;
+            const releaseBtn = document.getElementById('releaseConversationBtn');
+            if (releaseBtn) releaseBtn.style.display = locked ? 'none' : 'inline-flex';
+        }
+
+        async function claimConversationForAdmin(conversationId) {
+            if (!conversationId) return false;
+            try {
+                const res = await fetch(API_BASE + 'chat-claim.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ conversationId, action: 'claim' })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!data.success) {
+                    setConversationLocked(true, data.message || 'Locked by another admin');
+                    return false;
+                }
+                setConversationLocked(false);
+                return true;
+            } catch (e) {
+                setConversationLocked(true, 'Unable to claim report');
+                return false;
+            }
+        }
+
+        async function releaseConversationForOtherAdmin() {
+            if (!currentConversationId) return;
+            if (!confirm('Pass this report/message to another admin? This will unlock it for others.')) return;
+            try {
+                const res = await fetch(API_BASE + 'chat-claim.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ conversationId: currentConversationId, action: 'release' })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!data.success) {
+                    alert(data.message || 'Failed to release report.');
+                    return;
+                }
+                alert('Report released for another admin.');
+                closeChatPanel();
+                resetConversationsAndReload();
+            } catch (e) {
+                alert('Failed to release report.');
+            }
         }
 
         async function updateIncidentPriorityManual(level) {
@@ -1546,6 +1788,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         function openConversation(id, data, element) {
             currentConversationId = id;
+            currentConversationData = data || null;
             lastMessageId = 0;
             
             // UI Selection
@@ -1592,6 +1835,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const isClosed = (data.status === 'closed');
             setupInputState(isClosed);
             setupCloseButton(isClosed);
+            const releaseBtn = document.getElementById('releaseConversationBtn');
+            if (releaseBtn) releaseBtn.style.display = isClosed ? 'none' : 'inline-flex';
+            if (!isClosed) {
+                claimConversationForAdmin(id);
+            }
 
             // Load Messages
             loadMessages(id, true);
@@ -2018,7 +2266,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     // Update temp message with real ID if needed, or just let polling handle sync
                     if (d.messageId) lastMessageId = Math.max(lastMessageId, d.messageId);
                 } else {
-                    alert('Failed to send');
+                    if (d.locked) setConversationLocked(true, d.message || 'Locked by another admin');
+                    alert(d.message || 'Failed to send');
                 }
             } catch (e) {
                 alert('Send error');
@@ -2183,6 +2432,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     resetConversationsAndReload();
                 });
             }
+            const transferConversationBtn = document.getElementById('transferConversationBtn');
+            if (transferConversationBtn) {
+                transferConversationBtn.addEventListener('click', () => transferConversationReport());
+            }
+            const releaseConversationBtn = document.getElementById('releaseConversationBtn');
+            if (releaseConversationBtn) {
+                releaseConversationBtn.addEventListener('click', releaseConversationForOtherAdmin);
+            }
             const incidentPriorityButton = document.getElementById('incidentPriorityButton');
             const incidentPriorityMenu = document.getElementById('incidentPriorityMenu');
             if (incidentPriorityButton && incidentPriorityMenu) {
@@ -2204,8 +2461,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
 
             const initialView = new URLSearchParams(window.location.search).get('view');
-            if (initialView === 'chatbotLogs') {
-                setPrimaryView('chatbotLogs', false);
+            if (initialView === 'chatbotLogs' || initialView === 'transfers') {
+                setPrimaryView(initialView, false);
             } else {
                 setPrimaryView('conversations', false);
             }
@@ -2262,6 +2519,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         <div id="callerCoords" style="font-weight:600; opacity:0.95;">—</div>
                     </div>
 
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px; border:1px solid rgba(255,255,255,0.10); border-radius:12px; background:rgba(255,255,255,0.04);">
+                        <input id="callerNameInput" type="text" placeholder="Type caller name" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
+                        <input id="callerPhoneInput" type="tel" placeholder="Type phone number" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
+                        <input id="callerAddressInput" type="text" placeholder="Type location or address" style="grid-column:1 / -1; min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:600;">
+                    </div>
+
                     <div style="border-top:1px solid rgba(255,255,255,0.10); padding-top:12px; display:flex; flex-direction:column; gap:10px;">
                         <label style="font-size:12px; opacity:0.8; margin:0;">Emergency Type</label>
                         <select id="emergencyTypeSelect" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.08); color:#fff; outline:none;">
@@ -2287,7 +2550,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
                     <!-- Call Header -->
                     <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
-                        <div style="width:44px; height:44px; border-radius:12px; background:rgba(58, 118, 117,0.2); display:flex; align-items:center; justify-content:center;">
+                        <div id="adminLocalMicIndicator" title="Your microphone activity" style="width:44px; height:44px; border-radius:12px; background:rgba(58, 118, 117,0.2); display:flex; align-items:center; justify-content:center; transition:box-shadow .18s ease, background .18s ease;">
                             <i class="fas fa-headset" style="color:#3a7675;"></i>
                         </div>
                         <div style="flex:1;">
@@ -2295,6 +2558,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                             <div id="callStatus" style="opacity:0.85; font-size:13px;">Connecting…</div>
                         </div>
                         <div id="callTimer" style="font-variant-numeric:tabular-nums; font-weight:700;">00:00</div>
+                    </div>
+
+                    <div style="display:flex; gap:8px; margin-top:10px; font-size:12px; opacity:0.9;">
+                        <div id="adminSpeakingLabel" style="display:flex; align-items:center; gap:6px; padding:6px 9px; border-radius:999px; background:rgba(255,255,255,0.06); transition:background .18s ease, color .18s ease;">
+                            <i class="fas fa-microphone"></i><span>You</span>
+                        </div>
+                        <div id="userSpeakingLabel" style="display:flex; align-items:center; gap:6px; padding:6px 9px; border-radius:999px; background:rgba(255,255,255,0.06); transition:background .18s ease, color .18s ease;">
+                            <i class="fas fa-user"></i><span>Caller</span>
+                        </div>
                     </div>
 
                     <!-- Messages Area -->
@@ -2324,7 +2596,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     const SIGNALING_URL = window.location.origin;
     const SOCKET_HEALTH_URL = `${SIGNALING_URL}${SOCKET_IO_PATH}/?EIO=4&transport=polling`;
     console.log('[call][admin] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
-    const room = "emergency-room";
+    const CALL_LOBBY_ROOM = "emergency-lobby";
+    let activeCallRoom = null;
+    let pendingCallRoom = null;
+
+    function getCallRoom(id = callId) {
+        return id ? `emergency-call-${id}` : CALL_LOBBY_ROOM;
+    }
 
     let socket = null;
     let socketBound = false;
@@ -2459,7 +2737,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         socket.on('connect', () => {
             console.log('[socket] Connected to signaling server');
-            socket.emit('join', room);
+            socket.emit('join', CALL_LOBBY_ROOM);
+            if (activeCallRoom) socket.emit('join', activeCallRoom);
+            if (pendingCallRoom) socket.emit('join', pendingCallRoom);
             socketRetryCount = 0; // Reset retry count on successful connection
         });
 
@@ -2589,6 +2869,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let pc = null;
     let localStream = null;
     let callId = null;
+    let transferInProgress = false;
     let callConversationId = null;
     let callerInfo = null;
     let callerLocation = null;
@@ -2596,10 +2877,87 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let timerInterval = null;
     let locationData = null;
     let messages = [];
+    let audioActivityMonitors = [];
 
     let pendingOffer = null;
     let pendingCallId = null;
     let pendingCandidates = [];
+
+    function setSpeakingIndicator(labelId, indicatorId, active) {
+        const label = document.getElementById(labelId);
+        if (label) {
+            label.style.background = active ? 'rgba(58,118,117,0.32)' : 'rgba(255,255,255,0.06)';
+            label.style.color = active ? '#e8fffe' : '#fff';
+        }
+        const indicator = indicatorId ? document.getElementById(indicatorId) : null;
+        if (indicator) {
+            indicator.style.background = active ? 'rgba(58,118,117,0.42)' : 'rgba(58, 118, 117,0.2)';
+            indicator.style.boxShadow = active ? '0 0 0 6px rgba(58,118,117,0.22)' : 'none';
+        }
+    }
+
+    function monitorAudioActivity(stream, labelId, indicatorId = null) {
+        if (!stream || !stream.getAudioTracks || stream.getAudioTracks().length === 0) return;
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = new AudioContext();
+            const source = ctx.createMediaStreamSource(stream);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 512;
+            source.connect(analyser);
+            const data = new Uint8Array(analyser.frequencyBinCount);
+            let stopped = false;
+            const tick = () => {
+                if (stopped) return;
+                analyser.getByteTimeDomainData(data);
+                let sum = 0;
+                for (const value of data) {
+                    const diff = value - 128;
+                    sum += diff * diff;
+                }
+                const rms = Math.sqrt(sum / data.length);
+                setSpeakingIndicator(labelId, indicatorId, rms > 7);
+                requestAnimationFrame(tick);
+            };
+            tick();
+            audioActivityMonitors.push(() => {
+                stopped = true;
+                setSpeakingIndicator(labelId, indicatorId, false);
+                try { source.disconnect(); } catch (e) {}
+                try { ctx.close(); } catch (e) {}
+            });
+        } catch (e) {}
+    }
+
+    function stopAudioActivityMonitors() {
+        audioActivityMonitors.forEach(stop => {
+            try { stop(); } catch (e) {}
+        });
+        audioActivityMonitors = [];
+    }
+
+    function getManualCallerInfo() {
+        const manual = {
+            name: document.getElementById('callerNameInput')?.value.trim() || '',
+            phone: document.getElementById('callerPhoneInput')?.value.trim() || '',
+            address: document.getElementById('callerAddressInput')?.value.trim() || ''
+        };
+        return {
+            ...(callerInfo || {}),
+            ...(manual.name ? { name: manual.name } : {}),
+            ...(manual.phone ? { phone: manual.phone } : {}),
+            ...(manual.address ? { address: manual.address } : {})
+        };
+    }
+
+    function getTransferLocationPayload() {
+        const caller = getManualCallerInfo();
+        return {
+            ...(callerLocation || {}),
+            ...(caller.address ? { address: caller.address } : {})
+        };
+    }
 
     // Messaging functions for admin
     function addMessage(text, sender = 'admin', timestamp = Date.now()) {
@@ -2663,10 +3021,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             s.emit('call-message', {
                 text,
                 callId,
+                room: activeCallRoom || getCallRoom(),
                 sender: 'admin',
                 senderName: 'Emergency Services',
                 timestamp: Date.now()
-            }, room);
+            }, activeCallRoom || getCallRoom());
         }
         
         // Log to database using existing chat-send structure
@@ -2703,9 +3062,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const phoneEl = document.getElementById('callerPhone');
         const addrEl = document.getElementById('callerAddress');
         const coordsEl = document.getElementById('callerCoords');
+        const nameInput = document.getElementById('callerNameInput');
+        const phoneInput = document.getElementById('callerPhoneInput');
+        const addressInput = document.getElementById('callerAddressInput');
 
         if (nameEl) nameEl.textContent = callerInfo?.name || '—';
         if (phoneEl) phoneEl.textContent = callerInfo?.phone || '—';
+
+        if (nameInput && !nameInput.value) nameInput.value = callerInfo?.name || '';
+        if (phoneInput && !phoneInput.value) phoneInput.value = callerInfo?.phone || '';
 
         // Fetch address from database if we have user_id or phone
         let address = callerInfo?.address || '';
@@ -2745,6 +3110,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         
         if (addrEl) addrEl.textContent = address || '—';
+
+        if (addressInput && !addressInput.value) addressInput.value = address || '';
 
         const lat = callerLocation?.lat;
         const lng = callerLocation?.lng;
@@ -2872,7 +3239,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             
             const payload = {
                 callId: callId,
-                room: room || null,
+                room: activeCallRoom || pendingCallRoom || getCallRoom(callId),
                 role: 'admin',
                 event: event,
                 location: locationData || null,
@@ -2897,6 +3264,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
     function cleanupCall() {
         stopTimer();
+        stopAudioActivityMonitors();
         setEndEnabled(false);
         setCallActiveBannerVisible(false);
         setIncomingCallModalVisible(false);
@@ -2912,10 +3280,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         pendingOffer = null;
         pendingCallId = null;
+        pendingCallRoom = null;
         pendingCandidates = [];
         callConversationId = null;
         callerInfo = null;
         callerLocation = null;
+        ['callerNameInput', 'callerPhoneInput', 'callerAddressInput'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
         renderCallerDetails();
         renderIncomingEmergencyCallRow();
 
@@ -2931,6 +3304,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         callConnectedAt = null;
         callId = null;
+        activeCallRoom = null;
         locationData = null;
         setTimer(0);
     }
@@ -2966,14 +3340,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 body: JSON.stringify({
                     callId,
                     emergencyType: type,
-                    caller: callerInfo,
-                    location: callerLocation,
+                    caller: getManualCallerInfo(),
+                    location: getTransferLocationPayload(),
                     conversationId: callConversationId
                 })
             });
             const data = await res.json().catch(() => ({}));
             if (data && data.success) {
-                if (statusEl) statusEl.textContent = 'Dispatch request queued (placeholder endpoint).';
+                if (statusEl) statusEl.textContent = 'Dispatch request queued.';
             } else {
                 if (statusEl) statusEl.textContent = data.message || 'Dispatch request failed.';
             }
@@ -2991,20 +3365,24 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         try {
             if (statusEl) statusEl.textContent = 'Starting transfer…';
-            const res = await fetch('../api/transfer-call.php', {
+            const res = await fetch('../../api/transfer-call.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     callId,
+                    room: activeCallRoom || getCallRoom(),
+                    socketUrl: SIGNALING_URL,
+                    socketPath: SOCKET_IO_PATH,
                     emergencyType: document.getElementById('emergencyTypeSelect')?.value || '',
-                    caller: callerInfo,
-                    location: callerLocation,
+                    caller: getManualCallerInfo(),
+                    location: getTransferLocationPayload(),
                     conversationId: callConversationId
                 })
             });
             const data = await res.json().catch(() => ({}));
             if (data && data.success) {
-                if (statusEl) statusEl.textContent = 'Transfer initiated (placeholder endpoint).';
+                if (statusEl) statusEl.textContent = data.integration?.configured ? 'Transfer notification sent.' : 'Transfer payload prepared.';
+                completeActiveCallTransfer(data.data || null);
             } else {
                 if (statusEl) statusEl.textContent = data.message || 'Transfer failed.';
             }
@@ -3012,6 +3390,54 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (statusEl) statusEl.textContent = 'Transfer failed.';
         }
     };
+
+    async function completeActiveCallTransfer(transferPayload = null) {
+        if (!callId) return;
+
+        transferInProgress = true;
+        const activeCallId = callId;
+        const s = ensureSocket();
+        if (s) {
+            s.emit('call-transfer', {
+                callId: activeCallId,
+                room: activeCallRoom || getCallRoom(activeCallId),
+                socketUrl: SIGNALING_URL,
+                socketPath: SOCKET_IO_PATH,
+                transfer: transferPayload || null,
+                transferredBy: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : 'Admin'),
+                transferredAt: new Date().toISOString()
+            }, activeCallRoom || getCallRoom(activeCallId));
+        }
+
+        try {
+            await logCall('transferred', {
+                room: activeCallRoom || getCallRoom(activeCallId),
+                socketUrl: SIGNALING_URL,
+                socketPath: SOCKET_IO_PATH,
+                conversationId: callConversationId || null
+            });
+        } catch (e) {}
+
+        setStatus('Transferred to response team');
+        stopTimer();
+        stopAudioActivityMonitors();
+        setEndEnabled(false);
+
+        if (localStream) {
+            localStream.getTracks().forEach(t => t.stop());
+            localStream = null;
+        }
+        if (pc) {
+            try { pc.onconnectionstatechange = null; pc.close(); } catch (e) {}
+            pc = null;
+        }
+
+        setTimeout(() => {
+            setOverlayVisible(false);
+            cleanupCall();
+            transferInProgress = false;
+        }, 900);
+    }
 
     async function endCall(notifyPeer = true) {
         const durationSec = callConnectedAt ? Math.floor((Date.now() - callConnectedAt) / 1000) : 0;
@@ -3027,9 +3453,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         if (callId) {
             try {
                 // Get user information from callerInfo or use defaults
-                const userId = callerInfo?.user_id || callerInfo?.id || null;
-                const userName = callerInfo?.name || 'Emergency Call User';
-                const userPhone = callerInfo?.phone || null;
+                const callerPayload = getManualCallerInfo();
+                const userId = callerPayload?.user_id || callerPayload?.id || null;
+                const userName = callerPayload?.name || 'Emergency Call User';
+                const userPhone = callerPayload?.phone || null;
                 
                 const saveResponse = await fetch('../api/save-completed-call.php', {
                     method: 'POST',
@@ -3039,6 +3466,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         userId: userId,
                         userName: userName,
                         userPhone: userPhone,
+                        userLocation: callerPayload?.address || callerLocation?.address || null,
+                        location: callerLocation || null,
                         duration: durationSec || 0,
                         endedAt: Math.floor(Date.now() / 1000), // Unix timestamp in seconds
                         conversationId: callConversationId || null // Pass existing conversation ID if available
@@ -3082,7 +3511,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         if (notifyPeer && callId) {
             const s = ensureSocket();
-            if (s) s.emit('hangup', { callId }, room);
+            if (s) s.emit('hangup', { callId, room: activeCallRoom || getCallRoom() }, activeCallRoom || getCallRoom());
         }
 
         setStatus('Call ended');
@@ -3102,13 +3531,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         pc.ontrack = e => {
             const remote = document.getElementById('remote');
-            if (remote) remote.srcObject = e.streams[0];
+            const remoteStream = e.streams[0];
+            if (remote) remote.srcObject = remoteStream;
+            monitorAudioActivity(remoteStream, 'userSpeakingLabel');
         };
 
         pc.onicecandidate = e => {
             if (!e.candidate) return;
             const s = ensureSocket();
-            if (s && callId) s.emit('candidate', { candidate: e.candidate, callId }, room);
+            if (s && callId) s.emit('candidate', { candidate: e.candidate, callId, room: activeCallRoom || getCallRoom() }, activeCallRoom || getCallRoom());
         };
 
         pc.onconnectionstatechange = () => {
@@ -3123,6 +3554,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 setIncomingCallModalVisible(false);
             }
             if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+                if (transferInProgress) return;
                 if (callId) endCall(false);
             }
         };
@@ -3133,6 +3565,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         if (callId && pendingCallId !== callId) return;
 
         callId = pendingCallId;
+        activeCallRoom = pendingCallRoom || getCallRoom(callId);
         try {
             await logCall('accepted', {
                 adminUsername: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : null)
@@ -3151,11 +3584,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
             localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+            monitorAudioActivity(localStream, 'adminSpeakingLabel', 'adminLocalMicIndicator');
 
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             const s = ensureSocket();
-            if (s) s.emit('answer', { sdp: answer, callId }, room);
+            if (s) s.emit('answer', { sdp: answer, callId, room: activeCallRoom }, activeCallRoom);
 
             if (Array.isArray(pendingCandidates) && pendingCandidates.length) {
                 for (const cand of pendingCandidates) {
@@ -3184,10 +3618,31 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             await logCall('declined', { callId: pendingCallId });
         } catch (e) {}
 
+        try {
+            await fetch('../api/save-completed-call.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    callId: pendingCallId,
+                    event: 'declined',
+                    conversationId: callConversationId || null,
+                    userId: callerInfo?.user_id || callerInfo?.id || null,
+                    userName: callerInfo?.name || 'Emergency Call User',
+                    userPhone: callerInfo?.phone || null,
+                    userLocation: callerInfo?.address || callerLocation?.address || null,
+                    location: callerLocation || null,
+                    endedAt: Math.floor(Date.now() / 1000)
+                })
+            });
+        } catch (e) {
+            console.warn('Failed to save declined call report:', e);
+        }
+
         const s = ensureSocket();
-        if (s) s.emit('hangup', { callId: pendingCallId }, room);
+        if (s) s.emit('hangup', { callId: pendingCallId, room: pendingCallRoom || getCallRoom(pendingCallId) }, pendingCallRoom || getCallRoom(pendingCallId));
         pendingOffer = null;
         pendingCallId = null;
+        pendingCallRoom = null;
         pendingCandidates = [];
         renderIncomingEmergencyCallRow();
         _stopAlertSound();
@@ -3208,6 +3663,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const incomingCallId = payload && payload.callId ? payload.callId : null;
             if (!incomingCallId) return;
             if (callId && incomingCallId !== callId) return;
+            if (pendingCallId && pendingCallId !== incomingCallId) return;
+            if (pendingCallId === incomingCallId && pendingOffer) return;
 
             callConversationId = payload && payload.conversationId ? payload.conversationId : null;
             callerInfo = payload && payload.caller ? payload.caller : null;
@@ -3219,6 +3676,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             // We'll create/find the conversation when saving the completed call
 
             pendingCallId = incomingCallId;
+            pendingCallRoom = payload && payload.room ? payload.room : getCallRoom(incomingCallId);
+            s.emit('join', pendingCallRoom);
             pendingOffer = sdp;
             pendingCandidates = [];
 
@@ -3239,7 +3698,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (incomingCallId && pendingCallId && incomingCallId !== pendingCallId) return;
 
             if (!pc || !callId) {
-                if (cand) pendingCandidates.push(cand);
+                if (cand && incomingCallId && pendingCallId === incomingCallId) pendingCandidates.push(cand);
                 return;
             }
 
