@@ -76,7 +76,16 @@ function ensureTransferAuditTable(PDO $pdo): void {
     }
 }
 
-function responseTeamFormPayload(array $payload, string $apiKey): array {
+function responseTeamActionFromUrl(string $targetUrl): string {
+    $query = parse_url($targetUrl, PHP_URL_QUERY);
+    if (!is_string($query) || $query === '') {
+        return '';
+    }
+    parse_str($query, $params);
+    return trim((string)($params['action'] ?? ''));
+}
+
+function responseTeamFormPayload(array $payload, string $apiKey, string $action): array {
     $caller = is_array($payload['caller'] ?? null) ? $payload['caller'] : [];
     $location = is_array($payload['location'] ?? null) ? $payload['location'] : [];
     $description = trim((string)($payload['description'] ?? ''));
@@ -93,7 +102,7 @@ function responseTeamFormPayload(array $payload, string $apiKey): array {
 
     return [
         'api_key' => $apiKey,
-        'action' => 'create_incident',
+        'action' => $action !== '' ? $action : ($payload['action'] ?? 'incoming-transfer'),
         'event' => $payload['event'] ?? 'emergency_call_transfer',
         'call_id' => $payload['callId'] ?? '',
         'callId' => $payload['callId'] ?? '',
@@ -124,6 +133,7 @@ function responseTeamFormPayload(array $payload, string $apiKey): array {
 }
 
 function postResponseTeamPayload(string $targetUrl, array $payload, string $apiKey): array {
+    $action = responseTeamActionFromUrl($targetUrl);
     $headers = [
         'Content-Type: application/json',
         'Accept: application/json',
@@ -142,6 +152,8 @@ function postResponseTeamPayload(string $targetUrl, array $payload, string $apiK
         CURLOPT_HTTPHEADER => $headers,
         CURLOPT_POSTFIELDS => $jsonBody,
         CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_USERAGENT => 'AlertaraQC-EmergencyCom/1.0',
         CURLOPT_CONNECTTIMEOUT => 5,
         CURLOPT_TIMEOUT => 12,
     ]);
@@ -165,20 +177,25 @@ function postResponseTeamPayload(string $targetUrl, array $payload, string $apiK
         ];
     }
 
-    $formHeaders = ['Accept: application/json'];
+    $formHeaders = [
+        'Accept: application/json',
+        'Content-Type: application/x-www-form-urlencoded',
+    ];
     if ($apiKey !== '') {
         $formHeaders[] = 'Authorization: Bearer ' . $apiKey;
         $formHeaders[] = 'X-API-Key: ' . $apiKey;
         $formHeaders[] = 'X-ERS-API-Key: ' . $apiKey;
         $formHeaders[] = 'X-ERS-Client: emergency-comm-alertaraqc';
     }
-    $formBody = http_build_query(responseTeamFormPayload($payload, $apiKey));
+    $formBody = http_build_query(responseTeamFormPayload($payload, $apiKey, $action));
     $ch = curl_init($targetUrl);
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_HTTPHEADER => $formHeaders,
         CURLOPT_POSTFIELDS => $formBody,
         CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_USERAGENT => 'AlertaraQC-EmergencyCom/1.0',
         CURLOPT_CONNECTTIMEOUT => 5,
         CURLOPT_TIMEOUT => 12,
     ]);
@@ -421,7 +438,8 @@ $payload = [
 
 $payloadCaller = is_array($payload['caller'] ?? null) ? $payload['caller'] : [];
 $payloadLocation = is_array($payload['location'] ?? null) ? $payload['location'] : [];
-$payload['action'] = 'create_incident';
+$payload['action'] = responseTeamActionFromUrl($targetUrl) ?: 'incoming-transfer';
+$payload['createIncidentAction'] = 'create_incident';
 $payload['type'] = $payload['emergencyType'] ?: 'emergency';
 $payload['incident_type'] = $payload['emergencyType'] ?: 'emergency';
 $payload['caller_name'] = $payloadCaller['name'] ?? '';
@@ -495,6 +513,23 @@ if (isset($transferResult['jsonAttempt'])) {
     $result['integration']['jsonAttempt'] = $transferResult['jsonAttempt'];
 }
 $status = !empty($transferResult['ok']) ? 'sent' : 'failed';
+if ($status === 'failed') {
+    $logResponse = is_string($responseBody) ? substr($responseBody, 0, 1000) : '';
+    $logJsonAttempt = '';
+    if (isset($transferResult['jsonAttempt']) && is_array($transferResult['jsonAttempt'])) {
+        $jsonAttemptResponse = $transferResult['jsonAttempt']['response'] ?? '';
+        $logJsonAttempt = ' json_http=' . (int)($transferResult['jsonAttempt']['httpStatus'] ?? 0)
+            . ' json_error=' . (string)($transferResult['jsonAttempt']['error'] ?? '')
+            . ' json_response=' . (is_string($jsonAttemptResponse) ? substr($jsonAttemptResponse, 0, 500) : '');
+    }
+    error_log(
+        'AlertaraQC transfer failed: format=' . (string)($transferResult['format'] ?? 'unknown')
+        . ' http=' . $httpStatus
+        . ' curl_error=' . (string)$curlError
+        . ' response=' . $logResponse
+        . $logJsonAttempt
+    );
+}
 
 $auditPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 $caller = $payload['caller'] ?: [];

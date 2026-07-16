@@ -672,6 +672,31 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         let pollInterval = null;
         let messageInterval = null;
 
+        async function readApiResponse(response) {
+            const raw = await response.text();
+            let data = {};
+            if (raw) {
+                try {
+                    data = JSON.parse(raw);
+                } catch (e) {
+                    data = {
+                        success: false,
+                        message: raw
+                    };
+                }
+            }
+            if (!response.ok) {
+                data.success = false;
+                if (!data.message) {
+                    data.message = `HTTP ${response.status}`;
+                }
+                data.integration = data.integration || {};
+                data.integration.httpStatus = data.integration.httpStatus || response.status;
+                data.integration.response = data.integration.response || raw;
+            }
+            return data;
+        }
+
         // --- View Management ---
         
         function switchTab(status) {
@@ -799,7 +824,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             body.innerHTML = '<tr><td colspan="7" class="twc-logs-empty">Loading transferred records...</td></tr>';
             try {
                 const res = await fetch(transferApiUrl('?limit=50'));
-                const data = await res.json();
+                const data = await readApiResponse(res);
                 const rows = Array.isArray(data.transfers) ? data.transfers : [];
                 if (!data.success || rows.length === 0) {
                     body.innerHTML = '<tr><td colspan="7" class="twc-logs-empty">No transferred calls or reports yet.</td></tr>';
@@ -839,7 +864,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'request_status', transferId })
                 });
-                const data = await res.json().catch(() => ({}));
+                const data = await readApiResponse(res);
                 alert(data.message || (data.success ? 'Status requested.' : 'Status request failed.'));
                 loadTransferredRecords();
             } catch (e) {
@@ -858,7 +883,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'update_status', transferId, responseStatus, note })
                 });
-                const data = await res.json().catch(() => ({}));
+                const data = await readApiResponse(res);
                 alert(data.message || (data.success ? 'Status updated.' : 'Status update failed.'));
                 loadTransferredRecords();
             } catch (e) {
@@ -1864,7 +1889,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         function formatTransferError(result, fallback = 'Transfer failed.') {
             const parts = [];
-            if (result?.message) parts.push(result.message);
+            const compact = (value, max = 180) => {
+                let text = String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                return text.length > max ? text.slice(0, max) + '...' : text;
+            };
+            if (result?.message) parts.push(compact(result.message));
             const integration = result?.integration || {};
             if (integration.httpStatus) parts.push(`HTTP ${integration.httpStatus}`);
             if (integration.response) {
@@ -1873,8 +1902,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     const decoded = JSON.parse(responseText);
                     responseText = decoded.message || decoded.error || JSON.stringify(decoded);
                 } catch (e) {}
-                if (responseText.length > 180) responseText = responseText.slice(0, 180) + '...';
-                parts.push(responseText);
+                parts.push(compact(responseText));
             }
             return parts.filter(Boolean).join(' | ') || fallback;
         }
@@ -1917,7 +1945,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                const result = await res.json().catch(() => ({}));
+                const result = await readApiResponse(res);
                 if (!result.success) {
                     setTransferModalBusy(false);
                     setTransferModalMessage(formatTransferError(result), 'error');
@@ -3643,7 +3671,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     conversationId: callConversationId
                 })
             });
-            const data = await res.json().catch(() => ({}));
+            const data = await readApiResponse(res);
             if (data && data.success) {
                 if (statusEl) statusEl.textContent = data.integration?.configured ? 'Transfer notification sent.' : 'Transfer payload prepared.';
                 completeActiveCallTransfer(data.data || null);
