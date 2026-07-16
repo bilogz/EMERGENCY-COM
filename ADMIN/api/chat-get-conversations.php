@@ -33,6 +33,7 @@ try {
     $scope = strtolower(trim((string)($_GET['scope'] ?? '')));
     $assignedTo = twc_safe_int($_GET['assigned_to'] ?? null);
     $assignedToMe = filter_var($_GET['assigned_to_me'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    $unassignedOnly = filter_var($_GET['unassigned_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
     $adminSessionId = twc_safe_int($_SESSION['admin_user_id'] ?? null);
 
     $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
@@ -109,6 +110,8 @@ try {
     } elseif ($assignedTo !== null) {
         $whereSql .= " AND c.assigned_to = ? ";
         $params[] = $assignedTo;
+    } elseif ($unassignedOnly) {
+        $whereSql .= " AND c.assigned_to IS NULL ";
     }
 
     if ($search !== '') {

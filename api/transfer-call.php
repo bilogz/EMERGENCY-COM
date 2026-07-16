@@ -186,13 +186,18 @@ function postResponseTeamPayload(string $targetUrl, array $payload, string $apiK
     $formError = curl_error($ch);
     $formStatus = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+    $formOk = $formResponse !== false && $formError === '' && $formStatus >= 200 && $formStatus < 300;
+    $formDecoded = json_decode((string)$formResponse, true);
+    if (is_array($formDecoded) && array_key_exists('success', $formDecoded) && !$formDecoded['success']) {
+        $formOk = false;
+    }
 
     return [
         'format' => 'form',
         'httpStatus' => $formStatus,
         'response' => $formResponse,
         'error' => $formError,
-        'ok' => $formResponse !== false && $formError === '' && $formStatus >= 200 && $formStatus < 300,
+        'ok' => $formOk,
         'jsonAttempt' => [
             'httpStatus' => $status,
             'response' => $body,
@@ -244,6 +249,15 @@ if ($action === 'update_status') {
         WHERE id = ?
     ");
     $stmt->execute([$responseStatus, trim((string)($input['note'] ?? '')), $transferId]);
+    $stmt = $pdo->prepare("SELECT conversation_id FROM transfer_call_audit WHERE id = ? LIMIT 1");
+    $stmt->execute([$transferId]);
+    $linkedConversationId = (int)($stmt->fetchColumn() ?: 0);
+    if ($linkedConversationId > 0 && in_array($responseStatus, ['fake_call', 'resolved', 'cancelled', 'duplicate', 'unable_to_locate'], true)) {
+        try {
+            $pdo->prepare("UPDATE conversations SET status = 'resolved', updated_at = NOW() WHERE conversation_id = ?")
+                ->execute([$linkedConversationId]);
+        } catch (Throwable $e) {}
+    }
     sendJsonResponse(true, 'Transfer emergency status updated.', [
         'transferId' => $transferId,
         'responseStatus' => $responseStatus,

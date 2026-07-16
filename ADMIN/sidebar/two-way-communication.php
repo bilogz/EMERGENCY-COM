@@ -115,6 +115,106 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             70% { box-shadow: 0 0 0 6px rgba(46, 204, 113, 0); }
             100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
         }
+
+        .twc-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 10050;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(15, 23, 42, 0.62);
+            backdrop-filter: blur(6px);
+        }
+        .twc-modal-backdrop.active {
+            display: flex;
+        }
+        .twc-transfer-modal {
+            width: min(520px, 94vw);
+            border: 1px solid color-mix(in srgb, var(--primary-color-1) 28%, var(--border-color-1));
+            border-radius: 8px;
+            background: var(--card-bg-1);
+            color: var(--text-color-1);
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+            overflow: hidden;
+        }
+        .twc-transfer-modal__head {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 1rem 1.15rem;
+            border-bottom: 1px solid var(--border-color-1);
+            background: color-mix(in srgb, var(--primary-color-1) 9%, var(--card-bg-1));
+        }
+        .twc-transfer-modal__icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            background: var(--primary-color-1);
+        }
+        .twc-transfer-modal__head h3 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 800;
+        }
+        .twc-transfer-modal__head p {
+            margin: 0.15rem 0 0;
+            color: var(--text-secondary-1);
+            font-size: 0.82rem;
+        }
+        .twc-transfer-modal__body {
+            padding: 1rem 1.15rem;
+        }
+        .twc-transfer-summary {
+            display: grid;
+            gap: 0.55rem;
+            padding: 0.85rem;
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            background: var(--bg-color-2);
+        }
+        .twc-transfer-summary div {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            font-size: 0.86rem;
+        }
+        .twc-transfer-summary span:first-child {
+            color: var(--text-secondary-1);
+        }
+        .twc-transfer-summary span:last-child {
+            text-align: right;
+            font-weight: 700;
+        }
+        .twc-transfer-modal__message {
+            margin-top: 0.85rem;
+            min-height: 1.3rem;
+            color: var(--text-secondary-1);
+            font-size: 0.88rem;
+        }
+        .twc-transfer-modal__message.error {
+            color: #dc2626;
+            font-weight: 700;
+        }
+        .twc-transfer-modal__message.success {
+            color: #15803d;
+            font-weight: 700;
+        }
+        .twc-transfer-modal__actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.65rem;
+            padding: 0.9rem 1.15rem 1.1rem;
+            border-top: 1px solid var(--border-color-1);
+        }
+        .twc-transfer-modal__actions .btn {
+            min-width: 108px;
+            justify-content: center;
+        }
     </style>
 </head>
 <body class="twc-page">
@@ -173,7 +273,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                     <i class="fas fa-user-check"></i> Assigned
                                 </div>
                                 <div class="chat-tab" onclick="switchTab('closed')">
-                                    <i class="fas fa-check-circle"></i> Closed
+                                    <i class="fas fa-hourglass-half"></i> Pending Status
                                 </div>
                             </div>
                             <div class="chat-filters">
@@ -268,7 +368,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                          <i class="fas fa-share-from-square"></i> Transfer
                                      </button>
                                      <button class="btn btn-sm btn-secondary" id="releaseConversationBtn" style="display: none;">
-                                         <i class="fas fa-user-clock"></i> Pass to Admin
+                                         <i class="fas fa-user-clock"></i> Hand Over to Other Admin
                                      </button>
                                      <button class="btn btn-sm btn-secondary" id="toggleStatusBtn" style="display: none;">
                                          <i class="fas fa-check"></i> Close Chat
@@ -318,6 +418,37 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                             <tr><td colspan="7" class="twc-logs-empty">No transferred records loaded.</td></tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+
+            <div class="twc-modal-backdrop" id="twcTransferModal" aria-hidden="true">
+                <div class="twc-transfer-modal" role="dialog" aria-modal="true" aria-labelledby="twcTransferModalTitle">
+                    <div class="twc-transfer-modal__head">
+                        <div class="twc-transfer-modal__icon">
+                            <i class="fas fa-share-from-square"></i>
+                        </div>
+                        <div>
+                            <h3 id="twcTransferModalTitle">Transfer to Response Team</h3>
+                            <p id="twcTransferModalSubtitle">Send this report and message history to ERS.</p>
+                        </div>
+                    </div>
+                    <div class="twc-transfer-modal__body">
+                        <div class="twc-transfer-summary">
+                            <div><span>Citizen</span><span id="twcTransferCitizen">-</span></div>
+                            <div><span>Emergency Type</span><span id="twcTransferType">-</span></div>
+                            <div><span>Location</span><span id="twcTransferLocation">-</span></div>
+                        </div>
+                        <div class="twc-transfer-modal__message" id="twcTransferMessage">
+                            Confirm transfer to the response team system.
+                        </div>
+                    </div>
+                    <div class="twc-transfer-modal__actions">
+                        <button type="button" class="btn btn-secondary" id="twcTransferCancelBtn">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="twcTransferConfirmBtn">
+                            <i class="fas fa-share-from-square"></i> Transfer
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -541,7 +672,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             
             // UI Update
             document.querySelectorAll('.chat-tab').forEach(tab => {
-                tab.classList.toggle('active', tab.textContent.trim().toLowerCase().includes(status));
+                const onclick = tab.getAttribute('onclick') || '';
+                tab.classList.toggle('active', onclick.includes(`'${status}'`));
             });
 
             // Reset List
@@ -559,6 +691,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         function closeChatPanel() {
+            if (currentConversationId && currentConversationData && Number(currentConversationData.assignedTo || 0) === Number(ADMIN_ID || 0)) {
+                showTransferModalNotice(
+                    { userName: currentConversationData.userName || 'Assigned report', category: currentConversationData.category || 'Report', userLocation: currentConversationData.userLocation || '-' },
+                    'This report is assigned to you. Use Hand Over to Other Admin before leaving it.',
+                    'error'
+                );
+                return;
+            }
             closeMobileChat();
             document.querySelectorAll('.conversation-item').forEach(i => i.classList.remove('active'));
             currentConversationId = null;
@@ -1342,6 +1482,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     page: currentPage,
                     limit: pageLimit
                 });
+                if (currentStatus === 'open') {
+                    params.set('unassigned_only', '1');
+                }
+                if (currentStatus === 'assigned') {
+                    params.set('assigned_to_me', '1');
+                }
                 if (PAGE_MODE === 'citizen_reports') {
                     params.set('scope', 'citizen_reports');
                 }
@@ -1622,14 +1768,118 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             control.style.display = 'inline-flex';
         }
 
+        function setTransferModalBusy(busy) {
+            const confirmBtn = document.getElementById('twcTransferConfirmBtn');
+            const cancelBtn = document.getElementById('twcTransferCancelBtn');
+            if (confirmBtn) {
+                confirmBtn.disabled = busy;
+                confirmBtn.innerHTML = busy
+                    ? '<i class="fas fa-spinner fa-spin"></i> Sending...'
+                    : '<i class="fas fa-share-from-square"></i> Transfer';
+            }
+            if (cancelBtn) cancelBtn.disabled = busy;
+        }
+
+        function setTransferModalMessage(message, state = '') {
+            const el = document.getElementById('twcTransferMessage');
+            if (!el) return;
+            el.textContent = message || '';
+            el.className = `twc-transfer-modal__message ${state}`.trim();
+        }
+
+        function closeTransferModal() {
+            const modal = document.getElementById('twcTransferModal');
+            if (!modal) return;
+            modal.classList.remove('active');
+            modal.setAttribute('aria-hidden', 'true');
+            setTransferModalBusy(false);
+        }
+
+        function openTransferModal(data) {
+            const modal = document.getElementById('twcTransferModal');
+            if (!modal) return Promise.resolve(false);
+
+            const citizenEl = document.getElementById('twcTransferCitizen');
+            const typeEl = document.getElementById('twcTransferType');
+            const locationEl = document.getElementById('twcTransferLocation');
+            if (citizenEl) citizenEl.textContent = data?.userName || data?.caller?.name || 'Guest User';
+            if (typeEl) typeEl.textContent = data?.category || data?.department || data?.userConcern || 'Emergency report';
+            if (locationEl) locationEl.textContent = data?.userLocation || data?.caller?.address || 'Not specified';
+
+            setTransferModalMessage('Confirm transfer to the response team system.');
+            setTransferModalBusy(false);
+            modal.classList.add('active');
+            modal.setAttribute('aria-hidden', 'false');
+
+            return new Promise(resolve => {
+                const confirmBtn = document.getElementById('twcTransferConfirmBtn');
+                const cancelBtn = document.getElementById('twcTransferCancelBtn');
+                const cleanup = (value) => {
+                    if (confirmBtn) confirmBtn.removeEventListener('click', onConfirm);
+                    if (cancelBtn) cancelBtn.removeEventListener('click', onCancel);
+                    modal.removeEventListener('click', onBackdrop);
+                    document.removeEventListener('keydown', onKeydown);
+                    if (!value) closeTransferModal();
+                    resolve(value);
+                };
+                const onConfirm = () => cleanup(true);
+                const onCancel = () => cleanup(false);
+                const onBackdrop = (event) => {
+                    if (event.target === modal) cleanup(false);
+                };
+                const onKeydown = (event) => {
+                    if (event.key === 'Escape') cleanup(false);
+                };
+                if (confirmBtn) confirmBtn.addEventListener('click', onConfirm);
+                if (cancelBtn) cancelBtn.addEventListener('click', onCancel);
+                modal.addEventListener('click', onBackdrop);
+                document.addEventListener('keydown', onKeydown);
+                setTimeout(() => confirmBtn?.focus(), 0);
+            });
+        }
+
+        function showTransferModalNotice(data, message, state = '') {
+            const modal = document.getElementById('twcTransferModal');
+            if (!modal) return;
+            const citizenEl = document.getElementById('twcTransferCitizen');
+            const typeEl = document.getElementById('twcTransferType');
+            const locationEl = document.getElementById('twcTransferLocation');
+            if (citizenEl) citizenEl.textContent = data?.userName || 'Notice';
+            if (typeEl) typeEl.textContent = data?.category || '-';
+            if (locationEl) locationEl.textContent = data?.userLocation || '-';
+            setTransferModalBusy(false);
+            setTransferModalMessage(message, state);
+            modal.classList.add('active');
+            modal.setAttribute('aria-hidden', 'false');
+            setTimeout(closeTransferModal, 1200);
+        }
+
+        function formatTransferError(result, fallback = 'Transfer failed.') {
+            const parts = [];
+            if (result?.message) parts.push(result.message);
+            const integration = result?.integration || {};
+            if (integration.httpStatus) parts.push(`HTTP ${integration.httpStatus}`);
+            if (integration.response) {
+                let responseText = String(integration.response);
+                try {
+                    const decoded = JSON.parse(responseText);
+                    responseText = decoded.message || decoded.error || JSON.stringify(decoded);
+                } catch (e) {}
+                if (responseText.length > 180) responseText = responseText.slice(0, 180) + '...';
+                parts.push(responseText);
+            }
+            return parts.filter(Boolean).join(' | ') || fallback;
+        }
+
         async function transferConversationReport(conversationData = null) {
             const data = conversationData || currentConversationData;
             const conversationId = data?.id || currentConversationId;
             if (!conversationId) {
-                alert('No report selected to transfer.');
+                showTransferModalNotice({ userName: 'No report selected', category: '-', userLocation: '-' }, 'No report selected to transfer.', 'error');
                 return;
             }
-            if (!confirm('Transfer this report/messages to the response team?')) return;
+            const confirmed = await openTransferModal(data);
+            if (!confirmed) return;
 
             const payload = {
                 callId: data?.callId || null,
@@ -1652,6 +1902,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             };
 
             try {
+                setTransferModalBusy(true);
+                setTransferModalMessage('Sending report to response team...');
                 const res = await fetch('../../api/transfer-call.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1659,16 +1911,25 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 });
                 const result = await res.json().catch(() => ({}));
                 if (!result.success) {
-                    alert(result.message || 'Transfer failed.');
+                    setTransferModalBusy(false);
+                    setTransferModalMessage(formatTransferError(result), 'error');
                     return;
                 }
-                alert(result.integration?.configured ? 'Transfer notification sent.' : 'Transfer payload prepared.');
+                setTransferModalMessage(result.integration?.configured ? 'Transfer notification sent.' : 'Transfer payload prepared.', 'success');
+                if (currentConversationData && String(currentConversationData.id) === String(conversationId)) {
+                    currentConversationData.assignedTo = null;
+                }
                 resetConversationsAndReload();
                 if (currentMainView === 'transfers') {
                     loadTransferredRecords();
                 }
+                if (String(currentConversationId) === String(conversationId)) {
+                    closeChatPanel();
+                }
+                setTimeout(closeTransferModal, 1100);
             } catch (e) {
-                alert('Transfer failed.');
+                setTransferModalBusy(false);
+                setTransferModalMessage('Transfer failed.', 'error');
             }
         }
 
@@ -1698,6 +1959,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     setConversationLocked(true, data.message || 'Locked by another admin');
                     return false;
                 }
+                if (currentConversationData && String(currentConversationData.id) === String(conversationId)) {
+                    currentConversationData.assignedTo = data.assignedTo || ADMIN_ID;
+                    currentConversationData.workflowStatus = 'in_progress';
+                }
                 setConversationLocked(false);
                 return true;
             } catch (e) {
@@ -1708,8 +1973,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         async function releaseConversationForOtherAdmin() {
             if (!currentConversationId) return;
-            if (!confirm('Pass this report/message to another admin? This will unlock it for others.')) return;
+            const confirmed = await openTransferModal({
+                userName: currentConversationData?.userName || 'Current report',
+                category: currentConversationData?.category || currentConversationData?.userConcern || 'Report',
+                userLocation: currentConversationData?.userLocation || 'Not specified'
+            });
+            if (!confirmed) return;
             try {
+                setTransferModalBusy(true);
+                setTransferModalMessage('Handing over this report to the admin queue...');
                 const res = await fetch(API_BASE + 'chat-claim.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1717,14 +1989,18 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!data.success) {
-                    alert(data.message || 'Failed to release report.');
+                    setTransferModalBusy(false);
+                    setTransferModalMessage(data.message || 'Failed to hand over report.', 'error');
                     return;
                 }
-                alert('Report released for another admin.');
+                setTransferModalMessage('Report handed over to other admins.', 'success');
+                if (currentConversationData) currentConversationData.assignedTo = null;
                 closeChatPanel();
                 resetConversationsAndReload();
+                setTimeout(closeTransferModal, 1000);
             } catch (e) {
-                alert('Failed to release report.');
+                setTransferModalBusy(false);
+                setTransferModalMessage('Failed to hand over report.', 'error');
             }
         }
 
@@ -1787,6 +2063,19 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         // --- Chat Interaction ---
 
         function openConversation(id, data, element) {
+            if (
+                currentConversationId &&
+                String(currentConversationId) !== String(id) &&
+                currentConversationData &&
+                Number(currentConversationData.assignedTo || 0) === Number(ADMIN_ID || 0)
+            ) {
+                showTransferModalNotice(
+                    { userName: currentConversationData.userName || 'Assigned report', category: currentConversationData.category || 'Report', userLocation: currentConversationData.userLocation || '-' },
+                    'This report is assigned to you. Use Hand Over to Other Admin before opening another report.',
+                    'error'
+                );
+                return;
+            }
             currentConversationId = id;
             currentConversationData = data || null;
             lastMessageId = 0;
@@ -2539,8 +2828,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         </select>
 
                         <div style="display:flex; gap:10px;">
-                            <button id="dispatchRespondentBtn" class="btn btn-primary" style="flex:1; padding:10px 12px;">Send Respondent</button>
-                            <button id="transferCallBtn" class="btn btn-secondary" style="flex:1; padding:10px 12px;">Transfer Call</button>
+                            <button id="transferCallBtn" class="btn btn-primary" style="flex:1; padding:12px 14px; min-height:48px;">
+                                <i class="fas fa-share-from-square"></i> Transfer Call
+                            </button>
                         </div>
 
                         <div id="dispatchStatus" style="font-size:12px; opacity:0.85; min-height:18px;"></div>
@@ -2550,8 +2840,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
                     <!-- Call Header -->
                     <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
-                        <div id="adminLocalMicIndicator" title="Your microphone activity" style="width:44px; height:44px; border-radius:12px; background:rgba(58, 118, 117,0.2); display:flex; align-items:center; justify-content:center; transition:box-shadow .18s ease, background .18s ease;">
-                            <i class="fas fa-headset" style="color:#3a7675;"></i>
+                        <div id="adminLocalMicIndicator" title="Your microphone activity" style="width:64px; height:64px; border-radius:16px; background:rgba(58, 118, 117,0.28); display:flex; align-items:center; justify-content:center; transition:box-shadow .18s ease, background .18s ease, transform .18s ease; border:1px solid rgba(255,255,255,0.16);">
+                            <i class="fas fa-microphone" style="color:#e8fffe; font-size:28px;"></i>
                         </div>
                         <div style="flex:1;">
                             <div style="font-weight:700; font-size:16px;">Emergency Call</div>
@@ -2560,12 +2850,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         <div id="callTimer" style="font-variant-numeric:tabular-nums; font-weight:700;">00:00</div>
                     </div>
 
-                    <div style="display:flex; gap:8px; margin-top:10px; font-size:12px; opacity:0.9;">
-                        <div id="adminSpeakingLabel" style="display:flex; align-items:center; gap:6px; padding:6px 9px; border-radius:999px; background:rgba(255,255,255,0.06); transition:background .18s ease, color .18s ease;">
-                            <i class="fas fa-microphone"></i><span>You</span>
+                    <div style="display:flex; gap:10px; margin-top:10px; font-size:13px; opacity:1;">
+                        <div id="adminSpeakingLabel" style="display:flex; align-items:center; gap:8px; padding:9px 13px; border-radius:999px; background:rgba(255,255,255,0.08); transition:background .18s ease, color .18s ease, box-shadow .18s ease; font-weight:800;">
+                            <i class="fas fa-microphone" style="font-size:18px;"></i><span>You</span>
                         </div>
-                        <div id="userSpeakingLabel" style="display:flex; align-items:center; gap:6px; padding:6px 9px; border-radius:999px; background:rgba(255,255,255,0.06); transition:background .18s ease, color .18s ease;">
-                            <i class="fas fa-user"></i><span>Caller</span>
+                        <div id="userSpeakingLabel" style="display:flex; align-items:center; gap:8px; padding:9px 13px; border-radius:999px; background:rgba(255,255,255,0.08); transition:background .18s ease, color .18s ease, box-shadow .18s ease; font-weight:800;">
+                            <i class="fas fa-microphone-lines" style="font-size:18px;"></i><span>Caller</span>
                         </div>
                     </div>
 
@@ -2886,13 +3176,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     function setSpeakingIndicator(labelId, indicatorId, active) {
         const label = document.getElementById(labelId);
         if (label) {
-            label.style.background = active ? 'rgba(58,118,117,0.32)' : 'rgba(255,255,255,0.06)';
+            label.style.background = active ? 'rgba(20,184,166,0.35)' : 'rgba(255,255,255,0.08)';
             label.style.color = active ? '#e8fffe' : '#fff';
+            label.style.boxShadow = active ? '0 0 0 4px rgba(20,184,166,0.18), 0 0 22px rgba(20,184,166,0.38)' : 'none';
         }
         const indicator = indicatorId ? document.getElementById(indicatorId) : null;
         if (indicator) {
-            indicator.style.background = active ? 'rgba(58,118,117,0.42)' : 'rgba(58, 118, 117,0.2)';
-            indicator.style.boxShadow = active ? '0 0 0 6px rgba(58,118,117,0.22)' : 'none';
+            indicator.style.background = active ? 'rgba(20,184,166,0.48)' : 'rgba(58, 118, 117,0.28)';
+            indicator.style.boxShadow = active ? '0 0 0 8px rgba(20,184,166,0.20), 0 0 34px rgba(20,184,166,0.55)' : 'none';
+            indicator.style.transform = active ? 'scale(1.08)' : 'scale(1)';
         }
     }
 
@@ -3320,42 +3612,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     document.getElementById('incomingAnswerBtn').onclick = () => acceptIncomingEmergencyCall();
     document.getElementById('incomingDeclineBtn').onclick = () => declineIncomingEmergencyCall();
 
-    document.getElementById('dispatchRespondentBtn').onclick = async () => {
-        const statusEl = document.getElementById('dispatchStatus');
-        if (statusEl) statusEl.textContent = '';
-        if (!callId) {
-            if (statusEl) statusEl.textContent = 'No active call.';
-            return;
-        }
-        const type = document.getElementById('emergencyTypeSelect')?.value || '';
-        if (!type) {
-            if (statusEl) statusEl.textContent = 'Please choose an emergency type.';
-            return;
-        }
-        try {
-            if (statusEl) statusEl.textContent = 'Sending dispatch request…';
-            const res = await fetch('../api/dispatch-respondent.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    callId,
-                    emergencyType: type,
-                    caller: getManualCallerInfo(),
-                    location: getTransferLocationPayload(),
-                    conversationId: callConversationId
-                })
-            });
-            const data = await res.json().catch(() => ({}));
-            if (data && data.success) {
-                if (statusEl) statusEl.textContent = 'Dispatch request queued.';
-            } else {
-                if (statusEl) statusEl.textContent = data.message || 'Dispatch request failed.';
-            }
-        } catch (e) {
-            if (statusEl) statusEl.textContent = 'Dispatch request failed.';
-        }
-    };
-
     document.getElementById('transferCallBtn').onclick = async () => {
         const statusEl = document.getElementById('dispatchStatus');
         if (statusEl) statusEl.textContent = '';
@@ -3384,10 +3640,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (statusEl) statusEl.textContent = data.integration?.configured ? 'Transfer notification sent.' : 'Transfer payload prepared.';
                 completeActiveCallTransfer(data.data || null);
             } else {
-                if (statusEl) statusEl.textContent = data.message || 'Transfer failed.';
+                if (statusEl) statusEl.textContent = formatTransferError(data, 'Transfer failed.');
             }
         } catch (e) {
-            if (statusEl) statusEl.textContent = 'Transfer failed.';
+            if (statusEl) statusEl.textContent = `Transfer failed: ${e.message || e}`;
         }
     };
 

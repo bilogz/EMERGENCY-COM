@@ -131,6 +131,49 @@ $pageTitle = 'Log and Audit Trail';
                         </div>
                     </div>
 
+                    <!-- Two-Way Communication Audit Panels -->
+                    <div class="module-card">
+                        <div class="module-card-header">
+                            <h2><i class="fas fa-comments"></i> Messages and Calls Audit</h2>
+                        </div>
+                        <div class="module-card-content">
+                            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap:1rem;">
+                                <div class="table-responsive">
+                                    <h3 style="margin:0 0 .75rem; font-size:1rem;"><i class="fas fa-share-from-square"></i> Response Transfers</h3>
+                                    <table class="data-table" id="transferAuditTable">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Time</th>
+                                                <th>Caller</th>
+                                                <th>Status</th>
+                                                <th>Response</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody><tr><td colspan="6">Loading...</td></tr></tbody>
+                                    </table>
+                                </div>
+                                <div class="table-responsive">
+                                    <h3 style="margin:0 0 .75rem; font-size:1rem;"><i class="fas fa-user-clock"></i> Admin Handovers</h3>
+                                    <table class="data-table" id="assignmentAuditTable">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Time</th>
+                                                <th>Conversation</th>
+                                                <th>Action</th>
+                                                <th>Admin</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody><tr><td colspan="6">Loading...</td></tr></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Audit Trail Table -->
                     <div class="module-card">
                         <div class="module-card-header">
@@ -178,7 +221,100 @@ $pageTitle = 'Log and Audit Trail';
         </div>
     </div>
 
+    <div id="twcAuditDetailsModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="twcAuditDetailsTitle">Audit Details</h2>
+                <button class="modal-close" onclick="closeTwcAuditDetailsModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="twcAuditDetailsContent"></div>
+        </div>
+    </div>
+
     <script>
+        let twcTransferAuditRows = [];
+        let twcAssignmentAuditRows = [];
+
+        function escapeAuditHtml(value) {
+            const div = document.createElement('div');
+            div.textContent = value == null ? '' : String(value);
+            return div.innerHTML;
+        }
+
+        function loadTwcAuditSummary() {
+            fetch('../api/twc-audit-summary.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) return;
+                    twcTransferAuditRows = data.transfers || [];
+                    twcAssignmentAuditRows = data.assignments || [];
+                    renderTransferAuditRows();
+                    renderAssignmentAuditRows();
+                });
+        }
+
+        function renderTransferAuditRows() {
+            const tbody = document.querySelector('#transferAuditTable tbody');
+            if (!tbody) return;
+            if (!twcTransferAuditRows.length) {
+                tbody.innerHTML = '<tr><td colspan="6">No transfer audit records.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = twcTransferAuditRows.map(row => `
+                <tr>
+                    <td>${escapeAuditHtml(row.id)}</td>
+                    <td><small>${escapeAuditHtml(row.created_at)}</small></td>
+                    <td>${escapeAuditHtml(row.caller_name || 'Unknown')}</td>
+                    <td><span class="badge ${escapeAuditHtml(row.status || '')}">${escapeAuditHtml(row.status || 'prepared')}</span></td>
+                    <td>${escapeAuditHtml((row.response_status || 'pending').replace(/_/g, ' '))}</td>
+                    <td><button class="btn btn-sm btn-primary" onclick="viewTwcTransferAudit(${Number(row.id)})"><i class="fas fa-eye"></i></button></td>
+                </tr>
+            `).join('');
+        }
+
+        function renderAssignmentAuditRows() {
+            const tbody = document.querySelector('#assignmentAuditTable tbody');
+            if (!tbody) return;
+            if (!twcAssignmentAuditRows.length) {
+                tbody.innerHTML = '<tr><td colspan="6">No handover audit records.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = twcAssignmentAuditRows.map(row => `
+                <tr>
+                    <td>${escapeAuditHtml(row.id)}</td>
+                    <td><small>${escapeAuditHtml(row.created_at)}</small></td>
+                    <td>#${escapeAuditHtml(row.conversation_id)}</td>
+                    <td>${escapeAuditHtml(row.action)}</td>
+                    <td>${escapeAuditHtml(row.admin_name || 'Admin')}</td>
+                    <td><button class="btn btn-sm btn-primary" onclick="viewTwcAssignmentAudit(${Number(row.id)})"><i class="fas fa-eye"></i></button></td>
+                </tr>
+            `).join('');
+        }
+
+        function openTwcAuditDetailsModal(title, row) {
+            document.getElementById('twcAuditDetailsTitle').textContent = title;
+            document.getElementById('twcAuditDetailsContent').innerHTML = `
+                <pre style="white-space:pre-wrap; background:var(--bg-color-1); border:1px solid var(--border-color-1); border-radius:8px; padding:1rem;">${escapeAuditHtml(JSON.stringify(row, null, 2))}</pre>
+            `;
+            document.getElementById('twcAuditDetailsModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeTwcAuditDetailsModal() {
+            document.getElementById('twcAuditDetailsModal').style.display = 'none';
+            document.body.style.overflow = '';
+        }
+
+        function viewTwcTransferAudit(id) {
+            const row = twcTransferAuditRows.find(item => Number(item.id) === Number(id));
+            if (row) openTwcAuditDetailsModal('Response Transfer Audit', row);
+        }
+
+        function viewTwcAssignmentAudit(id) {
+            const row = twcAssignmentAuditRows.find(item => Number(item.id) === Number(id));
+            if (row) openTwcAuditDetailsModal('Admin Handover Audit', row);
+        }
+
         function loadAuditTrail() {
             const filters = getFilters();
             const queryParams = new URLSearchParams(filters).toString();
@@ -326,6 +462,7 @@ $pageTitle = 'Log and Audit Trail';
         document.addEventListener('DOMContentLoaded', function() {
             loadAuditTrail();
             loadStatistics();
+            loadTwcAuditSummary();
         });
     </script>
 </body>
