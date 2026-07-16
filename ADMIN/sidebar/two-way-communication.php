@@ -600,6 +600,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <!-- MySQL Chat System -->
     <script>
         const API_BASE = '../api/';
+        const APP_ROOT = (() => {
+            const marker = '/ADMIN/';
+            const path = window.location.pathname || '';
+            const index = path.indexOf(marker);
+            return index >= 0 ? path.slice(0, index) : '';
+        })();
+        const ROOT_API_BASE = `${APP_ROOT}/api/`;
+        const transferApiUrl = (suffix = '') => `${ROOT_API_BASE}transfer-call.php${suffix}`;
         const ADMIN_USERNAME = <?php echo json_encode($adminUsername); ?>;
         const ADMIN_ID = <?php echo json_encode($_SESSION['admin_user_id'] ?? null); ?>;
         const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=4c8a89&color=fff&size=128`;
@@ -790,7 +798,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (!body) return;
             body.innerHTML = '<tr><td colspan="7" class="twc-logs-empty">Loading transferred records...</td></tr>';
             try {
-                const res = await fetch('../../api/transfer-call.php?limit=50');
+                const res = await fetch(transferApiUrl('?limit=50'));
                 const data = await res.json();
                 const rows = Array.isArray(data.transfers) ? data.transfers : [];
                 if (!data.success || rows.length === 0) {
@@ -826,7 +834,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         async function requestTransferEmergencyStatus(transferId) {
             try {
-                const res = await fetch('../../api/transfer-call.php', {
+                const res = await fetch(transferApiUrl(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'request_status', transferId })
@@ -845,7 +853,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (!responseStatus) return;
             const note = prompt('Optional status note:', '') || '';
             try {
-                const res = await fetch('../../api/transfer-call.php', {
+                const res = await fetch(transferApiUrl(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'update_status', transferId, responseStatus, note })
@@ -1904,7 +1912,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             try {
                 setTransferModalBusy(true);
                 setTransferModalMessage('Sending report to response team...');
-                const res = await fetch('../../api/transfer-call.php', {
+                const res = await fetch(transferApiUrl(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -3621,7 +3629,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         try {
             if (statusEl) statusEl.textContent = 'Starting transfer…';
-            const res = await fetch('../../api/transfer-call.php', {
+            const res = await fetch(transferApiUrl(), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
