@@ -9,11 +9,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     apiResponse::error("Invalid request method.", 405);
 }
 
-// Get the POST data (JSON)
+// Get the POST data (JSON) - logout doesn't require any data
 $json = file_get_contents('php://input');
 $data = json_decode($json, true);
 
-if (!is_array($data)) {
+// Allow empty requests for logout
+if ($json !== '' && !is_array($data)) {
     apiResponse::error("Invalid JSON input.", 400);
 }
 
