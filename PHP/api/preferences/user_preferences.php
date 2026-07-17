@@ -24,6 +24,14 @@ try {
         $email_notifications = $data['email_notifications'] ?? true;
         $push_notifications = $data['push_notifications'] ?? true;
         $alert_categories = $data['alert_categories'] ?? null;
+        
+        // Parse alert_categories if it's a JSON string
+        if ($alert_categories && is_string($alert_categories)) {
+            $decoded = json_decode($alert_categories, true);
+            if (is_array($decoded)) {
+                $alert_categories = json_encode($decoded);
+            }
+        }
 
         // Validate required fields
         if (!$user_id) {
