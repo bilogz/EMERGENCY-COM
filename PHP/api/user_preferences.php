@@ -19,64 +19,58 @@ try {
         }
 
         $user_id = $data['user_id'] ?? null;
-        $language = $data['language'] ?? null;
-        $alert_crimes = $data['alert_crimes'] ?? true;
-        $alert_emergencies = $data['alert_emergencies'] ?? true;
-        $alert_community = $data['alert_community'] ?? true;
-        $notification_email = $data['notification_email'] ?? false;
-        $notification_sms = $data['notification_sms'] ?? false;
+        $preferred_language = $data['preferred_language'] ?? 'en';
+        $sms_notifications = $data['sms_notifications'] ?? true;
+        $email_notifications = $data['email_notifications'] ?? true;
+        $push_notifications = $data['push_notifications'] ?? true;
+        $alert_categories = $data['alert_categories'] ?? null;
 
         // Validate required fields
-        if (!$user_id || !$language) {
-            apiResponse::error("Missing required fields: user_id, language", 400);
+        if (!$user_id) {
+            apiResponse::error("Missing required fields: user_id", 400);
         }
 
         // Validate language
         $validLanguages = ['en', 'tl', 'ceb', 'war', 'hil', 'es', 'fr'];
-        if (!in_array($language, $validLanguages)) {
-            apiResponse::error("Invalid language. Must be one of: " . implode(', ', $validLanguages), 400);
+        if (!in_array($preferred_language, $validLanguages)) {
+            apiResponse::error("Invalid preferred_language. Must be one of: " . implode(', ', $validLanguages), 400);
         }
 
         // Convert boolean strings to actual booleans
-        $alert_crimes = filter_var($alert_crimes, FILTER_VALIDATE_BOOLEAN);
-        $alert_emergencies = filter_var($alert_emergencies, FILTER_VALIDATE_BOOLEAN);
-        $alert_community = filter_var($alert_community, FILTER_VALIDATE_BOOLEAN);
-        $notification_email = filter_var($notification_email, FILTER_VALIDATE_BOOLEAN);
-        $notification_sms = filter_var($notification_sms, FILTER_VALIDATE_BOOLEAN);
+        $sms_notifications = filter_var($sms_notifications, FILTER_VALIDATE_BOOLEAN);
+        $email_notifications = filter_var($email_notifications, FILTER_VALIDATE_BOOLEAN);
+        $push_notifications = filter_var($push_notifications, FILTER_VALIDATE_BOOLEAN);
 
         $query = "
             INSERT INTO user_preferences
-            (user_id, language, alert_crimes, alert_emergencies, alert_community, notification_email, notification_sms, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+            (user_id, preferred_language, sms_notifications, email_notifications, push_notifications, alert_categories, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE
-                language = VALUES(language),
-                alert_crimes = VALUES(alert_crimes),
-                alert_emergencies = VALUES(alert_emergencies),
-                alert_community = VALUES(alert_community),
-                notification_email = VALUES(notification_email),
-                notification_sms = VALUES(notification_sms),
+                preferred_language = VALUES(preferred_language),
+                sms_notifications = VALUES(sms_notifications),
+                email_notifications = VALUES(email_notifications),
+                push_notifications = VALUES(push_notifications),
+                alert_categories = VALUES(alert_categories),
                 updated_at = NOW()
         ";
 
         $stmt = $pdo->prepare($query);
         $stmt->execute([
             $user_id,
-            $language,
-            $alert_crimes ? 1 : 0,
-            $alert_emergencies ? 1 : 0,
-            $alert_community ? 1 : 0,
-            $notification_email ? 1 : 0,
-            $notification_sms ? 1 : 0
+            $preferred_language,
+            $sms_notifications ? 1 : 0,
+            $email_notifications ? 1 : 0,
+            $push_notifications ? 1 : 0,
+            $alert_categories
         ]);
 
         apiResponse::success([
             'user_id' => $user_id,
-            'language' => $language,
-            'alert_crimes' => $alert_crimes,
-            'alert_emergencies' => $alert_emergencies,
-            'alert_community' => $alert_community,
-            'notification_email' => $notification_email,
-            'notification_sms' => $notification_sms
+            'preferred_language' => $preferred_language,
+            'sms_notifications' => $sms_notifications,
+            'email_notifications' => $email_notifications,
+            'push_notifications' => $push_notifications,
+            'alert_categories' => $alert_categories
         ], "User preferences saved successfully");
 
     } elseif ($method === 'GET') {
@@ -90,12 +84,11 @@ try {
         $query = "
             SELECT
                 user_id,
-                language,
-                alert_crimes,
-                alert_emergencies,
-                alert_community,
-                notification_email,
-                notification_sms,
+                preferred_language,
+                sms_notifications,
+                email_notifications,
+                push_notifications,
+                alert_categories,
                 updated_at
             FROM user_preferences
             WHERE user_id = :user_id
@@ -111,11 +104,9 @@ try {
         }
 
         // Convert database integers to booleans
-        $preference['alert_crimes'] = (bool)$preference['alert_crimes'];
-        $preference['alert_emergencies'] = (bool)$preference['alert_emergencies'];
-        $preference['alert_community'] = (bool)$preference['alert_community'];
-        $preference['notification_email'] = (bool)$preference['notification_email'];
-        $preference['notification_sms'] = (bool)$preference['notification_sms'];
+        $preference['sms_notifications'] = (bool)$preference['sms_notifications'];
+        $preference['email_notifications'] = (bool)$preference['email_notifications'];
+        $preference['push_notifications'] = (bool)$preference['push_notifications'];
 
         apiResponse::success($preference, "User preferences fetched successfully");
 

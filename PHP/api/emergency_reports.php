@@ -18,30 +18,22 @@ try {
             apiResponse::error("Invalid JSON input.", 400);
         }
 
-        $type = $data['type'] ?? null;
+        $report_type = $data['report_type'] ?? null;
         $description = $data['description'] ?? null;
-        $location = $data['location'] ?? null;
         $latitude = $data['latitude'] ?? null;
         $longitude = $data['longitude'] ?? null;
-        $severity = $data['severity'] ?? null;
-        $contact_phone = $data['contact_phone'] ?? null;
         $user_id = $data['user_id'] ?? null;
+        $media_url = $data['media_url'] ?? null;
 
         // Validate required fields
-        if (!$type || !$description || !$location || !$severity) {
-            apiResponse::error("Missing required fields: type, description, location, severity", 400);
+        if (!$report_type || !$description) {
+            apiResponse::error("Missing required fields: report_type, description", 400);
         }
 
         // Validate type
         $validTypes = ['crime', 'fire', 'medical', 'traffic', 'natural_disaster', 'other'];
-        if (!in_array($type, $validTypes)) {
-            apiResponse::error("Invalid type. Must be one of: " . implode(', ', $validTypes), 400);
-        }
-
-        // Validate severity
-        $validSeverities = ['low', 'medium', 'high', 'critical'];
-        if (!in_array($severity, $validSeverities)) {
-            apiResponse::error("Invalid severity. Must be one of: " . implode(', ', $validSeverities), 400);
+        if (!in_array($report_type, $validTypes)) {
+            apiResponse::error("Invalid report_type. Must be one of: " . implode(', ', $validTypes), 400);
         }
 
         // Validate coordinates if provided
@@ -55,30 +47,26 @@ try {
 
         $query = "
             INSERT INTO incident_reports
-            (type, description, location, latitude, longitude, severity, contact_phone, user_id, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())
+            (user_id, report_type, description, latitude, longitude, media_url, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending')
         ";
 
         $stmt = $pdo->prepare($query);
         $stmt->execute([
-            $type,
+            $user_id,
+            $report_type,
             $description,
-            $location,
             $latitude,
             $longitude,
-            $severity,
-            $contact_phone,
-            $user_id
+            $media_url
         ]);
 
         $reportId = $pdo->lastInsertId();
 
         apiResponse::success([
             'id' => $reportId,
-            'type' => $type,
+            'report_type' => $report_type,
             'description' => $description,
-            'location' => $location,
-            'severity' => $severity,
             'status' => 'pending'
         ], "Emergency report submitted successfully");
 
@@ -89,15 +77,14 @@ try {
         $sql = "
             SELECT
                 id,
-                type,
+                user_id,
+                report_type,
                 description,
-                location,
                 latitude,
                 longitude,
-                severity,
-                contact_phone,
-                user_id,
                 status,
+                media_url,
+                admin_notes,
                 created_at
             FROM incident_reports
         ";

@@ -19,8 +19,7 @@ if (!is_array($data)) {
 
 $alert_id = $data['alert_id'] ?? null;
 $user_id  = $data['user_id'] ?? null;
-$response_status = $data['response_status'] ?? 'safe';
-$response_notes = $data['response_notes'] ?? null;
+$status = $data['status'] ?? 'received';
 
 // Extract latitude and longitude
 $latitude  = $data['latitude'] ?? null;
@@ -31,10 +30,10 @@ if (!is_numeric($alert_id) || !is_numeric($user_id)) {
     apiResponse::error("Invalid alert_id or user_id.", 400);
 }
 
-// Validate response status
-$validStatuses = ['safe', 'need-help', 'evacuated', 'not-affected'];
-if (!in_array($response_status, $validStatuses)) {
-    apiResponse::error("Invalid response_status. Must be one of: " . implode(', ', $validStatuses), 400);
+// Validate status
+$validStatuses = ['received', 'safe', 'need-help', 'evacuated', 'not-affected'];
+if (!in_array($status, $validStatuses)) {
+    apiResponse::error("Invalid status. Must be one of: " . implode(', ', $validStatuses), 400);
 }
 
 // Validate coordinates if provided
@@ -50,11 +49,10 @@ try {
 
     $query = "
         INSERT INTO alert_acknowledgments
-        (alert_id, user_id, response_status, response_notes, latitude, longitude, acknowledged_at)
-        VALUES (?, ?, ?, ?, ?, ?, NOW())
+        (alert_id, user_id, status, latitude, longitude, acknowledged_at)
+        VALUES (?, ?, ?, ?, ?, NOW())
         ON DUPLICATE KEY UPDATE
-            response_status = VALUES(response_status),
-            response_notes = VALUES(response_notes),
+            status = VALUES(status),
             latitude = VALUES(latitude),
             longitude = VALUES(longitude),
             acknowledged_at = NOW()
@@ -64,8 +62,7 @@ try {
     $stmt->execute([
         (int)$alert_id,
         (int)$user_id,
-        $response_status,
-        $response_notes,
+        $status,
         $latitude,
         $longitude
     ]);
