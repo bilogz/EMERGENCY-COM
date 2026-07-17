@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 
-require_once 'db_connect.php';
+require_once '../shared/db_connect.php';
 
 /** @var PDO $pdo */
 
