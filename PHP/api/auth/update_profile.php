@@ -28,7 +28,8 @@ try {
     $updateFields = [];
     $params = [':user_id' => $user_id];
     
-    $allowedFields = ['name', 'email', 'phone', 'nationality', 'district', 'barangay', 'house_unit', 'street'];
+    // Only update fields that exist in the database
+    $allowedFields = ['name', 'email', 'phone'];
     
     foreach ($allowedFields as $field) {
         if (isset($data[$field]) && $data[$field] !== '') {
@@ -41,9 +42,6 @@ try {
         apiResponse::error("No fields to update", 400);
     }
     
-    // Add updated_at timestamp
-    $updateFields[] = "updated_at = NOW()";
-    
     $query = "UPDATE users SET " . implode(', ', $updateFields) . " WHERE id = :user_id";
     
     $stmt = $pdo->prepare($query);
@@ -51,7 +49,7 @@ try {
     
     // Get updated user data
     $selectQuery = "
-        SELECT id, name, email, phone, nationality, district, barangay, house_unit, street, status, user_type, profile_pic
+        SELECT id, name, email, phone, status, user_type, profile_pic
         FROM users
         WHERE id = :user_id
     ";
