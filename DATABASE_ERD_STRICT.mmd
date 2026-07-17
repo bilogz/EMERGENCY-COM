@@ -1,0 +1,323 @@
+erDiagram
+    USERS {
+        int id PK
+        varchar email
+        varchar phone
+        varchar status
+        varchar user_type
+    }
+
+    ADMIN_USER {
+        int id PK
+        int user_id FK
+        int created_by FK
+        varchar email
+        varchar username
+        varchar role
+        varchar status
+    }
+
+    ADMIN_ACTIVITY_LOGS {
+        int id PK
+        int admin_id
+        varchar action
+        datetime created_at
+    }
+
+    ADMIN_LOGIN_LOGS {
+        int id PK
+        int admin_id
+        varchar email
+        varchar login_status
+        datetime login_at
+    }
+
+    ADMIN_PREFERENCES {
+        int admin_id PK
+        varchar notification_sound
+    }
+
+    ALERT_CATEGORIES {
+        int id PK
+        varchar name
+        varchar status
+    }
+
+    INCIDENTS {
+        int id PK
+        varchar type
+        varchar severity
+        varchar area
+        varchar status
+    }
+
+    ALERTS {
+        int id PK
+        int category_id
+        int incident_id FK
+        varchar title
+        varchar status
+        enum severity
+    }
+
+    ALERT_ACKNOWLEDGMENTS {
+        int id PK
+        int alert_id
+        int user_id
+        varchar status
+        datetime acknowledged_at
+    }
+
+    ALERT_TRANSLATIONS {
+        int id PK
+        int alert_id
+        int translated_by_admin_id
+        varchar target_language
+        varchar status
+    }
+
+    TRANSLATION_ACTIVITY_LOGS {
+        int id PK
+        int admin_id
+        int alert_id
+        int translation_id
+        varchar action_type
+        datetime created_at
+    }
+
+    TRANSLATION_CACHE {
+        int id PK
+        varchar cache_key
+        varchar source_lang
+        varchar target_lang
+    }
+
+    SUPPORTED_LANGUAGES {
+        int id PK
+        varchar language_code
+        varchar language_name
+        tinyint is_active
+    }
+
+    INCIDENT_REPORTS {
+        int id PK
+        int user_id
+        varchar report_type
+        varchar status
+    }
+
+    EMERGENCY_CONTACTS {
+        int id PK
+        int user_id
+        varchar contact_name
+        varchar contact_phone
+        varchar status
+    }
+
+    USER_DEVICES {
+        int id PK
+        int user_id FK
+        varchar device_id
+        varchar device_type
+        tinyint is_active
+    }
+
+    USER_LOCATIONS {
+        int id PK
+        int user_id FK
+        decimal latitude
+        decimal longitude
+        tinyint is_current
+    }
+
+    USER_PREFERENCES {
+        int id PK
+        int user_id FK
+        varchar preferred_language
+        tinyint push_notifications
+    }
+
+    USER_SESSIONS {
+        int id PK
+        int user_id FK
+        varchar session_token
+        varchar status
+        datetime expires_at
+    }
+
+    USER_ACTIVITY_LOGS {
+        int id PK
+        int user_id FK
+        varchar activity_type
+        varchar status
+        datetime created_at
+    }
+
+    SUBSCRIPTIONS {
+        int id PK
+        int user_id
+        varchar preferred_language
+        varchar status
+    }
+
+    USER_SUBSCRIPTIONS {
+        int id PK
+        int user_id FK
+        int category_id FK
+        varchar subscription_type
+        tinyint is_active
+    }
+
+    SAFETY_GUIDES {
+        int id PK
+        int category_id
+        varchar title
+        tinyint is_published
+    }
+
+    CONVERSATIONS {
+        int conversation_id PK
+        varchar user_id
+        int assigned_to
+        enum status
+        datetime updated_at
+    }
+
+    CHAT_MESSAGES {
+        int message_id PK
+        int conversation_id FK
+        varchar sender_id
+        enum sender_type
+        datetime created_at
+    }
+
+    CHAT_QUEUE {
+        int queue_id PK
+        int conversation_id FK
+        int assigned_to
+        enum status
+        datetime created_at
+    }
+
+    CALL_LOGS {
+        int id PK
+        varchar call_id
+        int user_id
+        varchar role
+        varchar event
+        bigint timestamp
+    }
+
+    AI_WARNING_SETTINGS {
+        int id PK
+        tinyint ai_enabled
+        tinyint ai_weather_enabled
+        tinyint ai_earthquake_enabled
+    }
+
+    WARNING_SETTINGS {
+        int id PK
+        int sync_interval
+        tinyint auto_publish
+    }
+
+    AUTOMATED_WARNINGS {
+        int id PK
+        varchar source
+        varchar type
+        varchar status
+    }
+
+    INTEGRATION_SETTINGS {
+        int id PK
+        varchar source
+        tinyint enabled
+    }
+
+    NOTIFICATION_LOGS {
+        int id PK
+        varchar channel
+        varchar status
+        datetime sent_at
+    }
+
+    NOTIFICATION_QUEUE {
+        bigint id PK
+        bigint log_id
+        bigint recipient_id
+        varchar recipient_type
+        varchar status
+    }
+
+    OTP_VERIFICATIONS {
+        int id PK
+        varchar email
+        varchar purpose
+        varchar status
+    }
+
+    PASSWORD_RESET_TOKENS {
+        int id PK
+        int user_id
+        varchar token
+        varchar status
+    }
+
+    RATE_LIMITS {
+        int id PK
+        varchar ip_address
+        varchar action
+    }
+
+    AUDIT_LOG {
+        int id PK
+        int user_id
+        int performed_by
+        varchar action
+        datetime created_at
+    }
+
+    EVACUATION_CENTERS {
+        int id PK
+        varchar name
+        varchar status
+    }
+
+    %% Explicit SQL FKs
+    ADMIN_USER }o--|| USERS : user_id_fk
+    ADMIN_USER }o--o| ADMIN_USER : created_by_fk
+    ALERTS }o--o| INCIDENTS : incident_id_fk
+    CHAT_MESSAGES }o--|| CONVERSATIONS : conversation_id_fk
+    CHAT_QUEUE ||--|| CONVERSATIONS : conversation_id_fk
+    USER_ACTIVITY_LOGS }o--o| USERS : user_id_fk
+    USER_DEVICES }o--|| USERS : user_id_fk
+    USER_LOCATIONS }o--|| USERS : user_id_fk
+    USER_PREFERENCES ||--|| USERS : user_id_fk
+    USER_SESSIONS }o--|| USERS : user_id_fk
+    USER_SUBSCRIPTIONS }o--|| USERS : user_id_fk
+    USER_SUBSCRIPTIONS }o--o| ALERT_CATEGORIES : category_id_fk
+
+    %% Inferred relationships
+    ADMIN_ACTIVITY_LOGS }o--|| ADMIN_USER : admin_id_inferred
+    ADMIN_LOGIN_LOGS }o--|| ADMIN_USER : admin_id_inferred
+    ADMIN_PREFERENCES ||--|| ADMIN_USER : admin_id_inferred
+    ALERTS }o--o| ALERT_CATEGORIES : category_id_inferred
+    ALERT_ACKNOWLEDGMENTS }o--|| ALERTS : alert_id_inferred
+    ALERT_ACKNOWLEDGMENTS }o--|| USERS : user_id_inferred
+    ALERT_TRANSLATIONS }o--|| ALERTS : alert_id_inferred
+    ALERT_TRANSLATIONS }o--o| ADMIN_USER : translated_by_admin_id_inferred
+    TRANSLATION_ACTIVITY_LOGS }o--|| ADMIN_USER : admin_id_inferred
+    TRANSLATION_ACTIVITY_LOGS }o--o| ALERTS : alert_id_inferred
+    TRANSLATION_ACTIVITY_LOGS }o--o| ALERT_TRANSLATIONS : translation_id_inferred
+    INCIDENT_REPORTS }o--|| USERS : user_id_inferred
+    EMERGENCY_CONTACTS }o--|| USERS : user_id_inferred
+    SUBSCRIPTIONS }o--|| USERS : user_id_inferred
+    SAFETY_GUIDES }o--o| ALERT_CATEGORIES : category_id_inferred
+    CONVERSATIONS }o--o| ADMIN_USER : assigned_to_inferred
+    CHAT_QUEUE }o--o| ADMIN_USER : assigned_to_inferred
+    CALL_LOGS }o--o| USERS : user_id_inferred
+    NOTIFICATION_QUEUE }o--|| NOTIFICATION_LOGS : log_id_inferred
+    PASSWORD_RESET_TOKENS }o--|| USERS : user_id_inferred
+    AUDIT_LOG }o--o| USERS : user_id_inferred
+    AUDIT_LOG }o--o| ADMIN_USER : performed_by_inferred
+
