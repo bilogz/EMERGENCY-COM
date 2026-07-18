@@ -3,7 +3,7 @@
 
 // Define DEBUG_MODE if not already defined
 if (!defined('DEBUG_MODE')) {
-    define('DEBUG_MODE', false);
+    define('DEBUG_MODE', true);
 }
 
 class apiResponse {
