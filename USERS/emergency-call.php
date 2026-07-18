@@ -881,9 +881,8 @@ $assetBase = '../ADMIN/header/';
             });
 
             socket.on("answer", payload => {
+                if (!signalingPayloadMatchesActiveCall(payload)) return;
                 const sdp = payload && payload.sdp ? payload.sdp : payload;
-                const incomingCallId = payload && payload.callId ? payload.callId : null;
-                if (incomingCallId && incomingCallId !== callId) return;
                 if (transferInProgress && transferPc) {
                     transferPc.setRemoteDescription(sdp).catch(console.error);
                     return;
@@ -892,9 +891,8 @@ $assetBase = '../ADMIN/header/';
             });
 
             socket.on("candidate", payload => {
+                if (!signalingPayloadMatchesActiveCall(payload)) return;
                 const cand = payload && payload.candidate ? payload.candidate : payload;
-                const incomingCallId = payload && payload.callId ? payload.callId : null;
-                if (incomingCallId && incomingCallId !== callId) return;
                 if (transferInProgress && transferPc && cand) {
                     transferPc.addIceCandidate(cand).catch(() => {});
                     return;
@@ -903,14 +901,12 @@ $assetBase = '../ADMIN/header/';
             });
 
             socket.on('hangup', payload => {
-                const incomingCallId = payload && payload.callId ? payload.callId : null;
-                if (incomingCallId && incomingCallId !== callId) return;
+                if (!signalingPayloadMatchesActiveCall(payload)) return;
                 if (callId) endCall(false);
             });
 
             socket.on('call-transfer', async payload => {
-                const incomingCallId = payload && payload.callId ? payload.callId : null;
-                if (incomingCallId && incomingCallId !== callId) return;
+                if (!signalingPayloadMatchesActiveCall(payload)) return;
                 if (!callId) return;
                 if (payload && payload.room) activeCallRoom = payload.room;
                 transferInProgress = true;
@@ -920,16 +916,14 @@ $assetBase = '../ADMIN/header/';
             });
 
             socket.on('request-transfer-offer', async payload => {
-                const incomingCallId = payload && payload.callId ? payload.callId : null;
-                if (!callId || (incomingCallId && incomingCallId !== callId)) return;
+                if (!signalingPayloadMatchesActiveCall(payload)) return;
                 if (payload && payload.room) activeCallRoom = payload.room;
                 await prepareTransferredCallOffer('response-team-request');
             });
 
             ['dispatcher-ready', 'call-accepted', 'accepted'].forEach(eventName => {
                 socket.on(eventName, payload => {
-                    const incomingCallId = payload && payload.callId ? payload.callId : null;
-                    if (!callId || (incomingCallId && incomingCallId !== callId)) return;
+                    if (!signalingPayloadMatchesActiveCall(payload)) return;
                     if (payload && payload.room) activeCallRoom = payload.room;
                 });
             });
@@ -943,8 +937,7 @@ $assetBase = '../ADMIN/header/';
             });
 
             socket.on('request-offer', payload => {
-                const incomingCallId = payload && payload.callId ? payload.callId : null;
-                if (!callId || incomingCallId !== callId) return;
+                if (!signalingPayloadMatchesActiveCall(payload)) return;
                 if (payload?.room) activeCallRoom = payload.room;
                 rebuildOfferForAdminResume().catch(error => {
                     console.error('[call][user] failed to rebuild offer after admin refresh', error);
@@ -960,6 +953,18 @@ $assetBase = '../ADMIN/header/';
                     setEndEnabled(true);
                 }
             });
+        }
+
+        function signalingPayloadMatchesActiveCall(payload) {
+            if (!callId) return false;
+            const incomingCallId = payload && (payload.callId || payload.call_id) ? String(payload.callId || payload.call_id) : '';
+            const incomingRoom = payload && payload.room ? String(payload.room) : '';
+            const currentCallId = String(callId);
+            const currentRoom = activeCallRoom || getCallRoom(callId);
+
+            if (incomingCallId && incomingCallId === currentCallId) return true;
+            if (incomingRoom && currentRoom && incomingRoom === String(currentRoom)) return true;
+            return !incomingCallId && !incomingRoom;
         }
 
         let pc = null;

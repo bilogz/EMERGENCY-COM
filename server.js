@@ -204,15 +204,15 @@ io.on('connection', (socket) => {
   ['dispatcher-ready', 'call-accepted', 'accepted', 'request-transfer-offer'].forEach(forwardTransferControl);
 
   socket.on('call-transfer', (payload, room) => {
-    if (typeof room === 'string' && room.length > 0) {
-      activeOffersByRoom.delete(room);
-      if (typeof payload?.room === 'string') activeOffersByRoom.delete(payload.room);
-      console.log(`[transfer] room=${room} callId=${payload?.callId || ''}`);
+    const transferRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
+    if (transferRoom) {
+      activeOffersByRoom.delete(transferRoom);
+      console.log(`[transfer] room=${transferRoom} callId=${payload?.callId || ''}`);
     }
     if (payload?.callId) activeCallsById.delete(String(payload.callId));
     const transferNotice = {
       ...(payload || {}),
-      room: cleanText(payload?.room, 180) || cleanText(room, 180),
+      room: transferRoom,
       socketUrl: cleanText(payload?.socketUrl, 255) || cleanText(payload?.transfer?.socketUrl, 255) || cleanText(payload?.transfer?.data?.socketUrl, 255) || 'https://emergency-comm.alertaraqc.com',
       socketPath: cleanText(payload?.socketPath, 100) || cleanText(payload?.transfer?.socketPath, 100) || cleanText(payload?.transfer?.data?.socketPath, 100) || '/socket.io',
       event: 'emergency_call_transfer',
@@ -221,7 +221,7 @@ io.on('connection', (socket) => {
     };
     io.to(TRANSFER_INBOX_ROOM).emit('incoming-transfer', transferNotice);
     io.to(TRANSFER_INBOX_ROOM).emit('ers-transfer-notify', transferNotice);
-    socket.to(room).emit('call-transfer', payload);
+    if (transferRoom) socket.to(transferRoom).emit('call-transfer', transferNotice);
   });
 
   socket.on('disconnect', (reason) => {
