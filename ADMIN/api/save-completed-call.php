@@ -20,6 +20,9 @@ if (file_exists(__DIR__ . '/db_connect.php')) {
 } else {
     require_once '../../ADMIN/api/db_connect.php';
 }
+if (file_exists(__DIR__ . '/chat-logic.php')) {
+    require_once __DIR__ . '/chat-logic.php';
+}
 
 if (!isset($pdo) || $pdo === null) {
     echo json_encode(['success' => false, 'message' => 'Database connection not available']);
@@ -42,11 +45,62 @@ $duration = $input['duration'] ?? null;
 $endedAt = $input['endedAt'] ?? time();
 $event = strtolower(trim((string)($input['event'] ?? 'ended')));
 $providedConversationId = $input['conversationId'] ?? null; // Use provided conversation ID if available
+$emergencyType = trim((string)($input['emergencyType'] ?? ''));
+$description = trim((string)($input['description'] ?? ''));
+$providedPriority = is_array($input['incidentPriority'] ?? null) ? $input['incidentPriority'] : [];
+
+function saveCallIncidentPriority(PDO $pdo, int $conversationId, array $priority): void {
+    if ($conversationId <= 0 || empty($priority) || !function_exists('twc_ensure_incident_priority_columns')) {
+        return;
+    }
+    try {
+        twc_ensure_incident_priority_columns($pdo);
+        $stmt = $pdo->prepare("
+            UPDATE conversations
+            SET incident_priority_score = ?,
+                incident_priority_level = ?,
+                incident_priority_color = ?,
+                incident_priority_breakdown = ?,
+                incident_priority_manual = 0
+            WHERE conversation_id = ?
+        ");
+        $stmt->execute([
+            (int)($priority['score'] ?? 0),
+            strtolower((string)($priority['priority'] ?? $priority['level'] ?? 'low')),
+            strtolower((string)($priority['color'] ?? 'green')),
+            json_encode($priority['breakdown'] ?? null, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            $conversationId,
+        ]);
+    } catch (Throwable $e) {
+        error_log('Call priority save warning: ' . $e->getMessage());
+    }
+}
 
 if (!$callId) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Call ID is required']);
     exit();
+}
+
+$incidentPriority = [];
+if (!empty($providedPriority) && isset($providedPriority['score'])) {
+    $incidentPriority = $providedPriority;
+    $incidentPriority['priority'] = strtolower((string)($incidentPriority['priority'] ?? $incidentPriority['level'] ?? 'low'));
+    if (function_exists('twc_incident_priority_config')) {
+        $meta = twc_incident_priority_config()[$incidentPriority['priority']] ?? null;
+        if ($meta) {
+            $incidentPriority['label'] = $incidentPriority['label'] ?? $meta['label'];
+            $incidentPriority['color'] = $incidentPriority['color'] ?? $meta['color'];
+            $incidentPriority['hex'] = $incidentPriority['hex'] ?? $meta['hex'];
+        }
+    }
+} elseif (function_exists('twc_calculate_incident_priority')) {
+    $incidentPriority = twc_calculate_incident_priority([
+        'incident_type' => $emergencyType,
+        'description' => $description,
+        'message' => $description,
+        'last_message' => $description,
+    ]);
 }
 
 try {
@@ -85,6 +139,21 @@ try {
             ");
             $stmt->execute([$conversationId, $callEndedMessage, $endedAt]);
         }
+
+        if ($description !== '') {
+            $stmt = $pdo->prepare("SELECT id FROM chat_messages WHERE conversation_id = ? AND message_text LIKE '[CALL_CONTEXT]%' LIMIT 1");
+            $stmt->execute([$conversationId]);
+            if (!$stmt->fetch()) {
+                $contextMessage = '[CALL_CONTEXT]' . $description;
+                $stmt = $pdo->prepare("
+                    INSERT INTO chat_messages
+                    (conversation_id, sender_id, sender_name, sender_type, message_text, is_read, created_at)
+                    VALUES (?, 'admin', ?, 'admin', ?, 0, FROM_UNIXTIME(?))
+                ");
+                $stmt->execute([$conversationId, $_SESSION['admin_username'] ?? 'Administrator', $contextMessage, $endedAt]);
+            }
+        }
+        saveCallIncidentPriority($pdo, (int)$conversationId, $incidentPriority);
         
         echo json_encode(['success' => true, 'message' => 'Call already saved']);
         exit;
@@ -141,7 +210,9 @@ try {
         // Build last message text
         $lastMessage = $event === 'declined'
             ? 'Emergency call declined by admin'
-            : "Emergency call completed (Duration: " . ($duration ? gmdate('H:i:s', $duration) : 'N/A') . ")";
+            : ($event === 'transferred'
+                ? '[TRANSFERRED] Emergency call transferred to response team'
+                : "Emergency call completed (Duration: " . ($duration ? gmdate('H:i:s', $duration) : 'N/A') . ")");
         
         // Determine if user is guest (no user_id means guest)
         $isGuest = empty($userId) ? 1 : 0;
@@ -168,7 +239,9 @@ try {
         // Update existing conversation with call ended/declined message
         $lastMessage = $event === 'declined'
             ? 'Emergency call declined by admin'
-            : "Emergency call completed (Duration: " . ($duration ? gmdate('H:i:s', $duration) : 'N/A') . ")";
+            : ($event === 'transferred'
+                ? '[TRANSFERRED] Emergency call transferred to response team'
+                : "Emergency call completed (Duration: " . ($duration ? gmdate('H:i:s', $duration) : 'N/A') . ")");
         
         $stmt = $pdo->prepare("
             UPDATE conversations 
@@ -186,7 +259,9 @@ try {
     $adminName = $_SESSION['admin_username'] ?? $_SESSION['admin_name'] ?? 'Administrator';
     $callEndedMessage = $event === 'declined'
         ? "[CALL_DECLINED]Call declined by {$adminName}"
-        : "[CALL_ENDED]Call ended - Duration: " . $durationStr;
+        : ($event === 'transferred'
+            ? "[CALL_TRANSFERRED]Call transferred to response team by {$adminName}"
+            : "[CALL_ENDED]Call ended - Duration: " . $durationStr);
     
     $stmt = $pdo->prepare("
         INSERT INTO chat_messages 
@@ -194,6 +269,16 @@ try {
         VALUES (?, 'system', ?, 'user', ?, 0, FROM_UNIXTIME(?))
     ");
     $stmt->execute([$conversationId, $userName ?: 'Emergency Call User', $callEndedMessage, $endedAt]);
+
+    if ($description !== '') {
+        $contextMessage = '[CALL_CONTEXT]' . $description;
+        $stmt = $pdo->prepare("
+            INSERT INTO chat_messages
+            (conversation_id, sender_id, sender_name, sender_type, message_text, is_read, created_at)
+            VALUES (?, 'admin', ?, 'admin', ?, 0, FROM_UNIXTIME(?))
+        ");
+        $stmt->execute([$conversationId, $adminName, $contextMessage, $endedAt]);
+    }
     
     // Update conversation's last message
     $stmt = $pdo->prepare("
@@ -202,6 +287,7 @@ try {
         WHERE conversation_id = ?
     ");
     $stmt->execute([$callEndedMessage, $endedAt, $conversationId]);
+    saveCallIncidentPriority($pdo, (int)$conversationId, $incidentPriority);
     
     // Also save to completed_calls table for reference (if table exists)
     try {

@@ -1423,6 +1423,95 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             };
         }
 
+        function incidentPriorityFromScore(score) {
+            const cleanScore = Math.max(0, Math.min(110, Number(score) || 0));
+            let priority = 'low';
+            if (cleanScore >= 90) priority = 'critical';
+            else if (cleanScore >= 70) priority = 'high';
+            else if (cleanScore >= 45) priority = 'urgent';
+            else if (cleanScore >= 20) priority = 'moderate';
+            const meta = incidentPriorityMeta({ priority, score: cleanScore });
+            return { ...meta, priority: meta.level, level: meta.level };
+        }
+
+        function scoreIncidentTextByPatterns(text, rules, fallback) {
+            const hay = String(text || '').toLowerCase();
+            for (const rule of rules) {
+                for (const pattern of rule.patterns) {
+                    if (pattern.test(hay)) return rule.score;
+                }
+            }
+            return fallback;
+        }
+
+        function calculateIncidentPriority(data = {}) {
+            const text = [
+                data.incident_type,
+                data.type,
+                data.category,
+                data.userConcern,
+                data.user_concern,
+                data.message,
+                data.text,
+                data.last_message,
+                data.description,
+                data.severity,
+                data.threat,
+                data.verification
+            ].filter(value => String(value || '').trim() !== '').join(' ').toLowerCase();
+
+            const incidentType = scoreIncidentTextByPatterns(text, [
+                { score: 40, patterns: [/\bbomb\b/, /active\s+shooter/, /gunman/, /shooting/] },
+                { score: 38, patterns: [/structural\s+fire/, /building\s+fire/, /major\s+fire/, /building\s+collapse/, /collapsed?\s+building/] },
+                { score: 35, patterns: [/chemical\s+spill/, /hazardous\s+material/, /hazmat/, /earthquake/] },
+                { score: 33, patterns: [/landslide/] },
+                { score: 32, patterns: [/flash\s+flood/, /flood/] },
+                { score: 30, patterns: [/typhoon/, /storm\s+damage/, /gas\s+leak/] },
+                { score: 28, patterns: [/medical/, /heart\s+attack/, /stroke/, /unconscious/, /injur/] },
+                { score: 25, patterns: [/vehicular/, /vehicle/, /car\s+accident/, /collision/, /crash/] },
+                { score: 20, patterns: [/missing\s+person/, /missing\s+child/] },
+                { score: 10, patterns: [/animal\s+rescue/, /stray\s+animal/] },
+                { score: 8, patterns: [/power\s+outage/, /blackout/] },
+                { score: 3, patterns: [/noise/, /minor\s+disturbance/, /disturbance/] }
+            ], 3);
+            const threat = scoreIncidentTextByPatterns(text, [
+                { score: 30, patterns: [/multiple\s+lives/, /many\s+people.*danger/, /immediate\s+danger/, /life.?threat/] },
+                { score: 25, patterns: [/trapped/, /seriously\s+injured/, /critical\s+injur/] },
+                { score: 15, patterns: [/nearby\s+people/, /possible\s+danger/, /risk\s+to\s+people/] },
+                { score: 0, patterns: [/false\s+alarm/, /hoax/] }
+            ], 5);
+            const severity = scoreIncidentTextByPatterns(text, [
+                { score: 20, patterns: [/catastrophic/, /massive/, /destroyed/, /severe/] },
+                { score: 15, patterns: [/major/, /large/, /serious/] },
+                { score: 10, patterns: [/moderate/] },
+                { score: 2, patterns: [/very\s+minor/] }
+            ], 5);
+            const population = scoreIncidentTextByPatterns(text, [
+                { score: 10, patterns: [/(more\s+than\s+)?500\+?\s+(people|persons|residents)/, /hundreds\s+of\s+people/] },
+                { score: 8, patterns: [/\b[1-4]\d\d\s+(people|persons|residents)/, /100\s*-\s*500/] },
+                { score: 6, patterns: [/\b[2-9]\d\s+(people|persons|residents)/, /20\s*-\s*99/] },
+                { score: 4, patterns: [/\b(5|6|7|8|9|1\d)\s+(people|persons|residents)/, /5\s*-\s*19/] }
+            ], 2);
+            const verification = scoreIncidentTextByPatterns(text, [
+                { score: 10, patterns: [/verified/, /official\s+source/, /emergency\s+personnel/, /cctv/] },
+                { score: 8, patterns: [/multiple\s+witness/, /many\s+witness/] },
+                { score: 5, patterns: [/identified\s+witness/, /reported\s+by\s+.*witness/] },
+                { score: 0, patterns: [/confirmed\s+false/, /false\s+report/] }
+            ], 2);
+            const score = incidentType + threat + severity + population + verification;
+            return {
+                ...incidentPriorityFromScore(score),
+                score,
+                breakdown: {
+                    incident_type: incidentType,
+                    threat_to_life: threat,
+                    severity,
+                    population_affected: population,
+                    verification
+                }
+            };
+        }
+
         function sortCitizenReports(conversations) {
             return [...conversations].sort((a, b) => {
                 const scoreDiff = incidentPriorityMeta(b).score - incidentPriorityMeta(a).score;
@@ -1916,6 +2005,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
             const confirmed = await openTransferModal(data);
             if (!confirmed) return;
+            const priorityMeta = incidentPriorityMeta(data);
 
             const payload = {
                 callId: data?.callId || null,
@@ -1924,6 +2014,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 socketUrl: data?.callId ? SIGNALING_URL : null,
                 socketPath: data?.callId ? SOCKET_IO_PATH : null,
                 emergencyType: data?.category || data?.department || data?.userConcern || '',
+                priority: priorityMeta.level,
+                incidentPriority: {
+                    score: priorityMeta.score,
+                    priority: priorityMeta.level,
+                    label: priorityMeta.label,
+                    manual: priorityMeta.manual
+                },
                 caller: {
                     id: data?.userId || null,
                     name: data?.userName || null,
@@ -2819,7 +2916,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             <div id="callActiveBanner" style="display:none; margin:-6px 0 12px; padding:8px 12px; border-radius:12px; background:rgba(220,38,38,0.18); border:1px solid rgba(220,38,38,0.45); color:#fecaca; font-weight:800; letter-spacing:0.6px; text-transform:uppercase; text-align:center;">CALL ON ACTIVE</div>
 
             <div style="display:flex; gap:20px; flex:1; min-height:0;">
-                <div style="width:420px; max-width:40%; min-width:380px; border:1px solid rgba(255,255,255,0.10); border-radius:14px; padding:18px; background:rgba(0,0,0,0.18); display:flex; flex-direction:column; gap:14px;">
+                <div style="width:420px; max-width:40%; min-width:380px; border:1px solid rgba(255,255,255,0.10); border-radius:14px; padding:18px; background:rgba(0,0,0,0.18); display:flex; flex-direction:column; gap:14px; overflow-y:auto;">
                     <div style="display:flex; align-items:center; gap:12px;">
                         <div style="width:44px; height:44px; border-radius:12px; background:rgba(58, 118, 117,0.2); display:flex; align-items:center; justify-content:center; flex:0 0 auto;">
                             <i class="fas fa-user" style="color:#3a7675;"></i>
@@ -2845,8 +2942,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     </div>
 
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px; border:1px solid rgba(255,255,255,0.10); border-radius:12px; background:rgba(255,255,255,0.04);">
-                        <input id="callerNameInput" type="text" placeholder="Type caller name" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
-                        <input id="callerPhoneInput" type="tel" placeholder="Type phone number" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
+                        <input id="callerNameInput" type="text" placeholder="Admin edit: caller name" autocomplete="off" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
+                        <input id="callerPhoneInput" type="tel" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" placeholder="09XXXXXXXXX" autocomplete="off" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
                         <input id="callerAddressInput" type="text" placeholder="Type location or address" style="grid-column:1 / -1; min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:600;">
                     </div>
 
@@ -2862,6 +2959,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                             <option value="earthquake">Earthquake</option>
                             <option value="other">Other</option>
                         </select>
+                        <label style="font-size:12px; opacity:0.8; margin:0;">Incident Description</label>
+                        <textarea id="callIncidentDescription" rows="4" placeholder="Write the emergency context, visible hazards, injuries, people affected, or caller notes..." style="width:100%; resize:vertical; min-height:86px; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.08); color:#fff; outline:none; font-weight:600; line-height:1.35;"></textarea>
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                            <span style="font-size:12px; opacity:0.8;">Auto Priority</span>
+                            <span id="callPriorityBadge" class="incident-priority-badge incident-priority-low">LOW 0</span>
+                        </div>
 
                         <div style="display:flex; gap:10px;">
                             <button id="transferCallBtn" class="btn btn-primary" style="flex:1; padding:12px 14px; min-height:48px;">
@@ -3208,6 +3311,48 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let pendingOffer = null;
     let pendingCallId = null;
     let pendingCandidates = [];
+    const ADMIN_CALL_LOCK_KEY = `alertaraqc_active_call_${ADMIN_ID || ADMIN_USERNAME || 'admin'}`;
+
+    function readAdminCallLock() {
+        try {
+            const raw = localStorage.getItem(ADMIN_CALL_LOCK_KEY);
+            if (!raw) return null;
+            const lock = JSON.parse(raw);
+            if (!lock || !lock.callId) return null;
+            if (Date.now() - Number(lock.startedAt || 0) > 4 * 60 * 60 * 1000) {
+                localStorage.removeItem(ADMIN_CALL_LOCK_KEY);
+                return null;
+            }
+            return lock;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function adminHasActiveCall(otherThanCallId = null) {
+        if (callId && (!otherThanCallId || callId !== otherThanCallId)) return true;
+        const lock = readAdminCallLock();
+        return !!(lock && (!otherThanCallId || lock.callId !== otherThanCallId));
+    }
+
+    function setAdminCallLock(activeCallId) {
+        if (!activeCallId) return;
+        try {
+            localStorage.setItem(ADMIN_CALL_LOCK_KEY, JSON.stringify({
+                callId: activeCallId,
+                adminId: ADMIN_ID || null,
+                adminUsername: ADMIN_USERNAME || 'Admin',
+                startedAt: Date.now()
+            }));
+        } catch (e) {}
+    }
+
+    function clearAdminCallLock(activeCallId = null) {
+        const lock = readAdminCallLock();
+        if (!lock) return;
+        if (activeCallId && lock.callId !== activeCallId) return;
+        try { localStorage.removeItem(ADMIN_CALL_LOCK_KEY); } catch (e) {}
+    }
 
     function setSpeakingIndicator(labelId, indicatorId, active) {
         const label = document.getElementById(labelId);
@@ -3265,16 +3410,58 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         audioActivityMonitors = [];
     }
 
+    function normalizePhPhone(value) {
+        let digits = String(value || '').replace(/\D/g, '');
+        if (digits.startsWith('63') && digits.length >= 12) {
+            digits = `0${digits.slice(2)}`;
+        } else if (digits.startsWith('9') && digits.length === 10) {
+            digits = `0${digits}`;
+        }
+        return digits.slice(0, 11);
+    }
+
+    function isValidPhPhone(value) {
+        return /^\d{11}$/.test(String(value || ''));
+    }
+
+    function getCallIncidentDescription() {
+        return document.getElementById('callIncidentDescription')?.value.trim() || '';
+    }
+
+    function currentCallPriority() {
+        const recentMessages = messages.slice(-8).map(message => message.text).join(' ');
+        return calculateIncidentPriority({
+            incident_type: document.getElementById('emergencyTypeSelect')?.value || '',
+            description: getCallIncidentDescription(),
+            message: recentMessages,
+            last_message: recentMessages,
+            userConcern: callerInfo?.concern || callerInfo?.emergency_type || '',
+            text: [callerInfo?.address, callerLocation?.address].filter(Boolean).join(' ')
+        });
+    }
+
+    function updateCallPriorityBadge() {
+        const badge = document.getElementById('callPriorityBadge');
+        if (!badge) return currentCallPriority();
+        const priority = currentCallPriority();
+        badge.className = `incident-priority-badge incident-priority-${priority.level}`;
+        badge.textContent = `${priority.label} ${priority.score}`;
+        badge.title = 'Auto priority from emergency type, description, messages, and caller context';
+        return priority;
+    }
+
     function getManualCallerInfo() {
+        const phoneInput = document.getElementById('callerPhoneInput');
+        if (phoneInput) phoneInput.value = normalizePhPhone(phoneInput.value);
         const manual = {
             name: document.getElementById('callerNameInput')?.value.trim() || '',
-            phone: document.getElementById('callerPhoneInput')?.value.trim() || '',
+            phone: phoneInput?.value.trim() || '',
             address: document.getElementById('callerAddressInput')?.value.trim() || ''
         };
         return {
             ...(callerInfo || {}),
             ...(manual.name ? { name: manual.name } : {}),
-            ...(manual.phone ? { phone: manual.phone } : {}),
+            ...(manual.phone && isValidPhPhone(manual.phone) ? { phone: manual.phone } : {}),
             ...(manual.address ? { address: manual.address } : {})
         };
     }
@@ -3285,6 +3472,42 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             ...(callerLocation || {}),
             ...(caller.address ? { address: caller.address } : {})
         };
+    }
+
+    async function ensureCallConversationForTransfer(callerPayload, incidentDescription, priorityMetric) {
+        if (callConversationId) return callConversationId;
+        if (!callId) return null;
+
+        const durationSec = callConnectedAt ? Math.floor((Date.now() - callConnectedAt) / 1000) : 0;
+        const response = await fetch('../api/save-completed-call.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                callId,
+                event: 'transferred',
+                userId: callerPayload?.user_id || callerPayload?.id || null,
+                userName: callerPayload?.name || 'Emergency Call User',
+                userPhone: callerPayload?.phone || null,
+                userLocation: callerPayload?.address || callerLocation?.address || null,
+                location: callerLocation || null,
+                emergencyType: document.getElementById('emergencyTypeSelect')?.value || '',
+                description: incidentDescription,
+                incidentPriority: {
+                    score: priorityMetric.score,
+                    priority: priorityMetric.level,
+                    label: priorityMetric.label,
+                    breakdown: priorityMetric.breakdown
+                },
+                duration: durationSec,
+                endedAt: Math.floor(Date.now() / 1000)
+            })
+        });
+        const data = await readApiResponse(response);
+        if (data && data.success && data.conversationId) {
+            callConversationId = data.conversationId;
+            return callConversationId;
+        }
+        throw new Error(data?.message || 'Could not create pending transfer report.');
     }
 
     // Messaging functions for admin
@@ -3331,6 +3554,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
         
         messages.push({ text, sender, timestamp, callId });
+        updateCallPriorityBadge();
     }
 
     async function sendCallMessage() {
@@ -3398,7 +3622,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         if (phoneEl) phoneEl.textContent = callerInfo?.phone || '—';
 
         if (nameInput && !nameInput.value) nameInput.value = callerInfo?.name || '';
-        if (phoneInput && !phoneInput.value) phoneInput.value = callerInfo?.phone || '';
+        if (phoneInput && !phoneInput.value) phoneInput.value = normalizePhPhone(callerInfo?.phone || '');
 
         // Fetch address from database if we have user_id or phone
         let address = callerInfo?.address || '';
@@ -3444,6 +3668,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const lat = callerLocation?.lat;
         const lng = callerLocation?.lng;
         if (coordsEl) coordsEl.textContent = (lat != null && lng != null) ? `${lat}, ${lng}` : '—';
+        updateCallPriorityBadge();
     }
 
     function setCallActiveBannerVisible(visible) {
@@ -3591,6 +3816,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     }
 
     function cleanupCall() {
+        const finishedCallId = callId || pendingCallId;
         stopTimer();
         stopAudioActivityMonitors();
         setEndEnabled(false);
@@ -3605,6 +3831,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         const messageInput = document.getElementById('callMessageInput');
         if (messageInput) messageInput.value = '';
+        const transferBtn = document.getElementById('transferCallBtn');
+        if (transferBtn) {
+            transferBtn.disabled = false;
+            transferBtn.style.opacity = '1';
+        }
 
         pendingOffer = null;
         pendingCallId = null;
@@ -3613,10 +3844,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         callConversationId = null;
         callerInfo = null;
         callerLocation = null;
-        ['callerNameInput', 'callerPhoneInput', 'callerAddressInput'].forEach(id => {
+        ['callerNameInput', 'callerPhoneInput', 'callerAddressInput', 'callIncidentDescription'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
+        updateCallPriorityBadge();
         renderCallerDetails();
         renderIncomingEmergencyCallRow();
 
@@ -3635,6 +3867,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         activeCallRoom = null;
         locationData = null;
         setTimer(0);
+        clearAdminCallLock(finishedCallId);
     }
 
     document.getElementById('endCallBtn').onclick = () => endCall(true);
@@ -3647,6 +3880,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     };
     document.getElementById('incomingAnswerBtn').onclick = () => acceptIncomingEmergencyCall();
     document.getElementById('incomingDeclineBtn').onclick = () => declineIncomingEmergencyCall();
+    document.getElementById('callerPhoneInput')?.addEventListener('input', (event) => {
+        event.target.value = normalizePhPhone(event.target.value);
+    });
+    document.getElementById('emergencyTypeSelect')?.addEventListener('change', updateCallPriorityBadge);
+    document.getElementById('callIncidentDescription')?.addEventListener('input', updateCallPriorityBadge);
 
     document.getElementById('transferCallBtn').onclick = async () => {
         const statusEl = document.getElementById('dispatchStatus');
@@ -3655,7 +3893,17 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (statusEl) statusEl.textContent = 'No active call.';
             return;
         }
+        const rawPhone = document.getElementById('callerPhoneInput')?.value.trim() || '';
+        const callerPayload = getManualCallerInfo();
+        if (rawPhone && !isValidPhPhone(rawPhone)) {
+            if (statusEl) statusEl.textContent = 'Phone number must be exactly 11 digits.';
+            return;
+        }
+        const incidentDescription = getCallIncidentDescription();
+        const priorityMetric = currentCallPriority();
         try {
+            if (statusEl) statusEl.textContent = 'Preparing pending transfer report...';
+            const transferConversationId = await ensureCallConversationForTransfer(callerPayload, incidentDescription, priorityMetric);
             if (statusEl) statusEl.textContent = 'Starting transfer…';
             const res = await fetch(transferApiUrl(), {
                 method: 'POST',
@@ -3666,9 +3914,17 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     socketUrl: SIGNALING_URL,
                     socketPath: SOCKET_IO_PATH,
                     emergencyType: document.getElementById('emergencyTypeSelect')?.value || '',
-                    caller: getManualCallerInfo(),
+                    priority: priorityMetric.level,
+                    incidentPriority: {
+                        score: priorityMetric.score,
+                        priority: priorityMetric.level,
+                        label: priorityMetric.label,
+                        breakdown: priorityMetric.breakdown
+                    },
+                    description: incidentDescription,
+                    caller: callerPayload,
                     location: getTransferLocationPayload(),
-                    conversationId: callConversationId
+                    conversationId: transferConversationId || callConversationId
                 })
             });
             const data = await readApiResponse(res);
@@ -3702,15 +3958,30 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         try {
+            const transferPriority = currentCallPriority();
             await logCall('transferred', {
                 room: activeCallRoom || getCallRoom(activeCallId),
                 socketUrl: SIGNALING_URL,
                 socketPath: SOCKET_IO_PATH,
-                conversationId: callConversationId || null
+                conversationId: callConversationId || null,
+                description: getCallIncidentDescription(),
+                emergencyType: document.getElementById('emergencyTypeSelect')?.value || '',
+                incidentPriority: transferPriority
             });
         } catch (e) {}
 
-        setStatus('Transferred to response team');
+        setStatus('Transfer sent. Stay on the call until the response team answers.');
+        setEndEnabled(true);
+        const transferBtn = document.getElementById('transferCallBtn');
+        if (transferBtn) {
+            transferBtn.disabled = true;
+            transferBtn.style.opacity = '0.65';
+        }
+    }
+
+    function completeResponseTeamAnswerHandoff() {
+        if (!transferInProgress) return;
+        setStatus('Response team answered. Call released from admin.');
         stopTimer();
         stopAudioActivityMonitors();
         setEndEnabled(false);
@@ -3728,6 +3999,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             setOverlayVisible(false);
             cleanupCall();
             transferInProgress = false;
+            const transferBtn = document.getElementById('transferCallBtn');
+            if (transferBtn) {
+                transferBtn.disabled = false;
+                transferBtn.style.opacity = '1';
+            }
         }, 900);
     }
 
@@ -3749,6 +4025,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 const userId = callerPayload?.user_id || callerPayload?.id || null;
                 const userName = callerPayload?.name || 'Emergency Call User';
                 const userPhone = callerPayload?.phone || null;
+                const endedCallPriority = currentCallPriority();
                 
                 const saveResponse = await fetch('../api/save-completed-call.php', {
                     method: 'POST',
@@ -3760,6 +4037,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         userPhone: userPhone,
                         userLocation: callerPayload?.address || callerLocation?.address || null,
                         location: callerLocation || null,
+                        emergencyType: document.getElementById('emergencyTypeSelect')?.value || '',
+                        description: getCallIncidentDescription(),
+                        incidentPriority: {
+                            score: endedCallPriority.score,
+                            priority: endedCallPriority.level,
+                            label: endedCallPriority.label,
+                            breakdown: endedCallPriority.breakdown
+                        },
                         duration: durationSec || 0,
                         endedAt: Math.floor(Date.now() / 1000), // Unix timestamp in seconds
                         conversationId: callConversationId || null // Pass existing conversation ID if available
@@ -3855,8 +4140,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     async function acceptIncomingEmergencyCall() {
         if (!pendingOffer || !pendingCallId) return;
         if (callId && pendingCallId !== callId) return;
+        if (adminHasActiveCall(pendingCallId)) {
+            setIncomingCallModalText('You already have an active call. Finish or transfer it before taking another call.');
+            renderIncomingEmergencyCallRow();
+            return;
+        }
 
         callId = pendingCallId;
+        setAdminCallLock(callId);
         activeCallRoom = pendingCallRoom || getCallRoom(callId);
         try {
             await logCall('accepted', {
@@ -3954,6 +4245,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const sdp = payload && payload.sdp ? payload.sdp : payload;
             const incomingCallId = payload && payload.callId ? payload.callId : null;
             if (!incomingCallId) return;
+            if (payload && payload.transferred) return;
+            if (adminHasActiveCall(incomingCallId)) return;
             if (callId && incomingCallId !== callId) return;
             if (pendingCallId && pendingCallId !== incomingCallId) return;
             if (pendingCallId === incomingCallId && pendingOffer) return;
@@ -3983,11 +4276,20 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             renderIncomingEmergencyCallRow();
         });
 
+        s.on('answer', payload => {
+            const incomingCallId = payload && payload.callId ? payload.callId : null;
+            if (incomingCallId && callId && incomingCallId !== callId) return;
+            if (transferInProgress && callId) {
+                completeResponseTeamAnswerHandoff();
+            }
+        });
+
         s.on('candidate', payload => {
             const cand = payload && payload.candidate ? payload.candidate : payload;
             const incomingCallId = payload && payload.callId ? payload.callId : null;
             if (incomingCallId && callId && incomingCallId !== callId) return;
             if (incomingCallId && pendingCallId && incomingCallId !== pendingCallId) return;
+            if (transferInProgress) return;
 
             if (!pc || !callId) {
                 if (cand && incomingCallId && pendingCallId === incomingCallId) pendingCandidates.push(cand);

@@ -22,6 +22,10 @@ if (!$isAdminSession) {
         }
     }
 }
+$chatLogicPath = dirname(__DIR__) . '/ADMIN/api/chat-logic.php';
+if (is_file($chatLogicPath)) {
+    require_once $chatLogicPath;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -99,6 +103,9 @@ function responseTeamFormPayload(array $payload, string $apiKey, string $action)
     if ($incidentType === '') {
         $incidentType = 'emergency';
     }
+    $incidentPriority = is_array($payload['incidentPriority'] ?? null) ? $payload['incidentPriority'] : [];
+    $priorityLevel = strtolower(trim((string)($incidentPriority['priority'] ?? $incidentPriority['level'] ?? $payload['priority'] ?? 'high')));
+    $priorityScore = (int)($incidentPriority['score'] ?? 0);
 
     return [
         'api_key' => $apiKey,
@@ -117,7 +124,11 @@ function responseTeamFormPayload(array $payload, string $apiKey, string $action)
         'incident_type' => $incidentType,
         'emergency_type' => $incidentType,
         'emergencyType' => $incidentType,
-        'priority' => $payload['priority'] ?? 'high',
+        'priority' => $priorityLevel,
+        'incident_priority' => $priorityLevel,
+        'incident_priority_level' => $priorityLevel,
+        'incident_priority_score' => $priorityScore,
+        'incident_priority_json' => json_encode($incidentPriority, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         'status' => 'new',
         'title' => 'Transferred emergency from AlertaraQC',
         'description' => $description,
@@ -317,6 +328,30 @@ if (!empty($messages)) {
     reset($messages);
 }
 
+$providedIncidentPriority = is_array($input['incidentPriority'] ?? null) ? $input['incidentPriority'] : [];
+$descriptionInput = trim((string)($input['description'] ?? ($input['details'] ?? $latestMessage)));
+$emergencyTypeInput = trim((string)($input['emergencyType'] ?? ''));
+$incidentPriority = [];
+if (!empty($providedIncidentPriority) && isset($providedIncidentPriority['score'])) {
+    $incidentPriority = $providedIncidentPriority;
+    $incidentPriority['priority'] = strtolower((string)($incidentPriority['priority'] ?? $incidentPriority['level'] ?? 'low'));
+    if (function_exists('twc_incident_priority_config')) {
+        $meta = twc_incident_priority_config()[$incidentPriority['priority']] ?? null;
+        if ($meta) {
+            $incidentPriority['label'] = $incidentPriority['label'] ?? $meta['label'];
+            $incidentPriority['color'] = $incidentPriority['color'] ?? $meta['color'];
+            $incidentPriority['hex'] = $incidentPriority['hex'] ?? $meta['hex'];
+        }
+    }
+} elseif (function_exists('twc_calculate_incident_priority')) {
+    $incidentPriority = twc_calculate_incident_priority([
+        'incident_type' => $emergencyTypeInput,
+        'description' => $descriptionInput,
+        'message' => $descriptionInput,
+        'last_message' => $latestMessage,
+    ]);
+}
+
 $config = [];
 $configCandidates = [
     dirname(__DIR__) . '/ADMIN/api/config.local.php',
@@ -419,9 +454,10 @@ $payload = [
     'room' => trim((string)($input['room'] ?? '')),
     'socketUrl' => trim((string)($input['socketUrl'] ?? '')),
     'socketPath' => trim((string)($input['socketPath'] ?? '/socket.io')),
-    'emergencyType' => $input['emergencyType'] ?? null,
-    'priority' => $input['priority'] ?? 'high',
-    'description' => $input['description'] ?? ($input['details'] ?? $latestMessage),
+    'emergencyType' => $emergencyTypeInput !== '' ? $emergencyTypeInput : null,
+    'priority' => $input['priority'] ?? ($incidentPriority['priority'] ?? 'high'),
+    'incidentPriority' => $incidentPriority,
+    'description' => $descriptionInput,
     'latestMessage' => $latestMessage,
     'caller' => is_array($input['caller'] ?? null) ? $input['caller'] : null,
     'location' => is_array($input['location'] ?? null) ? $input['location'] : null,
@@ -449,6 +485,8 @@ $payload['latitude'] = $payloadLocation['lat'] ?? '';
 $payload['longitude'] = $payloadLocation['lng'] ?? '';
 $payload['title'] = 'Transferred emergency from AlertaraQC';
 $payload['status'] = 'new';
+$payload['incident_priority'] = $incidentPriority['priority'] ?? $payload['priority'];
+$payload['incident_priority_score'] = $incidentPriority['score'] ?? 0;
 
 $result = [
     'data' => $payload,

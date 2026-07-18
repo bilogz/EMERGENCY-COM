@@ -877,6 +877,10 @@ $assetBase = '../ADMIN/header/';
                 const sdp = payload && payload.sdp ? payload.sdp : payload;
                 const incomingCallId = payload && payload.callId ? payload.callId : null;
                 if (incomingCallId && incomingCallId !== callId) return;
+                if (transferInProgress && transferPc) {
+                    transferPc.setRemoteDescription(sdp).catch(console.error);
+                    return;
+                }
                 if (pc) pc.setRemoteDescription(sdp);
             });
 
@@ -884,6 +888,10 @@ $assetBase = '../ADMIN/header/';
                 const cand = payload && payload.candidate ? payload.candidate : payload;
                 const incomingCallId = payload && payload.callId ? payload.callId : null;
                 if (incomingCallId && incomingCallId !== callId) return;
+                if (transferInProgress && transferPc && cand) {
+                    transferPc.addIceCandidate(cand).catch(() => {});
+                    return;
+                }
                 if (pc && cand) pc.addIceCandidate(cand);
             });
 
@@ -918,6 +926,7 @@ $assetBase = '../ADMIN/header/';
         }
 
         let pc = null;
+        let transferPc = null;
         let localStream = null;
         let callId = null;
         let callConversationId = null;
@@ -1282,6 +1291,10 @@ $assetBase = '../ADMIN/header/';
                 try { pc.close(); } catch (e) {}
                 pc = null;
             }
+            if (transferPc) {
+                try { transferPc.close(); } catch (e) {}
+                transferPc = null;
+            }
             callConnectedAt = null;
             callStartedAt = null;
             callId = null;
@@ -1311,30 +1324,74 @@ $assetBase = '../ADMIN/header/';
             if (!callId) return;
 
             transferInProgress = true;
-            setStatus('Transferred. Waiting for response team...');
-            setEndEnabled(false);
+            setStatus('Transfer sent. Stay connected until the response team answers...');
+            setEndEnabled(true);
             setCancelVisible(false);
-            stopAudioActivityMonitors();
-
-            if (pc) {
-                try { pc.onconnectionstatechange = null; pc.close(); } catch (e) {}
-                pc = null;
-            }
 
             try {
                 if (!localStream) {
                     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 }
 
-                initPeer();
-                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-                monitorAudioActivity(localStream, 'userSpeakingLabel', 'userLocalMicIndicator');
+                if (transferPc) {
+                    try { transferPc.close(); } catch (e) {}
+                    transferPc = null;
+                }
+
+                const previousPc = pc;
+                transferPc = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:global.stun.twilio.com:3478' }
+                    ]
+                });
+
+                transferPc.ontrack = e => {
+                    const remote = document.getElementById('remote');
+                    const remoteStream = e.streams[0];
+                    if (remote) remote.srcObject = remoteStream;
+                    monitorAudioActivity(remoteStream, 'adminSpeakingLabel');
+                };
+
+                transferPc.onicecandidate = e => {
+                    if (!e.candidate) return;
+                    const s = ensureSocket();
+                    if (s) {
+                        s.emit('candidate', { candidate: e.candidate, callId, room: activeCallRoom }, activeCallRoom || getCallRoom());
+                    }
+                };
+
+                transferPc.onconnectionstatechange = () => {
+                    if (!transferPc) return;
+                    const state = transferPc.connectionState;
+                    if (state === 'connected') {
+                        if (previousPc && previousPc !== transferPc) {
+                            try { previousPc.onconnectionstatechange = null; previousPc.close(); } catch (e) {}
+                        }
+                        pc = transferPc;
+                        transferPc = null;
+                        transferInProgress = false;
+                        callConnectedAt = Date.now();
+                        setStatus('Connected to response team');
+                        setEndEnabled(true);
+                        setCallActiveBannerVisible(true);
+                        startTimer();
+                        logCall('transfer_connected_response_team');
+                        return;
+                    }
+                    if (['failed', 'closed'].includes(state)) {
+                        setStatus('Response team connection failed. Admin call is still available.');
+                        setEndEnabled(true);
+                    }
+                };
+
+                localStream.getTracks().forEach(track => transferPc.addTrack(track, localStream));
 
                 const s = ensureSocket();
                 if (s) s.emit('join', activeCallRoom || getCallRoom());
 
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
+                const offer = await transferPc.createOffer();
+                await transferPc.setLocalDescription(offer);
 
                 const guestCaller = getGuestCallerInfo();
                 const caller = userProfile ? {
@@ -1368,7 +1425,6 @@ $assetBase = '../ADMIN/header/';
                 console.error('[call][user] failed to prepare transferred call', e);
                 setStatus('Transfer failed. Please stay on this page or call again.');
                 setEndEnabled(true);
-            } finally {
                 transferInProgress = false;
             }
         }
