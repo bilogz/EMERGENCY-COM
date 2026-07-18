@@ -76,6 +76,113 @@ function saveCallIncidentPriority(PDO $pdo, int $conversationId, array $priority
     }
 }
 
+function saveCallColumnInfo(PDO $pdo, string $table, string $column): ?array {
+    $allowed = ['conversations' => ['conversation_id'], 'chat_messages' => ['id', 'message_id']];
+    if (!isset($allowed[$table]) || !in_array($column, $allowed[$table], true)) return null;
+    $stmt = $pdo->query("SHOW COLUMNS FROM `{$table}` LIKE " . $pdo->quote($column));
+    $row = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+    return is_array($row) ? $row : null;
+}
+
+function saveCallNeedsExplicitId(PDO $pdo, string $table, string $column): bool {
+    $info = saveCallColumnInfo($pdo, $table, $column);
+    return $info !== null && stripos((string)($info['Extra'] ?? ''), 'auto_increment') === false;
+}
+
+function saveCallNextId(PDO $pdo, string $table, string $column): int {
+    $allowed = ['conversations' => ['conversation_id'], 'chat_messages' => ['id', 'message_id']];
+    if (!isset($allowed[$table]) || !in_array($column, $allowed[$table], true)) {
+        throw new InvalidArgumentException('Unsupported ID column.');
+    }
+    $stmt = $pdo->query("SELECT COALESCE(MAX(`{$column}`), 0) + 1 FROM `{$table}`");
+    return max(1, (int)($stmt ? $stmt->fetchColumn() : 1));
+}
+
+function saveCallWithIdLock(PDO $pdo, string $lockName, callable $callback) {
+    $stmt = $pdo->prepare('SELECT GET_LOCK(?, 5)');
+    $stmt->execute([$lockName]);
+    if ((int)$stmt->fetchColumn() !== 1) throw new RuntimeException('Could not reserve a database ID. Please retry.');
+    try {
+        return $callback();
+    } finally {
+        try {
+            $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$lockName]);
+        } catch (Throwable $e) {
+            error_log('Save call ID lock release warning: ' . $e->getMessage());
+        }
+    }
+}
+
+function saveCallInsertConversation(
+    PDO $pdo,
+    $userId,
+    string $userName,
+    ?string $userPhone,
+    ?string $userLocation,
+    int $isGuest,
+    string $status,
+    string $lastMessage,
+    int $timestamp,
+    string $callId
+): int {
+    $insert = function (?int $explicitId = null) use ($pdo, $userId, $userName, $userPhone, $userLocation, $isGuest, $status, $lastMessage, $timestamp, $callId): int {
+        $columns = ['user_id', 'user_name', 'user_phone', 'user_location', 'is_guest', 'status', 'last_message', 'last_message_time', 'created_at', 'updated_at'];
+        $marks = ['?', '?', '?', '?', '?', '?', '?', 'FROM_UNIXTIME(?)', 'NOW()', 'NOW()'];
+        $guestUserId = 'call_guest_' . substr(hash('sha256', $callId), 0, 24);
+        $values = [$userId ?: $guestUserId, $userName, $userPhone, $userLocation, $isGuest, $status, $lastMessage, $timestamp];
+        if ($explicitId !== null) {
+            array_unshift($columns, 'conversation_id');
+            array_unshift($marks, '?');
+            array_unshift($values, $explicitId);
+        }
+        $stmt = $pdo->prepare('INSERT INTO conversations (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $marks) . ')');
+        $stmt->execute($values);
+        return $explicitId ?? (int)$pdo->lastInsertId();
+    };
+
+    if (!saveCallNeedsExplicitId($pdo, 'conversations', 'conversation_id')) return $insert();
+    return saveCallWithIdLock($pdo, 'alertaraqc_conversations_id', function () use ($pdo, $insert): int {
+        return $insert(saveCallNextId($pdo, 'conversations', 'conversation_id'));
+    });
+}
+
+function saveCallMessageIdColumn(PDO $pdo): ?string {
+    if (saveCallColumnInfo($pdo, 'chat_messages', 'message_id')) return 'message_id';
+    if (saveCallColumnInfo($pdo, 'chat_messages', 'id')) return 'id';
+    return null;
+}
+
+function saveCallInsertMessage(
+    PDO $pdo,
+    int $conversationId,
+    string $senderId,
+    string $senderName,
+    string $senderType,
+    string $message,
+    int $isRead,
+    int $timestamp
+): int {
+    $idColumn = saveCallMessageIdColumn($pdo);
+    $insert = function (?int $explicitId = null) use ($pdo, $idColumn, $conversationId, $senderId, $senderName, $senderType, $message, $isRead, $timestamp): int {
+        $columns = ['conversation_id', 'sender_id', 'sender_name', 'sender_type', 'message_text', 'is_read', 'created_at'];
+        $marks = ['?', '?', '?', '?', '?', '?', 'FROM_UNIXTIME(?)'];
+        $values = [$conversationId, $senderId, $senderName, $senderType === 'admin' ? 'admin' : 'user', $message, $isRead, $timestamp];
+        if ($explicitId !== null && $idColumn !== null) {
+            array_unshift($columns, $idColumn);
+            array_unshift($marks, '?');
+            array_unshift($values, $explicitId);
+        }
+        $stmt = $pdo->prepare('INSERT INTO chat_messages (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $marks) . ')');
+        $stmt->execute($values);
+        return $explicitId ?? (int)$pdo->lastInsertId();
+    };
+
+    if ($idColumn === null || !saveCallNeedsExplicitId($pdo, 'chat_messages', $idColumn)) return $insert();
+    return saveCallWithIdLock($pdo, 'alertaraqc_chat_messages_id', function () use ($pdo, $idColumn, $insert): int {
+        return $insert(saveCallNextId($pdo, 'chat_messages', $idColumn));
+    });
+}
+
 if (!$callId) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Call ID is required']);
@@ -104,6 +211,7 @@ if (!empty($providedPriority) && isset($providedPriority['score'])) {
 }
 
 try {
+    $activeStatus = function_exists('twc_status_for_db') ? twc_status_for_db($pdo, 'open') : 'active';
     // Check if completed_calls table exists and if this call is already saved
     $existing = null;
     try {
@@ -123,7 +231,8 @@ try {
         $conversationId = $existing['conversation_id'];
         
         // Check if "Call ended" message already exists for this conversation
-        $stmt = $pdo->prepare("SELECT id FROM chat_messages WHERE conversation_id = ? AND message_text LIKE '[CALL_ENDED]%'");
+        $messageIdColumn = saveCallMessageIdColumn($pdo) ?: 'message_id';
+        $stmt = $pdo->prepare("SELECT `{$messageIdColumn}` FROM chat_messages WHERE conversation_id = ? AND message_text LIKE '[CALL_ENDED]%'");
         $stmt->execute([$conversationId]);
         $callEndedMsg = $stmt->fetch();
         
@@ -132,30 +241,20 @@ try {
             $durationStr = $duration ? gmdate('H:i:s', $duration) : 'N/A';
             $callEndedMessage = "[CALL_ENDED]Call ended • Duration: " . $durationStr;
             
-            $stmt = $pdo->prepare("
-                INSERT INTO chat_messages 
-                (conversation_id, sender_id, sender_name, sender_type, message_text, is_read, created_at)
-                VALUES (?, 'system', 'System', 'system', ?, 1, FROM_UNIXTIME(?))
-            ");
-            $stmt->execute([$conversationId, $callEndedMessage, $endedAt]);
+            saveCallInsertMessage($pdo, (int)$conversationId, 'system', 'System', 'user', $callEndedMessage, 1, (int)$endedAt);
         }
 
         if ($description !== '') {
-            $stmt = $pdo->prepare("SELECT id FROM chat_messages WHERE conversation_id = ? AND message_text LIKE '[CALL_CONTEXT]%' LIMIT 1");
+            $stmt = $pdo->prepare("SELECT `{$messageIdColumn}` FROM chat_messages WHERE conversation_id = ? AND message_text LIKE '[CALL_CONTEXT]%' LIMIT 1");
             $stmt->execute([$conversationId]);
             if (!$stmt->fetch()) {
                 $contextMessage = '[CALL_CONTEXT]' . $description;
-                $stmt = $pdo->prepare("
-                    INSERT INTO chat_messages
-                    (conversation_id, sender_id, sender_name, sender_type, message_text, is_read, created_at)
-                    VALUES (?, 'admin', ?, 'admin', ?, 0, FROM_UNIXTIME(?))
-                ");
-                $stmt->execute([$conversationId, $_SESSION['admin_username'] ?? 'Administrator', $contextMessage, $endedAt]);
+                saveCallInsertMessage($pdo, (int)$conversationId, 'admin', $_SESSION['admin_username'] ?? 'Administrator', 'admin', $contextMessage, 0, (int)$endedAt);
             }
         }
         saveCallIncidentPriority($pdo, (int)$conversationId, $incidentPriority);
         
-        echo json_encode(['success' => true, 'message' => 'Call already saved']);
+        echo json_encode(['success' => true, 'message' => 'Call already saved', 'conversationId' => (int)$conversationId]);
         exit;
     }
     
@@ -217,24 +316,18 @@ try {
         // Determine if user is guest (no user_id means guest)
         $isGuest = empty($userId) ? 1 : 0;
         
-        $stmt = $pdo->prepare("
-            INSERT INTO conversations (
-                user_id, user_name, user_phone, user_location, is_guest, status, 
-                last_message, last_message_time, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, 'open', ?, FROM_UNIXTIME(?), NOW(), NOW())
-        ");
-        
-        $stmt->execute([
-            $userId ?: null,
-            $userName,
-            $userPhone ?: null,
-            $userLocation ?: null,
+        $conversationId = saveCallInsertConversation(
+            $pdo,
+            $userId,
+            (string)$userName,
+            $userPhone ? (string)$userPhone : null,
+            $userLocation !== '' ? $userLocation : null,
             $isGuest,
+            $activeStatus,
             $lastMessage,
-            $endedAt
-        ]);
-        
-        $conversationId = $pdo->lastInsertId();
+            (int)$endedAt,
+            (string)$callId
+        );
     } else {
         // Update existing conversation with call ended/declined message
         $lastMessage = $event === 'declined'
@@ -248,10 +341,10 @@ try {
             SET last_message = ?, 
                 last_message_time = FROM_UNIXTIME(?), 
                 updated_at = NOW(),
-                status = 'open'
+                status = ?
             WHERE conversation_id = ?
         ");
-        $stmt->execute([$lastMessage, $endedAt, $conversationId]);
+        $stmt->execute([$lastMessage, $endedAt, $activeStatus, $conversationId]);
     }
     
     // Add "Call ended" system message to the conversation
@@ -263,21 +356,11 @@ try {
             ? "[CALL_TRANSFERRED]Call transferred to response team by {$adminName}"
             : "[CALL_ENDED]Call ended - Duration: " . $durationStr);
     
-    $stmt = $pdo->prepare("
-        INSERT INTO chat_messages 
-        (conversation_id, sender_id, sender_name, sender_type, message_text, is_read, created_at)
-        VALUES (?, 'system', ?, 'user', ?, 0, FROM_UNIXTIME(?))
-    ");
-    $stmt->execute([$conversationId, $userName ?: 'Emergency Call User', $callEndedMessage, $endedAt]);
+    saveCallInsertMessage($pdo, (int)$conversationId, 'system', $userName ?: 'Emergency Call User', 'user', $callEndedMessage, 0, (int)$endedAt);
 
     if ($description !== '') {
         $contextMessage = '[CALL_CONTEXT]' . $description;
-        $stmt = $pdo->prepare("
-            INSERT INTO chat_messages
-            (conversation_id, sender_id, sender_name, sender_type, message_text, is_read, created_at)
-            VALUES (?, 'admin', ?, 'admin', ?, 0, FROM_UNIXTIME(?))
-        ");
-        $stmt->execute([$conversationId, $adminName, $contextMessage, $endedAt]);
+        saveCallInsertMessage($pdo, (int)$conversationId, 'admin', $adminName, 'admin', $contextMessage, 0, (int)$endedAt);
     }
     
     // Update conversation's last message

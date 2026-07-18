@@ -846,6 +846,13 @@ $assetBase = '../ADMIN/header/';
             socket.on('connect', () => {
                 console.log('[call][user] socket connected', socket.id);
                 socket.emit('join', activeCallRoom || CALL_LOBBY_ROOM);
+                if (callId && activeCallRoom) {
+                    socket.emit('resume-user-call', {
+                        callId,
+                        room: activeCallRoom,
+                        accepted: !!callConnectedAt
+                    });
+                }
                 socketRetryCount = 0; // Reset retry count on successful connection
             });
 
@@ -917,6 +924,18 @@ $assetBase = '../ADMIN/header/';
                 }
             });
 
+            socket.on('request-offer', payload => {
+                const incomingCallId = payload && payload.callId ? payload.callId : null;
+                if (!callId || incomingCallId !== callId) return;
+                if (payload?.room) activeCallRoom = payload.room;
+                rebuildOfferForAdminResume().catch(error => {
+                    console.error('[call][user] failed to rebuild offer after admin refresh', error);
+                    setStatus('Unable to reconnect to dispatcher. You may cancel and call again.');
+                    setEndEnabled(true);
+                    setCancelVisible(true);
+                });
+            });
+
             socket.on('connect_error', () => {
                 if (callId) {
                     setStatus('Connecting failed. Signaling server offline.');
@@ -934,6 +953,7 @@ $assetBase = '../ADMIN/header/';
         let callStartedAt = null;
         let callConnectedAt = null;
         let timerInterval = null;
+        let peerDisconnectTimer = null;
         let locationData = null;
         let userProfile = null;
         let messages = [];
@@ -1264,6 +1284,8 @@ $assetBase = '../ADMIN/header/';
         }
 
         function cleanupCall() {
+            if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
+            peerDisconnectTimer = null;
             stopTimer();
             stopAudioActivityMonitors();
             setEndEnabled(false);
@@ -1469,6 +1491,62 @@ $assetBase = '../ADMIN/header/';
             bindCallOverlayUi();
         });
 
+        function currentCallCallerPayload() {
+            if (userProfile) {
+                return {
+                    id: userProfile.id ?? null,
+                    name: userProfile.name ?? null,
+                    email: userProfile.email ?? null,
+                    phone: userProfile.phone ?? null,
+                    nationality: userProfile.nationality ?? null,
+                    district: userProfile.district ?? null,
+                    barangay: userProfile.barangay ?? null,
+                    house_number: userProfile.house_number ?? null,
+                    street: userProfile.street ?? null,
+                    address: userProfile.address ?? null
+                };
+            }
+            return getGuestCallerInfo();
+        }
+
+        async function rebuildOfferForAdminResume() {
+            if (!callId || !activeCallRoom) return;
+            if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
+            peerDisconnectTimer = null;
+            setStatus('Dispatcher refreshed. Restoring your call...');
+
+            const previousPeer = pc;
+            pc = null;
+            if (previousPeer) {
+                try { previousPeer.close(); } catch (e) {}
+            }
+            initPeer();
+
+            const hasLiveAudio = localStream?.getAudioTracks?.().some(track => track.readyState === 'live');
+            if (!hasLiveAudio) {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                monitorAudioActivity(localStream, 'userSpeakingLabel', 'userLocalMicIndicator');
+            }
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+            const offer = await pc.createOffer({ iceRestart: true });
+            await pc.setLocalDescription(offer);
+            const s = ensureSocket();
+            await waitForSocketConnected(s);
+            const caller = currentCallCallerPayload();
+            s.emit('offer', {
+                sdp: offer,
+                callId,
+                room: activeCallRoom,
+                conversationId: callConversationId,
+                userId: userProfile?.id || null,
+                userName: caller?.name || null,
+                caller,
+                location: locationData || null,
+                resumed: true
+            }, activeCallRoom);
+        }
+
         function initPeer() {
             pc = new RTCPeerConnection({
                 iceServers: [
@@ -1493,8 +1571,10 @@ $assetBase = '../ADMIN/header/';
             };
             pc.onconnectionstatechange = () => {
                 if (!pc) return;
-                if (pc.connectionState === 'connected' && !callConnectedAt) {
-                    callConnectedAt = Date.now();
+                if (pc.connectionState === 'connected') {
+                    if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
+                    peerDisconnectTimer = null;
+                    if (!callConnectedAt) callConnectedAt = Date.now();
                     setStatus('Connected');
                     setEndEnabled(true);
                     setCancelVisible(false);
@@ -1504,7 +1584,13 @@ $assetBase = '../ADMIN/header/';
                 }
                 if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
                     if (transferInProgress) return;
-                    if (callId) endCall();
+                    if (!callId || peerDisconnectTimer) return;
+                    setStatus('Dispatcher connection interrupted. Reconnecting...');
+                    setCancelVisible(true);
+                    peerDisconnectTimer = setTimeout(() => {
+                        peerDisconnectTimer = null;
+                        if (callId && pc && pc.connectionState !== 'connected') endCall();
+                    }, 30000);
                 }
             };
         }

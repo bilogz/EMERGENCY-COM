@@ -3169,6 +3169,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             socket.emit('join', CALL_LOBBY_ROOM);
             if (activeCallRoom) socket.emit('join', activeCallRoom);
             if (pendingCallRoom) socket.emit('join', pendingCallRoom);
+            if (restoringAdminCall && callId) requestAdminCallResume(socket);
             socketRetryCount = 0; // Reset retry count on successful connection
         });
 
@@ -3304,6 +3305,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let callerLocation = null;
     let callConnectedAt = null;
     let timerInterval = null;
+    let peerDisconnectTimer = null;
     let locationData = null;
     let messages = [];
     let audioActivityMonitors = [];
@@ -3312,6 +3314,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let pendingCallId = null;
     let pendingCandidates = [];
     const ADMIN_CALL_LOCK_KEY = `alertaraqc_active_call_${ADMIN_ID || ADMIN_USERNAME || 'admin'}`;
+    const ADMIN_CALL_OWNER_KEY = String(ADMIN_ID || ADMIN_USERNAME || 'admin');
+    const ADMIN_CALL_RESUME_TIMEOUT_MS = 25000;
+    let restoringAdminCall = false;
+    let adminCallResumeTimer = null;
 
     function readAdminCallLock() {
         try {
@@ -3335,14 +3341,22 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         return !!(lock && (!otherThanCallId || lock.callId !== otherThanCallId));
     }
 
-    function setAdminCallLock(activeCallId) {
+    function setAdminCallLock(activeCallId, state = {}) {
         if (!activeCallId) return;
         try {
+            const existing = readAdminCallLock();
             localStorage.setItem(ADMIN_CALL_LOCK_KEY, JSON.stringify({
                 callId: activeCallId,
                 adminId: ADMIN_ID || null,
                 adminUsername: ADMIN_USERNAME || 'Admin',
-                startedAt: Date.now()
+                startedAt: existing?.callId === activeCallId ? Number(existing.startedAt || Date.now()) : Date.now(),
+                room: state.room || activeCallRoom || getCallRoom(activeCallId),
+                callerInfo: state.callerInfo || callerInfo || existing?.callerInfo || null,
+                callerLocation: state.callerLocation || callerLocation || existing?.callerLocation || null,
+                conversationId: state.conversationId || callConversationId || existing?.conversationId || null,
+                connectedAt: state.connectedAt || callConnectedAt || existing?.connectedAt || null,
+                accepted: state.accepted !== false,
+                version: 2
             }));
         } catch (e) {}
     }
@@ -3352,6 +3366,59 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         if (!lock) return;
         if (activeCallId && lock.callId !== activeCallId) return;
         try { localStorage.removeItem(ADMIN_CALL_LOCK_KEY); } catch (e) {}
+    }
+
+    function restoreAdminCallState() {
+        const lock = readAdminCallLock();
+        if (!lock?.callId) return false;
+        if (lock.accepted !== true || Number(lock.version || 0) < 2) {
+            clearAdminCallLock(lock.callId);
+            return false;
+        }
+        callId = lock.callId;
+        activeCallRoom = lock.room || getCallRoom(callId);
+        callerInfo = lock.callerInfo || null;
+        callerLocation = lock.callerLocation || null;
+        callConversationId = lock.conversationId || null;
+        callConnectedAt = Number(lock.connectedAt || lock.startedAt || Date.now());
+        restoringAdminCall = true;
+        setOverlayVisible(true);
+        setCallActiveBannerVisible(true);
+        setStatus('Restoring call connection...');
+        setEndEnabled(true);
+        renderCallerDetails();
+        startTimer();
+        return true;
+    }
+
+    function requestAdminCallResume(s = socket) {
+        if (!restoringAdminCall || !callId || !s?.connected) return;
+        s.emit('resume-admin-call', {
+            callId,
+            room: activeCallRoom || getCallRoom(callId),
+            adminKey: ADMIN_CALL_OWNER_KEY
+        }, result => {
+            if (!result?.ok) {
+                setStatus(result?.reason || 'The previous call is no longer available.');
+                clearAdminCallLock(callId);
+                setTimeout(() => {
+                    setOverlayVisible(false);
+                    cleanupCall();
+                }, 900);
+                return;
+            }
+            setStatus('Reconnecting to caller...');
+            if (adminCallResumeTimer) clearTimeout(adminCallResumeTimer);
+            adminCallResumeTimer = setTimeout(() => {
+                if (!restoringAdminCall) return;
+                setStatus('Caller did not reconnect. You can receive new calls now.');
+                clearAdminCallLock(callId);
+                setTimeout(() => {
+                    setOverlayVisible(false);
+                    cleanupCall();
+                }, 1200);
+            }, ADMIN_CALL_RESUME_TIMEOUT_MS);
+        });
     }
 
     function setSpeakingIndicator(labelId, indicatorId, active) {
@@ -3478,36 +3545,41 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         if (callConversationId) return callConversationId;
         if (!callId) return null;
 
-        const durationSec = callConnectedAt ? Math.floor((Date.now() - callConnectedAt) / 1000) : 0;
-        const response = await fetch('../api/save-completed-call.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                callId,
-                event: 'transferred',
-                userId: callerPayload?.user_id || callerPayload?.id || null,
-                userName: callerPayload?.name || 'Emergency Call User',
-                userPhone: callerPayload?.phone || null,
-                userLocation: callerPayload?.address || callerLocation?.address || null,
-                location: callerLocation || null,
-                emergencyType: document.getElementById('emergencyTypeSelect')?.value || '',
-                description: incidentDescription,
-                incidentPriority: {
-                    score: priorityMetric.score,
-                    priority: priorityMetric.level,
-                    label: priorityMetric.label,
-                    breakdown: priorityMetric.breakdown
-                },
-                duration: durationSec,
-                endedAt: Math.floor(Date.now() / 1000)
-            })
-        });
-        const data = await readApiResponse(response);
-        if (data && data.success && data.conversationId) {
-            callConversationId = data.conversationId;
-            return callConversationId;
+        try {
+            const durationSec = callConnectedAt ? Math.floor((Date.now() - callConnectedAt) / 1000) : 0;
+            const response = await fetch('../api/save-completed-call.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    callId,
+                    event: 'transferred',
+                    userId: callerPayload?.user_id || callerPayload?.id || null,
+                    userName: callerPayload?.name || 'Emergency Call User',
+                    userPhone: callerPayload?.phone || null,
+                    userLocation: callerPayload?.address || callerLocation?.address || null,
+                    location: callerLocation || null,
+                    emergencyType: document.getElementById('emergencyTypeSelect')?.value || '',
+                    description: incidentDescription,
+                    incidentPriority: {
+                        score: priorityMetric.score,
+                        priority: priorityMetric.level,
+                        label: priorityMetric.label,
+                        breakdown: priorityMetric.breakdown
+                    },
+                    duration: durationSec,
+                    endedAt: Math.floor(Date.now() / 1000)
+                })
+            });
+            const data = await readApiResponse(response);
+            if (data && data.success && data.conversationId) {
+                callConversationId = data.conversationId;
+                return callConversationId;
+            }
+            console.warn('[call][admin] Pending report save failed; continuing response-team transfer.', data);
+        } catch (error) {
+            console.warn('[call][admin] Pending report save error; continuing response-team transfer.', error);
         }
-        throw new Error(data?.message || 'Could not create pending transfer report.');
+        return null;
     }
 
     // Messaging functions for admin
@@ -3817,6 +3889,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
     function cleanupCall() {
         const finishedCallId = callId || pendingCallId;
+        if (adminCallResumeTimer) clearTimeout(adminCallResumeTimer);
+        adminCallResumeTimer = null;
+        restoringAdminCall = false;
+        if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
+        peerDisconnectTimer = null;
         stopTimer();
         stopAudioActivityMonitors();
         setEndEnabled(false);
@@ -4121,18 +4198,30 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         pc.onconnectionstatechange = () => {
             if (!pc) return;
-            if (pc.connectionState === 'connected' && !callConnectedAt) {
-                callConnectedAt = Date.now();
+            if (pc.connectionState === 'connected') {
+                const resumed = restoringAdminCall;
+                if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
+                peerDisconnectTimer = null;
+                if (!callConnectedAt) callConnectedAt = Date.now();
+                restoringAdminCall = false;
+                if (adminCallResumeTimer) clearTimeout(adminCallResumeTimer);
+                adminCallResumeTimer = null;
                 setStatus('Connected');
                 setEndEnabled(true);
                 startTimer();
-                logCall('connected');
+                setAdminCallLock(callId, { connectedAt: callConnectedAt });
+                logCall(resumed ? 'reconnected' : 'connected');
                 _stopAlertSound();
                 setIncomingCallModalVisible(false);
             }
             if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
                 if (transferInProgress) return;
-                if (callId) endCall(false);
+                if (!callId || peerDisconnectTimer) return;
+                setStatus('Connection interrupted. Waiting for caller to reconnect...');
+                peerDisconnectTimer = setTimeout(() => {
+                    peerDisconnectTimer = null;
+                    if (callId && pc && pc.connectionState !== 'connected') endCall(false);
+                }, 20000);
             }
         };
     }
@@ -4146,13 +4235,54 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             return;
         }
 
+        const wasRestoring = restoringAdminCall && callId === pendingCallId;
+        const signalingSocket = ensureSocket();
+        if (!signalingSocket?.connected) {
+            setIncomingCallModalText('Call service is reconnecting. Please try again.');
+            return;
+        }
+        const claimResult = await new Promise(resolve => {
+            const timer = setTimeout(() => resolve({ ok: false, reason: 'Call claim timed out.' }), 6000);
+            signalingSocket.emit('claim-call', {
+                callId: pendingCallId,
+                room: pendingCallRoom || getCallRoom(pendingCallId),
+                adminKey: ADMIN_CALL_OWNER_KEY
+            }, result => {
+                clearTimeout(timer);
+                resolve(result || { ok: false });
+            });
+        });
+        if (!claimResult?.ok) {
+            setIncomingCallModalText(claimResult?.reason || 'This call is no longer available.');
+            pendingOffer = null;
+            pendingCallId = null;
+            pendingCallRoom = null;
+            pendingCandidates = [];
+            renderIncomingEmergencyCallRow();
+            _stopAlertSound();
+            if (wasRestoring) cleanupCall();
+            return;
+        }
+
         callId = pendingCallId;
-        setAdminCallLock(callId);
         activeCallRoom = pendingCallRoom || getCallRoom(callId);
+        setAdminCallLock(callId, {
+            room: activeCallRoom,
+            callerInfo,
+            callerLocation,
+            conversationId: callConversationId,
+            connectedAt: callConnectedAt
+        });
         try {
+            if (wasRestoring) {
+                await logCall('reconnecting', {
+                    adminUsername: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : null)
+                });
+            } else {
             await logCall('accepted', {
                 adminUsername: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : null)
             });
+            }
         } catch (e) {}
         setIncomingEmergencyCallRowVisible(false);
         setOverlayVisible(true);
@@ -4246,6 +4376,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const incomingCallId = payload && payload.callId ? payload.callId : null;
             if (!incomingCallId) return;
             if (payload && payload.transferred) return;
+            const shouldAutoResume = restoringAdminCall && callId === incomingCallId;
             if (adminHasActiveCall(incomingCallId)) return;
             if (callId && incomingCallId !== callId) return;
             if (pendingCallId && pendingCallId !== incomingCallId) return;
@@ -4270,10 +4401,27 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (typeof switchTab === 'function') switchTab('open');
             } catch (e) {}
 
-            _startAlertSound(notificationSound);
+            if (!shouldAutoResume) _startAlertSound(notificationSound);
             locationData = await tryGetLocation();
-            await logCall('incoming');
+            await logCall(shouldAutoResume ? 'resume_offer_received' : 'incoming');
             renderIncomingEmergencyCallRow();
+            if (shouldAutoResume) {
+                setIncomingCallModalText('Restoring your active emergency call...');
+                setTimeout(() => acceptIncomingEmergencyCall(), 0);
+            }
+        });
+
+        s.on('call-claimed', payload => {
+            const claimedCallId = payload?.callId || null;
+            if (!claimedCallId || claimedCallId !== pendingCallId) return;
+            if (String(payload?.adminKey || '') === ADMIN_CALL_OWNER_KEY) return;
+            pendingOffer = null;
+            pendingCallId = null;
+            pendingCallRoom = null;
+            pendingCandidates = [];
+            renderIncomingEmergencyCallRow();
+            setIncomingCallModalVisible(false);
+            _stopAlertSound();
         });
 
         s.on('answer', payload => {
@@ -4325,6 +4473,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
         });
     }
+
+    restoreAdminCallState();
 
     checkSocketServerAvailability(true).then((available) => {
         if (available) {
