@@ -89,9 +89,28 @@ function responseTeamActionFromUrl(string $targetUrl): string {
     return trim((string)($params['action'] ?? ''));
 }
 
+function responseTeamAcceptedResponse($body): bool {
+    $decoded = json_decode((string)$body, true);
+    if (!is_array($decoded)) {
+        return false;
+    }
+    foreach (['success', 'ok'] as $key) {
+        if (!array_key_exists($key, $decoded)) {
+            continue;
+        }
+        return $decoded[$key] === true
+            || $decoded[$key] === 1
+            || $decoded[$key] === '1'
+            || strtolower((string)$decoded[$key]) === 'true';
+    }
+    return false;
+}
+
 function responseTeamFormPayload(array $payload, string $apiKey, string $action): array {
     $caller = is_array($payload['caller'] ?? null) ? $payload['caller'] : [];
-    $location = is_array($payload['location'] ?? null) ? $payload['location'] : [];
+    $location = is_array($payload['locationData'] ?? null)
+        ? $payload['locationData']
+        : (is_array($payload['location'] ?? null) ? $payload['location'] : []);
     $description = trim((string)($payload['description'] ?? ''));
     if ($description === '') {
         $description = trim((string)($payload['latestMessage'] ?? ''));
@@ -106,6 +125,13 @@ function responseTeamFormPayload(array $payload, string $apiKey, string $action)
     $incidentPriority = is_array($payload['incidentPriority'] ?? null) ? $payload['incidentPriority'] : [];
     $priorityLevel = strtolower(trim((string)($incidentPriority['priority'] ?? $incidentPriority['level'] ?? $payload['priority'] ?? 'high')));
     $priorityScore = (int)($incidentPriority['score'] ?? 0);
+    $locationText = trim((string)($payload['location_address'] ?? ($caller['address'] ?? ($location['address'] ?? ''))));
+    if ($locationText === '' && isset($location['lat'], $location['lng'])) {
+        $locationText = trim((string)$location['lat']) . ', ' . trim((string)$location['lng']);
+    }
+    if ($locationText === '') {
+        $locationText = 'Location pending from transferred emergency';
+    }
 
     return [
         'api_key' => $apiKey,
@@ -113,6 +139,8 @@ function responseTeamFormPayload(array $payload, string $apiKey, string $action)
         'event' => $payload['event'] ?? 'emergency_call_transfer',
         'call_id' => $payload['callId'] ?? '',
         'callId' => $payload['callId'] ?? '',
+        'transfer_id' => $payload['transferId'] ?? ($payload['callId'] ?? ($payload['conversationId'] ?? '')),
+        'source_system' => $payload['source_system'] ?? 'AlertaraQC Emergency Communication',
         'room' => $payload['room'] ?? '',
         'socket_url' => $payload['socketUrl'] ?? '',
         'socketUrl' => $payload['socketUrl'] ?? '',
@@ -134,8 +162,9 @@ function responseTeamFormPayload(array $payload, string $apiKey, string $action)
         'description' => $description,
         'caller_name' => $caller['name'] ?? '',
         'caller_phone' => $caller['phone'] ?? '',
-        'caller_address' => $caller['address'] ?? ($location['address'] ?? ''),
-        'location_address' => $caller['address'] ?? ($location['address'] ?? ''),
+        'caller_address' => $locationText,
+        'location' => $locationText,
+        'location_address' => $locationText,
         'latitude' => $location['lat'] ?? '',
         'longitude' => $location['lng'] ?? '',
         'transferred_at' => $payload['transferredAt'] ?? gmdate('c'),
@@ -173,11 +202,11 @@ function postResponseTeamPayload(string $targetUrl, array $payload, string $apiK
     $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    $jsonOk = $body !== false && $error === '' && $status >= 200 && $status < 300;
-    $decoded = json_decode((string)$body, true);
-    if (is_array($decoded) && array_key_exists('success', $decoded) && !$decoded['success']) {
-        $jsonOk = false;
-    }
+    $jsonOk = $body !== false
+        && $error === ''
+        && $status >= 200
+        && $status < 300
+        && responseTeamAcceptedResponse($body);
     if ($jsonOk) {
         return [
             'format' => 'json',
@@ -214,11 +243,11 @@ function postResponseTeamPayload(string $targetUrl, array $payload, string $apiK
     $formError = curl_error($ch);
     $formStatus = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    $formOk = $formResponse !== false && $formError === '' && $formStatus >= 200 && $formStatus < 300;
-    $formDecoded = json_decode((string)$formResponse, true);
-    if (is_array($formDecoded) && array_key_exists('success', $formDecoded) && !$formDecoded['success']) {
-        $formOk = false;
-    }
+    $formOk = $formResponse !== false
+        && $formError === ''
+        && $formStatus >= 200
+        && $formStatus < 300
+        && responseTeamAcceptedResponse($formResponse);
 
     return [
         'format' => 'form',
@@ -451,16 +480,20 @@ if ($action === 'request_status') {
 $payload = [
     'event' => 'emergency_call_transfer',
     'callId' => $callId !== '' ? $callId : null,
+    'transferId' => $callId !== '' ? $callId : ($conversationId ? 'conversation-' . $conversationId : null),
+    'source_system' => 'AlertaraQC Emergency Communication',
     'room' => trim((string)($input['room'] ?? '')),
     'socketUrl' => trim((string)($input['socketUrl'] ?? '')),
     'socketPath' => trim((string)($input['socketPath'] ?? '/socket.io')),
     'emergencyType' => $emergencyTypeInput !== '' ? $emergencyTypeInput : null,
     'priority' => $input['priority'] ?? ($incidentPriority['priority'] ?? 'high'),
     'incidentPriority' => $incidentPriority,
-    'description' => $descriptionInput,
+    'description' => $descriptionInput !== ''
+        ? $descriptionInput
+        : ($latestMessage !== '' ? $latestMessage : 'Transferred emergency call/report from AlertaraQC two-way communication.'),
     'latestMessage' => $latestMessage,
     'caller' => is_array($input['caller'] ?? null) ? $input['caller'] : null,
-    'location' => is_array($input['location'] ?? null) ? $input['location'] : null,
+    'locationData' => is_array($input['location'] ?? null) ? $input['location'] : null,
     'conversationId' => $conversationId,
     'messages' => $messages,
     'requestedBy' => [
@@ -473,14 +506,22 @@ $payload = [
 ];
 
 $payloadCaller = is_array($payload['caller'] ?? null) ? $payload['caller'] : [];
-$payloadLocation = is_array($payload['location'] ?? null) ? $payload['location'] : [];
+$payloadLocation = is_array($payload['locationData'] ?? null) ? $payload['locationData'] : [];
+$payloadLocationText = trim((string)($payloadCaller['address'] ?? ($payloadLocation['address'] ?? '')));
+if ($payloadLocationText === '' && isset($payloadLocation['lat'], $payloadLocation['lng'])) {
+    $payloadLocationText = trim((string)$payloadLocation['lat']) . ', ' . trim((string)$payloadLocation['lng']);
+}
+if ($payloadLocationText === '') {
+    $payloadLocationText = 'Location pending from transferred emergency';
+}
 $payload['action'] = responseTeamActionFromUrl($targetUrl) ?: 'create_incident';
 $payload['createIncidentAction'] = 'create_incident';
 $payload['type'] = $payload['emergencyType'] ?: 'emergency';
 $payload['incident_type'] = $payload['emergencyType'] ?: 'emergency';
 $payload['caller_name'] = $payloadCaller['name'] ?? '';
 $payload['caller_phone'] = $payloadCaller['phone'] ?? '';
-$payload['location_address'] = $payloadCaller['address'] ?? ($payloadLocation['address'] ?? '');
+$payload['location'] = $payloadLocationText;
+$payload['location_address'] = $payloadLocationText;
 $payload['latitude'] = $payloadLocation['lat'] ?? '';
 $payload['longitude'] = $payloadLocation['lng'] ?? '';
 $payload['title'] = 'Transferred emergency from AlertaraQC';
@@ -501,7 +542,7 @@ $result = [
 if ($targetUrl === '') {
     $auditPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $caller = $payload['caller'] ?: [];
-    $location = $payload['location'] ?: [];
+    $location = $payload['locationData'] ?: [];
     $stmt = $pdo->prepare("
         INSERT INTO transfer_call_audit
         (call_id, conversation_id, emergency_type, caller_name, caller_phone, caller_address, payload, integration_url, integration_status, integration_response, status, requested_by)
@@ -571,7 +612,7 @@ if ($status === 'failed') {
 
 $auditPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 $caller = $payload['caller'] ?: [];
-$location = $payload['location'] ?: [];
+$location = $payload['locationData'] ?: [];
 $stmt = $pdo->prepare("
     INSERT INTO transfer_call_audit
     (call_id, conversation_id, emergency_type, caller_name, caller_phone, caller_address, payload, integration_url, integration_status, integration_response, status, requested_by)
