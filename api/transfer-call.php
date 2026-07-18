@@ -109,7 +109,7 @@ function responseTeamFormPayload(array $payload, string $apiKey, string $action)
 
     return [
         'api_key' => $apiKey,
-        'action' => $action !== '' ? $action : ($payload['action'] ?? 'incoming-transfer'),
+        'action' => $action !== '' ? $action : ($payload['action'] ?? 'create_incident'),
         'event' => $payload['event'] ?? 'emergency_call_transfer',
         'call_id' => $payload['callId'] ?? '',
         'callId' => $payload['callId'] ?? '',
@@ -474,7 +474,7 @@ $payload = [
 
 $payloadCaller = is_array($payload['caller'] ?? null) ? $payload['caller'] : [];
 $payloadLocation = is_array($payload['location'] ?? null) ? $payload['location'] : [];
-$payload['action'] = responseTeamActionFromUrl($targetUrl) ?: 'incoming-transfer';
+$payload['action'] = responseTeamActionFromUrl($targetUrl) ?: 'create_incident';
 $payload['createIncidentAction'] = 'create_incident';
 $payload['type'] = $payload['emergencyType'] ?: 'emergency';
 $payload['incident_type'] = $payload['emergencyType'] ?: 'emergency';
@@ -596,7 +596,7 @@ if ($conversationId && $status === 'sent') {
     $pdo->prepare("UPDATE conversations SET status = 'closed', last_message = '[TRANSFERRED] Report transferred to response team', updated_at = NOW() WHERE conversation_id = ?")->execute([$conversationId]);
 }
 
-if ($responseBody === false || $curlError !== '' || $httpStatus < 200 || $httpStatus >= 300) {
+if (empty($transferResult['ok']) || $responseBody === false || $curlError !== '' || $httpStatus < 200 || $httpStatus >= 300) {
     sendJsonResponse(
         false,
         $curlError !== '' ? 'Transfer notification failed: ' . $curlError : 'Transfer notification failed with HTTP ' . $httpStatus,
