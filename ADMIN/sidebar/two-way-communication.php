@@ -1759,9 +1759,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 return;
             }
 
-            // 2. Silent list refresh for first page only (stable re-render, no manual DOM shuffling)
-            const listEl = document.getElementById('scrollableList');
-            if (!isLoading && currentPage === 1 && listEl && listEl.scrollTop < 50 && (currentStatus === 'open' || currentStatus === 'active')) {
+            // 2. Silent list refresh for first page so incoming calls/reports appear without a manual refresh.
+            if (!isLoading && currentPage === 1 && ['open', 'active', 'assigned', 'closed'].includes(currentStatus)) {
                 await loadConversations(false, false, true);
             }
         }
@@ -2054,6 +2053,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     setTransferModalMessage(formatTransferError(result), 'error');
                     return;
                 }
+                notifyErsReportTransfer(result.data || payload, result);
                 setTransferModalMessage(result.integration?.configured ? 'Transfer notification sent.' : 'Transfer payload prepared.', 'success');
                 if (currentConversationData && String(currentConversationData.id) === String(conversationId)) {
                     currentConversationData.assignedTo = null;
@@ -2069,6 +2069,50 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             } catch (e) {
                 setTransferModalBusy(false);
                 setTransferModalMessage('Transfer failed.', 'error');
+            }
+        }
+
+        function parseTransferIntegrationResponse(result) {
+            const responseText = result?.integration?.response;
+            if (!responseText || typeof responseText !== 'string') return {};
+            try {
+                const decoded = JSON.parse(responseText);
+                return decoded && typeof decoded === 'object' ? decoded : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function notifyErsReportTransfer(transferPayload, result = {}) {
+            const s = ensureSocket();
+            if (!s) return;
+            const responseData = parseTransferIntegrationResponse(result);
+            const caller = transferPayload?.caller || {};
+            const location = transferPayload?.locationData || transferPayload?.location || {};
+            const notice = {
+                ...(transferPayload || {}),
+                event: 'emergency_report_transfer',
+                transfer_type: 'report',
+                transferType: 'report',
+                transferId: transferPayload?.transferId || transferPayload?.transfer_id || responseData.transfer_id || responseData.reference_no || '',
+                transfer_id: transferPayload?.transfer_id || transferPayload?.transferId || responseData.transfer_id || responseData.reference_no || '',
+                callId: '',
+                call_id: '',
+                room: '',
+                socketUrl: '',
+                socketPath: '',
+                incident_id: responseData.incident_id || null,
+                reference_no: responseData.reference_no || '',
+                incident_status: responseData.status || 'pending',
+                caller_name: transferPayload?.caller_name || caller.name || '',
+                caller_phone: transferPayload?.caller_phone || caller.phone || '',
+                location: transferPayload?.location || transferPayload?.location_address || location.address || '',
+                transferredAt: transferPayload?.transferredAt || new Date().toISOString()
+            };
+            if (s.connected) {
+                s.emit('ers-transfer-notify', notice);
+            } else {
+                s.once('connect', () => s.emit('ers-transfer-notify', notice));
             }
         }
 
@@ -4410,6 +4454,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (!shouldAutoResume) _startAlertSound(notificationSound);
             locationData = await tryGetLocation();
             await logCall(shouldAutoResume ? 'resume_offer_received' : 'incoming');
+            if (typeof resetConversationsAndReload === 'function') {
+                resetConversationsAndReload();
+            }
             renderIncomingEmergencyCallRow();
             if (shouldAutoResume) {
                 setIncomingCallModalText('Restoring your active emergency call...');

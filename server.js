@@ -224,6 +224,21 @@ io.on('connection', (socket) => {
     if (transferRoom) socket.to(transferRoom).emit('call-transfer', transferNotice);
   });
 
+  socket.on('ers-transfer-notify', (payload) => {
+    const transferType = cleanText(payload?.transfer_type, 40) || cleanText(payload?.transferType, 40) || 'report';
+    const transferNotice = {
+      ...(payload || {}),
+      event: cleanText(payload?.event, 80) || (transferType === 'live_call' ? 'emergency_call_transfer' : 'emergency_report_transfer'),
+      transfer_type: transferType,
+      transferType,
+      source_system: cleanText(payload?.source_system, 180) || 'AlertaraQC Emergency Communication',
+      transferredAt: payload?.transferredAt || payload?.transferred_at || new Date().toISOString(),
+    };
+    console.log(`[transfer-notify] type=${transferType} transferId=${payload?.transferId || payload?.transfer_id || ''}`);
+    io.to(TRANSFER_INBOX_ROOM).emit('incoming-transfer', transferNotice);
+    io.to(TRANSFER_INBOX_ROOM).emit('ers-transfer-notify', transferNotice);
+  });
+
   socket.on('disconnect', (reason) => {
     for (const call of activeCallsById.values()) {
       if (call.callerSocketId === socket.id) call.callerSocketId = null;
