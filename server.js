@@ -8,6 +8,7 @@ const server = http.createServer(app);
 const activeOffersByRoom = new Map();
 const activeCallsById = new Map();
 const CALL_LOBBY_ROOM = 'emergency-lobby';
+const TRANSFER_INBOX_ROOM = 'ers-transfer-inbox';
 const OFFER_TTL_MS = 4 * 60 * 60 * 1000;
 
 function cleanText(value, max = 200) {
@@ -196,6 +197,17 @@ io.on('connection', (socket) => {
       console.log(`[transfer] room=${room} callId=${payload?.callId || ''}`);
     }
     if (payload?.callId) activeCallsById.delete(String(payload.callId));
+    const transferNotice = {
+      ...(payload || {}),
+      room: cleanText(payload?.room, 180) || cleanText(room, 180),
+      socketUrl: cleanText(payload?.socketUrl, 255) || cleanText(payload?.transfer?.socketUrl, 255) || cleanText(payload?.transfer?.data?.socketUrl, 255) || 'https://emergency-comm.alertaraqc.com',
+      socketPath: cleanText(payload?.socketPath, 100) || cleanText(payload?.transfer?.socketPath, 100) || cleanText(payload?.transfer?.data?.socketPath, 100) || '/socket.io',
+      event: 'emergency_call_transfer',
+      source_system: 'AlertaraQC Emergency Communication',
+      transferredAt: payload?.transferredAt || new Date().toISOString(),
+    };
+    io.to(TRANSFER_INBOX_ROOM).emit('incoming-transfer', transferNotice);
+    io.to(TRANSFER_INBOX_ROOM).emit('ers-transfer-notify', transferNotice);
     socket.to(room).emit('call-transfer', payload);
   });
 
