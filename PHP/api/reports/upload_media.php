@@ -80,7 +80,31 @@ if (move_uploaded_file($file['tmp_name'], $targetPath)) {
     // Return relative URL from PHP/api/
     $mediaUrl = 'uploads/' . $newFilename;
     $fileSize = filesize($targetPath);
-    $fileType = mime_content_type($targetPath);
+    
+    // Try to get mime type, fallback if function not available
+    $fileType = 'application/octet-stream';
+    if (function_exists('mime_content_type')) {
+        $fileType = mime_content_type($targetPath);
+    } else {
+        // Fallback to basic mime type based on extension
+        $mimeTypes = [
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            'mp4' => 'video/mp4',
+            'mov' => 'video/quicktime',
+            'avi' => 'video/x-msvideo',
+            'mkv' => 'video/x-matroska',
+            'mp3' => 'audio/mpeg',
+            'wav' => 'audio/wav',
+            'm4a' => 'audio/mp4',
+            'aac' => 'audio/aac',
+            'ogg' => 'audio/ogg'
+        ];
+        $fileType = isset($mimeTypes[$ext]) ? $mimeTypes[$ext] : 'application/octet-stream';
+    }
     
     apiResponse::success([
         'file_url' => $mediaUrl,
