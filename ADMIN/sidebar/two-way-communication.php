@@ -2006,13 +2006,19 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const confirmed = await openTransferModal(data);
             if (!confirmed) return;
             const priorityMeta = incidentPriorityMeta(data);
+            const reportTransferId = `conversation-${conversationId}-${Date.now()}`;
 
             const payload = {
-                callId: data?.callId || null,
+                event: 'emergency_report_transfer',
+                transferType: 'report',
+                transfer_type: 'report',
+                transferId: reportTransferId,
+                transfer_id: reportTransferId,
+                callId: null,
                 conversationId,
-                room: data?.callId ? getCallRoom(data.callId) : null,
-                socketUrl: data?.callId ? SIGNALING_URL : null,
-                socketPath: data?.callId ? SOCKET_IO_PATH : null,
+                room: null,
+                socketUrl: null,
+                socketPath: null,
                 emergencyType: data?.category || data?.department || data?.userConcern || '',
                 priority: priorityMeta.level,
                 incidentPriority: {

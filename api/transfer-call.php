@@ -132,11 +132,21 @@ function responseTeamFormPayload(array $payload, string $apiKey, string $action)
     if ($locationText === '') {
         $locationText = 'Location pending from transferred emergency';
     }
+    $transferType = strtolower(trim((string)($payload['transfer_type'] ?? $payload['transferType'] ?? '')));
+    if ($transferType === '') {
+        $transferType = trim((string)($payload['callId'] ?? '')) !== '' && trim((string)($payload['room'] ?? '')) !== '' ? 'live_call' : 'report';
+    }
+    $event = trim((string)($payload['event'] ?? ''));
+    if ($event === '') {
+        $event = $transferType === 'live_call' ? 'emergency_call_transfer' : 'emergency_report_transfer';
+    }
 
     return [
         'api_key' => $apiKey,
         'action' => $action !== '' ? $action : ($payload['action'] ?? 'create_incident'),
-        'event' => $payload['event'] ?? 'emergency_call_transfer',
+        'event' => $event,
+        'transfer_type' => $transferType,
+        'transferType' => $transferType,
         'call_id' => $payload['callId'] ?? '',
         'callId' => $payload['callId'] ?? '',
         'transfer_id' => $payload['transferId'] ?? ($payload['callId'] ?? ($payload['conversationId'] ?? '')),
@@ -360,6 +370,18 @@ if (!empty($messages)) {
 $providedIncidentPriority = is_array($input['incidentPriority'] ?? null) ? $input['incidentPriority'] : [];
 $descriptionInput = trim((string)($input['description'] ?? ($input['details'] ?? $latestMessage)));
 $emergencyTypeInput = trim((string)($input['emergencyType'] ?? ''));
+$requestedTransferType = strtolower(trim((string)($input['transfer_type'] ?? $input['transferType'] ?? '')));
+$hasLiveTransferRoom = $callId !== '' && trim((string)($input['room'] ?? '')) !== '';
+if ($requestedTransferType === '') {
+    $requestedTransferType = $hasLiveTransferRoom ? 'live_call' : 'report';
+}
+if (!in_array($requestedTransferType, ['live_call', 'report'], true)) {
+    $requestedTransferType = $hasLiveTransferRoom ? 'live_call' : 'report';
+}
+$transferEvent = trim((string)($input['event'] ?? ''));
+if ($transferEvent === '') {
+    $transferEvent = $requestedTransferType === 'live_call' ? 'emergency_call_transfer' : 'emergency_report_transfer';
+}
 $incidentPriority = [];
 if (!empty($providedIncidentPriority) && isset($providedIncidentPriority['score'])) {
     $incidentPriority = $providedIncidentPriority;
@@ -478,9 +500,13 @@ if ($action === 'request_status') {
 }
 
 $payload = [
-    'event' => 'emergency_call_transfer',
+    'event' => $transferEvent,
+    'transfer_type' => $requestedTransferType,
+    'transferType' => $requestedTransferType,
     'callId' => $callId !== '' ? $callId : null,
-    'transferId' => $callId !== '' ? $callId : ($conversationId ? 'conversation-' . $conversationId : null),
+    'transferId' => trim((string)($input['transferId'] ?? $input['transfer_id'] ?? '')) !== ''
+        ? trim((string)($input['transferId'] ?? $input['transfer_id']))
+        : ($callId !== '' ? $callId : ($conversationId ? 'conversation-' . $conversationId . '-' . time() : null)),
     'source_system' => 'AlertaraQC Emergency Communication',
     'room' => trim((string)($input['room'] ?? '')),
     'socketUrl' => trim((string)($input['socketUrl'] ?? '')),
@@ -504,6 +530,7 @@ $payload = [
     ],
     'transferredAt' => gmdate('c'),
 ];
+$payload['transfer_id'] = $payload['transferId'];
 
 $payloadCaller = is_array($payload['caller'] ?? null) ? $payload['caller'] : [];
 $payloadLocation = is_array($payload['locationData'] ?? null) ? $payload['locationData'] : [];
