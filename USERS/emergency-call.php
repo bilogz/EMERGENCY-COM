@@ -913,7 +913,25 @@ $assetBase = '../ADMIN/header/';
                 if (incomingCallId && incomingCallId !== callId) return;
                 if (!callId) return;
                 if (payload && payload.room) activeCallRoom = payload.room;
-                await prepareTransferredCallOffer();
+                transferInProgress = true;
+                setStatus('Transfer sent. Stay connected until the response team answers...');
+                setEndEnabled(true);
+                setCancelVisible(false);
+            });
+
+            socket.on('request-transfer-offer', async payload => {
+                const incomingCallId = payload && payload.callId ? payload.callId : null;
+                if (!callId || (incomingCallId && incomingCallId !== callId)) return;
+                if (payload && payload.room) activeCallRoom = payload.room;
+                await prepareTransferredCallOffer('response-team-request');
+            });
+
+            ['dispatcher-ready', 'call-accepted', 'accepted'].forEach(eventName => {
+                socket.on(eventName, payload => {
+                    const incomingCallId = payload && payload.callId ? payload.callId : null;
+                    if (!callId || (incomingCallId && incomingCallId !== callId)) return;
+                    if (payload && payload.room) activeCallRoom = payload.room;
+                });
             });
 
             socket.on('call-message', payload => {
@@ -1342,7 +1360,7 @@ $assetBase = '../ADMIN/header/';
             }, 800);
         }
 
-        async function prepareTransferredCallOffer() {
+        async function prepareTransferredCallOffer(reason = 'transfer') {
             if (!callId) return;
 
             transferInProgress = true;
@@ -1430,16 +1448,19 @@ $assetBase = '../ADMIN/header/';
                 } : guestCaller;
 
                 if (s) {
+                    const transferRoom = activeCallRoom || getCallRoom();
                     s.emit("offer", {
                         sdp: offer,
                         callId,
+                        room: transferRoom,
                         conversationId: callConversationId,
                         userId: userProfile?.id || null,
                         userName: userProfile?.name || guestCaller.name || null,
                         caller,
                         location: locationData || null,
-                        transferred: true
-                    }, activeCallRoom || getCallRoom());
+                        transferred: true,
+                        transferReason: reason
+                    }, transferRoom);
                 }
 
                 await logCall('transfer_waiting_for_response_team');

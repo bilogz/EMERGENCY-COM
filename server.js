@@ -95,7 +95,7 @@ io.on('connection', (socket) => {
         updatedAt: Date.now(),
       });
     }
-    socket.to(room).emit('offer', payload);
+    socket.to(signalRoom).emit('offer', payload);
   });
 
   socket.on('claim-call', (payload, acknowledge) => {
@@ -165,12 +165,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('answer', (payload, room) => {
-    console.log(`[signal] answer room=${room} callId=${payload?.callId || ''}`);
-    socket.to(room).emit('answer', payload);
+    const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
+    console.log(`[signal] answer room=${signalRoom} callId=${payload?.callId || ''}`);
+    if (signalRoom) socket.to(signalRoom).emit('answer', payload);
   });
 
   socket.on('candidate', (candidate, room) => {
-    socket.to(room).emit('candidate', candidate);
+    const signalRoom = cleanText(candidate?.room, 180) || cleanText(room, 180);
+    if (signalRoom) socket.to(signalRoom).emit('candidate', candidate);
   });
 
   socket.on('hangup', (payload, room) => {
@@ -189,6 +191,17 @@ io.on('connection', (socket) => {
       socket.to(room).emit('call-message', payload);
     }
   });
+
+  const forwardTransferControl = (eventName) => {
+    socket.on(eventName, (payload, room) => {
+      const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
+      if (!signalRoom) return;
+      console.log(`[transfer-control] ${eventName} room=${signalRoom} callId=${payload?.callId || ''}`);
+      socket.to(signalRoom).emit(eventName, payload);
+    });
+  };
+
+  ['dispatcher-ready', 'call-accepted', 'accepted', 'request-transfer-offer'].forEach(forwardTransferControl);
 
   socket.on('call-transfer', (payload, room) => {
     if (typeof room === 'string' && room.length > 0) {
