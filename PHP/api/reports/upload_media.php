@@ -1,11 +1,14 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 
-require_once '../shared/db_connect.php';
+// Skip db_connect for media upload since we don't need database
+// Skip authentication for media upload - public endpoint
 
 // Allow POST only
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    apiResponse::error("Invalid request method. Use POST.", 405);
+    http_response_code(405);
+    echo json_encode(['success' => false, 'message' => 'Invalid request method. Use POST.']);
+    exit;
 }
 
 // Check if a file was uploaded
@@ -17,7 +20,9 @@ if (isset($_FILES['media'])) {
 }
 
 if ($fileKey === null) {
-    apiResponse::error("No file uploaded. Please submit a file using key 'media' or 'file'.", 400);
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'No file uploaded. Please submit a file using key \'media\' or \'file\'.']);
+    exit;
 }
 
 $file = $_FILES[$fileKey];
@@ -27,23 +32,30 @@ if ($file['error'] !== UPLOAD_ERR_OK) {
     switch ($file['error']) {
         case UPLOAD_ERR_INI_SIZE:
         case UPLOAD_ERR_FORM_SIZE:
-            apiResponse::error("The uploaded file exceeds the maximum allowed size.", 400);
-            break;
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'The uploaded file exceeds the maximum allowed size.']);
+            exit;
         case UPLOAD_ERR_PARTIAL:
-            apiResponse::error("The file was only partially uploaded.", 400);
-            break;
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'The file was only partially uploaded.']);
+            exit;
         case UPLOAD_ERR_NO_FILE:
-            apiResponse::error("No file was uploaded.", 400);
-            break;
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'No file was uploaded.']);
+            exit;
         default:
-            apiResponse::error("An error occurred during file upload (Code: " . $file['error'] . ").", 400);
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'An error occurred during file upload (Code: ' . $file['error'] . ').']);
+            exit;
     }
 }
 
 // Validate file size (limit to 20MB)
 $maxFileSize = 20 * 1024 * 1024; // 20 megabytes
 if ($file['size'] > $maxFileSize) {
-    apiResponse::error("File size exceeds the limit of 20MB.", 400);
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'File size exceeds the limit of 20MB.']);
+    exit;
 }
 
 // Validate mime type or extension
@@ -60,14 +72,18 @@ $filename = $file['name'];
 $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
 
 if (!in_array($ext, $allowedExtensions)) {
-    apiResponse::error("Invalid file type. Allowed types: " . implode(', ', $allowedExtensions), 400);
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Invalid file type. Allowed types: ' . implode(', ', $allowedExtensions)]);
+    exit;
 }
 
 // Create uploads directory if not exists
 $uploadDir = __DIR__ . '/../uploads';
 if (!file_exists($uploadDir)) {
     if (!mkdir($uploadDir, 0755, true)) {
-        apiResponse::error("Failed to create uploads directory on the server.", 500);
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Failed to create uploads directory on the server.']);
+        exit;
     }
 }
 
@@ -106,14 +122,17 @@ if (move_uploaded_file($file['tmp_name'], $targetPath)) {
         $fileType = isset($mimeTypes[$ext]) ? $mimeTypes[$ext] : 'application/octet-stream';
     }
     
-    apiResponse::success([
+    echo json_encode([
+        'success' => true,
+        'message' => 'Media uploaded successfully',
         'file_url' => $mediaUrl,
         'file_path' => $targetPath,
         'file_size' => $fileSize,
         'file_type' => $fileType,
         'filename' => $newFilename
-    ], "Media uploaded successfully", 200);
+    ]);
 } else {
-    apiResponse::error("Failed to save the uploaded file on the server.", 500);
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Failed to save the uploaded file on the server.']);
 }
 ?>
