@@ -79,8 +79,14 @@ $targetPath = $uploadDir . '/' . $newFilename;
 if (move_uploaded_file($file['tmp_name'], $targetPath)) {
     // Return relative URL from PHP/api/
     $mediaUrl = 'uploads/' . $newFilename;
+    $fileSize = filesize($targetPath);
+    $fileType = mime_content_type($targetPath);
+    
     apiResponse::success([
-        'media_url' => $mediaUrl,
+        'file_url' => $mediaUrl,
+        'file_path' => $targetPath,
+        'file_size' => $fileSize,
+        'file_type' => $fileType,
         'filename' => $newFilename
     ], "Media uploaded successfully", 200);
 } else {
