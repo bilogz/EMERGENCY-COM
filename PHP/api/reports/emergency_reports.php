@@ -25,6 +25,15 @@ try {
         $user_id = $data['user_id'] ?? null;
         $media_url = $data['media_url'] ?? null;
 
+        // Allow anonymous reports (guest mode) with user_id = 0
+        if ($user_id === null || $user_id === '') {
+            $user_id = 0;
+        } elseif (!is_numeric($user_id)) {
+            apiResponse::error("Invalid user_id.", 400);
+        } else {
+            $user_id = (int) $user_id;
+        }
+
         // Validate required fields
         if (!$report_type || !$description) {
             apiResponse::error("Missing required fields: report_type, description", 400);
@@ -63,12 +72,26 @@ try {
 
         $reportId = $pdo->lastInsertId();
 
-        apiResponse::success([
-            'id' => $reportId,
-            'report_type' => $report_type,
-            'description' => $description,
-            'status' => 'pending'
-        ], "Emergency report submitted successfully");
+        $selectQuery = "
+            SELECT
+                id,
+                user_id,
+                report_type,
+                description,
+                latitude,
+                longitude,
+                status,
+                media_url,
+                admin_notes,
+                created_at
+            FROM incident_reports
+            WHERE id = ?
+        ";
+        $selectStmt = $pdo->prepare($selectQuery);
+        $selectStmt->execute([$reportId]);
+        $report = $selectStmt->fetch(PDO::FETCH_ASSOC);
+
+        apiResponse::success($report, "Emergency report submitted successfully");
 
     } elseif ($method === 'GET') {
         // Get emergency reports
@@ -106,8 +129,59 @@ try {
 
         apiResponse::success(['reports' => $reports], "Emergency reports fetched successfully");
 
+    } elseif ($method === 'PUT' || $method === 'PATCH') {
+        // Update incident status
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
+
+        if (!is_array($data)) {
+            apiResponse::error("Invalid JSON input.", 400);
+        }
+
+        $report_id = $data['report_id'] ?? null;
+        $status = $data['status'] ?? null;
+        $admin_notes = $data['admin_notes'] ?? null;
+
+        // Validate required fields
+        if (!$report_id || !$status) {
+            apiResponse::error("Missing required fields: report_id, status", 400);
+        }
+
+        // Validate status
+        $validStatuses = ['pending', 'received', 'in_progress', 'resolved', 'rejected'];
+        if (!in_array($status, $validStatuses)) {
+            apiResponse::error("Invalid status. Must be one of: " . implode(', ', $validStatuses), 400);
+        }
+
+        // Check if report exists
+        $checkQuery = "SELECT id FROM incident_reports WHERE id = ?";
+        $checkStmt = $pdo->prepare($checkQuery);
+        $checkStmt->execute([$report_id]);
+        $existingReport = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$existingReport) {
+            apiResponse::error("Report not found", 404);
+        }
+
+        // Update status
+        $updateQuery = "
+            UPDATE incident_reports
+            SET status = ?,
+                admin_notes = ?
+            WHERE id = ?
+        ";
+
+        $updateStmt = $pdo->prepare($updateQuery);
+        $updateStmt->execute([$status, $admin_notes, $report_id]);
+
+        apiResponse::success([
+            'report_id' => $report_id,
+            'status' => $status,
+            'admin_notes' => $admin_notes
+        ], "Incident status updated successfully");
+
     } else {
-        apiResponse::error("Invalid request method. Use GET or POST.", 405);
+        apiResponse::error("Invalid request method. Use GET, POST, PUT, or PATCH.", 405);
     }
 
 } catch (PDOException $e) {
