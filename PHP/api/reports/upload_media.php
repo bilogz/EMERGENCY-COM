@@ -95,8 +95,8 @@ try {
   }
 
   // Create uploads directory if not exists
-  // Use PHP/api/uploads which is web-accessible
-  $uploadDir = __DIR__ . '/uploads';
+  // Use PHP/api/uploads which already exists
+  $uploadDir = dirname(__DIR__) . '/uploads';
   
   if (!file_exists($uploadDir)) {
     if (!mkdir($uploadDir, 0777, true)) {
@@ -114,7 +114,7 @@ try {
   if (move_uploaded_file($file['tmp_name'], $targetPath)) {
     // Return full URL for web access
     $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
-    $mediaUrl = $baseUrl . '/PHP/api/uploads/' . $newFilename;
+    $mediaUrl = $baseUrl . '/PHP/uploads/' . $newFilename;
     $fileSize = filesize($targetPath);
     
     // Try to get mime type, fallback if function not available
