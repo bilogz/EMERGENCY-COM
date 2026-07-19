@@ -95,15 +95,14 @@ try {
   }
 
   // Create uploads directory if not exists
-  // Use PHP/api/uploads which already exists
+  // Use PHP/api/uploads which should already exist
   $uploadDir = dirname(__DIR__) . '/uploads';
   
+  // Skip mkdir since directory should already exist
   if (!file_exists($uploadDir)) {
-    if (!mkdir($uploadDir, 0777, true)) {
-      http_response_code(500);
-      echo json_encode(['success' => false, 'message' => 'Failed to create uploads directory on the server. Path: ' . $uploadDir]);
-      exit;
-    }
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Uploads directory does not exist. Please create: ' . $uploadDir]);
+    exit;
   }
 
   // Generate unique secure filename
