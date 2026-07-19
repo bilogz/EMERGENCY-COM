@@ -95,11 +95,12 @@ try {
   }
 
   // Create uploads directory if not exists
-  $uploadDir = __DIR__ . '/../uploads';
+  // Use absolute path to PHP/uploads (outside api folder)
+  $uploadDir = dirname(__DIR__) . '/uploads';
   if (!file_exists($uploadDir)) {
     if (!mkdir($uploadDir, 0755, true)) {
       http_response_code(500);
-      echo json_encode(['success' => false, 'message' => 'Failed to create uploads directory on the server.']);
+      echo json_encode(['success' => false, 'message' => 'Failed to create uploads directory on the server. Path: ' . $uploadDir]);
       exit;
     }
   }
@@ -110,7 +111,7 @@ try {
 
   // Move the file to the target directory
   if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-    // Return relative URL from PHP/api/
+    // Return relative URL from PHP/
     $mediaUrl = 'uploads/' . $newFilename;
     $fileSize = filesize($targetPath);
     
