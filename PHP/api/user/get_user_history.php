@@ -94,7 +94,7 @@ try {
         ]
     ];
     
-    apiResponse::success($response, "User history retrieved successfully");
+    apiResponse::success(['data' => $response], "User history retrieved successfully");
 
 } catch (PDOException $e) {
     error_log("Get User History DB Error: " . $e->getMessage());
