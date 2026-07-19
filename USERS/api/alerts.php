@@ -257,6 +257,7 @@ try {
     $limit = isset($_GET['limit']) ? min(100, max(10, (int)$_GET['limit'])) : 50;
     $lastId = isset($_GET['last_id']) ? (int)$_GET['last_id'] : 0;
     $lastUpdate = $_GET['last_update'] ?? null;
+    $timeFilter = isset($_GET['time_filter']) && in_array($_GET['time_filter'], ['6h', '24h', 'week', 'month', 'year', 'all'], true) ? $_GET['time_filter'] : '6h';
     
     // Get only new alerts if lastId is provided (for incremental updates)
     if ($lastId > 0) {
@@ -269,6 +270,28 @@ try {
         $lastUpdateTime = date('Y-m-d H:i:s', strtotime($lastUpdate));
         $query .= " AND a.updated_at > ?";
         $params[] = $lastUpdateTime;
+    } elseif ($lastId == 0) {
+        $query .= " AND a.title NOT LIKE '[MOCK]%'";
+        switch ($timeFilter) {
+            case '6h':
+                $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 6 HOUR)";
+                break;
+            case '24h':
+                $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+                break;
+            case 'week':
+                $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
+                break;
+            case 'month':
+                $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)";
+                break;
+            case 'year':
+                $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 1 YEAR)";
+                break;
+            case 'all':
+            default:
+                break;
+        }
     }
     
     $query .= " ORDER BY a.created_at DESC, a.id DESC LIMIT ?";
