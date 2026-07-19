@@ -95,14 +95,15 @@ try {
   }
 
   // Create uploads directory if not exists
-  // Use PHP/api/uploads which should already exist
-  $uploadDir = dirname(__DIR__) . '/uploads';
+  // Use system temp directory which always has write permissions
+  $uploadDir = sys_get_temp_dir() . '/alertara_uploads';
   
-  // Skip mkdir since directory should already exist
   if (!file_exists($uploadDir)) {
-    http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Uploads directory does not exist. Please create: ' . $uploadDir]);
-    exit;
+    if (!mkdir($uploadDir, 0777, true)) {
+      http_response_code(500);
+      echo json_encode(['success' => false, 'message' => 'Failed to create uploads directory on the server. Path: ' . $uploadDir]);
+      exit;
+    }
   }
 
   // Generate unique secure filename
@@ -111,9 +112,8 @@ try {
 
   // Move the file to the target directory
   if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-    // Return full URL for web access
-    $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
-    $mediaUrl = $baseUrl . '/PHP/uploads/' . $newFilename;
+    // Return base64 encoded file data for immediate display
+    $fileData = base64_encode(file_get_contents($targetPath));
     $fileSize = filesize($targetPath);
     
     // Try to get mime type, fallback if function not available
@@ -144,7 +144,7 @@ try {
     echo json_encode([
       'success' => true,
       'message' => 'Media uploaded successfully',
-      'file_url' => $mediaUrl,
+      'file_url' => "data:$fileType;base64,$fileData",
       'file_path' => $targetPath,
       'file_size' => $fileSize,
       'file_type' => $fileType,
