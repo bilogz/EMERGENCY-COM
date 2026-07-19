@@ -380,7 +380,7 @@ $status = isset($_GET['status']) && $_GET['status'] !== '' ? trim($_GET['status'
 $limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 50;
 $lastId = isset($_GET['last_id']) ? max(0, (int)$_GET['last_id']) : 0;
 $category = isset($_GET['category']) && $_GET['category'] !== '' && $_GET['category'] !== 'all' ? trim($_GET['category']) : null;
-$timeFilter = isset($_GET['time_filter']) && in_array($_GET['time_filter'], ['24h', 'week', 'month', 'year', 'all'], true) ? $_GET['time_filter'] : '24h';
+$timeFilter = isset($_GET['time_filter']) && in_array($_GET['time_filter'], ['6h', '24h', 'week', 'month', 'year', 'all'], true) ? $_GET['time_filter'] : '6h';
 $severityFilter = isset($_GET['severity_filter']) && in_array($_GET['severity_filter'], ['emergency_only', 'warnings_only'], true) ? $_GET['severity_filter'] : null;
 $sessionUserId = (int)($_SESSION['user_id'] ?? 0);
 $isAdminSession = (int)($_SESSION['admin_user_id'] ?? 0) > 0;
@@ -444,7 +444,13 @@ if ($category) {
 
 // Apply time filter (only when not loading new alerts via last_id)
 if ($lastId === 0) {
+    if ($timeFilter !== 'all') {
+        $query .= " AND a.title NOT LIKE '[MOCK]%'";
+    }
     switch ($timeFilter) {
+        case '6h':
+            $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 6 HOUR)";
+            break;
         case '24h':
             $query .= " AND a.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
             break;

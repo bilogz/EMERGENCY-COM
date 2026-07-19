@@ -54,6 +54,13 @@ try {
             apiResponse::error("Invalid longitude.", 400);
         }
 
+        // Handle media_url - if it's a base64 data URI, truncate or handle appropriately
+        // For now, we'll store it as-is but the database column needs to be TEXT type
+        if ($media_url && strlen($media_url) > 255) {
+            // Log warning but still try to insert
+            error_log("media_url is too long for VARCHAR(255): " . strlen($media_url) . " chars");
+        }
+
         $query = "
             INSERT INTO incident_reports
             (user_id, report_type, description, latitude, longitude, media_url, status)
@@ -186,8 +193,10 @@ try {
 
 } catch (PDOException $e) {
     error_log("Emergency Reports DB Error: " . $e->getMessage());
-    apiResponse::error("Database error occurred.", 500);
+    error_log("Emergency Reports DB Error Code: " . $e->getCode());
+    error_log("Emergency Reports DB Error Trace: " . $e->getTraceAsString());
+    apiResponse::error("Database error occurred: " . $e->getMessage(), 500);
 } catch (Exception $e) {
     error_log("Emergency Reports Error: " . $e->getMessage());
-    apiResponse::error("An unexpected error occurred.", 500);
+    apiResponse::error("An unexpected error occurred: " . $e->getMessage(), 500);
 }

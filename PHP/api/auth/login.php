@@ -60,7 +60,18 @@ try {
         apiResponse::error("Invalid email or password.", 401);
     }
 
-    apiResponse::success(['user' => $user], "Login successful");
+    // Return user with correct field names for mobile app
+    $userResponse = [
+        'id' => $user['id'],
+        'name' => $user['name'],
+        'email' => $user['email'],
+        'phone' => $user['phone'],
+        'status' => $user['status'],
+        'user_type' => $user['user_type'],
+        'profile_pic' => $user['profile_pic']
+    ];
+    
+    apiResponse::success(['user' => $userResponse], "Login successful");
 
 } catch (PDOException $e) {
     error_log("Login DB Error: " . $e->getMessage());

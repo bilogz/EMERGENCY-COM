@@ -126,36 +126,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $ins = $pdo->prepare("
                 INSERT INTO {$warningsTable} (source, type, title, content, severity, status, received_at, published_at)
-                VALUES (?, ?, ?, ?, 'critical', 'published', NOW(), NOW())
+                VALUES (?, ?, ?, ?, 'critical', 'archived', NOW(), NOW())
             ");
             $ins->execute([$template['source'], $template['type'], $template['title'], $template['content']]);
             $warningId = (int)$pdo->lastInsertId();
-
-            $dispatchResult = safeAutoPublishCriticalWarningToCitizens($pdo, [
-                'id' => $warningId,
-                'source' => $template['source'],
-                'type' => $template['type'],
-                'title' => $template['title'],
-                'content' => $template['content'],
-                'severity' => 'critical',
-                'status' => 'published'
-            ], $adminId);
-
-            $degraded = empty($dispatchResult['alert_id']);
+            $dispatchResult = [
+                'alert_id' => null,
+                'log_id' => null,
+                'channels' => [],
+                'recipients' => 0,
+                'queued_jobs' => 0,
+                'recipient_meta' => [
+                    'source' => 'history_only',
+                    'error' => null
+                ]
+            ];
+            $degraded = false;
             $degradedReason = '';
-            if ($degraded) {
-                $degradedReason = (string)($dispatchResult['recipient_meta']['error'] ?? $dispatchResult['warning_message'] ?? '');
-                if ($degradedReason !== '') {
-                    $degradedReason = trim(preg_replace('/\s+/', ' ', $degradedReason));
-                    if (strlen($degradedReason) > 320) {
-                        $degradedReason = substr($degradedReason, 0, 320) . '...';
-                    }
-                }
-            }
-            $messageText = strtoupper($mockType) . ' mock alert published and queued for citizen broadcast.';
-            if ($degraded) {
-                $messageText = strtoupper($mockType) . ' mock alert saved, but citizen delivery is degraded (alert feed or queue table issue).';
-            }
+            $messageText = strtoupper($mockType) . ' mock alert saved to history only. No citizen broadcast was sent.';
 
             if ($adminId && function_exists('logAdminActivity')) {
                 logAdminActivity($adminId, 'mock_critical_warning', strtoupper($mockType) . " mock warning created (ID: {$warningId})");

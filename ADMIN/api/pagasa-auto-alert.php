@@ -253,34 +253,6 @@ function fetchPagasaBulletins(): ?array {
         }
     } catch (Throwable $e) {}
 
-    // FALLBACK 2: Mock Failsafe (Typhoon Marce)
-    $mockXml = getMockPagasaFeedXml();
-    try {
-        $oldLoader = libxml_disable_entity_loader(true);
-        $xml = @simplexml_load_string($mockXml, 'SimpleXMLElement', LIBXML_NOCDATA);
-        libxml_disable_entity_loader($oldLoader);
-
-        if ($xml !== false && isset($xml->channel->item)) {
-            $bulletins = [];
-            foreach ($xml->channel->item as $item) {
-                $title = trim((string)$item->title);
-                $description = trim((string)$item->description);
-                $pubDate = trim((string)$item->pubDate);
-                $link = trim((string)$item->link);
-
-                $bulletins[] = [
-                    'title' => $title,
-                    'description' => $description,
-                    'pubDate' => $pubDate,
-                    'link' => $link,
-                    'severity' => 'high',
-                    'hash' => md5($title . '|' . $description)
-                ];
-            }
-            return $bulletins;
-        }
-    } catch (Throwable $e) {}
-
     return null;
 }
 
@@ -391,8 +363,8 @@ function queuePagasaBroadcast(PDO $pdo, array $bulletin, string $channels): ?int
     $channelList = $channels ?: 'push';
     $recipientCount = countActiveCitizens($pdo);
 
-    // Compute alert time to be exactly 5 hours ago
-    $alertTime = date('Y-m-d H:i:s', time() - 5 * 3600);
+    // Use the actual publish time so old entries stay in history naturally.
+    $alertTime = date('Y-m-d H:i:s');
 
     $stmt = $pdo->prepare("
         INSERT INTO dispatch_logs (title, message, category_id, severity, channels, target_audience, status, total_recipients, created_by, created_at)
@@ -508,7 +480,7 @@ switch ($action) {
     // ----------------------------------------------------------
     case 'status':
         $enabled = getSetting($pdo, 'enabled', '0') === '1';
-        $interval = (int)getSetting($pdo, 'check_interval_minutes', '5');
+        $interval = (int)getSetting($pdo, 'check_interval_minutes', '360');
         $channels = getSetting($pdo, 'channels', 'push,email');
         $lastCheck = getSetting($pdo, 'last_check_at', '');
         $lastHash = getSetting($pdo, 'last_bulletin_hash', '');

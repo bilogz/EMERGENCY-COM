@@ -131,11 +131,11 @@ $current = 'alerts.php';
                     <!-- Time Filter Dropdown -->
                     <div class="filter-dropdown" style="position: relative;">
                         <button class="filter-btn time-dropdown-toggle" id="timeDropdownToggle" data-no-translate style="padding: 0.5rem 0.75rem; font-size: 0.875rem; background: transparent; border: 1px solid rgba(76, 138, 137, 0.5); color: #2e7d32;">
-                            <i class="fas fa-filter"></i> <span id="timeDropdownLabel">24 Hours Ago</span> <i class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.75rem;"></i>
+                            <i class="fas fa-filter"></i> <span id="timeDropdownLabel">6 Hours Ago</span> <i class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.75rem;"></i>
                         </button>
                         <div class="filter-dropdown-menu" id="timeDropdownMenu" style="display: none; position: absolute; top: 100%; right: 0; min-width: 180px; background: var(--card-bg, #fff); border: 1px solid var(--card-border, #d1d5db); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); z-index: 100; margin-top: 0.25rem;">
-                            <div class="filter-dropdown-item time-filter-option active" data-time-filter="24h" data-label="24 Hours Ago">
-                                <i class="fas fa-clock"></i> <span>24 Hours Ago</span>
+                            <div class="filter-dropdown-item time-filter-option active" data-time-filter="6h" data-label="6 Hours Ago">
+                                <i class="fas fa-clock"></i> <span>6 Hours Ago</span>
                             </div>
                             <div class="filter-dropdown-item time-filter-option" data-time-filter="week" data-label="This Week">
                                 <i class="fas fa-calendar-week"></i> <span>This Week</span>
@@ -208,7 +208,7 @@ $current = 'alerts.php';
     <script>
         // Live Alerts System - Real-time Updates
         let currentCategory = 'all';
-        let currentTimeFilter = '24h'; // 24h, week, month, year, all
+        let currentTimeFilter = '6h'; // 6h, 24h, week, month, year, all
         let currentSeverityFilter = null; // null (all), emergency_only, warnings_only
         let lastAlertId = 0;
         let lastUpdateTime = null;
