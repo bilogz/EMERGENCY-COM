@@ -95,10 +95,21 @@ try {
   }
 
   // Create uploads directory if not exists
-  // Use absolute path to PHP/uploads (outside api folder)
+  // Try multiple locations with write permissions
   $uploadDir = dirname(__DIR__) . '/uploads';
+  
+  // If that fails, try PHP/api/uploads (existing directory)
   if (!file_exists($uploadDir)) {
-    if (!mkdir($uploadDir, 0755, true)) {
+    $uploadDir = __DIR__ . '/uploads';
+  }
+  
+  // If still doesn't exist, try system temp directory
+  if (!file_exists($uploadDir)) {
+    $uploadDir = sys_get_temp_dir() . '/alertara_uploads';
+  }
+  
+  if (!file_exists($uploadDir)) {
+    if (!mkdir($uploadDir, 0777, true)) {
       http_response_code(500);
       echo json_encode(['success' => false, 'message' => 'Failed to create uploads directory on the server. Path: ' . $uploadDir]);
       exit;
