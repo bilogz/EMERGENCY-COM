@@ -95,11 +95,11 @@ try {
   }
 
   // Create uploads directory if not exists
-  // Use system temp directory which always has write permissions
-  $uploadDir = sys_get_temp_dir() . '/alertara_uploads';
+  // Use web-accessible directory for proper URL access
+  $uploadDir = dirname(__DIR__, 2) . '/uploads/reports';
   
   if (!file_exists($uploadDir)) {
-    if (!mkdir($uploadDir, 0777, true)) {
+    if (!mkdir($uploadDir, 0755, true)) {
       http_response_code(500);
       echo json_encode(['success' => false, 'message' => 'Failed to create uploads directory on the server. Path: ' . $uploadDir]);
       exit;
@@ -107,13 +107,11 @@ try {
   }
 
   // Generate unique secure filename
-  $newFilename = uniqid('media_', true) . '.' . $ext;
+  $newFilename = uniqid('report_', true) . '.' . $ext;
   $targetPath = $uploadDir . '/' . $newFilename;
 
   // Move the file to the target directory
   if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-    // Return base64 encoded file data for immediate display
-    $fileData = base64_encode(file_get_contents($targetPath));
     $fileSize = filesize($targetPath);
     
     // Try to get mime type, fallback if function not available
@@ -141,10 +139,14 @@ try {
       $fileType = isset($mimeTypes[$ext]) ? $mimeTypes[$ext] : 'application/octet-stream';
     }
     
+    // Return web-accessible URL
+    $baseUrl = 'https://emergency-comm.alertaraqc.com/PHP/uploads/reports/';
+    $fileUrl = $baseUrl . $newFilename;
+    
     echo json_encode([
       'success' => true,
       'message' => 'Media uploaded successfully',
-      'file_url' => "data:$fileType;base64,$fileData",
+      'file_url' => $fileUrl,
       'file_path' => $targetPath,
       'file_size' => $fileSize,
       'file_type' => $fileType,
