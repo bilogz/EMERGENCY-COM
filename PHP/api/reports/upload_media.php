@@ -1,6 +1,17 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 
+// CORS headers for React Native
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+
+// Handle preflight OPTIONS request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
 // Skip db_connect for media upload since we don't need database
 // Skip authentication for media upload - public endpoint
 
