@@ -204,6 +204,40 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             color: #15803d;
             font-weight: 700;
         }
+        .twc-transfer-description { margin-top: 0.9rem; }
+        .twc-transfer-description label {
+            display: block;
+            margin-bottom: 0.4rem;
+            color: var(--text-color-1);
+            font-size: 0.86rem;
+            font-weight: 700;
+        }
+        .twc-transfer-description label span { color: #dc2626; }
+        .twc-transfer-description textarea {
+            width: 100%;
+            min-height: 96px;
+            padding: 0.7rem 0.8rem;
+            resize: vertical;
+            box-sizing: border-box;
+            border: 1px solid var(--border-color-1);
+            border-radius: 8px;
+            background: var(--bg-color-1);
+            color: var(--text-color-1);
+            font: inherit;
+            line-height: 1.45;
+        }
+        .twc-transfer-description textarea:focus {
+            outline: none;
+            border-color: var(--primary-color-1);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color-1) 18%, transparent);
+        }
+        .twc-transfer-description textarea[aria-invalid="true"] { border-color: #dc2626; }
+        .twc-transfer-description small {
+            display: block;
+            margin-top: 0.35rem;
+            color: var(--text-secondary-1);
+            font-size: 0.75rem;
+        }
         .twc-transfer-modal__actions {
             display: flex;
             justify-content: flex-end;
@@ -302,6 +336,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                             <th>Location</th>
                                             <th>Last Message</th>
                                             <th>Priority</th>
+                                            <th>Admin Assigned</th>
                                             <th>Status</th>
                                             <th style="text-align: right;">Action</th>
                                         </tr>
@@ -310,11 +345,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                         <!-- Conversations will be loaded here -->
                                     </tbody>
                                 </table>
-                                <div id="loadMoreContainer" class="load-more-container" style="display: none; padding: 1rem; text-align: center;">
-                                    <button class="btn-load-more" onclick="loadMoreConversations()">
-                                        Load More
-                                    </button>
-                                </div>
+                                <nav id="paginationContainer" class="twc-pagination" aria-label="Conversation pages" style="display: none;"></nav>
                                 <div id="loadingSpinner" style="text-align: center; padding: 1rem; display: none;">
                                     <i class="fas fa-spinner fa-spin" style="color: var(--primary-color-1);"></i>
                                 </div>
@@ -368,13 +399,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                          <i class="fas fa-share-from-square"></i> Transfer
                                      </button>
                                      <button class="btn btn-sm btn-secondary" id="releaseConversationBtn" style="display: none;">
-                                         <i class="fas fa-user-clock"></i> Hand Over to Other Admin
+                                         <i class="fas fa-door-open"></i> Hand Over
                                      </button>
                                      <button class="btn btn-sm btn-secondary" id="toggleStatusBtn" style="display: none;">
                                          <i class="fas fa-check"></i> Close Chat
-                                     </button>
-                                     <button onclick="closeChatPanel()" class="btn btn-sm btn-secondary" style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 6px; border: 1px solid var(--border-color-1); background: var(--bg-color-1); color: var(--text-color-2); cursor: pointer; margin-left: 0.5rem;" title="Hide Chat">
-                                         <i class="fas fa-times"></i>
                                      </button>
                                  </div>
                             </div>
@@ -438,6 +466,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                             <div><span>Citizen</span><span id="twcTransferCitizen">-</span></div>
                             <div><span>Emergency Type</span><span id="twcTransferType">-</span></div>
                             <div><span>Location</span><span id="twcTransferLocation">-</span></div>
+                            <div><span>Priority</span><span id="twcTransferPriority" class="incident-priority-badge incident-priority-low">LOW 0</span></div>
+                        </div>
+                        <div class="twc-transfer-description" id="twcTransferDescriptionGroup">
+                            <label for="twcTransferDescription">Description <span aria-hidden="true">*</span></label>
+                            <textarea id="twcTransferDescription" rows="4" maxlength="1000" placeholder="Describe the incident and important details for the response team." required></textarea>
+                            <small>Include the situation, hazards, injuries, or other details responders should know.</small>
                         </div>
                         <div class="twc-transfer-modal__message" id="twcTransferMessage">
                             Confirm transfer to the response team system.
@@ -619,7 +653,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         let currentConversationData = null;
         let lastMessageId = 0;
         let currentPage = 1;
-        const pageLimit = 20; // Load 20 at a time for speed
+        const pageLimit = 10; // Show up to 10 conversations per table page
         let isLoading = false;
         let hasMore = true;
         let lastDisplayedDate = null; // Track the last date shown in the chat
@@ -713,7 +747,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             currentPage = 1;
             hasMore = true;
             document.getElementById('conversationsList').innerHTML = '';
-            document.getElementById('loadMoreContainer').style.display = 'none';
+            document.getElementById('paginationContainer').style.display = 'none';
             
             loadConversations(true);
         }
@@ -725,11 +759,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         function closeChatPanel() {
             if (currentConversationId && currentConversationData && Number(currentConversationData.assignedTo || 0) === Number(ADMIN_ID || 0)) {
-                showTransferModalNotice(
-                    { userName: currentConversationData.userName || 'Assigned report', category: currentConversationData.category || 'Report', userLocation: currentConversationData.userLocation || '-' },
-                    'This report is assigned to you. Use Hand Over to Other Admin before leaving it.',
-                    'error'
-                );
+                showToast('Conversation still active', 'Use Hand Over to leave it for another admin.');
                 return;
             }
             closeMobileChat();
@@ -1386,7 +1416,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             currentPage = 1;
             hasMore = true;
             document.getElementById('conversationsList').innerHTML = '';
-            document.getElementById('loadMoreContainer').style.display = 'none';
+            document.getElementById('paginationContainer').style.display = 'none';
             loadConversations(true);
         }
 
@@ -1415,11 +1445,21 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 moderate: 'MODERATE',
                 low: 'LOW'
             };
+            const colors = {
+                critical: { name: 'red', hex: '#dc2626' },
+                high: { name: 'orange', hex: '#f97316' },
+                urgent: { name: 'yellow', hex: '#eab308' },
+                moderate: { name: 'blue', hex: '#2563eb' },
+                low: { name: 'green', hex: '#16a34a' }
+            };
+            const safeLevel = labels[level] ? level : 'low';
             return {
-                level: labels[level] ? level : 'low',
+                level: safeLevel,
                 label: labels[level] || 'LOW',
                 score: Number.isFinite(score) ? score : 0,
-                manual: Boolean(p.manual ?? convOrPriority?.incidentPriorityManual)
+                manual: Boolean(p.manual ?? convOrPriority?.incidentPriorityManual),
+                color: colors[safeLevel].name,
+                hex: colors[safeLevel].hex
             };
         }
 
@@ -1588,14 +1628,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             
             const listContainer = document.getElementById('conversationsList');
             const spinner = document.getElementById('loadingSpinner');
-            const loadMoreBtn = document.getElementById('loadMoreContainer');
-            
             if (isInitial && !append && !silent) {
                 spinner.style.display = 'block';
                 listContainer.innerHTML = ''; // Clear for initial load
-            } else if (append) {
-                spinner.style.display = 'block';
-                loadMoreBtn.style.display = 'none';
             }
             
             try {
@@ -1606,9 +1641,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 });
                 if (currentStatus === 'open') {
                     params.set('unassigned_only', '1');
-                }
-                if (currentStatus === 'assigned') {
-                    params.set('assigned_to_me', '1');
                 }
                 if (PAGE_MODE === 'citizen_reports') {
                     params.set('scope', 'citizen_reports');
@@ -1659,18 +1691,16 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         const topicSuffix = currentTopic === 'all' ? '' : ' for this topic';
                         listContainer.innerHTML = `<p style="text-align: center; color: var(--text-secondary-1); padding: 2rem;">No ${currentStatus} conversations${suffix}${topicSuffix}</p>`;
                     }
+                    renderConversationPagination(0);
                     return;
                 }
-                
-                // Check if we have more pages
-                if (conversations.length < pageLimit) {
-                    hasMore = false;
-                } else {
-                    loadMoreBtn.style.display = 'block';
-                }
+
+                const totalPages = Math.max(1, Number(data.pagination?.total_pages) || 1);
+                hasMore = currentPage < totalPages;
+                renderConversationPagination(totalPages);
                 
                 // Render Items (grouped by department)
-                renderGroupedConversations(conversations, append);
+                renderGroupedConversations(conversations, false);
                 tryOpenConversationFromQuery(conversations);
                 
             } catch (error) {
@@ -1684,11 +1714,46 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
         }
         
-        function loadMoreConversations() {
-            if (hasMore && !isLoading) {
-                currentPage++;
-                loadConversations(false, true);
+        function renderConversationPagination(totalPages) {
+            const container = document.getElementById('paginationContainer');
+            if (!container) return;
+
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                container.style.display = 'none';
+                return;
             }
+
+            const pages = [];
+            const start = Math.max(1, currentPage - 2);
+            const end = Math.min(totalPages, currentPage + 2);
+            if (start > 1) pages.push(1);
+            if (start > 2) pages.push('ellipsis-start');
+            for (let page = start; page <= end; page++) pages.push(page);
+            if (end < totalPages - 1) pages.push('ellipsis-end');
+            if (end < totalPages) pages.push(totalPages);
+
+            const pageButtons = pages.map(page => {
+                if (typeof page !== 'number') return '<span class="twc-page-ellipsis" aria-hidden="true">&hellip;</span>';
+                const active = page === currentPage;
+                return `<button type="button" class="twc-page-btn${active ? ' active' : ''}" onclick="goToConversationPage(${page})" ${active ? 'aria-current="page"' : ''}>${page}</button>`;
+            }).join('');
+
+            container.innerHTML = `
+                <button type="button" class="twc-page-btn twc-page-nav" onclick="goToConversationPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''} aria-label="Previous page">&lsaquo;</button>
+                ${pageButtons}
+                <button type="button" class="twc-page-btn twc-page-nav" onclick="goToConversationPage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''} aria-label="Next page">&rsaquo;</button>
+            `;
+            container.style.display = 'flex';
+        }
+
+        function goToConversationPage(page) {
+            const targetPage = Number(page);
+            if (isLoading || !Number.isInteger(targetPage) || targetPage < 1 || targetPage === currentPage) return;
+            currentPage = targetPage;
+            loadConversations(true, false).then(() => {
+                document.getElementById('scrollableList')?.scrollTo({ top: 0, behavior: 'smooth' });
+            });
         }
         
         // --- Real-time Polling ---
@@ -1760,7 +1825,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
 
             // 2. Silent list refresh for first page so incoming calls/reports appear without a manual refresh.
-            if (!isLoading && currentPage === 1 && ['open', 'active', 'assigned', 'closed'].includes(currentStatus)) {
+            if (!currentConversationId && !isLoading && currentPage === 1 && ['open', 'active', 'assigned', 'closed'].includes(currentStatus)) {
                 await loadConversations(false, false, true);
             }
         }
@@ -1782,12 +1847,20 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             item.innerHTML = getConversationHTML(conv);
             
             item.addEventListener('click', function(event) {
-                if (event.target.closest('.transfer-report-btn')) {
+                const rowData = this._conversationData || conv;
+                const assignedToOther = Number(rowData?.assignedTo || 0) > 0
+                    && Number(rowData.assignedTo) !== Number(ADMIN_ID || 0);
+                if (assignedToOther) {
                     event.stopPropagation();
-                    transferConversationReport(this._conversationData || conv);
+                    showToast('Conversation in use', `${rowData.assignedAdminName || 'Another admin'} is handling this conversation.`);
                     return;
                 }
-                openConversation(conv.id, this._conversationData, this);
+                if (event.target.closest('.transfer-report-btn')) {
+                    event.stopPropagation();
+                    transferConversationReport(rowData);
+                    return;
+                }
+                openConversation(conv.id, rowData, this);
             });
             
             return item;
@@ -1819,6 +1892,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const workflowClass = workflowClassMap[workflowRaw] || 'workflow-open';
             const statusBadge = `<span class="workflow-pill ${workflowClass}">${workflowLabel}</span>`;
             const incidentBadge = incidentPriorityBadgeHtml(conv);
+            const assignedAdmin = conv.assignedAdminName
+                ? `<span class="assigned-admin-pill"><i class="fas fa-user-shield"></i> ${escapeHtml(conv.assignedAdminName)}</span>`
+                : '<span class="assigned-admin-empty">Unassigned</span>';
             const statusDot = `<span class="status-dot"></span>`;
 
             const timestamp = getConversationTimestamp(conv);
@@ -1847,6 +1923,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 </td>
                 <td style="padding: 0.85rem 0.75rem; vertical-align: middle;">
                     ${incidentBadge}
+                </td>
+                <td style="padding: 0.85rem 0.75rem; vertical-align: middle;">
+                    ${assignedAdmin}
                 </td>
                 <td style="padding: 0.85rem 0.75rem; vertical-align: middle;">
                     ${statusBadge}
@@ -1899,6 +1978,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     : '<i class="fas fa-share-from-square"></i> Transfer';
             }
             if (cancelBtn) cancelBtn.disabled = busy;
+            const descriptionEl = document.getElementById('twcTransferDescription');
+            if (descriptionEl) descriptionEl.disabled = busy;
         }
 
         function setTransferModalMessage(message, state = '') {
@@ -1923,9 +2004,22 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const citizenEl = document.getElementById('twcTransferCitizen');
             const typeEl = document.getElementById('twcTransferType');
             const locationEl = document.getElementById('twcTransferLocation');
+            const priorityEl = document.getElementById('twcTransferPriority');
+            const descriptionGroup = document.getElementById('twcTransferDescriptionGroup');
+            const descriptionEl = document.getElementById('twcTransferDescription');
+            const priorityMeta = incidentPriorityMeta(data);
             if (citizenEl) citizenEl.textContent = data?.userName || data?.caller?.name || 'Guest User';
             if (typeEl) typeEl.textContent = data?.category || data?.department || data?.userConcern || 'Emergency report';
             if (locationEl) locationEl.textContent = data?.userLocation || data?.caller?.address || 'Not specified';
+            if (priorityEl) {
+                priorityEl.className = `incident-priority-badge incident-priority-${priorityMeta.level}`;
+                priorityEl.textContent = `${priorityMeta.label} ${priorityMeta.score}`;
+            }
+            if (descriptionGroup) descriptionGroup.hidden = false;
+            if (descriptionEl) {
+                descriptionEl.value = String(data?.description || data?.lastMessage || '').trim();
+                descriptionEl.setAttribute('aria-invalid', 'false');
+            }
 
             setTransferModalMessage('Confirm transfer to the response team system.');
             setTransferModalBusy(false);
@@ -1943,7 +2037,16 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     if (!value) closeTransferModal();
                     resolve(value);
                 };
-                const onConfirm = () => cleanup(true);
+                const onConfirm = () => {
+                    const description = String(descriptionEl?.value || '').trim();
+                    if (!description) {
+                        descriptionEl?.setAttribute('aria-invalid', 'true');
+                        setTransferModalMessage('Please enter a description before transferring.', 'error');
+                        descriptionEl?.focus();
+                        return;
+                    }
+                    cleanup({ description });
+                };
                 const onCancel = () => cleanup(false);
                 const onBackdrop = (event) => {
                     if (event.target === modal) cleanup(false);
@@ -1955,24 +2058,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (cancelBtn) cancelBtn.addEventListener('click', onCancel);
                 modal.addEventListener('click', onBackdrop);
                 document.addEventListener('keydown', onKeydown);
-                setTimeout(() => confirmBtn?.focus(), 0);
+                setTimeout(() => descriptionEl?.focus(), 0);
             });
-        }
-
-        function showTransferModalNotice(data, message, state = '') {
-            const modal = document.getElementById('twcTransferModal');
-            if (!modal) return;
-            const citizenEl = document.getElementById('twcTransferCitizen');
-            const typeEl = document.getElementById('twcTransferType');
-            const locationEl = document.getElementById('twcTransferLocation');
-            if (citizenEl) citizenEl.textContent = data?.userName || 'Notice';
-            if (typeEl) typeEl.textContent = data?.category || '-';
-            if (locationEl) locationEl.textContent = data?.userLocation || '-';
-            setTransferModalBusy(false);
-            setTransferModalMessage(message, state);
-            modal.classList.add('active');
-            modal.setAttribute('aria-hidden', 'false');
-            setTimeout(closeTransferModal, 1200);
         }
 
         function formatTransferError(result, fallback = 'Transfer failed.') {
@@ -1999,11 +2086,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const data = conversationData || currentConversationData;
             const conversationId = data?.id || currentConversationId;
             if (!conversationId) {
-                showTransferModalNotice({ userName: 'No report selected', category: '-', userLocation: '-' }, 'No report selected to transfer.', 'error');
+                showToast('Transfer unavailable', 'Select a report before transferring.');
                 return;
             }
-            const confirmed = await openTransferModal(data);
-            if (!confirmed) return;
+            const transferForm = await openTransferModal(data);
+            if (!transferForm) return;
             const priorityMeta = incidentPriorityMeta(data);
             const reportTransferId = `conversation-${conversationId}-${Date.now()}`;
 
@@ -2019,11 +2106,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 socketUrl: null,
                 socketPath: null,
                 emergencyType: data?.category || data?.department || data?.userConcern || '',
+                description: transferForm.description,
                 priority: priorityMeta.level,
+                priorityColor: priorityMeta.color,
                 incidentPriority: {
                     score: priorityMeta.score,
                     priority: priorityMeta.level,
                     label: priorityMeta.label,
+                    color: priorityMeta.color,
+                    hex: priorityMeta.hex,
                     manual: priorityMeta.manual
                 },
                 caller: {
@@ -2139,16 +2230,23 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!data.success) {
+                    if (currentConversationData && String(currentConversationData.id) === String(conversationId)) {
+                        currentConversationData.assignedTo = null;
+                    }
                     setConversationLocked(true, data.message || 'Locked by another admin');
                     return false;
                 }
                 if (currentConversationData && String(currentConversationData.id) === String(conversationId)) {
                     currentConversationData.assignedTo = data.assignedTo || ADMIN_ID;
+                    currentConversationData.assignedAdminName = data.adminName || ADMIN_USERNAME;
                     currentConversationData.workflowStatus = 'in_progress';
                 }
                 setConversationLocked(false);
                 return true;
             } catch (e) {
+                if (currentConversationData && String(currentConversationData.id) === String(conversationId)) {
+                    currentConversationData.assignedTo = null;
+                }
                 setConversationLocked(true, 'Unable to claim report');
                 return false;
             }
@@ -2156,34 +2254,33 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         async function releaseConversationForOtherAdmin() {
             if (!currentConversationId) return;
-            const confirmed = await openTransferModal({
-                userName: currentConversationData?.userName || 'Current report',
-                category: currentConversationData?.category || currentConversationData?.userConcern || 'Report',
-                userLocation: currentConversationData?.userLocation || 'Not specified'
-            });
-            if (!confirmed) return;
+            const releaseBtn = document.getElementById('releaseConversationBtn');
+            const conversationId = currentConversationId;
             try {
-                setTransferModalBusy(true);
-                setTransferModalMessage('Handing over this report to the admin queue...');
+                if (releaseBtn) {
+                    releaseBtn.disabled = true;
+                    releaseBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Leaving...';
+                }
                 const res = await fetch(API_BASE + 'chat-claim.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ conversationId: currentConversationId, action: 'release' })
+                    body: JSON.stringify({ conversationId, action: 'release' })
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!data.success) {
-                    setTransferModalBusy(false);
-                    setTransferModalMessage(data.message || 'Failed to hand over report.', 'error');
-                    return;
+                    throw new Error(data.message || 'Failed to leave conversation.');
                 }
-                setTransferModalMessage('Report handed over to other admins.', 'success');
                 if (currentConversationData) currentConversationData.assignedTo = null;
                 closeChatPanel();
                 resetConversationsAndReload();
-                setTimeout(closeTransferModal, 1000);
+                showToast('Conversation released', 'Another admin can now take this conversation.');
             } catch (e) {
-                setTransferModalBusy(false);
-                setTransferModalMessage('Failed to hand over report.', 'error');
+                showToast('Unable to leave conversation', e.message || 'Please try again.');
+            } finally {
+                if (releaseBtn) {
+                    releaseBtn.disabled = false;
+                    releaseBtn.innerHTML = '<i class="fas fa-door-open"></i> Hand Over';
+                }
             }
         }
 
@@ -2252,15 +2349,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 currentConversationData &&
                 Number(currentConversationData.assignedTo || 0) === Number(ADMIN_ID || 0)
             ) {
-                showTransferModalNotice(
-                    { userName: currentConversationData.userName || 'Assigned report', category: currentConversationData.category || 'Report', userLocation: currentConversationData.userLocation || '-' },
-                    'This report is assigned to you. Use Hand Over to Other Admin before opening another report.',
-                    'error'
-                );
+                showToast('Finish the active conversation', 'Click Hand Over before opening another conversation.');
                 return;
             }
             currentConversationId = id;
             currentConversationData = data || null;
+            if (currentConversationData) currentConversationData.assignedTo = ADMIN_ID;
             lastMessageId = 0;
             
             // UI Selection

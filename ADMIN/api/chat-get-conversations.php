@@ -57,6 +57,7 @@ try {
 
     $hasCategoryColumn = twc_column_exists($pdo, 'conversations', 'category');
     $hasPriorityColumn = twc_column_exists($pdo, 'conversations', 'priority');
+    $hasAdminUserTable = twc_table_exists($pdo, 'admin_user');
     twc_ensure_incident_priority_columns($pdo);
     $hasIncidentPriority = twc_column_exists($pdo, 'conversations', 'incident_priority_score');
 
@@ -152,6 +153,7 @@ try {
             c.user_agent,
             c.status AS workflow_status,
             c.assigned_to,
+            " . ($hasAdminUserTable ? "au.name" : "NULL") . " AS assigned_admin_name,
             c.created_at,
             c.updated_at,
             COALESCE(lm.message_text, c.last_message) AS last_message,
@@ -196,6 +198,7 @@ try {
             WHERE is_read = 0 AND sender_type <> 'admin'
             GROUP BY conversation_id
         ) uc ON c.conversation_id = uc.conversation_id
+        " . ($hasAdminUserTable ? "LEFT JOIN admin_user au ON au.id = c.assigned_to" : "") . "
         $whereSql
         ORDER BY
             " . ($scope === 'citizen_reports' && $hasIncidentPriority ? "COALESCE(c.incident_priority_score, 0) DESC," : "") . "
@@ -272,6 +275,7 @@ try {
             'lastMessageTime' => $conv['last_message_time'] ? strtotime((string)$conv['last_message_time']) * 1000 : null,
             'unreadCount' => (int)$conv['unread_user_messages'],
             'assignedTo' => twc_safe_int($conv['assigned_to']),
+            'assignedAdminName' => $conv['assigned_admin_name'] ?? null,
             'createdAt' => $conv['created_at'] ? strtotime((string)$conv['created_at']) * 1000 : null,
             'updatedAt' => $conv['updated_at'] ? strtotime((string)$conv['updated_at']) * 1000 : null,
             'hasCall' => (bool)($conv['has_call'] ?? false),
