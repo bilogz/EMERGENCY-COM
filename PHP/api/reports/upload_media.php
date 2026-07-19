@@ -95,18 +95,8 @@ try {
   }
 
   // Create uploads directory if not exists
-  // Try multiple locations with write permissions
-  $uploadDir = dirname(__DIR__) . '/uploads';
-  
-  // If that fails, try PHP/api/uploads (existing directory)
-  if (!file_exists($uploadDir)) {
-    $uploadDir = __DIR__ . '/uploads';
-  }
-  
-  // If still doesn't exist, try system temp directory
-  if (!file_exists($uploadDir)) {
-    $uploadDir = sys_get_temp_dir() . '/alertara_uploads';
-  }
+  // Use PHP/api/uploads which is web-accessible
+  $uploadDir = __DIR__ . '/uploads';
   
   if (!file_exists($uploadDir)) {
     if (!mkdir($uploadDir, 0777, true)) {
@@ -122,8 +112,9 @@ try {
 
   // Move the file to the target directory
   if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-    // Return relative URL from PHP/
-    $mediaUrl = 'uploads/' . $newFilename;
+    // Return full URL for web access
+    $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
+    $mediaUrl = $baseUrl . '/PHP/api/uploads/' . $newFilename;
     $fileSize = filesize($targetPath);
     
     // Try to get mime type, fallback if function not available
