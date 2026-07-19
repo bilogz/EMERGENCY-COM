@@ -56,8 +56,8 @@ try {
 
         $query = "
             INSERT INTO incident_reports
-            (user_id, report_type, description, latitude, longitude, media_url, status)
-            VALUES (?, ?, ?, ?, ?, ?, 'pending')
+            (user_id, report_type, description, latitude, longitude, status)
+            VALUES (?, ?, ?, ?, ?, 'pending')
         ";
 
         $stmt = $pdo->prepare($query);
@@ -66,11 +66,17 @@ try {
             $report_type,
             $description,
             $latitude,
-            $longitude,
-            $media_url
+            $longitude
         ]);
 
         $reportId = $pdo->lastInsertId();
+
+        // If media_url is provided, update the record
+        if ($media_url) {
+            $updateQuery = "UPDATE incident_reports SET media_url = ? WHERE id = ?";
+            $updateStmt = $pdo->prepare($updateQuery);
+            $updateStmt->execute([$media_url, $reportId]);
+        }
 
         $selectQuery = "
             SELECT
