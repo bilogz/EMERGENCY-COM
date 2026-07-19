@@ -83,7 +83,7 @@ try {
         return $alert;
     }, $alerts);
 
-    apiResponse::success($alerts, "Alerts retrieved successfully");
+    apiResponse::success(['data' => $alerts], "Alerts retrieved successfully");
 
 } catch (PDOException $e) {
     error_log("Get Alerts DB Error: " . $e->getMessage());
