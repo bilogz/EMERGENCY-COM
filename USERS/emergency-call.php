@@ -23,6 +23,7 @@ $assetBase = '../ADMIN/header/';
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <!-- Emergency Alert System -->
     <link rel="stylesheet" href="../ADMIN/header/css/emergency-alert.css">
     <style>
@@ -260,6 +261,89 @@ $assetBase = '../ADMIN/header/';
         .chat-location-input-bubble input:focus {
             border-color: var(--primary-color, #8e44ad);
             box-shadow: 0 0 0 3px var(--primary-light, rgba(142, 68, 173, 0.15));
+        }
+
+        .chat-location-search-wrap {
+            position: relative;
+        }
+
+        .chat-location-suggestions {
+            position: absolute;
+            top: calc(100% + 0.35rem);
+            left: 0;
+            right: 0;
+            z-index: 1005;
+            display: flex;
+            flex-direction: column;
+            max-height: 190px;
+            overflow-y: auto;
+            background: var(--bg-primary, #ffffff);
+            border: 1px solid var(--border-secondary, #d1d5db);
+            border-radius: 10px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+        }
+
+        .chat-location-suggestions[hidden] {
+            display: none;
+        }
+
+        .chat-location-suggestion {
+            border: 0;
+            border-bottom: 1px solid var(--border-primary, #e5e7eb);
+            background: transparent;
+            color: var(--text-primary, #1f2937);
+            cursor: pointer;
+            font-size: 0.78rem;
+            line-height: 1.35;
+            padding: 0.65rem 0.75rem;
+            text-align: left;
+        }
+
+        .chat-location-suggestion:last-child {
+            border-bottom: 0;
+        }
+
+        .chat-location-suggestion:hover,
+        .chat-location-suggestion:focus {
+            background: var(--primary-light, rgba(142, 68, 173, 0.08));
+            color: var(--primary-color, #8e44ad);
+            outline: none;
+        }
+
+        .chat-location-map {
+            width: 100%;
+            height: 220px;
+            min-height: 220px;
+            border: 1px solid var(--border-secondary, #d1d5db);
+            border-radius: 12px;
+            overflow: hidden;
+            background: var(--bg-secondary, #f8fafc);
+        }
+
+        .chat-location-selected {
+            min-height: 34px;
+            padding: 0.55rem 0.7rem;
+            border-radius: 9px;
+            background: var(--bg-secondary, #f8fafc);
+            color: var(--text-secondary, #4b5563);
+            border: 1px solid var(--border-primary, #e5e7eb);
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+
+        .chat-location-selected.has-location {
+            color: var(--text-primary, #1f2937);
+            border-color: rgba(20, 184, 166, 0.4);
+        }
+
+        .chat-location-hint {
+            color: var(--text-muted, #6b7280);
+            font-size: 0.74rem;
+            line-height: 1.3;
+        }
+
+        .leaflet-container {
+            font-family: inherit;
         }
 
         .chat-location-buttons {
@@ -768,6 +852,7 @@ $assetBase = '../ADMIN/header/';
     <audio id="remote" autoplay></audio>
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const SOCKET_IO_PATH = '/socket.io';
         const SIGNALING_URL = window.location.origin;
@@ -1735,12 +1820,19 @@ $assetBase = '../ADMIN/header/';
         let incidentReportStep = 1;
         let selectedCategory = '';
         let selectedLocation = '';
+        let selectedLocationData = null;
         let selectedDetails = '';
         let selectedLink = '';
         let selectedAttachment = null;
         let activeIncidentConversationId = sessionStorage.getItem('active_incident_conversation_id') || null;
         let incidentChatPollInterval = null;
         let lastIncidentMessageId = 0;
+        let incidentLocationMap = null;
+        let incidentLocationMarker = null;
+        let incidentLocationSearchTimer = null;
+        let incidentLocationSearchAbort = null;
+        let incidentLocationOutsideClickBound = false;
+        const DEFAULT_INCIDENT_LOCATION = { lat: 14.6760, lng: 121.0437, label: 'Quezon City, Philippines' };
 
         function escapeHtml(text) {
             const div = document.createElement('div');
@@ -1791,9 +1883,19 @@ $assetBase = '../ADMIN/header/';
             incidentReportStep = 1;
             selectedCategory = '';
             selectedLocation = '';
+            selectedLocationData = null;
             selectedDetails = '';
             selectedLink = '';
             selectedAttachment = null;
+            if (incidentLocationMap) {
+                incidentLocationMap.remove();
+                incidentLocationMap = null;
+            }
+            incidentLocationMarker = null;
+            if (incidentLocationSearchTimer) clearTimeout(incidentLocationSearchTimer);
+            incidentLocationSearchTimer = null;
+            if (incidentLocationSearchAbort) incidentLocationSearchAbort.abort();
+            incidentLocationSearchAbort = null;
             clearIncidentAttachment();
             
             const chatInput = document.getElementById('incidentChatInput');
@@ -1847,7 +1949,17 @@ $assetBase = '../ADMIN/header/';
                 appendBotMessage("Got it. Where did the incident occur? Please enter the location or landmark below:");
                 const locationBubbleHtml = `
                     <div class="chat-location-input-bubble" id="botLocationBubble">
-                        <input type="text" id="botLocationInput" placeholder="Enter street, barangay, or landmark...">
+                        <div class="chat-location-search-wrap">
+                            <input type="text" id="botLocationInput" placeholder="Enter street, barangay, or landmark..." autocomplete="off">
+                            <div class="chat-location-suggestions" id="botLocationSuggestions" hidden></div>
+                        </div>
+                        <div class="chat-location-map" id="botLocationMap"></div>
+                        <div class="chat-location-selected" id="botLocationSelected">
+                            Search a place, tap a suggestion, or click the map to drop the pin.
+                        </div>
+                        <div class="chat-location-hint">
+                            Drag the pin or tap the map to refine the exact incident location.
+                        </div>
                         <div class="chat-location-buttons">
                             <button class="chat-location-btn primary" onclick="confirmIncidentLocation()">
                                 <i class="fas fa-check"></i> Confirm
@@ -1859,26 +1971,222 @@ $assetBase = '../ADMIN/header/';
                     </div>
                 `;
                 appendBotMessage(locationBubbleHtml);
-                setTimeout(() => {
-                    const inp = document.getElementById('botLocationInput');
-                    if (inp) {
-                        if (locationData && locationData.address) {
-                            inp.value = locationData.address;
-                        }
-                        inp.focus();
-                        inp.onkeypress = e => { if (e.key === 'Enter') confirmIncidentLocation(); };
-                    }
-                }, 50);
+                setTimeout(initIncidentLocationPicker, 50);
             }, 500);
         };
+
+        function getLocationLabel(location) {
+            if (!location) return '';
+            return location.address || location.display_name || location.label || '';
+        }
+
+        function formatIncidentCoordinates(location) {
+            if (!location || !Number.isFinite(Number(location.lat)) || !Number.isFinite(Number(location.lng))) return '';
+            return `${Number(location.lat).toFixed(6)}, ${Number(location.lng).toFixed(6)}`;
+        }
+
+        function updateIncidentLocationSelectedLabel(message) {
+            const label = document.getElementById('botLocationSelected');
+            if (!label) return;
+            const address = message || getLocationLabel(selectedLocationData);
+            const coords = formatIncidentCoordinates(selectedLocationData);
+            if (!address && !coords) {
+                label.classList.remove('has-location');
+                label.textContent = 'Search a place, tap a suggestion, or click the map to drop the pin.';
+                return;
+            }
+            label.classList.add('has-location');
+            label.textContent = coords ? `${address || 'Pinned location'} (${coords})` : address;
+        }
+
+        function hideIncidentLocationSuggestions() {
+            const suggestions = document.getElementById('botLocationSuggestions');
+            if (!suggestions) return;
+            suggestions.hidden = true;
+            suggestions.innerHTML = '';
+        }
+
+        function setIncidentLocationPin(lat, lng, address = '', options = {}) {
+            const numericLat = Number(lat);
+            const numericLng = Number(lng);
+            if (!Number.isFinite(numericLat) || !Number.isFinite(numericLng)) return;
+
+            selectedLocationData = {
+                lat: numericLat,
+                lng: numericLng,
+                address: address || (options.reverse ? '' : getLocationLabel(selectedLocationData)) || ''
+            };
+
+            const input = document.getElementById('botLocationInput');
+            if (input && selectedLocationData.address) input.value = selectedLocationData.address;
+
+            if (incidentLocationMap && window.L) {
+                const latLng = [numericLat, numericLng];
+                if (!incidentLocationMarker) {
+                    incidentLocationMarker = L.marker(latLng, { draggable: true }).addTo(incidentLocationMap);
+                    incidentLocationMarker.on('dragend', () => {
+                        const markerPosition = incidentLocationMarker.getLatLng();
+                        setIncidentLocationPin(markerPosition.lat, markerPosition.lng, '', { reverse: true, keepView: true });
+                    });
+                } else {
+                    incidentLocationMarker.setLatLng(latLng);
+                }
+
+                if (!options.keepView) {
+                    incidentLocationMap.setView(latLng, Math.max(incidentLocationMap.getZoom(), 16));
+                }
+            }
+
+            updateIncidentLocationSelectedLabel(options.reverse ? 'Finding nearest address...' : '');
+
+            if (options.reverse) {
+                reverseIncidentLocation(numericLat, numericLng).then(reverseAddress => {
+                    if (!reverseAddress) {
+                        updateIncidentLocationSelectedLabel();
+                        return;
+                    }
+                    selectedLocationData.address = reverseAddress;
+                    const currentInput = document.getElementById('botLocationInput');
+                    if (currentInput) currentInput.value = reverseAddress;
+                    updateIncidentLocationSelectedLabel();
+                }).catch(() => updateIncidentLocationSelectedLabel());
+            }
+        }
+
+        function initIncidentLocationPicker() {
+            const input = document.getElementById('botLocationInput');
+            if (!input) return;
+
+            input.focus();
+            input.onkeydown = e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    confirmIncidentLocation();
+                }
+            };
+            input.oninput = () => {
+                if (incidentLocationSearchTimer) clearTimeout(incidentLocationSearchTimer);
+                incidentLocationSearchTimer = setTimeout(() => searchIncidentLocations(input.value.trim()), 350);
+            };
+            if (!incidentLocationOutsideClickBound) {
+                document.addEventListener('click', event => {
+                    const bubble = document.getElementById('botLocationBubble');
+                    if (bubble && !bubble.contains(event.target)) hideIncidentLocationSuggestions();
+                });
+                incidentLocationOutsideClickBound = true;
+            }
+
+            const startLat = Number(locationData?.lat || selectedLocationData?.lat || DEFAULT_INCIDENT_LOCATION.lat);
+            const startLng = Number(locationData?.lng || selectedLocationData?.lng || DEFAULT_INCIDENT_LOCATION.lng);
+            const startAddress = getLocationLabel(locationData) || getLocationLabel(selectedLocationData);
+
+            if (startAddress) input.value = startAddress;
+
+            if (!window.L) {
+                updateIncidentLocationSelectedLabel('Map could not load. You can still type the location manually.');
+                return;
+            }
+
+            const mapEl = document.getElementById('botLocationMap');
+            if (!mapEl) return;
+            incidentLocationMap = L.map(mapEl, {
+                zoomControl: true,
+                attributionControl: true
+            }).setView([startLat, startLng], 14);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(incidentLocationMap);
+
+            incidentLocationMap.on('click', event => {
+                setIncidentLocationPin(event.latlng.lat, event.latlng.lng, '', { reverse: true });
+            });
+
+            if (locationData?.lat && locationData?.lng) {
+                setIncidentLocationPin(locationData.lat, locationData.lng, startAddress, { reverse: !startAddress });
+            } else {
+                updateIncidentLocationSelectedLabel();
+            }
+
+            setTimeout(() => incidentLocationMap.invalidateSize(), 120);
+        }
+
+        async function searchIncidentLocations(query) {
+            const suggestions = document.getElementById('botLocationSuggestions');
+            if (!suggestions) return;
+            if (query.length < 3) {
+                hideIncidentLocationSuggestions();
+                return;
+            }
+
+            if (incidentLocationSearchAbort) incidentLocationSearchAbort.abort();
+            incidentLocationSearchAbort = new AbortController();
+
+            suggestions.hidden = false;
+            suggestions.innerHTML = '<button type="button" class="chat-location-suggestion">Searching locations...</button>';
+
+            const searchText = /philippines|quezon|manila/i.test(query) ? query : `${query}, Quezon City, Philippines`;
+            const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=ph&bounded=1&viewbox=120.85,14.85,121.25,14.45&q=${encodeURIComponent(searchText)}`;
+
+            try {
+                const response = await fetch(url, { signal: incidentLocationSearchAbort.signal });
+                const results = await response.json();
+                if (!Array.isArray(results) || results.length === 0) {
+                    suggestions.innerHTML = '<button type="button" class="chat-location-suggestion">No matching places found. Try a nearby landmark.</button>';
+                    return;
+                }
+
+                suggestions.innerHTML = '';
+                results.forEach(result => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'chat-location-suggestion';
+                    button.textContent = result.display_name || 'Selected place';
+                    button.onclick = () => {
+                        const label = result.display_name || query;
+                        const input = document.getElementById('botLocationInput');
+                        if (input) input.value = label;
+                        setIncidentLocationPin(result.lat, result.lon, label);
+                        hideIncidentLocationSuggestions();
+                    };
+                    suggestions.appendChild(button);
+                });
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+                suggestions.innerHTML = '<button type="button" class="chat-location-suggestion">Search unavailable. You can still type the location.</button>';
+            }
+        }
+
+        async function geocodeIncidentLocation(query) {
+            const searchText = /philippines|quezon|manila/i.test(query) ? query : `${query}, Quezon City, Philippines`;
+            const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ph&bounded=1&viewbox=120.85,14.85,121.25,14.45&q=${encodeURIComponent(searchText)}`;
+            const response = await fetch(url);
+            const results = await response.json();
+            if (!Array.isArray(results) || !results[0]) return null;
+            return {
+                lat: Number(results[0].lat),
+                lng: Number(results[0].lon),
+                address: results[0].display_name || query
+            };
+        }
+
+        async function reverseIncidentLocation(lat, lng) {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            return data.display_name || '';
+        }
 
         window.getBotCurrentLocation = async function() {
             const inp = document.getElementById('botLocationInput');
             if (inp) inp.value = "Fetching location...";
             try {
                 const loc = await tryGetLocation();
-                if (loc && loc.address) {
-                    if (inp) inp.value = loc.address;
+                if (loc && Number.isFinite(Number(loc.lat)) && Number.isFinite(Number(loc.lng))) {
+                    const address = loc.address || 'Current location';
+                    if (inp) inp.value = address;
+                    setIncidentLocationPin(loc.lat, loc.lng, address, { reverse: !loc.address });
                 } else {
                     if (inp) inp.value = "Location not found, please type manually.";
                 }
@@ -1887,19 +2195,37 @@ $assetBase = '../ADMIN/header/';
             }
         };
 
-        window.confirmIncidentLocation = function() {
+        window.confirmIncidentLocation = async function() {
             const inp = document.getElementById('botLocationInput');
             const val = inp ? inp.value.trim() : '';
-            if (!val) {
+            if (!val && !selectedLocationData) {
                 Swal.fire({ icon: 'warning', title: 'Location Required', text: 'Please enter a location.' });
                 return;
             }
-            selectedLocation = val;
+
+            if (val && (!selectedLocationData || getLocationLabel(selectedLocationData) !== val)) {
+                try {
+                    const geocoded = await geocodeIncidentLocation(val);
+                    if (geocoded && Number.isFinite(geocoded.lat) && Number.isFinite(geocoded.lng)) {
+                        selectedLocationData = geocoded;
+                    } else if (getLocationLabel(selectedLocationData) && getLocationLabel(selectedLocationData) !== val) {
+                        selectedLocationData = null;
+                    }
+                } catch (error) {
+                    if (getLocationLabel(selectedLocationData) && getLocationLabel(selectedLocationData) !== val) {
+                        selectedLocationData = null;
+                    }
+                }
+            }
+
+            selectedLocation = getLocationLabel(selectedLocationData) || val;
+            if (!selectedLocation && selectedLocationData) selectedLocation = formatIncidentCoordinates(selectedLocationData);
 
             const bubble = document.getElementById('botLocationBubble');
             if (bubble) bubble.remove();
 
-            appendUserMessage(`Location: ${val}`);
+            const coords = formatIncidentCoordinates(selectedLocationData);
+            appendUserMessage(coords ? `Location: ${selectedLocation} (${coords})` : `Location: ${selectedLocation}`);
 
             incidentReportStep = 3;
             setTimeout(() => {
@@ -1988,9 +2314,12 @@ $assetBase = '../ADMIN/header/';
         };
 
         function buildIncidentReportText(type, details, location, relatedLink) {
+            const coords = formatIncidentCoordinates(selectedLocationData);
             const lines = [
                 `Incident Type: ${type}`,
                 location ? `Location: ${location}` : '',
+                coords ? `Coordinates: ${coords}` : '',
+                selectedLocationData?.lat ? `Map: https://www.google.com/maps?q=${encodeURIComponent(`${selectedLocationData.lat},${selectedLocationData.lng}`)}` : '',
                 '',
                 details,
                 relatedLink ? `Related Link: ${relatedLink}` : ''
@@ -2007,6 +2336,11 @@ $assetBase = '../ADMIN/header/';
             formData.append('userEmail', userProfile?.email || '');
             formData.append('userPhone', userProfile?.phone || '');
             formData.append('userLocation', selectedLocation);
+            if (selectedLocationData) {
+                formData.append('locationAddress', selectedLocationData.address || selectedLocation);
+                formData.append('locationLat', selectedLocationData.lat || '');
+                formData.append('locationLng', selectedLocationData.lng || '');
+            }
             formData.append('userConcern', 'incident_report');
             formData.append('category', selectedCategory);
             formData.append('forceNewConversation', '1');

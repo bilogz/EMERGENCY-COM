@@ -2342,7 +2342,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         // --- Chat Interaction ---
 
-        function openConversation(id, data, element) {
+        async function openConversation(id, data, element) {
             if (
                 currentConversationId &&
                 String(currentConversationId) !== String(id) &&
@@ -2354,7 +2354,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
             currentConversationId = id;
             currentConversationData = data || null;
-            if (currentConversationData) currentConversationData.assignedTo = ADMIN_ID;
             lastMessageId = 0;
             
             // UI Selection
@@ -2404,7 +2403,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const releaseBtn = document.getElementById('releaseConversationBtn');
             if (releaseBtn) releaseBtn.style.display = isClosed ? 'none' : 'inline-flex';
             if (!isClosed) {
-                claimConversationForAdmin(id);
+                const claimed = await claimConversationForAdmin(id);
+                if (!claimed) {
+                    return;
+                }
+                if (currentStatus === 'open' || currentStatus === 'active') {
+                    switchTab('assigned');
+                } else {
+                    loadConversations(false, false, true);
+                }
             }
 
             // Load Messages
