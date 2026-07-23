@@ -15,6 +15,10 @@ function cleanText(value, max = 200) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
 
+function signalText(value, max = 200) {
+  return value === null || value === undefined ? '' : cleanText(String(value), max);
+}
+
 function pruneExpiredCalls() {
   const cutoff = Date.now() - OFFER_TTL_MS;
   for (const [room, offer] of activeOffersByRoom.entries()) {
@@ -37,6 +41,42 @@ function callSummary(call) {
     conversationId: call.offer?.conversationId || null,
     updatedAt: call.updatedAt,
   };
+}
+
+function getSignalCallId(payload) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  return signalText(source.callId || source.call_id || source.transferId || source.transfer_id, 128);
+}
+
+function resolveSignalRoom(payload, room) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  const callId = getSignalCallId(source);
+  const storedRoom = callId ? signalText(activeCallsById.get(callId)?.room, 180) : '';
+  return signalText(source.room, 180) || signalText(room, 180) || storedRoom;
+}
+
+function relayHangup(socket, payload = {}, room) {
+  const source = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+  const callId = getSignalCallId(source);
+  const signalRoom = resolveSignalRoom(source, room);
+  const notice = {
+    ...source,
+    callId: callId || signalText(source.callId || source.call_id, 128),
+    call_id: callId || signalText(source.call_id || source.callId, 128),
+    room: signalRoom,
+    endedAt: signalText(source.endedAt || source.ended_at, 100) || new Date().toISOString(),
+  };
+
+  if (signalRoom) {
+    activeOffersByRoom.delete(signalRoom);
+    const payloadRoom = signalText(source.room, 180);
+    if (payloadRoom && payloadRoom !== signalRoom) activeOffersByRoom.delete(payloadRoom);
+    console.log(`[signal] hangup room=${signalRoom} callId=${notice.callId || ''}`);
+    socket.to(signalRoom).emit('hangup', notice);
+    socket.to(signalRoom).emit('call-ended', notice);
+    socket.to(signalRoom).emit('call_ended', notice);
+  }
+  if (callId) activeCallsById.delete(callId);
 }
 
 const io = new Server(server, {
@@ -180,15 +220,9 @@ io.on('connection', (socket) => {
     if (signalRoom) socket.to(signalRoom).emit('candidate', candidate);
   });
 
-  socket.on('hangup', (payload, room) => {
-    if (typeof room === 'string' && room.length > 0) {
-      activeOffersByRoom.delete(room);
-      if (typeof payload?.room === 'string') activeOffersByRoom.delete(payload.room);
-      console.log(`[signal] hangup room=${room} callId=${payload?.callId || ''}`);
-    }
-    if (payload?.callId) activeCallsById.delete(String(payload.callId));
-    socket.to(room).emit('hangup', payload);
-  });
+  socket.on('hangup', (payload, room) => relayHangup(socket, payload, room));
+  socket.on('call-ended', (payload, room) => relayHangup(socket, payload, room));
+  socket.on('call_ended', (payload, room) => relayHangup(socket, payload, room));
 
   socket.on('call-message', (payload, room) => {
     if (typeof room === 'string' && room.length > 0) {

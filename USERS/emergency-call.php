@@ -993,10 +993,13 @@ $assetBase = '../ADMIN/header/';
                 if (pc && cand) pc.addIceCandidate(cand);
             });
 
-            socket.on('hangup', payload => {
+            const handlePeerHangup = payload => {
                 if (!signalingPayloadMatchesActiveCall(payload)) return;
                 if (callId) endCall(false);
-            });
+            };
+            socket.on('hangup', handlePeerHangup);
+            socket.on('call-ended', handlePeerHangup);
+            socket.on('call_ended', handlePeerHangup);
 
             socket.on('call-transfer', async payload => {
                 if (!signalingPayloadMatchesActiveCall(payload)) return;
@@ -1107,6 +1110,7 @@ $assetBase = '../ADMIN/header/';
         let userProfile = null;
         let messages = [];
         let audioActivityMonitors = [];
+        let endingCall = false;
 
         function setSpeakingIndicator(labelId, indicatorId, active) {
             const label = document.getElementById(labelId);
@@ -1447,6 +1451,8 @@ $assetBase = '../ADMIN/header/';
         }
 
         function cleanupCall() {
+            endingCall = false;
+            transferInProgress = false;
             if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
             peerDisconnectTimer = null;
             stopTimer();
@@ -1494,6 +1500,8 @@ $assetBase = '../ADMIN/header/';
         }
 
         async function endCall(notifyPeer = true) {
+            if (endingCall) return;
+            endingCall = true;
             const durationSec = callConnectedAt ? Math.floor((Date.now() - callConnectedAt) / 1000) : null;
             await logCall('ended', { durationSec });
             if (notifyPeer && callId) {
@@ -1879,6 +1887,10 @@ $assetBase = '../ADMIN/header/';
 
         document.getElementById("call").onclick = async () => {
             if (callId) return;
+
+            endingCall = false;
+            transferInProgress = false;
+            autoTransferInFlight = false;
 
             setOverlayVisible(true);
             setStatus('Connecting…');
