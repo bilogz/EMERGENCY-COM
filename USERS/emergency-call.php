@@ -973,14 +973,26 @@ $assetBase = '../ADMIN/header/';
                 }
             });
 
-            socket.on("answer", payload => {
+            socket.on("answer", async payload => {
                 if (!signalingPayloadMatchesActiveCall(payload)) return;
-                const sdp = payload && payload.sdp ? payload.sdp : payload;
-                if (transferInProgress && transferPc) {
-                    transferPc.setRemoteDescription(sdp).catch(console.error);
+                const description = normalizeRemoteAnswer(payload);
+                if (!description) return;
+                const candidates = [transferPc, pc].filter(Boolean);
+                const targetPc = candidates.find(candidate => candidate.signalingState === 'have-local-offer') || candidates[0] || null;
+                if (!targetPc) return;
+                if (description.type === 'answer' && targetPc.signalingState !== 'have-local-offer') {
+                    console.warn('[call][user] Ignoring stale answer because peer is already', targetPc.signalingState);
                     return;
                 }
-                if (pc) pc.setRemoteDescription(sdp);
+                try {
+                    await targetPc.setRemoteDescription(description);
+                } catch (error) {
+                    if (targetPc.signalingState === 'stable') {
+                        console.warn('[call][user] Ignoring duplicate answer after connection became stable.', error);
+                        return;
+                    }
+                    console.error(error);
+                }
             });
 
             socket.on("candidate", payload => {
@@ -1094,6 +1106,18 @@ $assetBase = '../ADMIN/header/';
             return !incomingCallId && !incomingRoom;
         }
 
+        function normalizeRemoteAnswer(payload) {
+            if (!payload) return null;
+            if (payload.sdp && typeof payload.sdp === 'object') return payload.sdp;
+            if (typeof payload.sdp === 'string') {
+                return { type: payload.type || 'answer', sdp: payload.sdp };
+            }
+            if (typeof payload === 'object' && typeof payload.type === 'string' && typeof payload.sdp === 'string') {
+                return payload;
+            }
+            return null;
+        }
+
         let pc = null;
         let transferPc = null;
         let localStream = null;
@@ -1104,6 +1128,7 @@ $assetBase = '../ADMIN/header/';
         let callConnectedAt = null;
         let autoTransferCompletedCallId = null;
         let autoTransferInFlight = false;
+        let liveTransferSocketNotifiedCallId = null;
         let timerInterval = null;
         let peerDisconnectTimer = null;
         let locationData = null;
@@ -1487,6 +1512,7 @@ $assetBase = '../ADMIN/header/';
                 transferPc = null;
             }
             autoTransferInFlight = false;
+            liveTransferSocketNotifiedCallId = null;
             if (autoTransferCompletedCallId === callId) {
                 autoTransferCompletedCallId = null;
             }
@@ -1715,12 +1741,17 @@ $assetBase = '../ADMIN/header/';
         function notifyErsSocketTransfer(transferPayload = {}, result = {}) {
             const s = ensureSocket();
             if (!s || !callId) return;
+            const transferId = transferPayload.transferId || transferPayload.transfer_id || transferPayload.callId || callId;
             const notice = {
                 ...(transferPayload || {}),
                 event: 'emergency_call_transfer',
                 transfer_type: 'live_call',
                 transferType: 'live_call',
                 callId,
+                call_id: callId,
+                call_id_external: callId,
+                transferId,
+                transfer_id: transferId,
                 room: activeCallRoom || getCallRoom(callId),
                 socketUrl: SIGNALING_URL,
                 socketPath: SOCKET_IO_PATH,
@@ -1749,27 +1780,41 @@ $assetBase = '../ADMIN/header/';
                 const location = currentCallLocationPayload();
                 setStatus(attempt > 1 ? `Retrying response team transfer (${attempt}/3)...` : 'Forwarding call to response team...');
 
+                const transferPayload = {
+                    action: 'transfer',
+                    event: 'emergency_call_transfer',
+                    transfer_type: 'live_call',
+                    transferType: 'live_call',
+                    callId: activeCallId,
+                    call_id: activeCallId,
+                    call_id_external: activeCallId,
+                    transferId: activeCallId,
+                    transfer_id: activeCallId,
+                    room: activeCallRoom || getCallRoom(activeCallId),
+                    socketUrl: SIGNALING_URL,
+                    socketPath: SOCKET_IO_PATH,
+                    emergencyType: 'emergency_call',
+                    type: 'emergency_call',
+                    priority: priority.priority,
+                    incidentPriority: priority,
+                    description: 'Live emergency call waiting for ERS response team answer.',
+                    latestMessage: '[CALL_STARTED] Emergency live call forwarded to ERS',
+                    caller,
+                    location,
+                    locationData: location,
+                    conversationId: callConversationId || null
+                };
+
+                if (liveTransferSocketNotifiedCallId !== activeCallId) {
+                    notifyErsSocketTransfer(transferPayload, { integration: { pending: true } });
+                    liveTransferSocketNotifiedCallId = activeCallId;
+                    setStatus('Transfer sent. Stay connected until the response team answers...');
+                }
+
                 const response = await fetch(transferApiUrl(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'transfer',
-                        event: 'emergency_call_transfer',
-                        transfer_type: 'live_call',
-                        transferType: 'live_call',
-                        callId: activeCallId,
-                        room: activeCallRoom || getCallRoom(activeCallId),
-                        socketUrl: SIGNALING_URL,
-                        socketPath: SOCKET_IO_PATH,
-                        emergencyType: 'emergency_call',
-                        priority: priority.priority,
-                        incidentPriority: priority,
-                        description: 'Live emergency call waiting for ERS response team answer.',
-                        latestMessage: '[CALL_STARTED] Emergency live call forwarded to ERS',
-                        caller,
-                        location,
-                        conversationId: callConversationId || null
-                    })
+                    body: JSON.stringify(transferPayload)
                 });
 
                 const data = await readApiResponse(response);
@@ -1891,6 +1936,7 @@ $assetBase = '../ADMIN/header/';
             endingCall = false;
             transferInProgress = false;
             autoTransferInFlight = false;
+            liveTransferSocketNotifiedCallId = null;
 
             setOverlayVisible(true);
             setStatus('Connecting…');

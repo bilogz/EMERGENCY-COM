@@ -244,11 +244,13 @@ io.on('connection', (socket) => {
 
   socket.on('call-transfer', (payload, room) => {
     const transferRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
+    const transferType = cleanText(payload?.transfer_type, 40) || cleanText(payload?.transferType, 40);
+    const isLiveTransfer = transferType === 'live_call' || !!transferRoom;
     if (transferRoom) {
-      activeOffersByRoom.delete(transferRoom);
       console.log(`[transfer] room=${transferRoom} callId=${payload?.callId || ''}`);
+      if (!isLiveTransfer) activeOffersByRoom.delete(transferRoom);
     }
-    if (payload?.callId) activeCallsById.delete(String(payload.callId));
+    if (payload?.callId && !isLiveTransfer) activeCallsById.delete(String(payload.callId));
     const transferNotice = {
       ...(payload || {}),
       room: transferRoom,
@@ -264,7 +266,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('ers-transfer-notify', (payload) => {
-    const transferType = cleanText(payload?.transfer_type, 40) || cleanText(payload?.transferType, 40) || 'report';
+    const hasLiveSignal = !!(cleanText(payload?.room, 180) && getSignalCallId(payload));
+    const transferType = cleanText(payload?.transfer_type, 40) || cleanText(payload?.transferType, 40) || (hasLiveSignal ? 'live_call' : 'report');
     const transferNotice = {
       ...(payload || {}),
       event: cleanText(payload?.event, 80) || (transferType === 'live_call' ? 'emergency_call_transfer' : 'emergency_report_transfer'),
