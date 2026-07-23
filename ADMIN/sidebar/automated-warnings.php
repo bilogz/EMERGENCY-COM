@@ -215,15 +215,10 @@ $pageTitle = 'Automated Warning Integration';
                                 <!-- Check Interval -->
                                 <div style="background: var(--bg-color-1); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border-color-1);">
                                     <label for="paaInterval" style="font-weight:700; font-size:0.85rem; color:var(--text-secondary-1); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.75rem; display:block;">Check Interval</label>
-                                    <select id="paaInterval" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid var(--border-color-1); background:var(--card-bg-1); color:var(--text-color-1); font-size:0.88rem;">
-                                        <option value="3">Every 3 minutes</option>
-                                        <option value="5" selected>Every 5 minutes</option>
-                                        <option value="10">Every 10 minutes</option>
-                                        <option value="15">Every 15 minutes</option>
-                                        <option value="30">Every 30 minutes</option>
-                                        <option value="360">Every 6 hours</option>
+                                    <select id="paaInterval" disabled style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid var(--border-color-1); background:var(--card-bg-1); color:var(--text-color-1); font-size:0.88rem;">
+                                        <option value="360" selected>Every 6 hours</option>
                                     </select>
-                                    <div style="font-size:0.78rem; color:var(--text-secondary-1); margin-top:0.5rem;">How often to poll the PAGASA feed</div>
+                                    <div style="font-size:0.78rem; color:var(--text-secondary-1); margin-top:0.5rem;">Fixed safety interval for automatic PAGASA checks</div>
                                 </div>
 
                                 <!-- Last Check Info -->
@@ -1257,7 +1252,7 @@ $pageTitle = 'Automated Warning Integration';
                 }
 
                 // Start/stop background polling based on enabled status
-                setupPagasaAutoPolling(data.enabled, data.check_interval_minutes || 5);
+                setupPagasaAutoPolling(data.enabled, 360);
 
             } catch (e) {
                 console.error('Failed to load PAGASA auto-alert status:', e);
@@ -1273,7 +1268,7 @@ $pageTitle = 'Automated Warning Integration';
 
             if (!enabled) return;
 
-            const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
+            const intervalMs = 360 * 60 * 1000;
             paaPollingTimer = setInterval(async () => {
                 try {
                     const res = await fetch(PAA_API + '?action=check');
@@ -1337,7 +1332,7 @@ $pageTitle = 'Automated Warning Integration';
             if (document.getElementById('paaChSms')?.checked) channels.push('sms');
 
             const enabled = document.getElementById('pagasaAutoAlertToggle')?.checked || false;
-            const interval = parseInt(document.getElementById('paaInterval')?.value || '5', 10);
+            const interval = 360;
 
             try {
                 const res = await fetch(PAA_API + '?action=toggle', {

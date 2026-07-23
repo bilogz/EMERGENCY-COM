@@ -16,6 +16,7 @@
 
     const CONFIG = {
         checkIntervalMs: 3000,
+        alertFreshnessMs: 6 * 60 * 60 * 1000,
         maxAlarmMs: 60000,
         beepIntervalMs: 900,
         modalZIndex: 10000,
@@ -47,7 +48,17 @@
 
     function shouldRunForCurrentPage() {
         const path = String(window.location.pathname || '').toLowerCase();
-        return !path.includes('/admin/');
+        const hasCurrentCitizenListener = Boolean(document.querySelector('script[src*="alert-listener.js"]'));
+        return path.includes('/users/') && !path.includes('/admin/') && !hasCurrentCitizenListener;
+    }
+
+    function isWithinFreshnessWindow(alert) {
+        const rawTimestamp = alert && (alert.created_at || alert.timestamp || alert.updated_at);
+        if (!rawTimestamp) return false;
+        const timestamp = new Date(String(rawTimestamp).replace(' ', 'T')).getTime();
+        if (!Number.isFinite(timestamp)) return false;
+        const age = Date.now() - timestamp;
+        return age >= -5 * 60 * 1000 && age <= CONFIG.alertFreshnessMs;
     }
 
     function loadAcknowledgedIds() {
@@ -292,6 +303,14 @@
             return true;
         }
 
+        // Citizen warning UI supports the full operational severity scale.
+        // Low and medium official bulletins still need to be visible; their
+        // calmer color and sound treatment communicates urgency appropriately.
+        const severity = normalizeText(alert.severity);
+        if (['low', 'medium', 'high', 'critical', 'extreme'].includes(severity) && isLikelyEmergencyDispatch(alert)) {
+            return true;
+        }
+
         // Fallback for older schemas where source metadata may be missing.
         return hasHighPrioritySeverity(alert) && isLikelyEmergencyDispatch(alert);
     }
@@ -306,19 +325,14 @@
             };
         }
 
-        if (severity === 'high') {
-            return {
-                headerTitle: 'HIGH AUTOMATED WARNING',
-                headerColor: '#d97706',
-                iconClass: 'fas fa-triangle-exclamation'
-            };
-        }
-
-        return {
-            headerTitle: 'CRITICAL AUTOMATED WARNING',
-            headerColor: '#dc2626',
-            iconClass: 'fas fa-triangle-exclamation'
+        const presets = {
+            low: { headerTitle: 'SAFETY UPDATE', headerColor: '#166534', iconClass: 'fas fa-bell' },
+            medium: { headerTitle: 'PUBLIC ADVISORY', headerColor: '#0369a1', iconClass: 'fas fa-circle-info' },
+            high: { headerTitle: 'HIGH AUTOMATED WARNING', headerColor: '#d97706', iconClass: 'fas fa-triangle-exclamation' },
+            critical: { headerTitle: 'CRITICAL AUTOMATED WARNING', headerColor: '#dc2626', iconClass: 'fas fa-triangle-exclamation' },
+            extreme: { headerTitle: 'EXTREME EMERGENCY WARNING', headerColor: '#991b1b', iconClass: 'fas fa-triangle-exclamation' }
         };
+        return presets[severity] || presets.medium;
     }
 
     function showCriticalModal(alert) {
@@ -409,7 +423,7 @@
 
         try {
             const sep = state.apiEndpoint.includes('?') ? '&' : '?';
-            const url = state.apiEndpoint + sep + 'status=active&time_filter=all&limit=20';
+            const url = state.apiEndpoint + sep + 'status=active&time_filter=6h&limit=20';
 
             const response = await fetch(url, {
                 cache: 'no-cache',
@@ -425,6 +439,7 @@
 
             const candidates = data.alerts
                 .filter(shouldTriggerMandatoryModal)
+                .filter(isWithinFreshnessWindow)
                 .filter(function (a) {
                     const id = String(a.id || '');
                     if (!id) return false;

@@ -11,18 +11,21 @@
  *  - Via cron job: php pagasa-auto-alert.php --cron
  */
 
+date_default_timezone_set('Asia/Manila');
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
 
 // Detect CLI (cron) mode
 $isCron = (php_sapi_name() === 'cli');
+$isDryRun = $isCron && in_array('--dry-run', $argv ?? [], true);
 
 if (!$isCron) {
     session_start();
@@ -34,6 +37,7 @@ if (!$isCron) {
 }
 
 require_once __DIR__ . '/db_connect.php';
+require_once __DIR__ . '/bulletin-dispatch-helper.php';
 
 if ($pdo === null) {
     http_response_code(500);
@@ -95,9 +99,9 @@ function ensurePagasaAutoAlertTables(PDO $pdo): void {
             $stmt->execute($row);
         }
     }
-    // Update interval to 360 if it is currently 5 to align with new requirements
+    // Automatic PAGASA checks use one fixed six-hour interval.
     try {
-        $pdo->exec("UPDATE pagasa_auto_alert_settings SET setting_value = '360' WHERE setting_key = 'check_interval_minutes' AND setting_value = '5'");
+        $pdo->exec("UPDATE pagasa_auto_alert_settings SET setting_value = '360' WHERE setting_key = 'check_interval_minutes' AND setting_value <> '360'");
     } catch (Throwable $e) {}
 }
 
@@ -120,6 +124,15 @@ function setSetting(PDO $pdo, string $key, string $value): void {
         ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = NOW()
     ");
     $stmt->execute([$key, $value, $value]);
+}
+
+function isPagasaBulletinFresh(array $bulletin, int $hours = 6): bool {
+    $issuedAt = strtotime((string)($bulletin['pubDate'] ?? ''));
+    if ($issuedAt === false) {
+        return false;
+    }
+    $ageSeconds = time() - $issuedAt;
+    return $ageSeconds >= -300 && $ageSeconds <= ($hours * 3600);
 }
 
 function fetchPagasaBulletins(): ?array {
@@ -471,7 +484,7 @@ function queuePagasaBroadcast(PDO $pdo, array $bulletin, string $channels): ?int
 // Action Router
 // ============================================================
 
-$action = $isCron ? 'check' : ($_GET['action'] ?? $_POST['action'] ?? 'status');
+$action = $isCron ? ($isDryRun ? 'dry-run' : 'check') : ($_GET['action'] ?? $_POST['action'] ?? 'status');
 
 switch ($action) {
 
@@ -480,7 +493,8 @@ switch ($action) {
     // ----------------------------------------------------------
     case 'status':
         $enabled = getSetting($pdo, 'enabled', '0') === '1';
-        $interval = (int)getSetting($pdo, 'check_interval_minutes', '360');
+        $interval = 360;
+        setSetting($pdo, 'check_interval_minutes', '360');
         $channels = getSetting($pdo, 'channels', 'push,email');
         $lastCheck = getSetting($pdo, 'last_check_at', '');
         $lastHash = getSetting($pdo, 'last_bulletin_hash', '');
@@ -509,15 +523,13 @@ switch ($action) {
         $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
         $enabled = !empty($input['enabled']) ? '1' : '0';
         $channels = isset($input['channels']) ? (string)$input['channels'] : null;
-        $interval = isset($input['check_interval_minutes']) ? (int)$input['check_interval_minutes'] : null;
+        $interval = 360;
 
         setSetting($pdo, 'enabled', $enabled);
         if ($channels !== null) {
             setSetting($pdo, 'channels', $channels);
         }
-        if ($interval !== null && $interval >= 1 && $interval <= 1440) {
-            setSetting($pdo, 'check_interval_minutes', (string)$interval);
-        }
+        setSetting($pdo, 'check_interval_minutes', '360');
 
         echo json_encode([
             'success' => true,
@@ -529,10 +541,28 @@ switch ($action) {
     // ----------------------------------------------------------
     // CHECK: Poll PAGASA feed and send alert if new bulletin found
     // ----------------------------------------------------------
+    case 'dry-run':
     case 'check':
+        $lastCheck = getSetting($pdo, 'last_check_at', '');
+        $lastCheckTs = $lastCheck !== '' ? strtotime($lastCheck) : false;
+        $nextCheckTs = $lastCheckTs !== false ? $lastCheckTs + (6 * 3600) : 0;
+        if ($action === 'check' && $nextCheckTs > time()) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'Automatic PAGASA checks run every 6 hours.',
+                'alerted' => false,
+                'checked_at' => $lastCheck,
+                'next_check_at' => date('Y-m-d H:i:s', $nextCheckTs),
+                'check_interval_minutes' => 360
+            ]);
+            break;
+        }
+
         // Fetch bulletins
         $bulletins = fetchPagasaBulletins();
-        setSetting($pdo, 'last_check_at', date('Y-m-d H:i:s'));
+        if ($action === 'check') {
+            setSetting($pdo, 'last_check_at', date('Y-m-d H:i:s'));
+        }
 
         if ($bulletins === null || empty($bulletins)) {
             echo json_encode([
@@ -545,14 +575,38 @@ switch ($action) {
         }
 
         $latestBulletin = $bulletins[0]; // Most recent
+        if ($action === 'dry-run') {
+            echo json_encode([
+                'success' => true,
+                'dry_run' => true,
+                'feed_total' => count($bulletins),
+                'fresh' => isPagasaBulletinFresh($latestBulletin, 6),
+                'candidate' => $latestBulletin,
+                'enabled' => getSetting($pdo, 'enabled', '0') === '1',
+                'check_interval_minutes' => 360
+            ]);
+            break;
+        }
+
+        if (!isPagasaBulletinFresh($latestBulletin, 6)) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'The latest PAGASA bulletin is older than 6 hours, so no automatic alert was sent.',
+                'alerted' => false,
+                'bulletin_title' => $latestBulletin['title'] ?? '',
+                'checked_at' => date('Y-m-d H:i:s')
+            ]);
+            break;
+        }
+
         $currentHash = $latestBulletin['hash'];
         $severity = strtolower($latestBulletin['severity'] ?? 'medium');
         $enabled = getSetting($pdo, 'enabled', '0');
 
-        // Send if auto-alert enabled OR if bulletin is high/critical severity
-        $shouldSend = ($enabled === '1') || ($severity === 'high') || ($severity === 'critical');
+        // Automatic dispatch must always respect the operator's enable switch.
+        $shouldSend = ($enabled === '1');
 
-        if (!$shouldSend && !$isCron) {
+        if (!$shouldSend) {
             echo json_encode([
                 'success' => true,
                 'message' => 'Auto-alerts are disabled for low/medium severity bulletins.',
@@ -592,8 +646,16 @@ switch ($action) {
 
         // NEW BULLETIN DETECTED — Send mass notification
         $channels = getSetting($pdo, 'channels', 'push,email');
-        $logId = queuePagasaBroadcast($pdo, $latestBulletin, $channels);
-        $recipientCount = countActiveCitizens($pdo);
+        $dispatch = queueBulletinBroadcast($pdo, [
+            'title' => 'PAGASA Weather Alert: ' . ($latestBulletin['title'] ?? 'New Bulletin'),
+            'message' => $latestBulletin['description'] ?? 'PAGASA has issued a new weather bulletin. Monitor official updates and follow local instructions.',
+            'severity' => $latestBulletin['severity'] ?? 'medium',
+            'source' => 'pagasa',
+            'category' => 'weather',
+            'channels' => $channels,
+        ]);
+        $logId = (int)$dispatch['log_id'];
+        $recipientCount = (int)$dispatch['recipients'];
 
         // Record in alert log
         $alertStmt = $pdo->prepare("
@@ -668,8 +730,16 @@ switch ($action) {
 
         $latestBulletin = $bulletins[0];
         $channels = getSetting($pdo, 'channels', 'push,email');
-        $logId = queuePagasaBroadcast($pdo, $latestBulletin, $channels);
-        $recipientCount = countActiveCitizens($pdo);
+        $dispatch = queueBulletinBroadcast($pdo, [
+            'title' => 'PAGASA Weather Alert: ' . ($latestBulletin['title'] ?? 'New Bulletin'),
+            'message' => $latestBulletin['description'] ?? 'PAGASA has issued a new weather bulletin. Monitor official updates and follow local instructions.',
+            'severity' => $latestBulletin['severity'] ?? 'medium',
+            'source' => 'pagasa',
+            'category' => 'weather',
+            'channels' => $channels,
+        ]);
+        $logId = (int)$dispatch['log_id'];
+        $recipientCount = (int)$dispatch['recipients'];
         $currentHash = $latestBulletin['hash'];
 
         $alertStmt = $pdo->prepare("

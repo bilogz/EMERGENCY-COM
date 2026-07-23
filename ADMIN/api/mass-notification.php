@@ -632,6 +632,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         }
 
         $selectParts[] = in_array('status', $cols, true) ? 'status' : "'pending' as status";
+        $selectParts[] = in_array('sent_by', $cols, true) ? 'sent_by' : "'' as sent_by";
 
         $hasSentAt = in_array('sent_at', $cols, true);
         $hasCreatedAt = in_array('created_at', $cols, true);
@@ -654,9 +655,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         ");
         $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // Older PAGASA/PHIVOLCS jobs used source-specific history tables. Add
+        // those legacy rows so operators have one complete dispatch history.
+        // New bulletin jobs already write to notification_logs and are excluded
+        // here to prevent duplicate rows.
+        $legacyAutomatic = [];
+        try {
+            if ($pdo->query("SHOW TABLES LIKE 'pagasa_auto_alert_log'")->fetchColumn()) {
+                $autoStmt = $pdo->query("
+                    SELECT p.* FROM pagasa_auto_alert_log p
+                    WHERE p.dispatch_log_id IS NULL OR NOT EXISTS (
+                        SELECT 1 FROM {$logsTable} nl
+                        WHERE nl.id = p.dispatch_log_id AND nl.sent_by = 'pagasa_auto_bulletin'
+                    )
+                    ORDER BY p.created_at DESC LIMIT 50
+                ");
+                foreach ($autoStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $total = (int)($row['recipients_count'] ?? 0);
+                    $legacyAutomatic[] = [
+                        'id' => 'PAGASA-' . $row['id'],
+                        'channel' => $row['channels'] ?? 'push,email',
+                        'message' => trim(($row['bulletin_title'] ?? 'PAGASA Bulletin') . ' — ' . ($row['bulletin_summary'] ?? '')),
+                        'recipients' => 'All Citizens · PAGASA Auto',
+                        'sent_by' => 'pagasa_auto_bulletin',
+                        'status' => 'completed',
+                        'sent_at' => $row['created_at'] ?? null,
+                        'response' => json_encode(['sent' => $total, 'failed' => 0, 'total' => $total, 'progress' => 100]),
+                    ];
+                }
+            }
+        } catch (Throwable $legacyPagasaError) {
+            error_log('PAGASA legacy history unavailable: ' . $legacyPagasaError->getMessage());
+        }
+        try {
+            if ($pdo->query("SHOW TABLES LIKE 'phivolcs_auto_alert_log'")->fetchColumn()) {
+                $autoStmt = $pdo->query("
+                    SELECT p.* FROM phivolcs_auto_alert_log p
+                    WHERE p.dispatch_log_id IS NULL OR NOT EXISTS (
+                        SELECT 1 FROM {$logsTable} nl
+                        WHERE nl.id = p.dispatch_log_id AND nl.sent_by = 'phivolcs_auto_bulletin'
+                    )
+                    ORDER BY p.created_at DESC LIMIT 50
+                ");
+                foreach ($autoStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $total = (int)($row['recipients_count'] ?? 0);
+                    $legacyAutomatic[] = [
+                        'id' => 'PHIVOLCS-' . $row['id'],
+                        'channel' => 'push,email',
+                        'message' => sprintf('PHIVOLCS Earthquake Bulletin — M%.1f · %s', (float)($row['magnitude'] ?? 0), $row['location'] ?? 'Philippines'),
+                        'recipients' => 'All Citizens · PHIVOLCS Auto',
+                        'sent_by' => 'phivolcs_auto_bulletin',
+                        'status' => 'completed',
+                        'sent_at' => $row['created_at'] ?? null,
+                        'response' => json_encode(['sent' => $total, 'failed' => 0, 'total' => $total, 'progress' => 100]),
+                    ];
+                }
+            }
+        } catch (Throwable $legacyPhivolcsError) {
+            error_log('PHIVOLCS legacy history unavailable: ' . $legacyPhivolcsError->getMessage());
+        }
+        if ($legacyAutomatic) {
+            $notifications = array_merge($notifications, $legacyAutomatic);
+            usort($notifications, static fn(array $a, array $b): int => strcmp((string)($b['sent_at'] ?? ''), (string)($a['sent_at'] ?? '')));
+            $notifications = array_slice($notifications, 0, 50);
+        }
+
         // Optional: compute queue stats when response column is missing/empty
         $queueStatsByLog = [];
-        $logIds = array_values(array_filter(array_map(fn($n) => $n['id'] ?? null, $notifications)));
+        $logIds = array_values(array_filter(
+            array_map(fn($n) => $n['id'] ?? null, $notifications),
+            static fn($id) => is_int($id) || (is_string($id) && ctype_digit($id))
+        ));
         if (!empty($logIds)) {
             try {
                 // Check table exists (notification_queue)

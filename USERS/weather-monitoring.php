@@ -1,8 +1,13 @@
 <?php
 /**
  * Weather Monitoring Page (User)
- * Reuses admin module styling/logic with user navigation
+ * Legacy route kept for bookmarks. The citizen weather experience now lives on
+ * the bulletin-first weather map page.
  */
+
+require_once __DIR__ . '/../session-config.php';
+header('Location: weather-map.php', true, 302);
+exit;
 
 $assetBase = '../ADMIN/header/';
 $current = 'weather-monitoring.php';

@@ -2,6 +2,7 @@
 header('Content-Type: application/json; charset=utf-8');
 
 require_once '../shared/db_connect.php';
+require_once '../device_registry.php';
 
 /** @var PDO $pdo */
 
@@ -29,8 +30,9 @@ try {
             apiResponse::error("Missing required fields: user_id, device_id", 400);
         }
 
+        $deviceTable = resolveDeviceRegistryTable($pdo);
         // Check if device already exists
-        $checkQuery = "SELECT id FROM user_devices WHERE user_id = ? AND device_id = ?";
+        $checkQuery = "SELECT id FROM {$deviceTable} WHERE user_id = ? AND device_id = ?";
         $checkStmt = $pdo->prepare($checkQuery);
         $checkStmt->execute([$user_id, $device_id]);
         $existingDevice = $checkStmt->fetch(PDO::FETCH_ASSOC);
@@ -38,7 +40,7 @@ try {
         if ($existingDevice) {
             // Update existing device
             $updateQuery = "
-                UPDATE user_devices
+                UPDATE {$deviceTable}
                 SET device_type = ?,
                     device_name = ?,
                     fcm_token = ?,
@@ -61,7 +63,7 @@ try {
         } else {
             // Insert new device
             $insertQuery = "
-                INSERT INTO user_devices
+                INSERT INTO {$deviceTable}
                 (user_id, device_id, device_type, device_name, fcm_token, is_active, last_active)
                 VALUES (?, ?, ?, ?, ?, 1, NOW())
             ";
@@ -88,6 +90,7 @@ try {
             apiResponse::error("Missing required parameter: user_id", 400);
         }
 
+        $deviceTable = resolveDeviceRegistryTable($pdo);
         $query = "
             SELECT
                 id,
@@ -98,7 +101,7 @@ try {
                 is_active,
                 last_active,
                 created_at
-            FROM user_devices
+            FROM {$deviceTable}
             WHERE user_id = :user_id
             ORDER BY last_active DESC
         ";
@@ -126,8 +129,9 @@ try {
             apiResponse::error("Missing required fields: user_id, device_id", 400);
         }
 
+        $deviceTable = resolveDeviceRegistryTable($pdo);
         $query = "
-            UPDATE user_devices
+            UPDATE {$deviceTable}
             SET is_active = 0
             WHERE user_id = ? AND device_id = ?
         ";
