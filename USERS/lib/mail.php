@@ -8,22 +8,24 @@ function load_mail_config() {
     $cfg = [];
 
     $secureCfgPath = __DIR__ . '/../api/config.env.php';
-    if (file_exists($secureCfgPath)) {
+    // The admin worker already loads its equivalent config.env.php. Reuse the
+    // existing function to avoid fatal duplicate function declarations.
+    if (!function_exists('getEmailConfig') && file_exists($secureCfgPath)) {
         require_once $secureCfgPath;
-        if (function_exists('getEmailConfig')) {
-            $emailCfg = getEmailConfig();
-            if (is_array($emailCfg)) {
-                $cfg = [
-                    'host' => $emailCfg['smtp_host'] ?? null,
-                    'port' => $emailCfg['smtp_port'] ?? null,
-                    'username' => $emailCfg['smtp_user'] ?? null,
-                    'password' => $emailCfg['smtp_pass'] ?? null,
-                    'from_email' => $emailCfg['smtp_from'] ?? null,
-                    'from_name' => $emailCfg['smtp_from_name'] ?? null,
-                    'auth' => true,
-                    'secure' => 'tls',
-                ];
-            }
+    }
+    if (function_exists('getEmailConfig')) {
+        $emailCfg = getEmailConfig();
+        if (is_array($emailCfg)) {
+            $cfg = [
+                'host' => $emailCfg['smtp_host'] ?? null,
+                'port' => $emailCfg['smtp_port'] ?? null,
+                'username' => $emailCfg['smtp_user'] ?? null,
+                'password' => $emailCfg['smtp_pass'] ?? null,
+                'from_email' => $emailCfg['smtp_from'] ?? null,
+                'from_name' => $emailCfg['smtp_from_name'] ?? null,
+                'auth' => true,
+                'secure' => 'tls',
+            ];
         }
     }
 

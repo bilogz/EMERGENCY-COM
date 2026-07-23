@@ -61,16 +61,23 @@ $pageTitle = 'Mass Notification System';
                             <li class="breadcrumb-item active" aria-current="page">Mass Notification</li>
                         </ol>
                     </nav>
-                    <h1 style="margin: 0;"><i class="fas fa-broadcast-tower" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Mass Notification System</h1>
-                    <p style="margin: 0.25rem 0 0 0; font-size: 0.9rem; color: var(--text-secondary-1);">Broadcast emergency alerts across multiple channels to targeted audiences.</p>
+                    <h1 style="margin: 0;"><i class="fas fa-broadcast-tower" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Send an Emergency Alert</h1>
+                    <p style="margin: 0.35rem 0 0 0; font-size: 1rem; color: var(--text-secondary-1);">Send one clear message to registered citizens in three guided steps.</p>
                 </div>
                 <button type="button" class="btn btn-primary" onclick="openDispatchWizard()" style="padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                    <i class="fas fa-plus"></i> Create New Alert
+                    <i class="fas fa-plus"></i> Send a New Alert
                 </button>
             </div>
             
             <div class="sub-container">
                 <div class="page-content">
+                    <div class="mn-simple-intro" role="note">
+                        <div class="mn-simple-intro-icon" aria-hidden="true"><i class="fas fa-circle-info"></i></div>
+                        <div>
+                            <strong>You will review everything before it is sent.</strong>
+                            <span>First choose the people, then choose how they will receive it, and finally write the message.</span>
+                        </div>
+                    </div>
                     <div class="mn-mini-analytics" aria-label="Mass notification analytics">
                         <div class="mn-stat mn-stat--total">
                             <div class="mn-stat-top">
@@ -115,11 +122,11 @@ $pageTitle = 'Mass Notification System';
                                 <!-- Target Audience -->
                                 <div class="module-card" id="mnCardTarget" data-mn-step="1">
                                     <div class="module-card-header">
-                                        <h2><i class="fas fa-users"></i> 1. Target Audience</h2>
+                                        <h2><span class="mn-card-number">1</span> Choose who should receive it</h2>
                                     </div>
                                     <div class="module-card-body">
                                         <div class="form-group">
-                                            <label for="audienceType">Who should receive this alert?</label>
+                                            <label for="audienceType">Who needs this message?</label>
                                             <select id="audienceType" name="audience_type" onchange="toggleAudienceFilters()" class="form-control">
                                                 <option value="all">All Registered Citizens</option>
                                                 <option value="barangay">Specific Barangay</option>
@@ -127,7 +134,7 @@ $pageTitle = 'Mass Notification System';
                                                 <option value="role">Specific Role (Citizen, Responder, Admin)</option>
                                                 <option value="topic">Subscribed Topic Users</option>
                                             </select>
-                                            <div class="mn-help">Choose <strong>All</strong> for the fastest dispatch, or narrow to a Barangay/Role. "Topic" uses the category subscription.</div>
+                                            <div class="mn-help mn-help--large" id="mnAudienceHelp">Choose <strong>All Registered Citizens</strong> unless the alert is only for one place or group.</div>
                                         </div>
                                         
                                         <div id="barangayFilter" class="form-group" style="display:none;">
@@ -188,33 +195,41 @@ $pageTitle = 'Mass Notification System';
                                 <!-- Dispatch Channels -->
                                 <div class="module-card" id="mnCardChannels" data-mn-step="2">
                                     <div class="module-card-header">
-                                        <h2><i class="fas fa-share-alt"></i> 2. Dispatch Channels</h2>
+                                        <h2><span class="mn-card-number">2</span> Choose how people receive it</h2>
                                     </div>
                                     <div class="module-card-body">
                                         <div class="channel-options">
                                             <label class="channel-checkbox" id="lbl-sms">
-                                                <input type="checkbox" name="channels" value="sms" hidden onchange="this.parentElement.classList.toggle('selected', this.checked)">
+                                                <input type="checkbox" name="channels" value="sms" class="mn-visually-hidden" onchange="this.parentElement.classList.toggle('selected', this.checked)">
+                                                <span class="mn-channel-check" aria-hidden="true"><i class="fas fa-check"></i></span>
                                                 <i class="fas fa-sms"></i>
-                                                <span>SMS</span>
+                                                <strong>Text Message</strong>
+                                                <small>Sent to their phone number</small>
                                             </label>
-                                            <label class="channel-checkbox" id="lbl-email">
-                                                <input type="checkbox" name="channels" value="email" hidden onchange="this.parentElement.classList.toggle('selected', this.checked)">
+                                            <label class="channel-checkbox selected" id="lbl-email">
+                                                <input type="checkbox" name="channels" value="email" class="mn-visually-hidden" checked onchange="this.parentElement.classList.toggle('selected', this.checked)">
+                                                <span class="mn-channel-check" aria-hidden="true"><i class="fas fa-check"></i></span>
                                                 <i class="fas fa-envelope"></i>
-                                                <span>Email</span>
+                                                <strong>Email <span class="mn-recommended">Recommended</span></strong>
+                                                <small>Sent to their email inbox</small>
                                             </label>
-                                            <label class="channel-checkbox" id="lbl-push">
-                                                <input type="checkbox" name="channels" value="push" hidden onchange="this.parentElement.classList.toggle('selected', this.checked)">
+                                            <label class="channel-checkbox selected" id="lbl-push">
+                                                <input type="checkbox" name="channels" value="push" class="mn-visually-hidden" checked onchange="this.parentElement.classList.toggle('selected', this.checked)">
+                                                <span class="mn-channel-check" aria-hidden="true"><i class="fas fa-check"></i></span>
                                                 <i class="fas fa-mobile-alt"></i>
-                                                <span>Push</span>
+                                                <strong>Mobile App</strong>
+                                                <small>Shows on active devices</small>
                                             </label>
                                             <label class="channel-checkbox" id="lbl-pa">
-                                                <input type="checkbox" name="channels" value="pa" hidden onchange="this.parentElement.classList.toggle('selected', this.checked)">
+                                                <input type="checkbox" name="channels" value="pa" class="mn-visually-hidden" onchange="this.parentElement.classList.toggle('selected', this.checked)">
+                                                <span class="mn-channel-check" aria-hidden="true"><i class="fas fa-check"></i></span>
                                                 <i class="fas fa-bullhorn"></i>
-                                                <span>PA System</span>
+                                                <strong>Public Loudspeaker</strong>
+                                                <small>Announced through the PA system</small>
                                             </label>
                                         </div>
                                         <div class="mn-preview-hint" id="mnChannelsHint">
-                                            Pick at least one channel. Tip: SMS is best for urgent short messages; Email is best for detailed instructions.
+                                            Email and Mobile App are selected for broad coverage. Website popups are always published for targeted citizens.
                                         </div>
                                     </div>
                                 </div>
@@ -224,99 +239,140 @@ $pageTitle = 'Mass Notification System';
                             <div class="dispatch-right">
                                 <div class="module-card" id="mnCardMessage" data-mn-step="3">
                                     <div class="module-card-header">
-                                        <h2><i class="fas fa-pen"></i> 3. Message Details</h2>
+                                        <h2><span class="mn-card-number">3</span> Write the alert message</h2>
                                     </div>
                                     <div class="module-card-body">
+                                        <div class="mn-writing-intro">
+                                            <i class="fas fa-pen-to-square" aria-hidden="true"></i>
+                                            <div><strong>Write the important information first.</strong><span>Use short, direct words. You can review and edit everything before sending.</span></div>
+                                        </div>
+
                                         <div class="form-group">
-                                            <label for="category_id">Alert Category *</label>
+                                            <label for="category_id">What kind of alert is this? <span class="mn-required">Required</span></label>
                                             <select id="category_id" name="category_id" style="width: 100%;" required>
                                                 <option value="">Loading Categories...</option>
                                             </select>
-                                            <div class="mn-help">Category controls icons/colors in citizen feeds and determines "Topic" subscriptions.</div>
+                                            <div class="mn-help">Choose the closest match, such as Fire, Flood, Weather, or General.</div>
                                         </div>
 
-                                        <div class="form-group">
-                                            <label for="template">Use Template (Optional)</label>
-                                            <select id="template" name="template" onchange="applyTemplate(this.value)" style="width: 100%;">
-                                                <option value="">-- Select a Template --</option>
-                                            </select>
-                                        </div>
-
-                                        <div class="form-group" id="mnFireLevelWrap" style="display:none;">
-                                            <label for="mnFireLevel">Fire Alert Level (1-5)</label>
-                                            <select id="mnFireLevel" name="fire_level" class="form-control">
-                                                <option value="1">Level 1</option>
-                                                <option value="2">Level 2</option>
-                                                <option value="3">Level 3</option>
-                                                <option value="4">Level 4</option>
-                                                <option value="5">Level 5</option>
-                                            </select>
-                                            <div class="mn-help">Shown for fire categories. Fire dispatch is automatically enforced to High/Critical severity.</div>
-                                        </div>
-
-                                        <div class="form-group">
-                                            <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap;">
-                                                <label style="margin:0;">AI Assisted Draft</label>
-                                                <button type="button" class="btn btn-secondary btn-sm" id="mnAiAssistBtn" onclick="mnAiAssist()">
+                                        <div class="mn-quick-start">
+                                            <div class="form-group">
+                                                <label for="template"><i class="fas fa-file-lines" aria-hidden="true"></i> Use a ready-made message</label>
+                                                <select id="template" name="template" onchange="applyTemplate(this.value)" class="form-control" style="width: 100%;">
+                                                    <option value="">Choose a template (optional)</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group mn-writing-help">
+                                                <label><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Let the system help</label>
+                                                <button type="button" class="btn btn-secondary" id="mnAiAssistBtn" onclick="mnAiAssist()">
                                                     <svg class="gemini-logo" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-                                                        <defs>
-                                                            <linearGradient id="geminiGradient" x1="0%" y1="50%" x2="100%" y2="50%">
-                                                                <stop offset="0%" stop-color="#F5C542"/>
-                                                                <stop offset="35%" stop-color="#34A853"/>
-                                                                <stop offset="70%" stop-color="#4285F4"/>
-                                                                <stop offset="100%" stop-color="#EA4335"/>
-                                                            </linearGradient>
-                                                        </defs>
+                                                        <defs><linearGradient id="geminiGradient" x1="0%" y1="50%" x2="100%" y2="50%"><stop offset="0%" stop-color="#F5C542"/><stop offset="35%" stop-color="#34A853"/><stop offset="70%" stop-color="#4285F4"/><stop offset="100%" stop-color="#EA4335"/></linearGradient></defs>
                                                         <path fill="url(#geminiGradient)" d="M50 6 C54 24 62 34 94 50 C62 66 54 76 50 94 C46 76 38 66 6 50 C38 34 46 24 50 6 Z"/>
                                                     </svg>
-                                                    Suggest Message
+                                                    Create a Draft for Me
                                                     <span class="mn-ai-spinner" aria-hidden="true"></span>
                                                 </button>
                                             </div>
-                                            <div class="mn-help">Generates a suggested title and message based on the selected category + severity (you can edit before sending).</div>
                                         </div>
 
-                                        <div class="form-group">
-                                            <label>Severity Level</label>
-                                            <div class="severity-options">
-                                                <label class="severity-radio low"><input type="radio" name="severity" value="Low" hidden onchange="updateSeverityUI(this)"> Low</label>
-                                                <label class="severity-radio medium selected"><input type="radio" name="severity" value="Medium" hidden checked onchange="updateSeverityUI(this)"> Medium</label>
-                                                <label class="severity-radio high"><input type="radio" name="severity" value="High" hidden onchange="updateSeverityUI(this)"> High</label>
-                                                <label class="severity-radio critical"><input type="radio" name="severity" value="Critical" hidden onchange="updateSeverityUI(this)"> Critical</label>
+                                        <div class="form-group mn-primary-writing-field">
+                                            <label for="message_title">1. Add a short title <span class="mn-required">Required</span></label>
+                                            <input type="text" id="message_title" name="title" required maxlength="100" placeholder="Example: FLASH FLOOD WARNING">
+                                            <div class="mn-help">State the danger or announcement in a few words.</div>
+                                        </div>
+
+                                        <div class="form-group mn-primary-writing-field">
+                                            <label for="message_body">2. Tell people what happened and what to do <span class="mn-required">Required</span></label>
+                                            <div class="mn-guided-message" id="mnGuidedMessage">
+                                                <div class="mn-guided-heading">
+                                                    <div><strong>Answer these 3 simple questions</strong><span id="mnGuidedProgress">0 of 3 answered · The complete message will be written for you.</span></div>
+                                                    <button type="button" class="btn ui-btn-ghost mn-clear-message-btn" onclick="mnClearMessageBuilder()"><i class="fas fa-eraser"></i> Clear</button>
+                                                </div>
+
+                                                <div class="mn-guided-question">
+                                                    <span class="mn-question-number">1</span>
+                                                    <div class="mn-guided-control">
+                                                        <label for="mnWhatHappened">What happened?</label>
+                                                        <div class="mn-input-with-action">
+                                                            <input type="text" id="mnWhatHappened" placeholder="Example: Flood water is rising">
+                                                            <button type="button" class="mn-dictate-btn" onclick="mnStartDictation('mnWhatHappened', this)" aria-label="Speak what happened" title="Speak instead of typing"><i class="fas fa-microphone"></i></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="mn-guided-question">
+                                                    <span class="mn-question-number">2</span>
+                                                    <div class="mn-guided-control">
+                                                        <label for="mnWhere">Where is it happening?</label>
+                                                        <div class="mn-input-with-action">
+                                                            <input type="text" id="mnWhere" placeholder="Example: Commonwealth Avenue">
+                                                            <button type="button" class="mn-dictate-btn" onclick="mnStartDictation('mnWhere', this)" aria-label="Speak the location" title="Speak instead of typing"><i class="fas fa-microphone"></i></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="mn-guided-question">
+                                                    <span class="mn-question-number">3</span>
+                                                    <div class="mn-guided-control">
+                                                        <label for="mnActionToTake">What should people do?</label>
+                                                        <div class="mn-input-with-action">
+                                                            <input type="text" id="mnActionToTake" placeholder="Example: Move to higher ground now">
+                                                            <button type="button" class="mn-dictate-btn" onclick="mnStartDictation('mnActionToTake', this)" aria-label="Speak what people should do" title="Speak instead of typing"><i class="fas fa-microphone"></i></button>
+                                                        </div>
+                                                        <div class="mn-action-chip-label">Quick actions — select one or more:</div>
+                                                        <div class="mn-action-chips" role="group" aria-label="Recommended emergency actions">
+                                                            <button type="button" aria-pressed="false" onclick="mnApplyActionChip('Duck, cover, and hold on', this)">Duck, Cover &amp; Hold</button>
+                                                            <button type="button" aria-pressed="false" onclick="mnApplyActionChip('Evacuate immediately and follow official evacuation routes', this)">Evacuate Immediately</button>
+                                                            <button type="button" aria-pressed="false" onclick="mnApplyActionChip('Move to higher ground now', this)">Seek Higher Ground</button>
+                                                            <button type="button" aria-pressed="false" onclick="mnApplyActionChip('Stay indoors and keep away from windows', this)">Stay Indoors</button>
+                                                            <button type="button" aria-pressed="false" onclick="mnApplyActionChip('Avoid the affected area and use alternate routes', this)">Avoid the Area</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
                                             </div>
-                                            <div class="mn-help">Severity affects how prominently the alert appears to users.</div>
-                                        </div>
 
-                                        <div class="form-group" id="mnWeatherSignalWrap" style="display:none;">
-                                            <label for="mnWeatherSignal">Weather Signal (1-5)</label>
-                                            <select id="mnWeatherSignal" name="weather_signal" class="form-control">
-                                                <option value="1">Signal 1</option>
-                                                <option value="2">Signal 2</option>
-                                                <option value="3">Signal 3</option>
-                                                <option value="4">Signal 4</option>
-                                                <option value="5">Signal 5</option>
-                                            </select>
-                                            <div class="mn-help">Shown for weather/typhoon categories. You can adjust the signal level before generating a draft.</div>
-                                        </div>
-
-                                        <div class="form-group">
-                                            <label for="message_title">Title / Headline *</label>
-                                            <input type="text" id="message_title" name="title" required placeholder="e.g., FLASH FLOOD WARNING">
-                                            <div class="mn-help">Keep it short and action-focused (e.g., "Evacuate now").</div>
-                                        </div>
-
-                                        <div class="form-group">
-                                            <label for="message_body">Message Body *</label>
-                                            <textarea id="message_body" name="body" rows="4" required onkeyup="updateCharCount(this)"></textarea>
-                                            <div class="char-counter">
-                                                <i class="fas fa-info-circle"></i> <span id="charCount">0</span> chars (approx. <span id="smsParts">0</span> SMS parts)
+                                            <div class="mn-complete-message-heading">
+                                                <label for="message_body">Complete message</label>
+                                                <button type="button" class="btn ui-btn-ghost mn-speak-full-btn mn-dictate-btn" onclick="mnStartDictation('message_body', this)"><i class="fas fa-microphone"></i> Speak Message</button>
                                             </div>
-                                            <div class="mn-help">Include <strong>what</strong>, <strong>where</strong>, and <strong>what to do next</strong>. Avoid jargon.</div>
+                                            <textarea id="message_body" name="body" rows="6" required onkeyup="updateCharCount(this)" placeholder="Your complete alert message will appear here as you answer the questions above. You can also type or edit it directly."></textarea>
+                                            <div class="mn-field-note"><i class="fas fa-pen"></i> Read this message once. You can click inside it and change any word.</div>
+                                            <div class="mn-sms-counter" id="mnSmsCounter" aria-live="polite">
+                                                <span><i class="fas fa-comment-sms" aria-hidden="true"></i> <strong id="mnSmsMetrics">0 / 160 characters • 1 SMS Segment</strong></span>
+                                                <span class="mn-sms-encoding" id="mnSmsEncoding">Standard SMS</span>
+                                            </div>
+                                            <div class="mn-sms-warning" id="mnSmsWarning" role="status"></div>
+                                            <div class="mn-dictation-status" id="mnDictationStatus" aria-live="polite"></div>
                                         </div>
 
-                                        <div class="mn-preview-hint" style="margin-top: 1.25rem;">
-                                            Live preview is shown on the right side of the wizard while you fill in the fields.
-                                        </div>
+                                        <details class="mn-more-settings" id="mnAdvancedSettings">
+                                            <summary><span><i class="fas fa-sliders"></i> Urgency and alert level</span><small id="mnUrgencySummary">Medium urgency</small></summary>
+                                            <div class="mn-more-settings-body">
+                                                <div class="form-group">
+                                                    <label>How urgently should people act?</label>
+                                                    <div class="severity-options">
+                                                        <label class="severity-radio low"><input type="radio" name="severity" value="Low" hidden onchange="updateSeverityUI(this)"> Low</label>
+                                                        <label class="severity-radio medium selected"><input type="radio" name="severity" value="Medium" hidden checked onchange="updateSeverityUI(this)"> Medium</label>
+                                                        <label class="severity-radio high"><input type="radio" name="severity" value="High" hidden onchange="updateSeverityUI(this)"> High</label>
+                                                        <label class="severity-radio critical"><input type="radio" name="severity" value="Critical" hidden onchange="updateSeverityUI(this)"> Critical</label>
+                                                    </div>
+                                                    <div class="mn-urgency-guide"><span><strong>Low:</strong> information</span><span><strong>Medium:</strong> be ready</span><span><strong>High:</strong> act soon</span><span><strong>Critical:</strong> act now</span></div>
+                                                </div>
+
+                                                <div class="form-group" id="mnWeatherSignalWrap" style="display:none;">
+                                                    <label for="mnWeatherSignal">Weather Signal (1-5)</label>
+                                                    <select id="mnWeatherSignal" name="weather_signal" class="form-control"><option value="1">Signal 1</option><option value="2">Signal 2</option><option value="3">Signal 3</option><option value="4">Signal 4</option><option value="5">Signal 5</option></select>
+                                                    <div class="mn-help">Choose the official weather signal for this alert.</div>
+                                                </div>
+
+                                                <div class="form-group" id="mnFireLevelWrap" style="display:none;">
+                                                    <label for="mnFireLevel">Fire Alert Level (1-5)</label>
+                                                    <select id="mnFireLevel" name="fire_level" class="form-control"><option value="1">Level 1</option><option value="2">Level 2</option><option value="3">Level 3</option><option value="4">Level 4</option><option value="5">Level 5</option></select>
+                                                    <div class="mn-help">Fire alerts are automatically marked High or Critical.</div>
+                                                </div>
+                                            </div>
+                                        </details>
                                     </div>
                                 </div>
                             </div>
@@ -357,8 +413,8 @@ $pageTitle = 'Mass Notification System';
         <div class="mn-modal" role="dialog" aria-modal="true" aria-label="Dispatch wizard">
             <div class="mn-modal-header">
                 <div>
-                    <h2 class="mn-modal-title"><i class="fas fa-paper-plane" style="margin-right: 0.5rem; color: var(--primary-color-1);"></i> Dispatch Wizard</h2>
-                    <div class="mn-modal-subtitle">Follow the steps to send a complete alert.</div>
+                    <h2 class="mn-modal-title"><i class="fas fa-paper-plane" style="margin-right: 0.5rem; color: var(--primary-color-1);"></i> Send a New Alert</h2>
+                    <div class="mn-modal-subtitle" id="mnWizardInstruction">Step 1 of 3: Choose the people who need this message.</div>
                 </div>
                 <button class="mn-modal-close" type="button" onclick="closeDispatchWizard()" aria-label="Close wizard">&times;</button>
             </div>
@@ -366,11 +422,11 @@ $pageTitle = 'Mass Notification System';
                 <div class="mn-modal-grid">
                     <div class="mn-modal-left">
                         <div class="mn-stepper" aria-label="Wizard steps">
-                            <div class="mn-step is-active" id="mnWStep1"><span class="mn-step-num">1</span> Target</div>
+                            <button type="button" class="mn-step is-active" id="mnWStep1" onclick="mnWizardRequestStep(1)"><span class="mn-step-num">1</span> People</button>
                             <div class="mn-step-sep" aria-hidden="true"></div>
-                            <div class="mn-step" id="mnWStep2"><span class="mn-step-num">2</span> Channels</div>
+                            <button type="button" class="mn-step" id="mnWStep2" onclick="mnWizardRequestStep(2)"><span class="mn-step-num">2</span> Delivery</button>
                             <div class="mn-step-sep" aria-hidden="true"></div>
-                            <div class="mn-step" id="mnWStep3"><span class="mn-step-num">3</span> Message</div>
+                            <button type="button" class="mn-step" id="mnWStep3" onclick="mnWizardRequestStep(3)"><span class="mn-step-num">3</span> Message</button>
                         </div>
                         <div id="mnWizardHost"></div>
                     </div>
@@ -378,7 +434,7 @@ $pageTitle = 'Mass Notification System';
                     <aside class="mn-modal-right" aria-label="Live preview">
                         <div class="preview-box" style="margin-top: 0;">
                             <div class="preview-header">
-                                <span class="preview-label"><i class="fas fa-eye"></i> Live Preview</span>
+                                <span class="preview-label"><i class="fas fa-eye"></i> What people will see</span>
                                 <div class="mn-preview-modes" aria-label="Preview mode">
                                     <button class="mn-preview-mode is-active" type="button" data-mode="sms">SMS</button>
                                     <button class="mn-preview-mode" type="button" data-mode="email">Email</button>
@@ -395,23 +451,20 @@ $pageTitle = 'Mass Notification System';
                             <div class="mn-help" id="mnPreviewFooter"></div>
                         </div>
 
-                        <div class="mn-cta" style="margin-top: 1rem;">
-                            <button type="button" class="btn btn-primary" id="mnPreviewDispatchBtn" style="width: 100%; padding: 1rem; font-size: 1rem;" onclick="showPreview()" disabled>
-                                <i class="fas fa-paper-plane" style="margin-right: 0.5rem;"></i> Preview & Dispatch
-                            </button>
-                            <div class="mn-cta-reason is-visible" id="mnDispatchReason">Select a category, choose at least 1 channel, then add a title and message.</div>
-                        </div>
                     </aside>
                 </div>
             </div>
             <div class="mn-modal-footer">
-                <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-                    <button type="button" class="btn btn-secondary" id="mnWizardBackBtn" onclick="mnWizardPrev()" disabled>Back</button>
-                    <button type="button" class="btn ui-btn-ghost" onclick="closeDispatchWizard()">Close</button>
+                <div class="mn-footer-left">
+                    <button type="button" class="btn btn-secondary mn-large-action" id="mnWizardBackBtn" onclick="mnWizardPrev()" disabled><i class="fas fa-arrow-left"></i> Back</button>
+                </div>
+                <div class="mn-footer-center">
+                    <button type="button" class="btn ui-btn-ghost mn-large-action" onclick="closeDispatchWizard()"><i class="fas fa-floppy-disk"></i> Save Draft</button>
                     <span class="mn-draft-status" id="mnDraftStatus" aria-live="polite"></span>
                 </div>
-                <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-                    <button type="button" class="btn btn-primary" id="mnWizardNextBtn" onclick="mnWizardNext()">Next</button>
+                <div class="mn-footer-right">
+                    <span class="mn-footer-reason" id="mnDispatchReason" aria-live="polite"></span>
+                    <button type="button" class="btn btn-primary mn-large-action" id="mnWizardNextBtn" onclick="mnWizardNext()">Continue to Delivery <i class="fas fa-arrow-right"></i></button>
                 </div>
             </div>
         </div>
@@ -436,13 +489,13 @@ $pageTitle = 'Mass Notification System';
     <div id="previewModal" class="modal" aria-hidden="true">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
-                <h2>Confirm Dispatch</h2>
+                <h2>Review and Send</h2>
                 <button class="modal-close" type="button" onclick="mnCloseModal('previewModal')">&times;</button>
             </div>
             <div class="modal-body">
                 <div style="background: color-mix(in srgb, var(--primary-color-1) 12%, transparent); padding: 1rem; border-radius: 10px; border-left: 4px solid var(--primary-color-1); margin-bottom: 1rem; font-size: 0.9rem; color: var(--text-color-1);">
                     <i class="fas fa-exclamation-triangle" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> 
-                    <strong>Attention:</strong> This message will be sent immediately to the selected audience.
+                    <strong>Please check carefully.</strong> Make sure the people, delivery method, and message below are correct.
                 </div>
                 <table style="width: 100%; border-collapse: collapse; margin-bottom: 1rem;">
                     <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">Audience:</td><td id="pvAudience" style="padding: 0.5rem 0; font-weight: 600; text-align: right;"></td></tr>
@@ -451,13 +504,13 @@ $pageTitle = 'Mass Notification System';
                 </table>
                 <div style="background: var(--bg-color-1); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color-1);">
                     <div id="pvTitle" style="font-weight: 700; color: var(--text-color-1); margin-bottom: 0.5rem;"></div>
-                    <div id="pvBody" style="font-size: 0.95rem; color: var(--text-secondary-1); line-height: 1.5;"></div>
+                    <div id="pvBody" class="mn-formatted-message" style="font-size: 0.95rem; color: var(--text-secondary-1); line-height: 1.65;"></div>
                 </div>
             </div>
             <div class="modal-footer" style="padding: 1.5rem; display: flex; gap: 1rem;">
-                <button class="btn btn-secondary" type="button" onclick="mnCloseModal('previewModal')" style="flex: 1;">Cancel</button>
+                <button class="btn btn-secondary" type="button" onclick="mnCloseModal('previewModal')" style="flex: 1;"><i class="fas fa-arrow-left"></i> Go Back and Edit</button>
                 <button class="btn btn-primary" type="button" onclick="submitDispatch()" id="confirmDispatchBtn" style="flex: 2;">
-                    <i class="fas fa-check-circle"></i> Confirm & Dispatch
+                    <i class="fas fa-paper-plane"></i> Send Alert Now
                 </button>
             </div>
         </div>
@@ -625,8 +678,21 @@ $pageTitle = 'Mass Notification System';
 
             const backBtn = document.getElementById('mnWizardBackBtn');
             const nextBtn = document.getElementById('mnWizardNextBtn');
+            const instruction = document.getElementById('mnWizardInstruction');
             if (backBtn) backBtn.disabled = step === 1;
-            if (nextBtn) nextBtn.textContent = step === 3 ? 'Finish' : 'Next';
+            if (nextBtn) {
+                if (step === 1) nextBtn.innerHTML = 'Continue to Delivery <i class="fas fa-arrow-right"></i>';
+                else if (step === 2) nextBtn.innerHTML = 'Continue to Message <i class="fas fa-arrow-right"></i>';
+                else nextBtn.innerHTML = '<i class="fas fa-eye"></i> Review Alert <span aria-hidden="true">→</span>';
+            }
+            if (instruction) {
+                const instructions = {
+                    1: 'Step 1 of 3: Choose the people who need this message.',
+                    2: 'Step 2 of 3: Choose one or more ways to deliver the message.',
+                    3: 'Step 3 of 3: Write a clear message, then review it before sending.'
+                };
+                instruction.textContent = instructions[step];
+            }
 
             document.getElementById('mnWStep1')?.classList.toggle('is-active', step === 1);
             document.getElementById('mnWStep2')?.classList.toggle('is-active', step === 2);
@@ -644,15 +710,49 @@ $pageTitle = 'Mass Notification System';
             if (step === 1) document.getElementById('audienceType')?.focus();
             if (step === 2) document.getElementById('lbl-sms')?.scrollIntoView({behavior:'smooth', block:'center'});
             if (step === 3) document.getElementById('message_title')?.focus();
+            updateDispatchCTAState();
+        }
+
+        function mnValidateStep(step, showMessage = true) {
+            let message = '';
+            let focusId = '';
+            if (step === 1) {
+                const type = document.getElementById('audienceType')?.value || 'all';
+                if (type === 'barangay' && !document.getElementById('barangay')?.value) {
+                    message = 'Please choose a barangay before continuing.';
+                    focusId = 'barangay';
+                } else if (type === 'location') {
+                    const lat = document.getElementById('mnTargetLat')?.value || '';
+                    const lng = document.getElementById('mnTargetLng')?.value || '';
+                    if (!lat || !lng) {
+                        message = 'Please click “Open Map” and choose the location that needs the alert.';
+                    }
+                }
+            } else if (step === 2 && getSelectedChannels().length === 0) {
+                message = 'Please choose at least one delivery method. Email is recommended.';
+                focusId = 'lbl-email';
+            }
+            if (message && showMessage) {
+                mnShowNotice(message, 'One more thing');
+                const target = document.getElementById(focusId);
+                if (target) setTimeout(() => target.focus?.(), 100);
+            }
+            return !message;
+        }
+
+        function mnWizardRequestStep(step) {
+            if (step > mnWizardStep && !mnValidateStep(mnWizardStep)) return;
+            if (step === 3 && !mnValidateStep(2)) return;
+            mnWizardGoTo(step);
         }
 
         function mnWizardNext() {
-            if (mnWizardStep === 1) return mnWizardGoTo(2);
+            if (mnWizardStep === 1) {
+                if (!mnValidateStep(1)) return;
+                return mnWizardGoTo(2);
+            }
             if (mnWizardStep === 2) {
-                if (getSelectedChannels().length === 0) {
-                    alert('Please select at least one channel.');
-                    return;
-                }
+                if (!mnValidateStep(2)) return;
                 return mnWizardGoTo(3);
             }
             // step 3 finish: open preview/confirm modal (non-tech friendly)
@@ -673,14 +773,24 @@ $pageTitle = 'Mass Notification System';
 
         function toggleAudienceFilters() {
             const type = document.getElementById('audienceType').value;
+            const help = document.getElementById('mnAudienceHelp');
             document.getElementById('barangayFilter').style.display = type === 'barangay' ? 'block' : 'none';
             document.getElementById('roleFilter').style.display = type === 'role' ? 'block' : 'none';
             document.getElementById('locationFilter').style.display = type === 'location' ? 'block' : 'none';
+            const helpText = {
+                all: 'Every active registered citizen will receive this alert.',
+                barangay: 'Only active citizens in the barangay you choose will receive it.',
+                location: 'Only citizens near the point you choose on the map will receive it.',
+                role: 'Use this for a message meant only for citizens, responders, or administrators.',
+                topic: 'Only people subscribed to the alert category you choose in Step 3 will receive it.'
+            };
+            if (help) help.textContent = helpText[type] || helpText.all;
             
             if (type === 'topic') {
                 // Focus user attention on the category dropdown which now serves as the topic filter
                 $('#category_id').select2('open');
             }
+            updateDispatchCTAState();
         }
 
         function mnIsFireCategorySelected() {
@@ -723,9 +833,22 @@ $pageTitle = 'Mass Notification System';
             if (activeRadio && activeRadio.parentElement) {
                 activeRadio.parentElement.classList.add('selected');
             }
+            mnUpdateUrgencySummary();
             mnSyncWeatherSignalFromSeverity();
             mnRefreshAutoDraftFromContext();
             updateDispatchCTAState();
+        }
+
+        function mnUpdateUrgencySummary() {
+            const summary = document.getElementById('mnUrgencySummary');
+            if (!summary) return;
+            const severity = document.querySelector('input[name="severity"]:checked')?.value || 'Medium';
+            const weatherVisible = document.getElementById('mnWeatherSignalWrap')?.style.display !== 'none';
+            const fireVisible = document.getElementById('mnFireLevelWrap')?.style.display !== 'none';
+            let text = `${severity} urgency`;
+            if (weatherVisible) text += ` · Signal ${document.getElementById('mnWeatherSignal')?.value || '-'}`;
+            if (fireVisible) text += ` · Fire Level ${document.getElementById('mnFireLevel')?.value || '-'}`;
+            summary.textContent = text;
         }
 
         function mnShowConfirm(message, onOk, titleText = 'Confirm') {
@@ -859,15 +982,20 @@ $pageTitle = 'Mass Notification System';
         function mnSetDraftFields(suggestion, markAuto = true) {
             const titleEl = document.getElementById('message_title');
             const bodyEl = document.getElementById('message_body');
+            mnClearGuidedInputsSilently();
             if (titleEl) {
                 titleEl.value = suggestion.title;
+                titleEl.dataset.starterCopy = '';
                 if (markAuto) titleEl.dataset.autoDraft = '1';
             }
             if (bodyEl) {
                 bodyEl.value = suggestion.body;
                 if (markAuto) bodyEl.dataset.autoDraft = '1';
+                bodyEl.dataset.manualEdit = '1';
+                bodyEl.dataset.starterCopy = '';
             }
             if (bodyEl) updateCharCount(bodyEl);
+            mnUpdateGuidedProgress();
             updateLivePreview();
             updateDispatchCTAState();
         }
@@ -887,7 +1015,7 @@ $pageTitle = 'Mass Notification System';
         async function mnAiAssist() {
             const catId = $('#category_id').val();
             if (!catId) {
-                alert('Select an Alert Category first.');
+                mnShowNotice('Please choose what kind of alert this is first.', 'Choose an alert type');
                 return;
             }
 
@@ -959,7 +1087,7 @@ $pageTitle = 'Mass Notification System';
             mnEnsureWizardOpen();
 
             if (!Array.isArray(categoriesData) || categoriesData.length === 0) {
-                alert('Categories are still loading. Please try again in a moment.');
+                mnShowNotice('The alert types are still loading. Please wait a moment and try again.', 'Please wait');
                 return;
             }
 
@@ -978,7 +1106,7 @@ $pageTitle = 'Mass Notification System';
                 if (currentKind !== desired.kind) {
                     const found = mnFindCategoryIdByKind(desired.kind);
                     if (!found) {
-                        alert(`No ${desired.kind} category found. Please add one in Alert Categorization first.`);
+                        mnShowNotice(`The ${desired.kind} alert type is not available yet. Please ask an administrator to add it.`, 'Alert type unavailable');
                         return;
                     }
                     categoryId = String(found);
@@ -1236,6 +1364,7 @@ $pageTitle = 'Mass Notification System';
 
             if (weatherWrap) weatherWrap.style.display = showWeather ? 'block' : 'none';
             if (fireWrap) fireWrap.style.display = showFire ? 'block' : 'none';
+            mnUpdateUrgencySummary();
 
             const sev = (document.querySelector('input[name="severity"]:checked')?.value || 'Medium').toLowerCase();
 
@@ -1250,6 +1379,7 @@ $pageTitle = 'Mass Notification System';
                 if (!weatherSel.dataset._bound) {
                     weatherSel.addEventListener('change', () => {
                         weatherSel.dataset.userSet = '1';
+                        mnUpdateUrgencySummary();
                         updateLivePreview();
                     });
                     weatherSel.dataset._bound = '1';
@@ -1267,6 +1397,7 @@ $pageTitle = 'Mass Notification System';
                 if (!fireSel.dataset._bound) {
                     fireSel.addEventListener('change', () => {
                         fireSel.dataset.userSet = '1';
+                        mnUpdateUrgencySummary();
                         const currentSev = document.querySelector('input[name="severity"]:checked');
                         if (currentSev) updateSeverityUI(currentSev);
                         updateLivePreview();
@@ -1304,13 +1435,44 @@ $pageTitle = 'Mass Notification System';
                 changed = true;
             }
 
-            if (changed) updateLivePreview();
+            if (changed) {
+                mnUpdateUrgencySummary();
+                updateLivePreview();
+            }
         }
 
         function updateCharCount(textarea) {
-            const len = textarea.value.length;
-            document.getElementById('charCount').textContent = len;
-            document.getElementById('smsParts').textContent = Math.ceil(len / 160);
+            const value = String(textarea?.value || '');
+            const characters = Array.from(value).length;
+            const gsmBasic = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+            const gsmExtended = "^{}\\[~]|€";
+            let gsmUnits = 0;
+            let isGsm = true;
+            for (const char of Array.from(value)) {
+                if (gsmBasic.includes(char)) gsmUnits += 1;
+                else if (gsmExtended.includes(char)) gsmUnits += 2;
+                else { isGsm = false; break; }
+            }
+
+            const used = isGsm ? gsmUnits : characters;
+            const singleLimit = isGsm ? 160 : 70;
+            const multipartLimit = isGsm ? 153 : 67;
+            const segments = used === 0 ? 1 : (used <= singleLimit ? 1 : Math.ceil(used / multipartLimit));
+
+            const metrics = document.getElementById('mnSmsMetrics');
+            const encoding = document.getElementById('mnSmsEncoding');
+            const counter = document.getElementById('mnSmsCounter');
+            const warning = document.getElementById('mnSmsWarning');
+            if (metrics) metrics.textContent = `${characters} / ${singleLimit} characters • ${segments} SMS Segment${segments === 1 ? '' : 's'}`;
+            if (encoding) encoding.textContent = isGsm ? 'Standard SMS' : 'Unicode SMS';
+            counter?.classList.toggle('is-warning', segments > 1);
+            counter?.classList.toggle('is-critical', segments > 3);
+            if (warning) {
+                warning.textContent = segments > 1
+                    ? `Long message: this will be billed and delivered as ${segments} separate SMS segments.`
+                    : 'Fits in one SMS segment.';
+                warning.classList.toggle('is-visible', segments > 1);
+            }
             
             // Also update preview body text
             const previewBody = document.getElementById('preview-body');
@@ -1444,12 +1606,15 @@ $pageTitle = 'Mass Notification System';
                         const tSel = document.getElementById('template');
                         templatesData = Array.isArray(data.templates) ? data.templates : [];
                         if (tSel) {
-                            tSel.innerHTML = '<option value="">-- Select a Template --</option>' +
+                            tSel.innerHTML = '<option value="">Choose a template (optional)</option>' +
                                 templatesData.map(t => `<option value="${t.id}">${t.title} (${t.severity})</option>`).join('');
                         }
 
                         // Re-apply any saved draft now that options are loaded (cookie/localStorage)
                         try { window.DraftPersist?.restoreForm(document.getElementById('dispatchForm')); } catch {}
+                        mnApplyCategoryStarterCopy(false);
+                        mnUpdateGuidedProgress();
+                        updateCharCount(document.getElementById('message_body'));
                     } else {
                         console.error('Mass Notification: get_options failed:', data?.message || data);
                         loadCategoriesFallback();
@@ -1487,6 +1652,9 @@ $pageTitle = 'Mass Notification System';
 
                     initCategorySelect();
                     try { window.DraftPersist?.restoreForm(document.getElementById('dispatchForm')); } catch {}
+                    mnApplyCategoryStarterCopy(false);
+                    mnUpdateGuidedProgress();
+                    updateCharCount(document.getElementById('message_body'));
                 })
                 .catch(err => {
                     console.error('Mass Notification: category fallback error:', err);
@@ -1518,11 +1686,20 @@ $pageTitle = 'Mass Notification System';
                 dropdownParent: $('#mnDispatchWizardBackdrop .mn-modal')
             }).on('change', function () {
                 mnUpdateWeatherSignalUI();
+                mnApplyCategoryStarterCopy(false);
                 updateLivePreview();
             });
 
             // Ensure signal UI state matches restored/initial category
             mnUpdateWeatherSignalUI();
+        }
+
+        function mnFormatMessageForDisplay(message) {
+            return String(message || '')
+                .replace(/\r\n?/g, '\n')
+                .replace(/[ \t]*•[ \t]*/g, '\n\n• ')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
         }
 
         function updateLivePreview() {
@@ -1553,19 +1730,19 @@ $pageTitle = 'Mass Notification System';
             
             if (previewBody) {
                 if (previewMode === 'sms') {
-                    previewBody.textContent = body;
+                    previewBody.textContent = mnFormatMessageForDisplay(body);
                     if (previewFooter) previewFooter.textContent = `SMS preview - ${Math.ceil((title.length + body.length) / 160)} part(s) approx.`;
                 } else if (previewMode === 'email') {
-                    previewBody.textContent = body ? `Hi,\n\n${body}\n\n- Emergency Communication System` : '';
+                    previewBody.textContent = body ? `Hi,\n\n${mnFormatMessageForDisplay(body)}\n\n- Emergency Communication System` : '';
                     if (previewFooter) previewFooter.textContent = 'Email preview - supports longer instructions.';
                 } else if (previewMode === 'push') {
-                    previewBody.textContent = body ? body.slice(0, 140) + (body.length > 140 ? '...' : '') : '';
+                    previewBody.textContent = body ? mnFormatMessageForDisplay(body.slice(0, 140) + (body.length > 140 ? '...' : '')) : '';
                     if (previewFooter) previewFooter.textContent = 'Push preview - keep it short for lock screens.';
                 } else if (previewMode === 'pa') {
-                    previewBody.textContent = body ? body.toUpperCase() : '';
+                    previewBody.textContent = body ? mnFormatMessageForDisplay(body.toUpperCase()) : '';
                     if (previewFooter) previewFooter.textContent = 'PA preview - uppercase for announcement clarity.';
                 } else {
-                    previewBody.textContent = body;
+                    previewBody.textContent = mnFormatMessageForDisplay(body);
                     if (previewFooter) previewFooter.textContent = '';
                 }
             }
@@ -1592,10 +1769,225 @@ $pageTitle = 'Mass Notification System';
             return channels;
         }
 
+        function mnSentence(text) {
+            const value = String(text || '').trim();
+            if (!value) return '';
+            return /[.!?]$/.test(value) ? value : value + '.';
+        }
+
+        function mnApplyActionChip(action, button) {
+            const field = document.getElementById('mnActionToTake');
+            if (!field) return;
+            const current = field.value.trim();
+            if (!current.toLowerCase().includes(String(action).toLowerCase())) {
+                field.value = current ? `${current}; ${action}` : action;
+            }
+            field.dataset.starterCopy = '';
+            button?.classList.add('is-selected');
+            button?.setAttribute('aria-pressed', 'true');
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+            field.focus();
+        }
+
+        function mnClearGuidedInputsSilently() {
+            ['mnWhatHappened', 'mnWhere', 'mnActionToTake'].forEach(id => {
+                const field = document.getElementById(id);
+                if (field) {
+                    field.value = '';
+                    field.dataset.starterCopy = '';
+                }
+            });
+            document.querySelectorAll('.mn-action-chips button').forEach(btn => {
+                btn.classList.remove('is-selected');
+                btn.setAttribute('aria-pressed', 'false');
+            });
+            mnUpdateGuidedProgress();
+        }
+
+        function mnApplyCategoryStarterCopy(force = false) {
+            const catId = $('#category_id').val();
+            const category = categoriesData.find(c => String(c.id) === String(catId));
+            if (!category) return;
+            const kind = mnCategoryKindFromName(category.name || '');
+            const existingBody = document.getElementById('message_body');
+            const guidedIsEmpty = ['mnWhatHappened', 'mnWhere', 'mnActionToTake']
+                .every(id => !document.getElementById(id)?.value.trim());
+            if (!force && existingBody?.value.trim() && existingBody.dataset.starterCopy !== '1' && guidedIsEmpty) return;
+            const copies = {
+                fire: {
+                    title: 'FIRE EMERGENCY',
+                    what: 'A fire has been reported and may threaten nearby homes',
+                    where: 'the affected area in Quezon City',
+                    action: 'Evacuate immediately and follow instructions from emergency responders'
+                },
+                earthquake: {
+                    title: 'EARTHQUAKE ALERT',
+                    what: 'Strong ground shaking has been reported',
+                    where: 'Quezon City and nearby areas',
+                    action: 'Duck, cover, and hold on; stay away from windows and damaged buildings'
+                },
+                weather: {
+                    title: 'SEVERE WEATHER WARNING',
+                    what: 'Heavy rainfall may cause flash floods and dangerous road conditions',
+                    where: 'low-lying and flood-prone areas of Quezon City',
+                    action: 'Move to higher ground now and do not cross flooded roads'
+                },
+                general: {
+                    title: 'PUBLIC SAFETY ADVISORY',
+                    what: 'A public safety incident has been reported',
+                    where: 'the affected area in Quezon City',
+                    action: 'Avoid the affected area and follow instructions from local authorities'
+                }
+            };
+            const copy = copies[kind] || copies.general;
+            const fields = [
+                [document.getElementById('message_title'), copy.title],
+                [document.getElementById('mnWhatHappened'), copy.what],
+                [document.getElementById('mnWhere'), copy.where],
+                [document.getElementById('mnActionToTake'), copy.action]
+            ];
+            let changed = false;
+            fields.forEach(([field, value]) => {
+                if (!field) return;
+                if (force || !field.value.trim() || field.dataset.starterCopy === '1') {
+                    field.value = value;
+                    field.dataset.starterCopy = '1';
+                    changed = true;
+                }
+            });
+            if (changed) {
+                const body = document.getElementById('message_body');
+                if (body && (!body.value.trim() || body.dataset.starterCopy === '1')) {
+                    mnBuildGuidedMessage(true);
+                    body.dataset.starterCopy = '1';
+                } else {
+                    mnUpdateGuidedProgress();
+                    updateLivePreview();
+                }
+            }
+        }
+
+        function mnBuildGuidedMessage(force = false) {
+            const what = document.getElementById('mnWhatHappened')?.value || '';
+            const where = document.getElementById('mnWhere')?.value || '';
+            const action = document.getElementById('mnActionToTake')?.value || '';
+            const body = document.getElementById('message_body');
+            if (!body) return;
+            const parts = [];
+            if (what.trim()) parts.push(mnSentence(what));
+            if (where.trim()) parts.push('Affected area: ' + mnSentence(where));
+            if (action.trim()) parts.push('Protective action: ' + mnSentence(action));
+
+            body.dataset.guidedUpdate = '1';
+            body.value = parts.join(' ');
+            body.dataset.manualEdit = '';
+            body.dataset.autoDraft = '';
+            delete body.dataset.guidedUpdate;
+
+            const title = document.getElementById('message_title');
+            if (title && !title.value.trim() && what.trim()) {
+                const catId = $('#category_id').val();
+                const cat = categoriesData.find(c => String(c.id) === String(catId));
+                title.value = String(cat?.name || 'Emergency').toUpperCase() + ' ALERT';
+            }
+            updateCharCount(body);
+            mnUpdateGuidedProgress();
+            updateLivePreview();
+            updateDispatchCTAState();
+        }
+
+        function mnUpdateGuidedProgress() {
+            const ids = ['mnWhatHappened', 'mnWhere', 'mnActionToTake'];
+            let completed = 0;
+            ids.forEach(id => {
+                const field = document.getElementById(id);
+                const done = !!field?.value.trim();
+                field?.closest('.mn-guided-question')?.classList.toggle('is-complete', done);
+                if (done) completed++;
+            });
+            const progress = document.getElementById('mnGuidedProgress');
+            if (progress) {
+                const hasCompleteMessage = !!document.getElementById('message_body')?.value.trim();
+                progress.textContent = completed === 0 && hasCompleteMessage
+                    ? 'A complete message is already provided. You may skip these questions.'
+                    : completed === 3
+                    ? 'All 3 answered · Your complete message is ready below.'
+                    : `${completed} of 3 answered · Complete the remaining questions.`;
+            }
+        }
+
+        function mnClearMessageBuilder() {
+            mnShowConfirm('Clear the three answers and the complete message?', () => {
+                ['mnWhatHappened', 'mnWhere', 'mnActionToTake', 'message_body'].forEach(id => {
+                    const field = document.getElementById(id);
+                    if (field) field.value = '';
+                });
+                const body = document.getElementById('message_body');
+                if (body) {
+                    body.dataset.manualEdit = '';
+                    body.dataset.autoDraft = '';
+                    updateCharCount(body);
+                }
+                mnUpdateGuidedProgress();
+                updateLivePreview();
+                updateDispatchCTAState();
+                document.getElementById('mnWhatHappened')?.focus();
+            }, 'Clear message?');
+        }
+
+        let mnActiveRecognition = null;
+        function mnStartDictation(fieldId, button) {
+            const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!Recognition) {
+                mnShowNotice('Voice typing is not supported by this browser. You can still type in the box.', 'Voice typing unavailable');
+                return;
+            }
+            if (mnActiveRecognition) {
+                try { mnActiveRecognition.stop(); } catch (e) {}
+                mnActiveRecognition = null;
+            }
+            const field = document.getElementById(fieldId);
+            const status = document.getElementById('mnDictationStatus');
+            if (!field) return;
+
+            const recognition = new Recognition();
+            mnActiveRecognition = recognition;
+            recognition.lang = 'en-PH';
+            recognition.interimResults = false;
+            recognition.continuous = false;
+            button?.classList.add('is-listening');
+            if (status) status.textContent = 'Listening… Speak clearly, then pause.';
+
+            recognition.onresult = event => {
+                const spoken = Array.from(event.results).map(result => result[0]?.transcript || '').join(' ').trim();
+                if (spoken) {
+                    const separator = field.value.trim() ? ' ' : '';
+                    field.value = field.value.trim() + separator + spoken;
+                    field.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            };
+            recognition.onerror = event => {
+                if (status) status.textContent = event.error === 'not-allowed'
+                    ? 'Microphone permission was not allowed. You can type instead.'
+                    : 'Voice typing did not hear anything. Please try again.';
+            };
+            recognition.onend = () => {
+                button?.classList.remove('is-listening');
+                if (status && !status.textContent.includes('permission') && !status.textContent.includes('did not')) {
+                    status.textContent = 'Voice typing finished. You can edit the words above.';
+                }
+                mnActiveRecognition = null;
+            };
+            try { recognition.start(); } catch (e) {
+                button?.classList.remove('is-listening');
+                if (status) status.textContent = 'Voice typing could not start. Please try again.';
+            }
+        }
+
         function updateDispatchCTAState() {
-            const btn = document.getElementById('mnPreviewDispatchBtn');
+            const btn = document.getElementById('mnWizardNextBtn');
             const reason = document.getElementById('mnDispatchReason');
-            if (!btn || !reason) return;
+            if (!reason) return;
 
             const audienceType = document.getElementById('audienceType')?.value || 'all';
             const title = document.getElementById('message_title').value.trim();
@@ -1605,12 +1997,14 @@ $pageTitle = 'Mass Notification System';
             const lat = (document.getElementById('mnTargetLat')?.value || '').trim();
             const lng = (document.getElementById('mnTargetLng')?.value || '').trim();
             const radiusM = (document.getElementById('mnRadiusM')?.value || '').trim();
+            const barangay = document.getElementById('barangay')?.value || '';
 
             let missing = [];
             if (!catId) missing.push('category');
             if (channels.length === 0) missing.push('channel');
             if (!title) missing.push('title');
             if (!body) missing.push('message');
+            if (audienceType === 'barangay' && !barangay) missing.push('barangay');
             if (audienceType === 'location') {
                 if (!lat || !lng) missing.push('location');
                 const r = parseInt(radiusM || '0', 10);
@@ -1618,12 +2012,12 @@ $pageTitle = 'Mass Notification System';
             }
 
             const canProceed = missing.length === 0;
-            btn.disabled = !canProceed;
+            if (btn) btn.disabled = mnWizardStep === 3 && !canProceed;
 
-            if (!canProceed) {
+            if (!canProceed && mnWizardStep === 3) {
                 reason.classList.add('is-visible');
-                const map = {category:'Select a category', channel:'choose at least 1 channel', title:'add a title', message:'write a message', location:'pick a location on the map', radius:'set a valid radius'};
-                reason.textContent = 'To continue: ' + missing.map(m => map[m]).join(', ') + '.';
+                const map = {category:'choose what kind of alert this is', channel:'choose how people will receive it', title:'add a short title', message:'write the message', barangay:'choose a barangay', location:'choose a location on the map', radius:'enter a valid distance'};
+                reason.textContent = 'Still needed: ' + missing.map(m => map[m]).join('; ') + '.';
             } else {
                 reason.classList.remove('is-visible');
                 reason.textContent = '';
@@ -1634,7 +2028,7 @@ $pageTitle = 'Mass Notification System';
             const step2 = document.getElementById('mnStep2');
             const step3 = document.getElementById('mnStep3');
             if (step1 && step2 && step3) {
-                step1.classList.add('is-done');
+                step1.classList.toggle('is-done', mnValidateStep(1, false));
                 step2.classList.toggle('is-done', channels.length > 0);
                 step3.classList.toggle('is-done', !!catId && !!title && !!body);
 
@@ -1650,12 +2044,32 @@ $pageTitle = 'Mass Notification System';
             const bodyInput = document.getElementById('message_body');
             if (titleInput) titleInput.addEventListener('input', () => {
                 titleInput.dataset.autoDraft = '';
+                titleInput.dataset.starterCopy = '';
                 updateLivePreview();
             });
             if (bodyInput) bodyInput.addEventListener('input', () => {
                 bodyInput.dataset.autoDraft = '';
+                bodyInput.dataset.starterCopy = '';
+                if (bodyInput.dataset.guidedUpdate !== '1') bodyInput.dataset.manualEdit = '1';
+                updateCharCount(bodyInput);
+                mnUpdateGuidedProgress();
                 updateLivePreview();
             });
+
+            ['mnWhatHappened', 'mnWhere', 'mnActionToTake'].forEach(id => {
+                const field = document.getElementById(id);
+                if (field) field.addEventListener('input', () => {
+                    field.dataset.starterCopy = '';
+                    const body = document.getElementById('message_body');
+                    if (body) body.dataset.starterCopy = '';
+                    mnUpdateGuidedProgress();
+                    mnBuildGuidedMessage(false);
+                });
+            });
+
+            if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
+                document.querySelectorAll('.mn-dictate-btn').forEach(btn => btn.style.display = 'none');
+            }
 
             document.querySelectorAll('input[name="channels"]').forEach(ch => {
                 ch.addEventListener('change', updateDispatchCTAState);
@@ -1698,6 +2112,11 @@ $pageTitle = 'Mass Notification System';
             if (t) {
                 document.getElementById('message_title').value = t.title;
                 document.getElementById('message_body').value = t.body;
+                document.getElementById('message_body').dataset.manualEdit = '1';
+                document.getElementById('message_body').dataset.starterCopy = '';
+                document.getElementById('message_title').dataset.starterCopy = '';
+                mnClearGuidedInputsSilently();
+                mnUpdateGuidedProgress();
                 
                 // Update Select2
                 $('#category_id').val(t.category_id).trigger('change');
@@ -1717,29 +2136,31 @@ $pageTitle = 'Mass Notification System';
             const data = mnBuildDispatchPayload();
             const channels = data.channels || [];
 
+            if (!mnValidateStep(1) || !mnValidateStep(2)) return;
+
             if (channels.length === 0) {
-                alert('Please select at least one channel.');
+                mnShowNotice('Please choose at least one delivery method. Email is recommended.', 'One more thing');
                 return;
             }
 
             if (!data.category_id) {
-                alert('Please select a category.');
+                mnShowNotice('Please choose what kind of alert this is.', 'One more thing');
                 return;
             }
 
             if (!data.title || !data.body) {
-                alert('Please enter a title and message body.');
+                mnShowNotice('Please add a short title and write the message citizens should receive.', 'One more thing');
                 return;
             }
 
             if (data.audience_type === 'location') {
                 if (!data.target_lat || !data.target_lng) {
-                    alert('Please pick a location on the map first.');
+                    mnShowNotice('Please choose the alert location on the map first.', 'One more thing');
                     return;
                 }
                 const r = parseInt(data.radius_m || '0', 10);
                 if (!Number.isFinite(r) || r <= 0) {
-                    alert('Please enter a valid radius in meters.');
+                    mnShowNotice('Please enter a valid distance around the selected location.', 'One more thing');
                     return;
                 }
             }
@@ -1748,7 +2169,7 @@ $pageTitle = 'Mass Notification System';
             document.getElementById('pvChannels').textContent = channels.join(', ').toUpperCase();
             document.getElementById('pvSeverity').textContent = data.severity || 'Medium';
             document.getElementById('pvTitle').textContent = data.title;
-            document.getElementById('pvBody').textContent = data.body;
+            document.getElementById('pvBody').textContent = mnFormatMessageForDisplay(data.body);
 
             // Use class-based modal show/hide (compatible with global modal helpers)
             mnOpenModal('previewModal');
@@ -1780,8 +2201,8 @@ $pageTitle = 'Mass Notification System';
                 if (!data.body) missing2.push('body');
                 if (missing2.length > 0) {
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-check-circle"></i> Confirm & Dispatch';
-                    alert('Please complete required fields: ' + missing2.join(', '));
+                    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Alert Now';
+                    mnShowNotice('Please complete these items before sending: ' + missing2.join(', ') + '.', 'One more thing');
                     return;
                 }
             }
@@ -1803,9 +2224,17 @@ $pageTitle = 'Mass Notification System';
                 mnCloseModal('previewModal');
                  
                 if (data.success) {
-                    alert(data.message);
                     document.getElementById('dispatchForm').reset();
-                    document.querySelectorAll('.channel-checkbox').forEach(c => c.classList.remove('selected'));
+                    const resetBody = document.getElementById('message_body');
+                    if (resetBody) {
+                        resetBody.dataset.manualEdit = '';
+                        resetBody.dataset.autoDraft = '';
+                    }
+                    mnUpdateGuidedProgress();
+                    document.querySelectorAll('.channel-checkbox').forEach(c => {
+                        const input = c.querySelector('input[name="channels"]');
+                        c.classList.toggle('selected', !!input?.checked);
+                    });
                     $('#category_id').val(null).trigger('change');
                     try { window.DraftPersist?.clearDraft('admin-mn-dispatch'); } catch {}
                     mnPendingDispatchPayload = null;
@@ -1813,6 +2242,11 @@ $pageTitle = 'Mass Notification System';
 
                     // Close wizard too to avoid trapping the user under overlays.
                     try { closeDispatchWizard(); } catch (e) {}
+
+                    const recipientText = Number(data.recipients || 0) === 1
+                        ? '1 citizen'
+                        : `${Number(data.recipients || 0)} citizens`;
+                    mnShowNotice(`The alert was accepted for ${recipientText}. Delivery has started. You can check its progress in Dispatch History.`, 'Alert is being sent');
 
                     // Kick the worker once (local/dev friendly) so queued jobs actually send.
                     // Safe to ignore errors; deployments may run the worker via cron.
@@ -1822,18 +2256,23 @@ $pageTitle = 'Mass Notification System';
                             .catch(() => {});
                     } catch (e) {}
                 } else {
-                    alert('Error: ' + data.message);
+                    mnShowNotice(data.message || 'The alert could not be sent. Please review the form and try again.', 'Could not send alert');
                 }
             })
             .fail(function(xhr) {
                 console.error('Dispatch Error:', xhr.responseText);
                 mnCloseModal('previewModal');
-                alert('Connection or Server Error. Please check console.');
+                let message = 'The system could not connect. Please wait a moment and try again.';
+                try {
+                    const parsed = JSON.parse(xhr.responseText || '{}');
+                    if (parsed.message) message = parsed.message;
+                } catch (e) {}
+                mnShowNotice(message, 'Could not send alert');
             })
             .always(function() {
                 btn.disabled = false;
                 btn.classList.remove('is-loading');
-                btn.innerHTML = '<i class="fas fa-check-circle"></i> Confirm & Dispatch';
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Alert Now';
             });
         }
 
@@ -1855,7 +2294,7 @@ $pageTitle = 'Mass Notification System';
             mnMapTargetMode = mode === 'barangay' ? 'barangay' : 'location';
 
             if (!window.L) {
-                alert('Map library failed to load. Please check your internet connection, then refresh the page.');
+                mnShowNotice('The map could not load. Please check the internet connection, then refresh this page.', 'Map unavailable');
                 return;
             }
 
@@ -1994,11 +2433,11 @@ $pageTitle = 'Mass Notification System';
 
             mnMap.on('click', (e) => {
                 if (!mnQcGeojson) {
-                    alert('Quezon City boundary is still loading. Please try again in a moment.');
+                    mnShowNotice('The Quezon City map is still loading. Please wait a moment and try again.', 'Please wait');
                     return;
                 }
                 if (!mnGeojsonContainsPoint(mnQcGeojson, e.latlng.lat, e.latlng.lng)) {
-                    alert('Please pick a location within Quezon City.');
+                    mnShowNotice('Please choose a location inside Quezon City.', 'Location outside the city');
                     return;
                 }
                 mnSetMapSelection(e.latlng.lat, e.latlng.lng, 'Dropped pin');
@@ -2125,11 +2564,11 @@ $pageTitle = 'Mass Notification System';
 
             // Guard: keep selection within QC boundary (GeoJSON)
             if (!mnQcGeojson) {
-                alert('Quezon City boundary is still loading. Please try again in a moment.');
+                mnShowNotice('The Quezon City map is still loading. Please wait a moment and try again.', 'Please wait');
                 return;
             }
             if (!mnGeojsonContainsPoint(mnQcGeojson, mnMapSelected.lat, mnMapSelected.lng)) {
-                alert('Please pick a location within Quezon City.');
+                mnShowNotice('Please choose a location inside Quezon City.', 'Location outside the city');
                 return;
             }
 
@@ -2140,7 +2579,7 @@ $pageTitle = 'Mass Notification System';
                         const p = mnMapMarker.getLatLng();
                         // Don't allow dragging outside QC
                         if (!mnQcGeojson || !mnGeojsonContainsPoint(mnQcGeojson, p.lat, p.lng)) {
-                            alert('Pin must stay within Quezon City.');
+                            mnShowNotice('The location pin must stay inside Quezon City.', 'Location outside the city');
                             mnMapMarker.setLatLng([mnMapSelected.lat, mnMapSelected.lng]);
                             return;
                         }
@@ -2210,7 +2649,7 @@ $pageTitle = 'Mass Notification System';
 
         function mnMapApplySelection() {
             if (mnMapSelected.lat === null || mnMapSelected.lng === null) {
-                alert('Please click on the map or choose a search result first.');
+                mnShowNotice('Please click a place on the map or choose one of the search results.', 'Choose a location');
                 return;
             }
 
@@ -2288,7 +2727,7 @@ $pageTitle = 'Mass Notification System';
             const lat = Number((document.getElementById('mnTargetLat')?.value || '').trim());
             const lng = Number((document.getElementById('mnTargetLng')?.value || '').trim());
             if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-                alert('Pick a location on the map first.');
+                mnShowNotice('Please choose a location on the map first.', 'Choose a location');
                 return;
             }
             const addrText = document.getElementById('mnTargetAddrText');
@@ -2374,6 +2813,10 @@ $pageTitle = 'Mass Notification System';
                         const status = (n.status || 'pending').toString().toLowerCase();
                         const sentAt = n.sent_at || '-';
                         const target = n.recipients || '-';
+                        const sender = (n.sent_by || '').toString().toLowerCase();
+                        const automaticSource = sender.endsWith('_auto_bulletin')
+                            ? sender.replace('_auto_bulletin', '').toUpperCase()
+                            : '';
                         const message = (n.message || '').toString();
                         const successRate = (status === 'completed' && Number(stats.total) > 0)
                             ? `<strong>${Math.round((Number(stats.sent) / Number(stats.total)) * 100)}%</strong> <br><small style="color: var(--text-secondary-1);">${stats.sent}/${stats.total}</small>`
@@ -2381,7 +2824,10 @@ $pageTitle = 'Mass Notification System';
                         return `
                             <tr>
                                 <td>#${n.id}</td>
-                                <td><small style="color: var(--text-secondary-1); font-weight: 500;">${target}</small></td>
+                                <td>
+                                    <small style="color: var(--text-secondary-1); font-weight: 500;">${target}</small>
+                                    ${automaticSource ? `<br><small class="badge completed" style="display:inline-block;margin-top:5px;">${automaticSource} AUTO</small>` : ''}
+                                </td>
                                 <td>${channelIcons}</td>
                                 <td><div style="max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: 0.9rem;">${message}</div></td>
                                 <td>
@@ -2460,7 +2906,6 @@ $pageTitle = 'Mass Notification System';
             });
         });
     </script>
-    <script src="../../USERS/js/alert-listener.js?v=<?php echo file_exists(__DIR__ . '/../../USERS/js/alert-listener.js') ? filemtime(__DIR__ . '/../../USERS/js/alert-listener.js') : time(); ?>"></script>
 </body>
 </html>
 

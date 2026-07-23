@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', function() {
         { name: 'Alerts', url: 'alerts.php', keywords: ['alerts', 'notifications', 'warnings'] },
         { name: 'Support', url: 'support.php', keywords: ['support', 'help', 'contact'] },
         { name: 'Weather Map', url: 'weather-map.php', keywords: ['weather', 'map', 'forecast'] },
-        { name: 'Weather Monitoring', url: 'weather-monitoring.php', keywords: ['weather', 'monitoring', 'forecast'] },
+        { name: 'Weather Monitoring', url: 'weather-map.php', keywords: ['weather', 'monitoring', 'forecast', 'bulletin'] },
         { name: 'Earthquake Monitoring', url: 'earthquake-monitoring.php', keywords: ['earthquake', 'seismic', 'quake'] },
         { name: 'Emergency Call', url: 'emergency-call.php', keywords: ['emergency', 'call', 'hotline', '911'] },
         { name: 'Profile', url: 'profile.php', keywords: ['profile', 'account', 'settings'] },

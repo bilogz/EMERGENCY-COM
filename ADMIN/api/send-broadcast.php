@@ -6,6 +6,7 @@
 
 // 1. Prevent any accidental output (warnings, notices) from breaking JSON
 ob_start();
+require_once dirname(__DIR__, 2) . '/PHP/api/device_registry.php';
 
 // 2. Set strict JSON header
 header('Content-Type: application/json; charset=utf-8');
@@ -105,6 +106,7 @@ function ensureNotificationQueueTable(PDO $pdo): void {
             CREATE TABLE IF NOT EXISTS notification_queue (
                 id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                 log_id BIGINT UNSIGNED NOT NULL,
+                alert_id BIGINT UNSIGNED NULL,
                 recipient_id BIGINT UNSIGNED NULL,
                 recipient_type VARCHAR(40) NOT NULL DEFAULT 'unknown',
                 recipient_value VARCHAR(255) NOT NULL DEFAULT '',
@@ -128,6 +130,7 @@ function ensureNotificationQueueTable(PDO $pdo): void {
 
     $requiredColumns = [
         'log_id' => "BIGINT UNSIGNED NOT NULL DEFAULT 0",
+        'alert_id' => "BIGINT UNSIGNED NULL",
         'recipient_id' => "BIGINT UNSIGNED NULL",
         'recipient_type' => "VARCHAR(40) NOT NULL DEFAULT 'unknown'",
         'recipient_value' => "VARCHAR(255) NOT NULL DEFAULT ''",
@@ -159,6 +162,46 @@ function ensureNotificationQueueTable(PDO $pdo): void {
             throw new Exception("Missing notification queue column '{$name}' and failed to add it: " . $e->getMessage());
         }
     }
+}
+
+/** Return a column map only when a table is actually readable (SHOW TABLES can list broken tables). */
+function dispatchReadableTableColumns(PDO $pdo, string $table): array {
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) return [];
+    try {
+        $pdo->query("SELECT 1 FROM `{$table}` LIMIT 1");
+        $stmt = $pdo->query("SHOW COLUMNS FROM `{$table}`");
+        return array_fill_keys($stmt ? $stmt->fetchAll(PDO::FETCH_COLUMN) : [], true);
+    } catch (Throwable $e) {
+        error_log("Mass notification table unavailable ({$table}): " . $e->getMessage());
+        return [];
+    }
+}
+
+/** Load every usable active push token without duplicating SMS/email recipients. */
+function dispatchLoadPushTokens(PDO $pdo, array $userIds): array {
+    if (empty($userIds)) return [];
+    $deviceTable = resolveDeviceRegistryTable($pdo);
+    $columns = dispatchReadableTableColumns($pdo, $deviceTable);
+    $tokenColumns = array_values(array_filter(['fcm_token', 'push_token'], fn($c) => isset($columns[$c])));
+    if (!isset($columns['user_id']) || empty($tokenColumns)) return [];
+
+    $ids = array_values(array_unique(array_filter(array_map('intval', $userIds), fn($id) => $id > 0)));
+    if (empty($ids)) return [];
+    $where = array_fill(0, count($ids), '?');
+    $activeSql = isset($columns['is_active']) ? ' AND is_active = 1' : '';
+    $select = implode(', ', array_map(fn($c) => "`{$c}`", $tokenColumns));
+    $stmt = $pdo->prepare("SELECT user_id, {$select} FROM {$deviceTable} WHERE user_id IN (" . implode(',', $where) . "){$activeSql}");
+    $stmt->execute($ids);
+
+    $result = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $userId = (int)$row['user_id'];
+        foreach ($tokenColumns as $column) {
+            $token = trim((string)($row[$column] ?? ''));
+            if ($token !== '') $result[$userId][$token] = true;
+        }
+    }
+    return array_map('array_keys', $result);
 }
 
 /**
@@ -369,12 +412,21 @@ try {
     $targetLngRaw = $_POST['target_lng'] ?? null;
     $radiusMRaw = $_POST['radius_m'] ?? null;
     $targetAddress = trim((string)($_POST['target_address'] ?? ''));
+    if (!in_array($audienceType, ['all', 'location', 'barangay', 'role', 'topic'], true)) {
+        throw new Exception('Unsupported audience type.');
+    }
+    if ($audienceType === 'barangay' && trim((string)$barangay) === '') throw new Exception('A barangay is required.');
+    if ($audienceType === 'role' && trim((string)$role) === '') throw new Exception('A recipient role is required.');
     
     $channels = $_POST['channels'] ?? []; 
     if (is_string($channels)) {
         $channels = explode(',', $channels);
     }
-    $channels = array_filter(array_map('trim', $channels));
+    $channels = array_values(array_unique(array_map('strtolower', array_filter(array_map('trim', $channels)))));
+    $invalidChannels = array_diff($channels, ['sms', 'email', 'push', 'pa']);
+    if (!empty($invalidChannels)) {
+        throw new Exception('Unsupported notification channel: ' . implode(', ', $invalidChannels));
+    }
 
     $severity = $_POST['severity'] ?? 'Medium';
     $title = trim($_POST['title'] ?? '');
@@ -386,6 +438,7 @@ try {
     if ($categoryId !== null && $categoryId <= 0) {
         $categoryId = null;
     }
+    if ($audienceType === 'topic' && $categoryId === null) throw new Exception('An alert category is required for topic targeting.');
 
     $severityAllowed = ['Low', 'Medium', 'High', 'Critical'];
     if (!in_array($severity, $severityAllowed, true)) {
@@ -442,10 +495,14 @@ try {
     ensureNotificationQueueTable($pdo);
 
     // 5. Build Recipient Query
-    $baseSelect = "SELECT u.id, u.name, u.email, u.phone, d.fcm_token";
-    $baseFrom = " FROM users u 
-            LEFT JOIN user_devices d ON u.id = d.user_id AND d.is_active = 1";
+    $baseSelect = "SELECT u.id, u.name, u.email, u.phone";
+    $baseFrom = " FROM users u";
+    // Every public-facing audience represents citizens. The explicit role
+    // audience is the only path allowed to target responders/admins.
     $baseWhere = " WHERE u.status = 'active'";
+    if ($audienceType !== 'role') {
+        $baseWhere .= " AND u.user_type = 'citizen'";
+    }
     $params = [];
 
     $join = "";
@@ -488,6 +545,9 @@ try {
         $baseWhere .= " AND u.user_type = ?";
         $params[] = $role;
     } elseif ($audienceType === 'topic' && !empty($categoryId)) {
+        if (empty(dispatchReadableTableColumns($pdo, 'user_subscriptions'))) {
+            throw new Exception('Topic targeting is unavailable because the subscription table is not readable.');
+        }
         $baseWhere .= " AND u.id IN (SELECT user_id FROM user_subscriptions WHERE category_id = ? AND is_active = 1)";
         $params[] = $categoryId;
     }
@@ -498,9 +558,23 @@ try {
     $stmt->execute($params);
     $recipients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    $pushTokensByUser = in_array('push', $channels, true)
+        ? dispatchLoadPushTokens($pdo, array_column($recipients, 'id'))
+        : [];
+
+    $deliverableCount = in_array('pa', $channels, true) ? 1 : 0;
+    foreach ($recipients as $recipient) {
+        if (in_array('sms', $channels, true) && trim((string)($recipient['phone'] ?? '')) !== '') $deliverableCount++;
+        if (in_array('email', $channels, true) && filter_var($recipient['email'] ?? '', FILTER_VALIDATE_EMAIL)) $deliverableCount++;
+        if (in_array('push', $channels, true)) $deliverableCount += count($pushTokensByUser[(int)$recipient['id']] ?? []);
+    }
+
     // If PA is not selected, we need at least one recipient
     if (empty($recipients) && !in_array('pa', $channels)) {
         throw new Exception('No active recipients found for the selected audience.');
+    }
+    if ($deliverableCount === 0) {
+        throw new Exception('No selected recipients have a valid address or active device for the chosen channels.');
     }
 
     // 6. Insert Pending Log Entry
@@ -599,7 +673,9 @@ try {
     }
 
     $alertCols[] = 'created_at';
-    $alertPlaceholders[] = 'DATE_SUB(NOW(), INTERVAL 5 HOUR)';
+    // MySQL is the application's canonical clock. Subtracting a server-timezone
+    // offset made brand-new alerts fall outside the six-hour citizen window.
+    $alertPlaceholders[] = 'NOW()';
 
     $aStmt = $pdo->prepare("INSERT INTO alerts (" . implode(', ', $alertCols) . ") VALUES (" . implode(', ', $alertPlaceholders) . ")");
     $aStmt->execute($alertVals);
@@ -607,20 +683,6 @@ try {
 
     // Save exact recipients for feed visibility filtering (nearby/location-safe targeting).
     $targetedRecipientCount = persistAlertRecipients($pdo, $alertId, $recipients);
-
-    // Optional topic broadcast via legacy FCM helper.
-    // Non-blocking: alert creation flow continues even if this fails.
-    $fcmHelperPath = dirname(__DIR__, 2) . '/PHP/api/fcm_helper.php';
-    if (file_exists($fcmHelperPath)) {
-        try {
-            require_once $fcmHelperPath;
-            if (function_exists('sendFCMNotification')) {
-                sendFCMNotification($title, $body);
-            }
-        } catch (Throwable $fcmEx) {
-            error_log('FCM topic send failed in send-broadcast.php: ' . $fcmEx->getMessage());
-        }
-    }
 
     // 8. Prepare translation service and recipient language map
     $translationHelper = null;
@@ -674,17 +736,22 @@ try {
             } elseif ($channel === 'email' && !empty($recipient['email'])) {
                 $value = $recipient['email'];
                 $type = 'email';
-            } elseif ($channel === 'push' && !empty($recipient['fcm_token'])) {
-                $value = $recipient['fcm_token'];
-                $type = 'fcm_token';
+            } elseif ($channel === 'push') {
+                $tokens = $pushTokensByUser[$recipientId] ?? [];
+                foreach ($tokens as $token) {
+                    $qStmt = $pdo->prepare("INSERT INTO notification_queue (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, status) VALUES (?, ?, ?, 'push_token', ?, 'push', ?, ?, 'pending')");
+                    $qStmt->execute([$logId, $alertId, $recipientId, $token, $localizedTitle, $localizedBody]);
+                    $queueCount++;
+                }
+                continue;
             }
 
             if (!empty($value)) {
                 $qStmt = $pdo->prepare("
-                    INSERT INTO notification_queue (log_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+                    INSERT INTO notification_queue (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
                 ");
-                $qStmt->execute([$logId, $recipientId, $type, $value, $channel, $localizedTitle, $localizedBody]);
+                $qStmt->execute([$logId, $alertId, $recipientId, $type, $value, $channel, $localizedTitle, $localizedBody]);
                 $queueCount++;
             }
         }
@@ -693,16 +760,16 @@ try {
     // Handle Public Address System (single message, no per-user language)
     if (in_array('pa', $channels, true)) {
         $qStmt = $pdo->prepare("
-            INSERT INTO notification_queue (log_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
-            VALUES (?, NULL, 'system', 'pa_system', 'pa', ?, ?, 'pending')
+            INSERT INTO notification_queue (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
+            VALUES (?, ?, NULL, 'system', 'pa_system', 'pa', ?, ?, 'pending')
         ");
-        $qStmt->execute([$logId, $title, $body]);
+        $qStmt->execute([$logId, $alertId, $title, $body]);
         $queueCount++;
     }
 
-    // 10. Update log status to 'sent' (queued successfully)
+    // 10. Mark as queued; the worker owns delivery status transitions.
     // Note: 'updated_at' is omitted as it does not exist in the schema.
-    $updateStmt = $pdo->prepare("UPDATE notification_logs SET status = 'sent' WHERE id = ?");
+    $updateStmt = $pdo->prepare("UPDATE notification_logs SET status = 'queued' WHERE id = ?");
     $updateStmt->execute([$logId]);
 
     // 11. Audit activity
@@ -725,12 +792,12 @@ try {
     ]);
     exit;
 
-} catch (Exception $e) {
+} catch (Throwable $e) {
     // Attempt to update log status to 'failed' if logId was created
     if (isset($logId) && $logId) {
         try {
             $pdo->prepare("UPDATE notification_logs SET status = 'failed' WHERE id = ?")->execute([$logId]);
-        } catch (PDOException $innerEx) {
+        } catch (Throwable $innerEx) {
             // Silence inner exception
         }
     }
@@ -738,6 +805,7 @@ try {
     // Discard any accidental buffered output
     if (ob_get_length()) ob_end_clean();
     
+    http_response_code(strpos($e->getMessage(), 'Unauthorized') !== false ? 401 : 400);
     echo json_encode([
         'success' => false,
         'message' => 'Dispatch error: ' . $e->getMessage()

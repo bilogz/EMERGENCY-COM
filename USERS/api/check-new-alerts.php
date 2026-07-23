@@ -5,7 +5,7 @@
  */
 
 header('Content-Type: application/json; charset=utf-8');
-require_once '../../ADMIN/api/db_connect.php';
+require_once __DIR__ . '/../../ADMIN/api/db_connect.php';
 
 session_start();
 
@@ -160,8 +160,24 @@ function resolveRealtimeLogsTable(PDO $pdo): string {
     return realtimeHasReadableTable($pdo, 'notification_logs_runtime') ? 'notification_logs_runtime' : 'notification_logs';
 }
 
-// Current user identification (assuming citizen user_id or admin_user_id)
-$userId = $_SESSION['user_id'] ?? $_SESSION['admin_user_id'] ?? null;
+function ensureRealtimeAlertMarks(PDO $pdo): string {
+    foreach (['user_alert_marks', 'user_alert_marks_runtime'] as $candidate) {
+        if (realtimeHasReadableTable($pdo, $candidate)) return $candidate;
+    }
+    $table = 'user_alert_marks_runtime';
+    $pdo->exec("CREATE TABLE IF NOT EXISTS {$table} (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT UNSIGNED NOT NULL,
+        alert_id BIGINT UNSIGNED NOT NULL,
+        acknowledged_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_user_alert (user_id, alert_id),
+        INDEX idx_alert_id (alert_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    return $table;
+}
+
+// Pop-up alerts are citizen-only. Admin sessions use the admin notification UI.
+$userId = $_SESSION['user_id'] ?? null;
 
 if (!$userId) {
     echo json_encode(['success' => false, 'message' => 'Unauthorized']);
@@ -169,10 +185,27 @@ if (!$userId) {
 }
 
 try {
+    $marksTable = ensureRealtimeAlertMarks($pdo);
     $alertsTable = resolveRealtimeAlertsTable($pdo);
     $logsTable = resolveRealtimeLogsTable($pdo);
-    $hasCategoryTable = realtimeHasReadableTable($pdo, 'alert_categories');
+    $categoriesTable = realtimeHasReadableTable($pdo, 'alert_categories')
+        ? 'alert_categories'
+        : (realtimeHasReadableTable($pdo, 'alert_categories_catalog') ? 'alert_categories_catalog' : null);
+    $hasCategoryTable = $categoriesTable !== null;
     $hasRecipientsMap = realtimeHasReadableTable($pdo, 'alert_recipients');
+    $logColumns = realtimeHasReadableTable($pdo, $logsTable)
+        ? $pdo->query("SHOW COLUMNS FROM {$logsTable}")->fetchAll(PDO::FETCH_COLUMN)
+        : [];
+    $hasHistoryClock = in_array('message', $logColumns, true) && in_array('sent_at', $logColumns, true);
+    // Compatibility for alerts created before the timezone bug was fixed:
+    // notification_logs.sent_at used MySQL's correct local clock, so use the
+    // matching dispatch time when the alert row itself was saved hours behind.
+    $historyIssuedAt = $hasHistoryClock
+        ? "(SELECT MAX(nl.sent_at) FROM {$logsTable} nl WHERE nl.message = COALESCE(a.message, a.content, ''))"
+        : 'NULL';
+    $freshCondition = "(a.created_at >= DATE_SUB(NOW(), INTERVAL 6 HOUR)"
+        . ($hasHistoryClock ? " OR {$historyIssuedAt} >= DATE_SUB(NOW(), INTERVAL 6 HOUR)" : '')
+        . ')';
 
     $latestAlert = null;
     $unreadCount = 0;
@@ -181,19 +214,21 @@ try {
         // Recipient-mapped visibility:
         // - global alerts (no map rows) are visible to all
         // - targeted alerts are visible only to mapped users
-        $sql = "SELECT a.*";
+        $sql = "SELECT a.*, COALESCE({$historyIssuedAt}, a.created_at) AS issued_at";
         if ($hasCategoryTable) {
             $sql .= ", c.name as category_name, c.icon as category_icon, c.color as category_color
                 FROM {$alertsTable} a
-                LEFT JOIN alert_categories c ON a.category_id = c.id
-                WHERE a.status = 'active'";
+                LEFT JOIN {$categoriesTable} c ON a.category_id = c.id
+                WHERE a.status = 'active'
+                AND {$freshCondition}";
         } else {
             $sql .= ", COALESCE(a.category, 'General') as category_name, 'fa-exclamation-triangle' as category_icon, '#95a5a6' as category_color
                 FROM {$alertsTable} a
-                WHERE a.status = 'active'";
+                WHERE a.status = 'active'
+                AND {$freshCondition}";
         }
         $sql .= "
-            AND a.id NOT IN (SELECT alert_id FROM user_alert_marks WHERE user_id = ?)
+            AND a.id NOT IN (SELECT alert_id FROM {$marksTable} WHERE user_id = ?)
             AND (
                 NOT EXISTS (SELECT 1 FROM alert_recipients ar0 WHERE ar0.alert_id = a.id)
                 OR EXISTS (SELECT 1 FROM alert_recipients ar WHERE ar.alert_id = a.id AND ar.user_id = ?)
@@ -209,7 +244,8 @@ try {
             SELECT COUNT(*)
             FROM {$alertsTable} a
             WHERE a.status = 'active'
-            AND a.id NOT IN (SELECT alert_id FROM user_alert_marks WHERE user_id = ?)
+            AND {$freshCondition}
+            AND a.id NOT IN (SELECT alert_id FROM {$marksTable} WHERE user_id = ?)
             AND (
                 NOT EXISTS (SELECT 1 FROM alert_recipients ar0 WHERE ar0.alert_id = a.id)
                 OR EXISTS (SELECT 1 FROM alert_recipients ar WHERE ar.alert_id = a.id AND ar.user_id = ?)
@@ -229,20 +265,22 @@ try {
         $barangay = $user['barangay'] ?? '';
         $userType = $user['user_type'] ?? '';
 
-        $sql = "SELECT a.*";
+        $sql = "SELECT a.*, COALESCE({$historyIssuedAt}, a.created_at) AS issued_at";
         if ($hasCategoryTable) {
             $sql .= ", c.name as category_name, c.icon as category_icon, c.color as category_color
                 FROM {$alertsTable} a
-                LEFT JOIN alert_categories c ON a.category_id = c.id
-                WHERE a.status = 'active'";
+                LEFT JOIN {$categoriesTable} c ON a.category_id = c.id
+                WHERE a.status = 'active'
+                AND {$freshCondition}";
         } else {
             $sql .= ", COALESCE(a.category, 'General') as category_name, 'fa-exclamation-triangle' as category_icon, '#95a5a6' as category_color
                 FROM {$alertsTable} a
                 WHERE a.status = 'active'
+                AND {$freshCondition}
             ";
         }
         $sql .= "
-                AND a.id NOT IN (SELECT alert_id FROM user_alert_marks WHERE user_id = ?)
+                AND a.id NOT IN (SELECT alert_id FROM {$marksTable} WHERE user_id = ?)
                 AND (
                     a.category_id IN (" . (empty($subscriptions) ? "0" : implode(',', array_map('intval', $subscriptions))) . ")
                     OR a.id IN (SELECT log_id FROM {$logsTable} WHERE recipients LIKE ?)
@@ -261,9 +299,10 @@ try {
 
         $cStmt = $pdo->prepare("
             SELECT COUNT(*) 
-            FROM {$alertsTable} a
-            WHERE a.status = 'active'
-            AND a.id NOT IN (SELECT alert_id FROM user_alert_marks WHERE user_id = ?)
+                FROM {$alertsTable} a
+                WHERE a.status = 'active'
+                AND {$freshCondition}
+                AND a.id NOT IN (SELECT alert_id FROM {$marksTable} WHERE user_id = ?)
             AND (
                 a.category_id IN (" . (empty($subscriptions) ? "0" : implode(',', array_map('intval', $subscriptions))) . ")
                 OR a.id IN (SELECT log_id FROM {$logsTable} WHERE recipients LIKE ?)
@@ -291,14 +330,27 @@ try {
         }
     }
 
+    if ($latestAlert) {
+        $severity = strtolower(trim((string)($latestAlert['severity'] ?? 'medium')));
+        $latestAlert['severity'] = in_array($severity, ['low', 'medium', 'high', 'critical'], true)
+            ? ucfirst($severity)
+            : 'Medium';
+        $latestAlert['message'] = (string)($latestAlert['message'] ?? ($latestAlert['content'] ?? ''));
+        $latestAlert['category_name'] = (string)($latestAlert['category_name'] ?? ($latestAlert['category'] ?? 'Emergency Alert'));
+        $latestAlert['category_icon'] = (string)($latestAlert['category_icon'] ?? 'fa-triangle-exclamation');
+    }
+
     echo json_encode([
         'success' => true,
         'alert' => $latestAlert,
         'unread_count' => (int)$unreadCount,
         'server_time' => date('Y-m-d H:i:s'),
+        'freshness_hours' => 6,
         'language' => $targetLanguage ?? 'en'
     ]);
 
-} catch (PDOException $e) {
-    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+} catch (Throwable $e) {
+    error_log('Realtime alert polling error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Alert service is temporarily unavailable.']);
 }

@@ -117,6 +117,14 @@ return [
     'SMTP_PASS' => '',                  // App password (not regular password)
     'SMTP_FROM' => '',                  // From email address
     'SMTP_FROM_NAME' => 'Emergency Alert System',
+
+    // ===========================================
+    // FIREBASE CLOUD MESSAGING (HTTP v1)
+    // ===========================================
+    // Store the downloaded service-account JSON outside the public web root.
+    'FIREBASE_SERVICE_ACCOUNT_PATH' => '',
+    // Alternative for managed hosting: the complete service-account JSON string.
+    'FIREBASE_SERVICE_ACCOUNT_JSON' => '',
     
     // ===========================================
     // RECAPTCHA CONFIGURATION

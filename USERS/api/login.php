@@ -66,12 +66,8 @@ try {
 
     if (!empty($deviceId)) {
         try {
-            $deviceStmt = $pdo->prepare("
-                INSERT INTO user_devices (user_id, device_id, device_type, device_name, push_token, is_active, last_active) 
-                VALUES (?, ?, ?, ?, ?, 1, NOW()) 
-                ON DUPLICATE KEY UPDATE push_token = VALUES(push_token), device_name = VALUES(device_name), is_active = 1, last_active = NOW()
-            ");
-            $deviceStmt->execute([$user['id'], $deviceId, $deviceType, $deviceName, $pushToken]);
+            require_once __DIR__ . '/../../PHP/api/device_registry.php';
+            registerDeviceToken($pdo, (int)$user['id'], $deviceId, $deviceType, $deviceName, $pushToken);
         } catch (PDOException $e) {
             error_log("Device registration error: " . $e->getMessage());
             // Continue even if device registration fails

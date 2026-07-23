@@ -14,13 +14,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-session_start();
-// Check if user is logged in
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-    http_response_code(401);
-    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
-    exit();
-}
+// This endpoint only returns public PAGASA bulletin data. Keeping GET access public
+// lets the citizen website and mobile webview receive the same official bulletin.
 
 // Fetch feed from PAGASA
 function fetchRawPagasaFeed() {

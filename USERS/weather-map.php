@@ -1,393 +1,251 @@
 <?php
-// Include centralized session configuration - MUST be first
 require_once __DIR__ . '/../session-config.php';
 
 $assetBase = '../ADMIN/header/';
 $current = 'weather-map.php';
+$pageTitle = 'Weather Bulletins and Map';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weather Map</title>
+    <title><?= htmlspecialchars($pageTitle) ?></title>
     <link rel="icon" type="image/x-icon" href="<?= $assetBase ?>images/favicon.ico">
-    <link rel="stylesheet" href="<?= $assetBase ?>css/global.css">
-    <link rel="stylesheet" href="<?= $assetBase ?>css/buttons.css">
-    <link rel="stylesheet" href="<?= $assetBase ?>css/hero.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/global.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/sidebar.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/content.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/admin-header.css">
     <link rel="stylesheet" href="../ADMIN/sidebar/css/buttons.css">
     <link rel="stylesheet" href="css/user.css">
+    <link rel="stylesheet" href="css/environment-bulletins.css?v=<?= filemtime(__DIR__ . '/css/environment-bulletins.css') ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <script src="js/translations.js"></script>
     <script src="js/language-manager.js"></script>
     <script src="js/global-translator.js"></script>
     <script src="js/language-selector-modal.js"></script>
     <script src="js/language-sync.js"></script>
-    <script>
-        // Ensure sidebar functions are available before translation scripts interfere
-        (function() {
-            if (typeof window.sidebarToggle !== 'function') {
-                window.sidebarToggle = function() {
-                    const sidebar = document.getElementById('sidebar');
-                    const sidebarOverlay = document.getElementById('sidebarOverlay');
-                    if (sidebar) {
-                        sidebar.classList.toggle('sidebar-open');
-                        if (sidebarOverlay) {
-                            sidebarOverlay.classList.toggle('sidebar-overlay-open');
-                        }
-                        document.body.classList.toggle('sidebar-open');
-                    }
-                };
-            }
-            if (typeof window.sidebarClose !== 'function') {
-                window.sidebarClose = function() {
-                    const sidebar = document.getElementById('sidebar');
-                    const sidebarOverlay = document.getElementById('sidebarOverlay');
-                    if (sidebar) {
-                        sidebar.classList.remove('sidebar-open');
-                        if (sidebarOverlay) {
-                            sidebarOverlay.classList.remove('sidebar-overlay-open');
-                        }
-                        document.body.classList.remove('sidebar-open');
-                    }
-                };
-            }
-        })();
-    </script>
 </head>
 <body class="user-admin-header">
     <?php include 'includes/user-global-header.php'; ?>
 
-    <main class="main-content" style="padding-top: 60px;">
+    <main class="main-content bulletin-page">
         <div class="main-container">
-            <div class="sub-container weather-map-card">
-                <div class="weather-map-header">
-                    <div>
-                        <h1><i class="fas fa-cloud-sun-rain"></i> Weather Map</h1>
-                        <p>Live weather overlays for Quezon City and nearby areas.</p>
+            <header class="bulletin-hero">
+                <div>
+                    <div class="bulletin-eyebrow"><i class="fas fa-satellite-dish"></i> PAGASA monitoring</div>
+                    <h1>Weather Bulletins and Live Map</h1>
+                    <p>Official weather advisories and current Quezon City conditions in one easy-to-read bulletin. Read the safety guidance first, then use the map to check rain, wind, clouds, or temperature.</p>
+                </div>
+                <div class="bulletin-live"><span class="bulletin-live-dot"></span> Live updates active</div>
+            </header>
+
+            <section class="bulletin-metrics" aria-label="Current Quezon City weather">
+                <div class="bulletin-metric"><span>Temperature</span><strong id="weatherTemperature">--°C</strong></div>
+                <div class="bulletin-metric"><span>Humidity</span><strong id="weatherHumidity">--%</strong></div>
+                <div class="bulletin-metric"><span>Wind</span><strong id="weatherWind">-- km/h</strong></div>
+                <div class="bulletin-metric"><span>Condition</span><strong id="weatherCondition" style="font-size:1rem">Loading...</strong></div>
+            </section>
+
+            <section class="bulletin-board" aria-labelledby="weatherBoardTitle">
+                <div class="bulletin-toolbar">
+                    <div class="bulletin-toolbar-title">
+                        <i class="fas fa-bullhorn"></i>
+                        <div>
+                            <h2 id="weatherBoardTitle">PAGASA Weather Bulletin Board</h2>
+                            <small id="weatherLastUpdate">Checking for active advisories...</small>
+                        </div>
                     </div>
-                    <div class="weather-map-actions">
-                        <button type="button" class="btn btn-secondary" data-layer="temp"><i class="fas fa-thermometer-half"></i> Temperature</button>
-                        <button type="button" class="btn btn-secondary" data-layer="precip"><i class="fas fa-cloud-showers-heavy"></i> Precipitation</button>
-                        <button type="button" class="btn btn-secondary" data-layer="wind"><i class="fas fa-wind"></i> Wind</button>
-                        <button type="button" class="btn btn-secondary" data-layer="clouds"><i class="fas fa-cloud"></i> Clouds</button>
-                        <button type="button" class="btn btn-secondary" data-layer="quakes"><i class="fas fa-mountain"></i> Earthquakes</button>
+                    <div class="bulletin-actions">
+                        <button class="bulletin-button" id="refreshWeather" type="button"><i class="fas fa-rotate"></i> Refresh</button>
+                        <a class="bulletin-button primary" href="https://www.pagasa.dost.gov.ph/" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Official PAGASA</a>
                     </div>
                 </div>
-                <div id="userWeatherMap" class="weather-map-canvas"></div>
-                <div class="weather-map-note" id="weatherMapNote">Tip: toggle layers to see different weather conditions.</div>
+                <div class="bulletin-feed" id="weatherBulletinFeed" aria-live="polite">
+                    <div class="bulletin-loading"><i class="fas fa-circle-notch fa-spin"></i>Retrieving the latest PAGASA advisories...</div>
+                </div>
+            </section>
 
-                <div class="weather-analytics-grid weather-analytics-layout">
-                    <div class="weather-analytics-stack">
-                    <div class="weather-analytics-card">
-                        <h3><i class="fas fa-cloud-sun"></i> Current Weather</h3>
-                        <div class="analytics-row">
-                            <div class="analytics-metric">
-                                <span class="metric-label">Temperature</span>
-                                <span class="metric-value" id="waTemp">--&deg;C</span>
-                            </div>
-                            <div class="analytics-metric">
-                                <span class="metric-label">Humidity</span>
-                                <span class="metric-value" id="waHumidity">--%</span>
-                            </div>
-                            <div class="analytics-metric">
-                                <span class="metric-label">Wind</span>
-                                <span class="metric-value" id="waWind">-- km/h</span>
-                            </div>
-                        </div>
-                        <div class="analytics-sub" id="waCondition">Loading weather data...</div>
+            <section class="bulletin-map-panel" aria-labelledby="weatherMapTitle">
+                <div class="bulletin-toolbar">
+                    <div class="bulletin-toolbar-title">
+                        <i class="fas fa-map-location-dot"></i>
+                        <div><h2 id="weatherMapTitle">Quezon City Weather Map</h2><small>Select one layer at a time for a clearer view.</small></div>
                     </div>
-
-                    <div class="weather-analytics-card">
-                        <h3><i class="fas fa-mountain"></i> Earthquake Activity</h3>
-                        <div class="analytics-row">
-                            <div class="analytics-metric">
-                                <span class="metric-label">Events (7d)</span>
-                                <span class="metric-value" id="eqCount">--</span>
-                            </div>
-                            <div class="analytics-metric">
-                                <span class="metric-label">Max Magnitude</span>
-                                <span class="metric-value" id="eqMax">--</span>
-                            </div>
-                            <div class="analytics-metric">
-                                <span class="metric-label">Latest</span>
-                                <span class="metric-value" id="eqLatest">--</span>
-                            </div>
-                        </div>
-                        <div class="analytics-sub" id="eqSummary">Loading earthquake data...</div>
-                    </div>
-
-                    </div>
-
-                    <div class="weather-analytics-card weather-analytics-ai">
-                        <h3><i class="fas fa-robot"></i> AI Analytics</h3>
-                        <p class="analytics-sub" id="aiSummary">Run AI analysis to get a concise risk summary for Quezon City.</p>
-                        <button type="button" class="btn btn-primary" id="runAiSummary"><i class="fas fa-bolt"></i> Generate AI Summary</button>
+                    <div class="bulletin-layer-actions weather-map-actions" role="group" aria-label="Weather map layers">
+                        <button class="bulletin-button active" type="button" data-layer="temp"><i class="fas fa-temperature-half"></i> Temperature</button>
+                        <button class="bulletin-button" type="button" data-layer="precip"><i class="fas fa-cloud-showers-heavy"></i> Rain</button>
+                        <button class="bulletin-button" type="button" data-layer="wind"><i class="fas fa-wind"></i> Wind</button>
+                        <button class="bulletin-button" type="button" data-layer="clouds"><i class="fas fa-cloud"></i> Clouds</button>
                     </div>
                 </div>
-            </div>
+                <div id="userWeatherMap" class="bulletin-map-canvas" aria-label="Live weather map of Quezon City"></div>
+                <div class="bulletin-map-note" id="weatherMapNote"><i class="fas fa-circle-info"></i> Map centered on Quezon City. Weather overlays require an active OpenWeather configuration.</div>
+            </section>
+
+            <section class="bulletin-safety-panel" aria-labelledby="weatherSafetyTitle">
+                <div class="bulletin-toolbar">
+                    <div class="bulletin-toolbar-title"><i class="fas fa-shield-heart"></i><h2 id="weatherSafetyTitle">Weather Safety Reminders</h2></div>
+                </div>
+                <div class="bulletin-safety-grid">
+                    <div class="bulletin-safety-item"><i class="fas fa-mobile-screen-button"></i><strong>Keep alerts available.</strong> Charge your phone and keep mobile data or a radio ready.</div>
+                    <div class="bulletin-safety-item"><i class="fas fa-water"></i><strong>Avoid floodwater.</strong> Never walk or drive through a flooded road.</div>
+                    <div class="bulletin-safety-item"><i class="fas fa-house"></i><strong>Prepare early.</strong> Secure loose items and know your nearest evacuation site.</div>
+                </div>
+            </section>
         </div>
     </main>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const map = L.map('userWeatherMap').setView([14.6760, 121.0437], 11);
-            const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 18,
-                attribution: '&copy; OpenStreetMap contributors'
-            });
-            baseLayer.addTo(map);
+        (() => {
+            'use strict';
 
-            const layerButtons = document.querySelectorAll('.weather-map-actions [data-layer]');
+            const feed = document.getElementById('weatherBulletinFeed');
+            const refreshButton = document.getElementById('refreshWeather');
+            const updateLabel = document.getElementById('weatherLastUpdate');
+            const layerButtons = [...document.querySelectorAll('.weather-map-actions [data-layer]')];
+            const map = L.map('userWeatherMap', { scrollWheelZoom: false }).setView([14.6760, 121.0437], 11);
             const overlays = {};
             let activeOverlay = null;
-            const quakeLayer = L.layerGroup();
-            let quakeLoaded = false;
-            let latestWeather = null;
-            let earthquakeStats = null;
 
-            function setActiveButton(target) {
-                layerButtons.forEach(btn => btn.classList.remove('active'));
-                if (target) target.classList.add('active');
-            }
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 18,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
 
-            function loadOverlay(type, apiKey) {
-                const key = type;
-                const mapType = {
-                    temp: 'temp_new',
-                    precip: 'precipitation_new',
-                    wind: 'wind_new',
-                    clouds: 'clouds_new'
-                }[type];
-
-                if (!mapType || !apiKey) return null;
-
-                if (!overlays[key]) {
-                    overlays[key] = L.tileLayer(`https://tile.openweathermap.org/map/${mapType}/{z}/{x}/{y}.png?appid=${apiKey}`, {
-                        maxZoom: 18,
-                        opacity: 0.75
-                    });
-                }
-                return overlays[key];
-            }
-
-            function loadQuezonBoundary() {
-                fetch('../ADMIN/api/quezon-city.geojson', { cache: 'force-cache' })
-                    .then(res => res.json())
-                    .then(geojson => {
-                        L.geoJSON(geojson, {
-                            style: {
-                                color: '#3a7675',
-                                weight: 3,
-                                fillOpacity: 0.05
-                            }
-                        }).addTo(map);
-                    })
-                    .catch(() => {
-                        const note = document.getElementById('weatherMapNote');
-                        if (note) {
-                            note.textContent = 'Boundary data unavailable. Map still shows weather layers.';
-                        }
-                    });
-            }
-
-            function updateWeatherAnalytics(weather) {
-                latestWeather = weather;
-                const tempEl = document.getElementById('waTemp');
-                const humidityEl = document.getElementById('waHumidity');
-                const windEl = document.getElementById('waWind');
-                const conditionEl = document.getElementById('waCondition');
-                if (!weather || !tempEl || !humidityEl || !windEl || !conditionEl) return;
-
-                const temp = Math.round(weather.main?.temp ?? 0);
-                const humidity = Math.round(weather.main?.humidity ?? 0);
-                const wind = Math.round((weather.wind?.speed ?? 0) * 3.6);
-                const description = weather.weather?.[0]?.description || 'Current conditions';
-
-                tempEl.textContent = `${temp}°C`;
-                humidityEl.textContent = `${humidity}%`;
-                windEl.textContent = `${wind} km/h`;
-                conditionEl.textContent = description.charAt(0).toUpperCase() + description.slice(1);
-            }
-
-            function loadWeatherSummary() {
-                fetch('../ADMIN/api/weather-monitoring.php?action=current&lat=14.6760&lon=121.0437')
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data && data.success && data.data) {
-                            updateWeatherAnalytics(data.data);
-                        }
-                    })
-                    .catch(() => {});
-            }
-
-            function updateEarthquakeAnalytics(stats) {
-                earthquakeStats = stats;
-                const countEl = document.getElementById('eqCount');
-                const maxEl = document.getElementById('eqMax');
-                const latestEl = document.getElementById('eqLatest');
-                const summaryEl = document.getElementById('eqSummary');
-                if (!countEl || !maxEl || !latestEl || !summaryEl) return;
-
-                countEl.textContent = stats.count ?? '--';
-                maxEl.textContent = stats.maxMag ?? '--';
-                latestEl.textContent = stats.latestTime ?? '--';
-                summaryEl.textContent = stats.summary ?? 'No recent earthquakes detected.';
-            }
-
-            function loadEarthquakes() {
-                if (quakeLoaded) return;
-                const endTime = new Date();
-                const startTime = new Date(endTime.getTime() - 7 * 24 * 60 * 60 * 1000);
-                const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${startTime.toISOString()}&minmagnitude=3&maxlatitude=21.5&minlatitude=4.0&maxlongitude=127.5&minlongitude=115.5`;
-
-                fetch(url)
-                    .then(res => res.json())
-                    .then(data => {
-                        const features = data.features || [];
-                        let maxMag = 0;
-                        let latest = null;
-                        features.forEach(feature => {
-                            const coords = feature.geometry?.coordinates || [];
-                            const mag = feature.properties?.mag || 0;
-                            const time = feature.properties?.time || 0;
-                            const place = feature.properties?.place || 'Unknown location';
-                            const lat = coords[1];
-                            const lon = coords[0];
-                            if (mag > maxMag) maxMag = mag;
-                            if (!latest || time > latest.time) latest = { time, place, mag };
-
-                            if (lat && lon) {
-                                const marker = L.circleMarker([lat, lon], {
-                                    radius: Math.max(4, Math.min(12, mag * 2)),
-                                    color: '#ff6b6b',
-                                    fillColor: '#ff8787',
-                                    fillOpacity: 0.8,
-                                    weight: 1
-                                }).bindPopup(`<strong>M ${mag.toFixed(1)}</strong><br>${place}`);
-                                quakeLayer.addLayer(marker);
-                            }
-                        });
-
-                        quakeLoaded = true;
-                        const latestTime = latest ? new Date(latest.time).toLocaleString() : '--';
-                        updateEarthquakeAnalytics({
-                            count: features.length,
-                            maxMag: maxMag ? maxMag.toFixed(1) : '--',
-                            latestTime: latestTime,
-                            summary: latest ? `Latest M ${latest.mag?.toFixed(1)} at ${latest.place}.` : 'No recent earthquakes detected.'
-                        });
-                    })
-                    .catch(() => {
-                        updateEarthquakeAnalytics({
-                            count: '--',
-                            maxMag: '--',
-                            latestTime: '--',
-                            summary: 'Unable to load earthquake data.'
-                        });
-                    });
-            }
-
-            function runAiAnalytics() {
-                const aiSummary = document.getElementById('aiSummary');
-                const btn = document.getElementById('runAiSummary');
-                if (!aiSummary || !btn) return;
-
-                btn.disabled = true;
-                aiSummary.textContent = 'Analyzing current conditions...';
-
-                const weatherDesc = latestWeather
-                    ? `Weather: ${latestWeather.weather?.[0]?.description || 'clear'}, ${Math.round(latestWeather.main?.temp ?? 0)}°C, humidity ${latestWeather.main?.humidity ?? 0}%, wind ${(latestWeather.wind?.speed ?? 0) * 3.6} km/h.`
-                    : 'Weather data unavailable.';
-                const quakeDesc = earthquakeStats
-                    ? `Earthquakes (7d): ${earthquakeStats.count} events, max magnitude ${earthquakeStats.maxMag}, latest ${earthquakeStats.latestTime}.`
-                    : 'Earthquake data unavailable.';
-
-                const prompt = `You are an emergency risk analyst. Provide a concise, calm 3-4 sentence summary for Quezon City based on:\n${weatherDesc}\n${quakeDesc}\nInclude any suggested precautions if needed.`;
-
-                fetch('../ADMIN/api/gemini-proxy.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt })
-                })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data && data.success && data.response) {
-                            aiSummary.textContent = data.response.trim();
-                        } else {
-                            aiSummary.textContent = data?.message || 'AI analysis unavailable.';
-                        }
-                    })
-                    .catch(() => {
-                        aiSummary.textContent = 'AI analysis unavailable.';
-                    })
-                    .finally(() => {
-                        btn.disabled = false;
-                    });
-            }
-
-            loadQuezonBoundary();
-            loadWeatherSummary();
-
-            const aiBtn = document.getElementById('runAiSummary');
-            if (aiBtn) {
-                aiBtn.addEventListener('click', runAiAnalytics);
-            }
-
-            fetch('../ADMIN/api/weather-monitoring.php?action=getApiKey')
+            fetch('../ADMIN/api/quezon-city.geojson', { cache: 'force-cache' })
                 .then(response => response.json())
-                .then(data => {
-                    if (!data || !data.success || !data.apiKey) {
-                        const note = document.getElementById('weatherMapNote');
-                        if (note) {
-                            note.textContent = 'Weather layers unavailable. API key not configured.';
-                        }
-                        return;
-                    }
+                .then(data => L.geoJSON(data, { style: { color: '#3e7f7d', weight: 3, fillOpacity: .06 } }).addTo(map))
+                .catch(() => {});
 
-                    layerButtons.forEach(btn => {
-                        btn.addEventListener('click', function() {
-                            const type = btn.getAttribute('data-layer');
-                            if (type === 'quakes') {
-                                if (activeOverlay && map.hasLayer(activeOverlay)) {
-                                    map.removeLayer(activeOverlay);
-                                }
-                                map.addLayer(quakeLayer);
-                                activeOverlay = quakeLayer;
-                                setActiveButton(btn);
-                                loadEarthquakes();
-                                return;
-                            }
+            function escapeHtml(value) {
+                return String(value ?? '').replace(/[&<>'"]/g, char => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
+                })[char]);
+            }
 
-                            const overlay = loadOverlay(type, data.apiKey);
-                            if (!overlay) return;
+            function severityStyle(value) {
+                const severity = String(value || 'Medium').toLowerCase();
+                if (severity === 'critical') return { color: '#b42318', label: 'Critical' };
+                if (severity === 'high') return { color: '#c2410c', label: 'High' };
+                if (severity === 'medium') return { color: '#b7791f', label: 'Moderate' };
+                return { color: '#2f855a', label: 'Advisory' };
+            }
 
-                            if (activeOverlay && map.hasLayer(activeOverlay)) {
-                                map.removeLayer(activeOverlay);
-                            }
-                            overlay.addTo(map);
-                            activeOverlay = overlay;
-                            setActiveButton(btn);
-                        });
+            function citizenActions(severity) {
+                const actions = [
+                    'Monitor PAGASA and Quezon City government updates.',
+                    'Charge phones and prepare water, medicine, and a flashlight.'
+                ];
+                if (['high', 'critical'].includes(String(severity).toLowerCase())) {
+                    actions.push('Stay away from waterways and be ready to move when officials advise evacuation.');
+                } else {
+                    actions.push('Plan travel carefully and bring rain protection when needed.');
+                }
+                return actions;
+            }
+
+            function renderBulletins(data) {
+                updateLabel.textContent = `Last checked ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+                // Never display the parser's demonstration fallback as a real public warning.
+                if (data.is_mock) {
+                    feed.innerHTML = '<div class="bulletin-error"><i class="fas fa-satellite-dish"></i><strong>The live PAGASA feed is temporarily unavailable.</strong><br>No demonstration or sample warning is being shown. Please check the official PAGASA website.</div>';
+                    return;
+                }
+
+                if (!Array.isArray(data.bulletins) || data.bulletins.length === 0) {
+                    feed.innerHTML = '<div class="bulletin-empty"><i class="fas fa-sun"></i><strong>No active tropical cyclone bulletin.</strong><br>Continue checking for local rain and thunderstorm advisories.</div>';
+                    return;
+                }
+
+                feed.innerHTML = data.bulletins.map(item => {
+                    const impact = item.quezon_city_impact || {};
+                    const level = severityStyle(impact.severity);
+                    const actions = citizenActions(impact.severity);
+                    const officialLink = item.link
+                        ? `<a class="bulletin-button" href="${escapeHtml(item.link)}" target="_blank" rel="noopener"><i class="fas fa-file-pdf"></i> View official bulletin</a>` : '';
+                    return `<article class="bulletin-card" style="--bulletin-accent:${level.color}">
+                        <div class="bulletin-card-head">
+                            <div><div class="bulletin-source"><i class="fas fa-satellite-dish"></i> PAGASA weather bulletin</div><h3>${escapeHtml(item.title || 'Weather Advisory')}</h3></div>
+                            <div class="bulletin-issued"><i class="far fa-clock"></i> ${escapeHtml(item.issued_at || 'Issue time unavailable')}</div>
+                        </div>
+                        <div class="bulletin-card-body">
+                            <p class="bulletin-description">${escapeHtml(item.description || 'Please open the official bulletin for complete details.')}</p>
+                            <div class="bulletin-impact">
+                                <div class="bulletin-impact-head"><span class="bulletin-impact-title"><i class="fas fa-location-dot"></i> What this means for Quezon City</span><span class="bulletin-badge">${level.label}</span></div>
+                                <p>${escapeHtml(impact.summary || 'Monitor local announcements for conditions affecting Quezon City.')}</p>
+                                <ul class="bulletin-steps">${actions.map(action => `<li>${escapeHtml(action)}</li>`).join('')}</ul>
+                            </div>
+                            <div class="bulletin-card-actions">${officialLink}</div>
+                        </div>
+                    </article>`;
+                }).join('');
+            }
+
+            async function loadBulletins() {
+                refreshButton.disabled = true;
+                refreshButton.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Checking';
+                try {
+                    const response = await fetch('../ADMIN/api/pagasa-bulletin-parser.php', { cache: 'no-store' });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) throw new Error(data.message || 'PAGASA bulletin service unavailable.');
+                    renderBulletins(data);
+                } catch (error) {
+                    feed.innerHTML = `<div class="bulletin-error"><i class="fas fa-triangle-exclamation"></i><strong>Weather bulletins could not be loaded.</strong><br>${escapeHtml(error.message)}<div style="margin-top:1rem"><button class="bulletin-button" type="button" onclick="document.getElementById('refreshWeather').click()">Try again</button></div></div>`;
+                    updateLabel.textContent = 'Live bulletin feed unavailable';
+                } finally {
+                    refreshButton.disabled = false;
+                    refreshButton.innerHTML = '<i class="fas fa-rotate"></i> Refresh';
+                }
+            }
+
+            async function loadCurrentWeather() {
+                try {
+                    const response = await fetch('../ADMIN/api/weather-monitoring.php?action=current&lat=14.6760&lon=121.0437');
+                    const result = await response.json();
+                    if (!result.success || !result.data) throw new Error('Current weather unavailable');
+                    const weather = result.data;
+                    document.getElementById('weatherTemperature').textContent = `${Math.round(weather.main?.temp ?? 0)}°C`;
+                    document.getElementById('weatherHumidity').textContent = `${Math.round(weather.main?.humidity ?? 0)}%`;
+                    document.getElementById('weatherWind').textContent = `${Math.round((weather.wind?.speed ?? 0) * 3.6)} km/h`;
+                    const condition = weather.weather?.[0]?.description || 'Current conditions';
+                    document.getElementById('weatherCondition').textContent = condition.charAt(0).toUpperCase() + condition.slice(1);
+                } catch (_) {
+                    document.getElementById('weatherCondition').textContent = 'Unavailable';
+                }
+            }
+
+            async function initializeLayers() {
+                try {
+                    const response = await fetch('../ADMIN/api/weather-monitoring.php?action=getApiKey');
+                    const result = await response.json();
+                    if (!result.success || !result.apiKey) throw new Error('Weather overlays are not configured.');
+                    const types = { temp: 'temp_new', precip: 'precipitation_new', wind: 'wind_new', clouds: 'clouds_new' };
+                    Object.entries(types).forEach(([key, type]) => {
+                        overlays[key] = L.tileLayer(`https://tile.openweathermap.org/map/${type}/{z}/{x}/{y}.png?appid=${result.apiKey}`, { maxZoom: 18, opacity: .72 });
                     });
+                    activeOverlay = overlays.temp.addTo(map);
+                    layerButtons.forEach(button => button.addEventListener('click', () => {
+                        if (activeOverlay) map.removeLayer(activeOverlay);
+                        activeOverlay = overlays[button.dataset.layer].addTo(map);
+                        layerButtons.forEach(item => item.classList.toggle('active', item === button));
+                    }));
+                } catch (error) {
+                    document.getElementById('weatherMapNote').innerHTML = `<i class="fas fa-circle-info"></i> ${escapeHtml(error.message)} The base map remains available.`;
+                    layerButtons.forEach(button => { button.disabled = true; });
+                }
+            }
 
-                    const defaultBtn = document.querySelector('.weather-map-actions [data-layer="temp"]');
-                    if (defaultBtn) defaultBtn.click();
-                })
-                .catch(() => {
-                    const note = document.getElementById('weatherMapNote');
-                    if (note) {
-                        note.textContent = 'Weather layers unavailable. Please try again later.';
-                    }
-                });
-        });
+            refreshButton.addEventListener('click', () => { loadBulletins(); loadCurrentWeather(); });
+            loadBulletins();
+            loadCurrentWeather();
+            initializeLayers();
+            window.setInterval(loadBulletins, 60000);
+            window.setInterval(loadCurrentWeather, 300000);
+        })();
     </script>
 </body>
 </html>
