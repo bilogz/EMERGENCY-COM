@@ -65,19 +65,6 @@ try {
         error_log('closed_by column might not exist: ' . $e->getMessage());
     }
     
-    // Also update chat queue if exists
-    try {
-        $stmt = $pdo->prepare("
-            UPDATE chat_queue 
-            SET status = 'closed', updated_at = NOW() 
-            WHERE conversation_id = ?
-        ");
-        $stmt->execute([$conversationId]);
-    } catch (PDOException $e) {
-        // Queue update is optional
-        error_log('Chat queue update warning: ' . $e->getMessage());
-    }
-    
     echo json_encode([
         'success' => true,
         'message' => 'Conversation closed successfully'

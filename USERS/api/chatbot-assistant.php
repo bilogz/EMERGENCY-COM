@@ -1341,7 +1341,7 @@ function chatbot_route_emergency_to_admin(array $context): array {
                 $assignedTo = twc_safe_int($existingRow['assigned_to'] ?? null);
             } else {
                 $createdConversation = true;
-                $assignedTo = $hasAssignedToColumn ? twc_pick_assignee($pdo) : null;
+                $assignedTo = null;
                 $statusOpen = twc_status_for_db($pdo, 'open');
 
                 $columns = [
@@ -1463,66 +1463,15 @@ function chatbot_route_emergency_to_admin(array $context): array {
             $updateParts[] = 'priority = ?';
             $updateParams[] = $priority;
         }
-        if ($hasAssignedToColumn) {
-            if ($assignedTo === null) {
-                $assignedTo = twc_pick_assignee($pdo);
-            }
-            if ($assignedTo !== null) {
-                $updateParts[] = 'assigned_to = ?';
-                $updateParams[] = $assignedTo;
-            }
+        if ($hasAssignedToColumn && $assignedTo !== null) {
+            $updateParts[] = 'assigned_to = ?';
+            $updateParams[] = $assignedTo;
         }
 
         $updateParams[] = $conversationId;
         $updateSql = "UPDATE conversations SET " . implode(', ', $updateParts) . " WHERE conversation_id = ?";
         $updateStmt = $pdo->prepare($updateSql);
         $updateStmt->execute($updateParams);
-
-        if (twc_table_exists($pdo, 'chat_queue')) {
-            $queueHasAssigned = twc_column_exists($pdo, 'chat_queue', 'assigned_to');
-            $queueColumns = [
-                'conversation_id',
-                'user_id',
-                'user_name',
-                'user_email',
-                'user_phone',
-                'user_location',
-                'user_concern',
-                'is_guest',
-                'message',
-                'status',
-                'created_at',
-            ];
-            $queueValues = [
-                $conversationId,
-                $userId,
-                $userName,
-                $userEmail !== '' ? $userEmail : null,
-                $userPhone !== '' ? $userPhone : null,
-                $userLocation !== '' ? $userLocation : null,
-                $category,
-                $isGuest ? 1 : 0,
-                $message,
-                'pending',
-                date('Y-m-d H:i:s'),
-            ];
-            if ($queueHasAssigned) {
-                $queueColumns[] = 'assigned_to';
-                $queueValues[] = $assignedTo;
-            }
-
-            $queueSql = "INSERT INTO chat_queue (" . implode(',', $queueColumns) . ")
-                         VALUES (" . twc_placeholders($queueValues) . ")
-                         ON DUPLICATE KEY UPDATE
-                            message = VALUES(message),
-                            status = 'pending',
-                            updated_at = NOW()";
-            if ($queueHasAssigned) {
-                $queueSql .= ", assigned_to = VALUES(assigned_to)";
-            }
-            $queueStmt = $pdo->prepare($queueSql);
-            $queueStmt->execute($queueValues);
-        }
 
         $pdo->commit();
 

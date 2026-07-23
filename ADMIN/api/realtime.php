@@ -57,7 +57,10 @@ if ($conversationId > 0) {
 
 $activeStatuses = twc_active_statuses();
 $unreadSql = "
-    SELECT COUNT(DISTINCT c.conversation_id)
+    SELECT
+        COUNT(*) AS unread_messages,
+        COUNT(DISTINCT c.conversation_id) AS unread_conversations,
+        COALESCE(MAX(m.message_id), 0) AS latest_message_id
     FROM conversations c
     JOIN chat_messages m ON c.conversation_id = m.conversation_id
     WHERE c.status IN (" . twc_placeholders($activeStatuses) . ")
@@ -66,12 +69,18 @@ $unreadSql = "
 ";
 $unreadStmt = $pdo->prepare($unreadSql);
 $unreadStmt->execute($activeStatuses);
-$lastUnread = (int)$unreadStmt->fetchColumn();
+$unreadRow = $unreadStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+$lastUnread = (int)($unreadRow['unread_messages'] ?? 0);
+$lastUnreadConversationCount = (int)($unreadRow['unread_conversations'] ?? 0);
+$lastUnreadMessageId = (int)($unreadRow['latest_message_id'] ?? 0);
 
 sse_emit('ready', [
     'conversationId' => $conversationId > 0 ? $conversationId : null,
     'lastMessageId' => $lastMessageId,
-    'unreadCount' => $lastUnread
+    'unreadCount' => $lastUnread,
+    'unreadMessageCount' => $lastUnread,
+    'unreadConversationCount' => $lastUnreadConversationCount,
+    'latestMessageId' => $lastUnreadMessageId,
 ]);
 
 $maxLoops = 15; // ~30s @ 2s interval
@@ -119,10 +128,20 @@ for ($i = 0; $i < $maxLoops; $i++) {
     }
 
     $unreadStmt->execute($activeStatuses);
-    $unread = (int)$unreadStmt->fetchColumn();
-    if ($unread !== $lastUnread) {
+    $unreadRow = $unreadStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $unread = (int)($unreadRow['unread_messages'] ?? 0);
+    $unreadConversationCount = (int)($unreadRow['unread_conversations'] ?? 0);
+    $latestUnreadMessageId = (int)($unreadRow['latest_message_id'] ?? 0);
+    if ($unread !== $lastUnread || $latestUnreadMessageId !== $lastUnreadMessageId) {
         $lastUnread = $unread;
-        sse_emit('conversation:unread', ['unreadCount' => $unread]);
+        $lastUnreadConversationCount = $unreadConversationCount;
+        $lastUnreadMessageId = $latestUnreadMessageId;
+        sse_emit('conversation:unread', [
+            'unreadCount' => $unread,
+            'unreadMessageCount' => $unread,
+            'unreadConversationCount' => $unreadConversationCount,
+            'latestMessageId' => $latestUnreadMessageId,
+        ]);
     }
 
     sse_emit('heartbeat', ['ts' => round(microtime(true) * 1000)]);

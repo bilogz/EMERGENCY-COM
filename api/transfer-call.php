@@ -1,25 +1,32 @@
 <?php
-session_start();
+$sessionConfigPath = dirname(__DIR__) . '/session-config.php';
+if (is_file($sessionConfigPath)) {
+    require_once $sessionConfigPath;
+} elseif (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 header('Content-Type: application/json; charset=utf-8');
 
 $isAdminSession = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
+$isUserSession = isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === true;
 
-if (!$isAdminSession) {
+if (!$isAdminSession && !$isUserSession) {
     require_once __DIR__ . '/auth.php';
 } else {
     require_once __DIR__ . '/config.php';
-    $deptName = 'Admin Session';
-    if (!function_exists('sendJsonResponse')) {
-        function sendJsonResponse(bool $success, string $message, array $data = [], int $httpCode = 200) {
-            http_response_code($httpCode);
-            header('Content-Type: application/json; charset=utf-8');
-            $response = ['success' => $success, 'message' => $message];
-            if (!empty($data)) {
-                $response = array_merge($response, $data);
-            }
-            echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            exit();
+    $deptName = $isAdminSession ? 'Admin Session' : 'User Emergency Call';
+}
+
+if (!function_exists('sendJsonResponse')) {
+    function sendJsonResponse(bool $success, string $message, array $data = [], int $httpCode = 200) {
+        http_response_code($httpCode);
+        header('Content-Type: application/json; charset=utf-8');
+        $response = ['success' => $success, 'message' => $message];
+        if (!empty($data)) {
+            $response = array_merge($response, $data);
         }
+        echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit();
     }
 }
 $chatLogicPath = dirname(__DIR__) . '/ADMIN/api/chat-logic.php';
@@ -273,7 +280,97 @@ function postResponseTeamPayload(string $targetUrl, array $payload, string $apiK
     ];
 }
 
+function transferNonEmptyValues(array $values): array {
+    $clean = [];
+    foreach ($values as $key => $value) {
+        if ($value === null) {
+            continue;
+        }
+        if (is_string($value) && trim($value) === '') {
+            continue;
+        }
+        $clean[$key] = $value;
+    }
+    return $clean;
+}
+
+function transferBuildUserAddress(array $user): string {
+    $address = trim((string)($user['address'] ?? ''));
+    if ($address !== '') {
+        return $address;
+    }
+
+    $parts = [];
+    foreach (['house_number', 'street', 'barangay', 'district'] as $field) {
+        $part = trim((string)($user[$field] ?? ''));
+        if ($part !== '') {
+            $parts[] = $part;
+        }
+    }
+    return implode(', ', $parts);
+}
+
+function transferLoadSessionCaller(PDO $pdo): array {
+    $userId = $_SESSION['user_id'] ?? null;
+    $userType = strtolower(trim((string)($_SESSION['user_type'] ?? '')));
+    $isRegistered = $userType === 'registered' && is_numeric($userId);
+
+    $caller = [
+        'id' => $userId,
+        'user_id' => $userId,
+        'name' => $_SESSION['user_name'] ?? null,
+        'email' => $_SESSION['user_email'] ?? null,
+        'phone' => $_SESSION['user_phone'] ?? null,
+        'is_registered' => $isRegistered,
+        'isGuest' => !$isRegistered,
+    ];
+
+    if (!$isRegistered) {
+        return transferNonEmptyValues($caller);
+    }
+
+    try {
+        $available = [];
+        $columnsStmt = $pdo->query('SHOW COLUMNS FROM users');
+        foreach (($columnsStmt ? $columnsStmt->fetchAll(PDO::FETCH_COLUMN, 0) : []) as $column) {
+            $available[$column] = true;
+        }
+
+        $wanted = ['id', 'name', 'email', 'phone', 'nationality', 'district', 'barangay', 'house_number', 'street', 'address'];
+        $select = array_values(array_filter($wanted, static function ($column) use ($available) {
+            return isset($available[$column]);
+        }));
+        if (!empty($select)) {
+            $quotedSelect = array_map(static function ($column) {
+                return "`{$column}`";
+            }, $select);
+            $stmt = $pdo->prepare('SELECT ' . implode(', ', $quotedSelect) . ' FROM users WHERE id = ? LIMIT 1');
+            $stmt->execute([(int)$userId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            if (!empty($row)) {
+                $caller = array_merge($caller, $row);
+                $caller['id'] = $row['id'] ?? $userId;
+                $caller['user_id'] = $row['id'] ?? $userId;
+                $caller['is_registered'] = true;
+                $caller['isGuest'] = false;
+                $address = transferBuildUserAddress($row);
+                if ($address !== '') {
+                    $caller['address'] = $address;
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('transfer-call session caller lookup failed: ' . $e->getMessage());
+    }
+
+    return transferNonEmptyValues($caller);
+}
+
 ensureTransferAuditTable($pdo);
+
+if ($isUserSession && !$isAdminSession && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+    sendJsonResponse(false, 'Forbidden: user sessions can only submit emergency transfers.', [], 403);
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $limit = isset($_GET['limit']) ? min(100, max(1, (int)$_GET['limit'])) : 50;
@@ -296,7 +393,29 @@ if (!is_array($input)) {
     sendJsonResponse(false, 'Invalid JSON', [], 400);
 }
 
+if ($isUserSession) {
+    $sessionCaller = transferLoadSessionCaller($pdo);
+    $clientCaller = is_array($input['caller'] ?? null) ? $input['caller'] : [];
+    $sessionIsRegistered = !empty($sessionCaller['is_registered']);
+    $input['caller'] = $sessionIsRegistered
+        ? array_merge($clientCaller, $sessionCaller)
+        : array_merge($sessionCaller, transferNonEmptyValues($clientCaller));
+    if (!isset($input['userId']) && isset($sessionCaller['user_id'])) {
+        $input['userId'] = $sessionCaller['user_id'];
+    }
+    if (!isset($input['location']) || !is_array($input['location'])) {
+        $input['location'] = [];
+    }
+    if (empty($input['location']['address']) && !empty($input['caller']['address'])) {
+        $input['location']['address'] = $input['caller']['address'];
+    }
+}
+
 $action = strtolower(trim((string)($input['action'] ?? 'transfer')));
+
+if ($isUserSession && !$isAdminSession && $action !== 'transfer') {
+    sendJsonResponse(false, 'Forbidden: user sessions can only submit emergency transfers.', [], 403);
+}
 
 $callId = trim((string)($input['callId'] ?? ''));
 $conversationId = isset($input['conversationId']) ? (int)$input['conversationId'] : null;
@@ -523,7 +642,7 @@ $payload = [
     'conversationId' => $conversationId,
     'messages' => $messages,
     'requestedBy' => [
-        'source' => $isAdminSession ? 'admin_session' : 'department_api',
+        'source' => $isAdminSession ? 'admin_session' : ($isUserSession ? 'user_session' : 'department_api'),
         'department' => $deptName ?? null,
         'adminId' => $_SESSION['admin_user_id'] ?? null,
         'adminUsername' => $_SESSION['admin_username'] ?? null,

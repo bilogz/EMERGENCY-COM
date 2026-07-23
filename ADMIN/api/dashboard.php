@@ -52,7 +52,7 @@ try {
             'end_to_end' => [
                 'labels' => [
                     'Citizen reports (24h)',
-                    'Queue backlog',
+                    'Unread report threads',
                     'In-progress conversations',
                     'Alerts sent today',
                     'Estimated delivered'

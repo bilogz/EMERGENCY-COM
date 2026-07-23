@@ -336,6 +336,12 @@ $assetBase = '../ADMIN/header/';
             border-color: rgba(20, 184, 166, 0.4);
         }
 
+        .chat-location-selected.is-outside {
+            color: #b91c1c;
+            border-color: rgba(239, 68, 68, 0.45);
+            background: rgba(254, 226, 226, 0.85);
+        }
+
         .chat-location-hint {
             color: var(--text-muted, #6b7280);
             font-size: 0.74rem;
@@ -719,14 +725,14 @@ $assetBase = '../ADMIN/header/';
                     <div class="cards-grid">
                         <div class="card">
                             <h3>Call for Emergency or Report</h3>
-                            <p>Start a voice call over WiFi or mobile data. Connect directly with emergency dispatchers.</p>
+                            <p>Start a voice call over WiFi or mobile data. Connect directly with the emergency response team.</p>
                             <button class="btn btn-primary" onclick="startInternetCall()">
                                 <i class="fas fa-headset"></i> <span>Call for Emergency via Internet</span>
                             </button>
                         </div>
                         <div class="card">
                             <h3>Report Incident</h3>
-                            <p>Submit incident details, photos, files, or related links so dispatchers can review and respond.</p>
+                            <p>Submit incident details, photos, files, or related links so responders can review and act.</p>
                             <button class="btn btn-secondary" onclick="openIncidentReport()">
                                 <i class="fas fa-triangle-exclamation"></i> <span>Report Incident</span>
                             </button>
@@ -777,7 +783,7 @@ $assetBase = '../ADMIN/header/';
                     <i class="fas fa-microphone"></i><span>You</span>
                 </div>
                 <div id="adminSpeakingLabel" style="display:flex; align-items:center; gap:6px; padding:6px 9px; border-radius:999px; background:rgba(255,255,255,0.06); transition:background .18s ease, color .18s ease;">
-                    <i class="fas fa-headset"></i><span>Admin</span>
+                    <i class="fas fa-headset"></i><span>Response Team</span>
                 </div>
             </div>
             
@@ -856,6 +862,8 @@ $assetBase = '../ADMIN/header/';
     <script>
         const SOCKET_IO_PATH = '/socket.io';
         const SIGNALING_URL = window.location.origin;
+        const ROOT_API_BASE = '../api/';
+        const transferApiUrl = () => `${ROOT_API_BASE}transfer-call.php`;
         console.log('[call][user] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
         let socket = null;
         let socketBound = false;
@@ -930,7 +938,7 @@ $assetBase = '../ADMIN/header/';
 
             socket.on('connect', () => {
                 console.log('[call][user] socket connected', socket.id);
-                socket.emit('join', activeCallRoom || CALL_LOBBY_ROOM);
+                if (activeCallRoom) socket.emit('join', activeCallRoom);
                 if (callId && activeCallRoom) {
                     socket.emit('resume-user-call', {
                         callId,
@@ -1025,8 +1033,8 @@ $assetBase = '../ADMIN/header/';
                 if (!signalingPayloadMatchesActiveCall(payload)) return;
                 if (payload?.room) activeCallRoom = payload.room;
                 rebuildOfferForAdminResume().catch(error => {
-                    console.error('[call][user] failed to rebuild offer after admin refresh', error);
-                    setStatus('Unable to reconnect to dispatcher. You may cancel and call again.');
+                    console.error('[call][user] failed to rebuild offer for response team', error);
+                    setStatus('Unable to reconnect to response team. You may cancel and call again.');
                     setEndEnabled(true);
                     setCancelVisible(true);
                 });
@@ -1038,6 +1046,37 @@ $assetBase = '../ADMIN/header/';
                     setEndEnabled(true);
                 }
             });
+        }
+
+        async function readApiResponse(response) {
+            const raw = await response.text();
+            let data = {};
+            if (raw) {
+                try {
+                    data = JSON.parse(raw);
+                } catch (e) {
+                    data = { success: false, message: raw };
+                }
+            }
+            if (!response.ok) {
+                data.success = false;
+                data.message = data.message || `HTTP ${response.status}`;
+                data.integration = data.integration || {};
+                data.integration.httpStatus = data.integration.httpStatus || response.status;
+                data.integration.response = data.integration.response || raw;
+            }
+            return data;
+        }
+
+        function formatTransferError(result, fallback = 'Response team notification failed.') {
+            if (!result) return fallback;
+            const parts = [result.message || fallback];
+            const integration = result.integration || {};
+            if (integration.httpStatus) parts.push(`HTTP ${integration.httpStatus}`);
+            if (integration.response && typeof integration.response === 'string') {
+                parts.push(integration.response.slice(0, 160));
+            }
+            return parts.filter(Boolean).join(' - ');
         }
 
         function signalingPayloadMatchesActiveCall(payload) {
@@ -1060,6 +1099,8 @@ $assetBase = '../ADMIN/header/';
         let transferInProgress = false;
         let callStartedAt = null;
         let callConnectedAt = null;
+        let autoTransferCompletedCallId = null;
+        let autoTransferInFlight = false;
         let timerInterval = null;
         let peerDisconnectTimer = null;
         let locationData = null;
@@ -1122,9 +1163,18 @@ $assetBase = '../ADMIN/header/';
         }
 
         function getGuestCallerInfo() {
-            const name = document.getElementById('guestCallerName')?.value.trim() || '';
-            const phone = document.getElementById('guestCallerPhone')?.value.trim() || '';
-            const address = document.getElementById('guestCallerLocation')?.value.trim() || '';
+            const name = document.getElementById('guestCallerName')?.value.trim()
+                || localStorage.getItem('guest_name')
+                || sessionStorage.getItem('user_name')
+                || '';
+            const phone = document.getElementById('guestCallerPhone')?.value.trim()
+                || localStorage.getItem('guest_contact')
+                || sessionStorage.getItem('user_phone')
+                || '';
+            const address = document.getElementById('guestCallerLocation')?.value.trim()
+                || localStorage.getItem('guest_location')
+                || sessionStorage.getItem('user_location')
+                || '';
             return { name, phone, address, isGuest: true };
         }
 
@@ -1265,12 +1315,16 @@ $assetBase = '../ADMIN/header/';
                 const response = await fetch('api/get-user-profile.php');
                 const data = await response.json();
                 if (data.success) {
+                    const user = data.user || {};
                     userProfile = {
-                        id: data.user.id,
-                        name: data.user.name || data.user.username,
-                        username: data.user.username,
-                        email: data.user.email,
-                        phone: data.user.phone
+                        ...user,
+                        id: user.id,
+                        name: user.name || user.username,
+                        username: user.username || user.name,
+                        email: user.email,
+                        phone: user.phone,
+                        is_registered: true,
+                        isGuest: false
                     };
                 }
             } catch (e) {
@@ -1278,6 +1332,7 @@ $assetBase = '../ADMIN/header/';
             } finally {
                 updateGuestFieldsVisibility();
             }
+            return userProfile;
         }
 
         function formatTime(totalSeconds) {
@@ -1425,6 +1480,10 @@ $assetBase = '../ADMIN/header/';
                 try { transferPc.close(); } catch (e) {}
                 transferPc = null;
             }
+            autoTransferInFlight = false;
+            if (autoTransferCompletedCallId === callId) {
+                autoTransferCompletedCallId = null;
+            }
             callConnectedAt = null;
             callStartedAt = null;
             callId = null;
@@ -1510,7 +1569,7 @@ $assetBase = '../ADMIN/header/';
                         return;
                     }
                     if (['failed', 'closed'].includes(state)) {
-                        setStatus('Response team connection failed. Admin call is still available.');
+                        setStatus('Response team connection failed. Please stay connected while we retry.');
                         setEndEnabled(true);
                     }
                 };
@@ -1606,6 +1665,7 @@ $assetBase = '../ADMIN/header/';
             if (userProfile) {
                 return {
                     id: userProfile.id ?? null,
+                    user_id: userProfile.id ?? null,
                     name: userProfile.name ?? null,
                     email: userProfile.email ?? null,
                     phone: userProfile.phone ?? null,
@@ -1614,17 +1674,131 @@ $assetBase = '../ADMIN/header/';
                     barangay: userProfile.barangay ?? null,
                     house_number: userProfile.house_number ?? null,
                     street: userProfile.street ?? null,
-                    address: userProfile.address ?? null
+                    address: userProfile.address ?? null,
+                    is_registered: true,
+                    isGuest: false
                 };
             }
             return getGuestCallerInfo();
+        }
+
+        function currentCallLocationPayload() {
+            const caller = currentCallCallerPayload();
+            return {
+                ...(locationData || {}),
+                ...(caller?.address ? { address: caller.address } : {})
+            };
+        }
+
+        function currentLiveCallPriority() {
+            return {
+                score: 90,
+                priority: 'critical',
+                level: 'critical',
+                label: 'CRITICAL',
+                color: 'red',
+                breakdown: {
+                    source: 'live_emergency_call',
+                    reason: 'Live calls are routed directly to ERS for immediate response.'
+                }
+            };
+        }
+
+        function notifyErsSocketTransfer(transferPayload = {}, result = {}) {
+            const s = ensureSocket();
+            if (!s || !callId) return;
+            const notice = {
+                ...(transferPayload || {}),
+                event: 'emergency_call_transfer',
+                transfer_type: 'live_call',
+                transferType: 'live_call',
+                callId,
+                room: activeCallRoom || getCallRoom(callId),
+                socketUrl: SIGNALING_URL,
+                socketPath: SOCKET_IO_PATH,
+                caller: currentCallCallerPayload(),
+                location: currentCallLocationPayload(),
+                locationData: currentCallLocationPayload(),
+                conversationId: callConversationId || null,
+                integration: result?.integration || null,
+                transferredAt: new Date().toISOString()
+            };
+            if (s.connected) {
+                s.emit('ers-transfer-notify', notice);
+            } else {
+                s.once('connect', () => s.emit('ers-transfer-notify', notice));
+            }
+        }
+
+        async function autoTransferCurrentCallToErs(attempt = 1) {
+            if (!callId || autoTransferCompletedCallId === callId || autoTransferInFlight) return;
+            const activeCallId = callId;
+            autoTransferInFlight = true;
+
+            try {
+                const priority = currentLiveCallPriority();
+                const caller = currentCallCallerPayload();
+                const location = currentCallLocationPayload();
+                setStatus(attempt > 1 ? `Retrying response team transfer (${attempt}/3)...` : 'Forwarding call to response team...');
+
+                const response = await fetch(transferApiUrl(), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'transfer',
+                        event: 'emergency_call_transfer',
+                        transfer_type: 'live_call',
+                        transferType: 'live_call',
+                        callId: activeCallId,
+                        room: activeCallRoom || getCallRoom(activeCallId),
+                        socketUrl: SIGNALING_URL,
+                        socketPath: SOCKET_IO_PATH,
+                        emergencyType: 'emergency_call',
+                        priority: priority.priority,
+                        incidentPriority: priority,
+                        description: 'Live emergency call waiting for ERS response team answer.',
+                        latestMessage: '[CALL_STARTED] Emergency live call forwarded to ERS',
+                        caller,
+                        location,
+                        conversationId: callConversationId || null
+                    })
+                });
+
+                const data = await readApiResponse(response);
+                if (!data.success) {
+                    throw new Error(formatTransferError(data));
+                }
+
+                autoTransferCompletedCallId = activeCallId;
+                setStatus('Waiting for response team to answer...');
+                notifyErsSocketTransfer(data.data || {}, data);
+                await logCall('auto_transferred_to_response_team', {
+                    room: activeCallRoom || getCallRoom(activeCallId),
+                    socketUrl: SIGNALING_URL,
+                    socketPath: SOCKET_IO_PATH,
+                    conversationId: callConversationId || null
+                });
+            } catch (error) {
+                console.error('[call][user] automatic ERS transfer failed', error);
+                if (callId === activeCallId && attempt < 3) {
+                    setStatus('Response team notification failed. Retrying...');
+                    setTimeout(() => autoTransferCurrentCallToErs(attempt + 1), 3000);
+                } else if (callId === activeCallId) {
+                    setStatus('Response team notification failed. Keep this call open and try again.');
+                    setEndEnabled(true);
+                }
+            } finally {
+                if (callId === activeCallId) {
+                    autoTransferInFlight = false;
+                }
+            }
         }
 
         async function rebuildOfferForAdminResume() {
             if (!callId || !activeCallRoom) return;
             if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
             peerDisconnectTimer = null;
-            setStatus('Dispatcher refreshed. Restoring your call...');
+            setStatus('Response team requested a fresh connection. Restoring your call...');
 
             const previousPeer = pc;
             pc = null;
@@ -1675,9 +1849,6 @@ $assetBase = '../ADMIN/header/';
                 const s = ensureSocket();
                 if (s) {
                     s.emit('candidate', { candidate: e.candidate, callId, room: activeCallRoom }, activeCallRoom || getCallRoom());
-                    if (!callConnectedAt) {
-                        s.emit('candidate', { candidate: e.candidate, callId, room: activeCallRoom }, CALL_LOBBY_ROOM);
-                    }
                 }
             };
             pc.onconnectionstatechange = () => {
@@ -1686,7 +1857,7 @@ $assetBase = '../ADMIN/header/';
                     if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
                     peerDisconnectTimer = null;
                     if (!callConnectedAt) callConnectedAt = Date.now();
-                    setStatus('Connected');
+                    setStatus('Connected to response team');
                     setEndEnabled(true);
                     setCancelVisible(false);
                     setCallActiveBannerVisible(true);
@@ -1696,7 +1867,7 @@ $assetBase = '../ADMIN/header/';
                 if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
                     if (transferInProgress) return;
                     if (!callId || peerDisconnectTimer) return;
-                    setStatus('Dispatcher connection interrupted. Reconnecting...');
+                    setStatus('Response team connection interrupted. Reconnecting...');
                     setCancelVisible(true);
                     peerDisconnectTimer = setTimeout(() => {
                         peerDisconnectTimer = null;
@@ -1737,7 +1908,7 @@ $assetBase = '../ADMIN/header/';
 
                 await ensureCallConversationId();
 
-                // Add initial message to conversation so it appears in admin citizen reports
+                // Add initial message so the transfer audit can link back to the call thread.
                 try {
                     const convId = await ensureCallConversationId();
                     console.log('[DEBUG] Conversation ID:', convId);
@@ -1777,24 +1948,13 @@ $assetBase = '../ADMIN/header/';
                 await pc.setLocalDescription(offer);
                 console.log('[call][user] emitting offer', { callId, room: activeCallRoom });
                 const guestCaller = getGuestCallerInfo();
-                const caller = userProfile ? {
-                    id: userProfile.id ?? null,
-                    name: userProfile.name ?? null,
-                    email: userProfile.email ?? null,
-                    phone: userProfile.phone ?? null,
-                    nationality: userProfile.nationality ?? null,
-                    district: userProfile.district ?? null,
-                    barangay: userProfile.barangay ?? null,
-                    house_number: userProfile.house_number ?? null,
-                    street: userProfile.street ?? null,
-                    address: userProfile.address ?? null
-                } : guestCaller;
+                const caller = currentCallCallerPayload();
 
                 if (!userProfile && guestCaller.address && locationData) {
                     locationData.address = guestCaller.address;
                 }
 
-                s.emit("offer", {
+                const offerPayload = {
                     sdp: offer,
                     callId,
                     room: activeCallRoom,
@@ -1803,7 +1963,10 @@ $assetBase = '../ADMIN/header/';
                     userName: userProfile?.name || guestCaller.name || null,
                     caller,
                     location: locationData || null
-                }, CALL_LOBBY_ROOM);
+                };
+
+                s.emit("offer", offerPayload, activeCallRoom);
+                await autoTransferCurrentCallToErs();
             } catch (e) {
                 console.error('[call][user] call failed', e);
                 setStatus('Call failed');
@@ -1833,6 +1996,12 @@ $assetBase = '../ADMIN/header/';
         let incidentLocationSearchAbort = null;
         let incidentLocationOutsideClickBound = false;
         const DEFAULT_INCIDENT_LOCATION = { lat: 14.6760, lng: 121.0437, label: 'Quezon City, Philippines' };
+        const QUEZON_CITY_SERVICE_BOUNDS = {
+            south: 14.575,
+            west: 120.945,
+            north: 14.795,
+            east: 121.145
+        };
 
         function escapeHtml(text) {
             const div = document.createElement('div');
@@ -1958,7 +2127,7 @@ $assetBase = '../ADMIN/header/';
                             Search a place, tap a suggestion, or click the map to drop the pin.
                         </div>
                         <div class="chat-location-hint">
-                            Drag the pin or tap the map to refine the exact incident location.
+                            Only Quezon City locations are accepted. Drag the pin or tap inside the boundary to refine it.
                         </div>
                         <div class="chat-location-buttons">
                             <button class="chat-location-btn primary" onclick="confirmIncidentLocation()">
@@ -1985,18 +2154,68 @@ $assetBase = '../ADMIN/header/';
             return `${Number(location.lat).toFixed(6)}, ${Number(location.lng).toFixed(6)}`;
         }
 
+        function isWithinQuezonCityBounds(lat, lng) {
+            const numericLat = Number(lat);
+            const numericLng = Number(lng);
+            if (!Number.isFinite(numericLat) || !Number.isFinite(numericLng)) return false;
+            return numericLat >= QUEZON_CITY_SERVICE_BOUNDS.south
+                && numericLat <= QUEZON_CITY_SERVICE_BOUNDS.north
+                && numericLng >= QUEZON_CITY_SERVICE_BOUNDS.west
+                && numericLng <= QUEZON_CITY_SERVICE_BOUNDS.east;
+        }
+
+        function getQuezonCitySearchViewbox() {
+            return `${QUEZON_CITY_SERVICE_BOUNDS.west},${QUEZON_CITY_SERVICE_BOUNDS.north},${QUEZON_CITY_SERVICE_BOUNDS.east},${QUEZON_CITY_SERVICE_BOUNDS.south}`;
+        }
+
+        function getQuezonCityLeafletBounds() {
+            if (!window.L) return null;
+            return L.latLngBounds(
+                [QUEZON_CITY_SERVICE_BOUNDS.south, QUEZON_CITY_SERVICE_BOUNDS.west],
+                [QUEZON_CITY_SERVICE_BOUNDS.north, QUEZON_CITY_SERVICE_BOUNDS.east]
+            );
+        }
+
+        function textLooksLikeQuezonCity(text = '') {
+            return /\b(quezon city|lungsod quezon|city of quezon)\b/i.test(String(text));
+        }
+
+        function resultLooksQuezonCity(result) {
+            if (!result || !isWithinQuezonCityBounds(result.lat, result.lon)) return false;
+            const address = result.address || {};
+            const addressText = [
+                result.display_name,
+                address.city,
+                address.town,
+                address.municipality,
+                address.county,
+                address.state_district,
+                address.suburb
+            ].filter(Boolean).join(' ');
+            return textLooksLikeQuezonCity(addressText);
+        }
+
         function updateIncidentLocationSelectedLabel(message) {
             const label = document.getElementById('botLocationSelected');
             if (!label) return;
             const address = message || getLocationLabel(selectedLocationData);
             const coords = formatIncidentCoordinates(selectedLocationData);
             if (!address && !coords) {
-                label.classList.remove('has-location');
+                label.classList.remove('has-location', 'is-outside');
                 label.textContent = 'Search a place, tap a suggestion, or click the map to drop the pin.';
                 return;
             }
+            label.classList.remove('is-outside');
             label.classList.add('has-location');
             label.textContent = coords ? `${address || 'Pinned location'} (${coords})` : address;
+        }
+
+        function showIncidentLocationBoundaryWarning(message = 'Only Quezon City locations are accepted. Please choose a pin inside the boundary.') {
+            const label = document.getElementById('botLocationSelected');
+            if (!label) return;
+            label.classList.remove('has-location');
+            label.classList.add('is-outside');
+            label.textContent = message;
         }
 
         function hideIncidentLocationSuggestions() {
@@ -2010,6 +2229,19 @@ $assetBase = '../ADMIN/header/';
             const numericLat = Number(lat);
             const numericLng = Number(lng);
             if (!Number.isFinite(numericLat) || !Number.isFinite(numericLng)) return;
+
+            if (!isWithinQuezonCityBounds(numericLat, numericLng)) {
+                if (incidentLocationMap && incidentLocationMarker) {
+                    if (selectedLocationData && isWithinQuezonCityBounds(selectedLocationData.lat, selectedLocationData.lng)) {
+                        incidentLocationMarker.setLatLng([selectedLocationData.lat, selectedLocationData.lng]);
+                    } else {
+                        incidentLocationMap.removeLayer(incidentLocationMarker);
+                        incidentLocationMarker = null;
+                    }
+                }
+                showIncidentLocationBoundaryWarning();
+                return false;
+            }
 
             selectedLocationData = {
                 lat: numericLat,
@@ -2041,6 +2273,15 @@ $assetBase = '../ADMIN/header/';
 
             if (options.reverse) {
                 reverseIncidentLocation(numericLat, numericLng).then(reverseAddress => {
+                    if (reverseAddress && !textLooksLikeQuezonCity(reverseAddress)) {
+                        if (incidentLocationMap && incidentLocationMarker) {
+                            incidentLocationMap.removeLayer(incidentLocationMarker);
+                            incidentLocationMarker = null;
+                        }
+                        selectedLocationData = null;
+                        showIncidentLocationBoundaryWarning('That pin looks outside Quezon City. Please choose a location inside the boundary.');
+                        return;
+                    }
                     if (!reverseAddress) {
                         updateIncidentLocationSelectedLabel();
                         return;
@@ -2051,6 +2292,7 @@ $assetBase = '../ADMIN/header/';
                     updateIncidentLocationSelectedLabel();
                 }).catch(() => updateIncidentLocationSelectedLabel());
             }
+            return true;
         }
 
         function initIncidentLocationPicker() {
@@ -2076,9 +2318,10 @@ $assetBase = '../ADMIN/header/';
                 incidentLocationOutsideClickBound = true;
             }
 
-            const startLat = Number(locationData?.lat || selectedLocationData?.lat || DEFAULT_INCIDENT_LOCATION.lat);
-            const startLng = Number(locationData?.lng || selectedLocationData?.lng || DEFAULT_INCIDENT_LOCATION.lng);
-            const startAddress = getLocationLabel(locationData) || getLocationLabel(selectedLocationData);
+            const hasUsableCurrentLocation = locationData?.lat && locationData?.lng && isWithinQuezonCityBounds(locationData.lat, locationData.lng);
+            const startLat = Number(hasUsableCurrentLocation ? locationData.lat : (selectedLocationData?.lat || DEFAULT_INCIDENT_LOCATION.lat));
+            const startLng = Number(hasUsableCurrentLocation ? locationData.lng : (selectedLocationData?.lng || DEFAULT_INCIDENT_LOCATION.lng));
+            const startAddress = hasUsableCurrentLocation ? getLocationLabel(locationData) : getLocationLabel(selectedLocationData);
 
             if (startAddress) input.value = startAddress;
 
@@ -2089,9 +2332,13 @@ $assetBase = '../ADMIN/header/';
 
             const mapEl = document.getElementById('botLocationMap');
             if (!mapEl) return;
+            const quezonCityBounds = getQuezonCityLeafletBounds();
             incidentLocationMap = L.map(mapEl, {
                 zoomControl: true,
-                attributionControl: true
+                attributionControl: true,
+                maxBounds: quezonCityBounds ? quezonCityBounds.pad(0.18) : undefined,
+                maxBoundsViscosity: 0.95,
+                minZoom: 11
             }).setView([startLat, startLng], 14);
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -2099,11 +2346,23 @@ $assetBase = '../ADMIN/header/';
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(incidentLocationMap);
 
+            if (quezonCityBounds) {
+                L.rectangle(quezonCityBounds, {
+                    color: '#8e44ad',
+                    weight: 2,
+                    dashArray: '7 6',
+                    fillColor: '#8e44ad',
+                    fillOpacity: 0.05,
+                    interactive: false
+                }).addTo(incidentLocationMap);
+                incidentLocationMap.fitBounds(quezonCityBounds, { padding: [12, 12] });
+            }
+
             incidentLocationMap.on('click', event => {
                 setIncidentLocationPin(event.latlng.lat, event.latlng.lng, '', { reverse: true });
             });
 
-            if (locationData?.lat && locationData?.lng) {
+            if (hasUsableCurrentLocation) {
                 setIncidentLocationPin(locationData.lat, locationData.lng, startAddress, { reverse: !startAddress });
             } else {
                 updateIncidentLocationSelectedLabel();
@@ -2126,14 +2385,15 @@ $assetBase = '../ADMIN/header/';
             suggestions.hidden = false;
             suggestions.innerHTML = '<button type="button" class="chat-location-suggestion">Searching locations...</button>';
 
-            const searchText = /philippines|quezon|manila/i.test(query) ? query : `${query}, Quezon City, Philippines`;
-            const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=ph&bounded=1&viewbox=120.85,14.85,121.25,14.45&q=${encodeURIComponent(searchText)}`;
+            const searchText = textLooksLikeQuezonCity(query) || /philippines|manila/i.test(query) ? query : `${query}, Quezon City, Philippines`;
+            const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&addressdetails=1&countrycodes=ph&bounded=1&viewbox=${getQuezonCitySearchViewbox()}&q=${encodeURIComponent(searchText)}`;
 
             try {
                 const response = await fetch(url, { signal: incidentLocationSearchAbort.signal });
-                const results = await response.json();
+                const rawResults = await response.json();
+                const results = Array.isArray(rawResults) ? rawResults.filter(resultLooksQuezonCity).slice(0, 5) : [];
                 if (!Array.isArray(results) || results.length === 0) {
-                    suggestions.innerHTML = '<button type="button" class="chat-location-suggestion">No matching places found. Try a nearby landmark.</button>';
+                    suggestions.innerHTML = '<button type="button" class="chat-location-suggestion">No Quezon City places found. Try a nearby QC landmark.</button>';
                     return;
                 }
 
@@ -2159,10 +2419,11 @@ $assetBase = '../ADMIN/header/';
         }
 
         async function geocodeIncidentLocation(query) {
-            const searchText = /philippines|quezon|manila/i.test(query) ? query : `${query}, Quezon City, Philippines`;
-            const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ph&bounded=1&viewbox=120.85,14.85,121.25,14.45&q=${encodeURIComponent(searchText)}`;
+            const searchText = textLooksLikeQuezonCity(query) || /philippines|manila/i.test(query) ? query : `${query}, Quezon City, Philippines`;
+            const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&addressdetails=1&countrycodes=ph&bounded=1&viewbox=${getQuezonCitySearchViewbox()}&q=${encodeURIComponent(searchText)}`;
             const response = await fetch(url);
-            const results = await response.json();
+            const rawResults = await response.json();
+            const results = Array.isArray(rawResults) ? rawResults.filter(resultLooksQuezonCity) : [];
             if (!Array.isArray(results) || !results[0]) return null;
             return {
                 lat: Number(results[0].lat),
@@ -2184,6 +2445,16 @@ $assetBase = '../ADMIN/header/';
             try {
                 const loc = await tryGetLocation();
                 if (loc && Number.isFinite(Number(loc.lat)) && Number.isFinite(Number(loc.lng))) {
+                    if (!isWithinQuezonCityBounds(loc.lat, loc.lng)) {
+                        selectedLocationData = null;
+                        if (incidentLocationMap && incidentLocationMarker) {
+                            incidentLocationMap.removeLayer(incidentLocationMarker);
+                            incidentLocationMarker = null;
+                        }
+                        if (inp) inp.value = '';
+                        showIncidentLocationBoundaryWarning('Your current GPS is outside Quezon City. Please search or pin a QC location.');
+                        return;
+                    }
                     const address = loc.address || 'Current location';
                     if (inp) inp.value = address;
                     setIncidentLocationPin(loc.lat, loc.lng, address, { reverse: !loc.address });
@@ -2220,6 +2491,12 @@ $assetBase = '../ADMIN/header/';
 
             selectedLocation = getLocationLabel(selectedLocationData) || val;
             if (!selectedLocation && selectedLocationData) selectedLocation = formatIncidentCoordinates(selectedLocationData);
+
+            if (!selectedLocationData || !isWithinQuezonCityBounds(selectedLocationData.lat, selectedLocationData.lng)) {
+                showIncidentLocationBoundaryWarning();
+                Swal.fire({ icon: 'warning', title: 'Quezon City Only', text: 'Please choose an exact location inside Quezon City.' });
+                return;
+            }
 
             const bubble = document.getElementById('botLocationBubble');
             if (bubble) bubble.remove();
@@ -2366,8 +2643,8 @@ $assetBase = '../ADMIN/header/';
                 clearIncidentAttachment();
                 selectedLink = '';
                 
-                appendBotMessage("Incident Report Submitted successfully! We have opened a live connection to a dispatcher. You can chat here in real time.");
-                appendSystemMessage("Connected to Dispatcher");
+                appendBotMessage("Incident Report Submitted successfully! We have opened a live response thread. You can chat here in real time.");
+                appendSystemMessage("Connected to response thread");
                 
                 startIncidentChatPolling(activeIncidentConversationId);
                 return true;

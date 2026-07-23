@@ -114,6 +114,7 @@ $sinceDate = $sinceTs !== null ? date('Y-m-d H:i:s', $sinceTs) : null;
 $activeAlerts = 0;
 $systemUnread = 0;
 $incidentUnread = 0;
+$messageUnread = 0;
 $systemNotifications = [];
 $incidentNotifications = [];
 
@@ -240,98 +241,117 @@ try {
     error_log('header-notifications logs error: ' . $e->getMessage());
 }
 
-// Pull incident reports from chat queue so new citizen reports always appear in bell notifications.
+// Pull unread Two-Way Communication messages/reports directly from chat storage.
+// Incident reports and citizen messages share the same conversations/chat_messages stream.
 try {
-    if (header_table_exists($pdo, 'chat_queue')) {
-        $hasConversationId = header_column_exists($pdo, 'chat_queue', 'conversation_id');
-        $hasUserName = header_column_exists($pdo, 'chat_queue', 'user_name');
-        $hasUserLocation = header_column_exists($pdo, 'chat_queue', 'user_location');
-        $hasUserConcern = header_column_exists($pdo, 'chat_queue', 'user_concern');
-        $hasMessage = header_column_exists($pdo, 'chat_queue', 'message');
-        $hasStatus = header_column_exists($pdo, 'chat_queue', 'status');
-        $hasUpdatedAt = header_column_exists($pdo, 'chat_queue', 'updated_at');
-        $hasCreatedAt = header_column_exists($pdo, 'chat_queue', 'created_at');
+    if (function_exists('twc_chat_storage_available') && twc_chat_storage_available($pdo)) {
+        $activeStatuses = twc_active_statuses();
+        $statusPlaceholders = twc_placeholders($activeStatuses);
 
-        if ($hasMessage) {
-            $eventTimeExpr = $hasUpdatedAt
-                ? 'updated_at'
-                : ($hasCreatedAt ? 'created_at' : 'NOW()');
+        $messageUnreadStmt = $pdo->prepare("
+            SELECT COUNT(*)
+            FROM conversations c
+            JOIN chat_messages m ON c.conversation_id = m.conversation_id
+            WHERE c.status IN ($statusPlaceholders)
+              AND COALESCE(m.is_read, 0) = 0
+              AND LOWER(COALESCE(m.sender_type, '')) <> 'admin'
+        ");
+        $messageUnreadStmt->execute($activeStatuses);
+        $messageUnread = (int)$messageUnreadStmt->fetchColumn();
 
-            $selectParts = [
-                $hasConversationId ? 'conversation_id' : 'NULL AS conversation_id',
-                $hasUserName ? 'user_name' : "'' AS user_name",
-                $hasUserLocation ? 'user_location' : "'' AS user_location",
-                $hasUserConcern ? 'user_concern' : "'' AS user_concern",
-                'message',
-                $hasStatus ? 'status' : "'pending' AS status",
-                "{$eventTimeExpr} AS event_time",
+        $hasIncidentPriorityLevel = header_column_exists($pdo, 'conversations', 'incident_priority_level');
+        $hasIncidentPriorityScore = header_column_exists($pdo, 'conversations', 'incident_priority_score');
+        $prioritySelect = $hasIncidentPriorityLevel
+            ? 'c.incident_priority_level'
+            : "'' AS incident_priority_level";
+        $scoreSelect = $hasIncidentPriorityScore
+            ? 'c.incident_priority_score'
+            : '0 AS incident_priority_score';
+
+        $latestUnreadStmt = $pdo->prepare("
+            SELECT
+                c.conversation_id,
+                c.user_name,
+                c.user_location,
+                c.user_concern,
+                {$prioritySelect},
+                {$scoreSelect},
+                lm.message_id,
+                lm.message_text,
+                lm.sender_name,
+                lm.created_at
+            FROM conversations c
+            JOIN (
+                SELECT m1.*
+                FROM chat_messages m1
+                JOIN (
+                    SELECT conversation_id, MAX(message_id) AS max_message_id
+                    FROM chat_messages
+                    WHERE COALESCE(is_read, 0) = 0
+                      AND LOWER(COALESCE(sender_type, '')) <> 'admin'
+                    GROUP BY conversation_id
+                ) latest ON latest.max_message_id = m1.message_id
+            ) lm ON lm.conversation_id = c.conversation_id
+            WHERE c.status IN ($statusPlaceholders)
+            ORDER BY lm.created_at DESC, lm.message_id DESC
+            LIMIT 12
+        ");
+        $latestUnreadStmt->execute($activeStatuses);
+        $messageRows = $latestUnreadStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        foreach ($messageRows as $row) {
+            $messageText = trim((string)($row['message_text'] ?? ''));
+            if ($messageText === '') {
+                continue;
+            }
+
+            $concern = strtolower(trim((string)($row['user_concern'] ?? '')));
+            $isIncidentReport = $concern === 'incident_report'
+                || stripos($messageText, 'Incident Type:') !== false
+                || stripos($messageText, '[CALL_') === 0;
+
+            $priority = strtolower(trim((string)($row['incident_priority_level'] ?? '')));
+            if (!in_array($priority, ['critical', 'high', 'urgent', 'moderate', 'low'], true)) {
+                $calculated = twc_calculate_incident_priority([
+                    'category' => $concern,
+                    'userConcern' => $concern,
+                    'message' => $messageText,
+                ]);
+                $priority = strtolower((string)($calculated['priority'] ?? 'low'));
+            }
+
+            $senderName = trim((string)($row['sender_name'] ?? ''));
+            if ($senderName === '') {
+                $senderName = trim((string)($row['user_name'] ?? 'Citizen'));
+            }
+            if ($senderName === '') {
+                $senderName = 'Citizen';
+            }
+
+            $snippet = preg_replace('/\s+/', ' ', $messageText) ?? $messageText;
+            if (strlen($snippet) > 140) {
+                $snippet = substr($snippet, 0, 137) . '...';
+            }
+
+            $incidentNotifications[] = [
+                'id' => 'msg_' . (string)($row['message_id'] ?? md5($messageText)),
+                'type' => 'incident',
+                'channel' => $isIncidentReport ? 'incident_report' : 'two_way_message',
+                'title' => $isIncidentReport ? 'New Incident Report' : 'New Message Report',
+                'message' => $senderName . ': ' . $snippet,
+                'status' => 'unread',
+                'priority' => $priority,
+                'sent_at' => (string)($row['created_at'] ?? date('Y-m-d H:i:s')),
+                'conversation_id' => (int)($row['conversation_id'] ?? 0),
+                'location' => (string)($row['user_location'] ?? ''),
+                'source' => 'chat_messages',
             ];
-
-            $whereSql = $hasStatus ? "WHERE status = 'pending'" : '';
-            $stmt = $pdo->query("
-                SELECT " . implode(', ', $selectParts) . "
-                FROM chat_queue
-                {$whereSql}
-                ORDER BY {$eventTimeExpr} DESC
-                LIMIT 12
-            ");
-            $queueRows = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
-
-            foreach ($queueRows as $row) {
-                $concern = trim((string)($row['user_concern'] ?? ''));
-                $message = trim((string)($row['message'] ?? ''));
-                $userName = trim((string)($row['user_name'] ?? 'Citizen'));
-                $userLocation = trim((string)($row['user_location'] ?? ''));
-                $eventTime = (string)($row['event_time'] ?? date('Y-m-d H:i:s'));
-                $conversationId = $hasConversationId ? (int)($row['conversation_id'] ?? 0) : 0;
-
-                $riskLevel = function_exists('twc_chat_risk_level')
-                    ? twc_chat_risk_level($message, $concern, 'urgent')
-                    : 'high';
-                $priority = in_array($riskLevel, ['critical', 'high'], true) ? $riskLevel : 'high';
-
-                $titleConcern = $concern !== ''
-                    ? ucwords(str_replace('_', ' ', $concern))
-                    : 'Incident Report';
-
-                $incidentNotifications[] = [
-                    'id' => 'queue_' . ($conversationId > 0 ? $conversationId : md5($userName . $message . $eventTime)),
-                    'type' => 'incident',
-                    'channel' => 'incident_report',
-                    'title' => $titleConcern,
-                    'message' => ($userName !== '' ? ($userName . ': ') : '') . $message,
-                    'status' => strtolower(trim((string)($row['status'] ?? 'pending'))),
-                    'priority' => $priority,
-                    'sent_at' => $eventTime,
-                    'conversation_id' => $conversationId > 0 ? $conversationId : null,
-                    'location' => $userLocation,
-                    'source' => 'chat_queue',
-                ];
-            }
-
-            if ($sinceDate !== null && ($hasUpdatedAt || $hasCreatedAt)) {
-                $timeColumn = $hasUpdatedAt ? 'updated_at' : 'created_at';
-                if ($hasConversationId) {
-                    $countSql = "SELECT COUNT(DISTINCT conversation_id) FROM chat_queue WHERE {$timeColumn} > ?";
-                    if ($hasStatus) {
-                        $countSql .= " AND status = 'pending'";
-                    }
-                } else {
-                    $countSql = "SELECT COUNT(*) FROM chat_queue WHERE {$timeColumn} > ?";
-                    if ($hasStatus) {
-                        $countSql .= " AND status = 'pending'";
-                    }
-                }
-                $countStmt = $pdo->prepare($countSql);
-                $countStmt->execute([$sinceDate]);
-                $incidentUnread += (int)$countStmt->fetchColumn();
-            } elseif ($sinceDate === null) {
-                $incidentUnread += count($queueRows);
-            }
         }
+
+        $incidentUnread = max($incidentUnread, $messageUnread);
     }
 } catch (Throwable $e) {
-    error_log('header-notifications chat_queue error: ' . $e->getMessage());
+    error_log('header-notifications chat messages error: ' . $e->getMessage());
 }
 
 // De-duplicate incidents by conversation id when available, keeping latest item.
@@ -372,6 +392,7 @@ echo json_encode([
     'active_alerts' => $activeAlerts,
     'system_unread' => $systemUnread,
     'incident_unread' => $incidentUnread,
+    'message_unread' => $messageUnread,
     'notification_unread' => $notificationUnread,
     'system_notifications' => $systemNotifications,
     'incident_notifications' => $incidentNotifications,

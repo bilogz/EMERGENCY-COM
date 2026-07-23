@@ -660,6 +660,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         let currentDept = 'all';
         let currentTopic = 'all';
         let lastUnreadCount = 0;
+        let lastUnreadMessageId = 0;
         let hasUnreadBaseline = false;
         let topicSet = new Set();
         let currentPriority = 'all';
@@ -705,6 +706,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         // Polling Intervals
         let pollInterval = null;
         let messageInterval = null;
+        let twcRealtimeSource = null;
+        let twcRealtimeReconnectTimer = null;
 
         async function readApiResponse(response) {
             const raw = await response.text();
@@ -1783,51 +1786,121 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             setTimeout(() => { toast.remove(); }, 3500);
         }
 
+        function formatMessageReportCount(diff) {
+            return diff === 1 ? '1 new message/report' : `${diff} new message/reports`;
+        }
+
+        function updateTwoWayBadges(count) {
+            if (typeof window.updateHeaderBadges === 'function') {
+                window.updateHeaderBadges({ messages: count });
+            }
+
+            const sidebarLinks = document.querySelectorAll('.sidebar-menu li a');
+            sidebarLinks.forEach(link => {
+                if (link.href.includes('two-way-communication.php')) {
+                    let badge = link.querySelector('.sidebar-badge');
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'sidebar-badge';
+                        badge.style.cssText = 'background: #ff5252; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7rem; margin-left: auto; display: none;';
+                        link.appendChild(badge);
+                        link.style.display = 'flex';
+                        link.style.alignItems = 'center';
+                    }
+                    badge.textContent = count;
+                    badge.style.display = count > 0 ? 'inline-block' : 'none';
+                }
+            });
+        }
+
+        function handleUnreadCount(rawCount, latestMessageId = null) {
+            const count = parseInt(rawCount, 10);
+            if (!Number.isFinite(count)) return;
+            const latestId = parseInt(latestMessageId || 0, 10);
+            const hasLatestId = Number.isFinite(latestId) && latestId > 0;
+
+            if (!hasUnreadBaseline) {
+                lastUnreadCount = count;
+                if (hasLatestId) lastUnreadMessageId = latestId;
+                hasUnreadBaseline = true;
+            } else if (count > lastUnreadCount || (hasLatestId && latestId > lastUnreadMessageId)) {
+                const diff = count > lastUnreadCount ? count - lastUnreadCount : 1;
+                showToast('New message/report', formatMessageReportCount(diff));
+                lastUnreadCount = count;
+            } else if (count < lastUnreadCount) {
+                lastUnreadCount = count;
+            }
+            if (hasLatestId && latestId > lastUnreadMessageId) {
+                lastUnreadMessageId = latestId;
+            }
+
+            updateTwoWayBadges(count);
+        }
+
+        async function refreshConversationListRealtime() {
+            if (currentMainView !== 'conversations') return;
+            if (!isLoading && currentPage === 1 && ['open', 'active', 'assigned', 'closed'].includes(currentStatus)) {
+                await loadConversations(false, false, true);
+            }
+        }
+
+        function closeTwoWayRealtimeSource() {
+            if (twcRealtimeSource) {
+                twcRealtimeSource.close();
+                twcRealtimeSource = null;
+            }
+        }
+
+        function scheduleTwoWayRealtimeReconnect(delay = 1800) {
+            if (!('EventSource' in window)) return;
+            if (twcRealtimeReconnectTimer) clearTimeout(twcRealtimeReconnectTimer);
+            twcRealtimeReconnectTimer = setTimeout(() => {
+                twcRealtimeReconnectTimer = null;
+                connectTwoWayRealtime();
+            }, delay);
+        }
+
+        function connectTwoWayRealtime() {
+            if (!('EventSource' in window) || twcRealtimeSource) return;
+            twcRealtimeSource = new EventSource(API_BASE + 'realtime.php');
+
+            const readEventData = (event) => {
+                try { return JSON.parse(event.data || '{}'); } catch (e) { return {}; }
+            };
+
+            twcRealtimeSource.addEventListener('ready', (event) => {
+                const data = readEventData(event);
+                handleUnreadCount(data.unreadMessageCount ?? data.unreadCount, data.latestMessageId);
+                refreshConversationListRealtime();
+            });
+
+            twcRealtimeSource.addEventListener('conversation:unread', (event) => {
+                const data = readEventData(event);
+                handleUnreadCount(data.unreadMessageCount ?? data.unreadCount, data.latestMessageId);
+                refreshConversationListRealtime();
+            });
+
+            twcRealtimeSource.addEventListener('end', () => {
+                closeTwoWayRealtimeSource();
+                scheduleTwoWayRealtimeReconnect(900);
+            });
+
+            twcRealtimeSource.onerror = () => {
+                closeTwoWayRealtimeSource();
+                scheduleTwoWayRealtimeReconnect(3000);
+            };
+        }
+
         async function pollUpdates() {
-            // 1. Update Badge & Unread Count
             try {
                 const response = await fetch(API_BASE + 'chat-get-unread-count.php');
                 const data = await response.json();
                 if (data.success) {
-                    const count = data.unreadCount;
-                    if (!hasUnreadBaseline) {
-                        lastUnreadCount = count;
-                        hasUnreadBaseline = true;
-                    } else if (count > lastUnreadCount) {
-                        const diff = count - lastUnreadCount;
-                        showToast('New message', diff === 1 ? '1 new conversation update' : `${diff} new conversation updates`);
-                        lastUnreadCount = count;
-                    } else if (count < lastUnreadCount) {
-                        lastUnreadCount = count;
-                    }
-                    // Sidebar Badge
-                    const sidebarLinks = document.querySelectorAll('.sidebar-menu li a');
-                    sidebarLinks.forEach(link => {
-                        if (link.href.includes('two-way-communication.php')) {
-                            let badge = link.querySelector('.sidebar-badge');
-                            if (!badge) {
-                                badge = document.createElement('span');
-                                badge.className = 'sidebar-badge';
-                                badge.style.cssText = 'background: #ff5252; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7rem; margin-left: auto; display: none;';
-                                link.appendChild(badge);
-                                link.style.display = 'flex';
-                                link.style.alignItems = 'center';
-                            }
-                            badge.textContent = count;
-                            badge.style.display = count > 0 ? 'inline-block' : 'none';
-                        }
-                    });
+                    handleUnreadCount(data.unreadMessageCount ?? data.unreadCount, data.latestMessageId);
                 }
             } catch (e) {}
 
-            if (currentMainView !== 'conversations') {
-                return;
-            }
-
-            // 2. Silent list refresh for first page so incoming calls/reports appear without a manual refresh.
-            if (!currentConversationId && !isLoading && currentPage === 1 && ['open', 'active', 'assigned', 'closed'].includes(currentStatus)) {
-                await loadConversations(false, false, true);
-            }
+            await refreshConversationListRealtime();
         }
 
         // --- DOM Helpers ---
@@ -3041,7 +3114,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
 
             loadConversations(true);
-            pollInterval = setInterval(pollUpdates, 3000); // Poll faster for real-time list updates
+            connectTwoWayRealtime();
+            pollInterval = setInterval(pollUpdates, 3000); // Fallback when SSE is unavailable/interrupted.
         });
         
     </script>
@@ -3177,6 +3251,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     const SOCKET_HEALTH_URL = `${SIGNALING_URL}${SOCKET_IO_PATH}/?EIO=4&transport=polling`;
     console.log('[call][admin] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
     const CALL_LOBBY_ROOM = "emergency-lobby";
+    const EMERGENCY_COM_CALL_INTAKE_ENABLED = false;
     let activeCallRoom = null;
     let pendingCallRoom = null;
 
@@ -3317,7 +3392,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         socket.on('connect', () => {
             console.log('[socket] Connected to signaling server');
-            socket.emit('join', CALL_LOBBY_ROOM);
+            if (EMERGENCY_COM_CALL_INTAKE_ENABLED) socket.emit('join', CALL_LOBBY_ROOM);
             if (activeCallRoom) socket.emit('join', activeCallRoom);
             if (pendingCallRoom) socket.emit('join', pendingCallRoom);
             if (restoringAdminCall && callId) requestAdminCallResume(socket);
@@ -4523,6 +4598,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         callSocketListenersBoundFor = s;
 
         s.on('offer', async payload => {
+            if (!EMERGENCY_COM_CALL_INTAKE_ENABLED) return;
             const sdp = payload && payload.sdp ? payload.sdp : payload;
             const incomingCallId = payload && payload.callId ? payload.callId : null;
             if (!incomingCallId) return;

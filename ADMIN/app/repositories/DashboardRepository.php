@@ -105,18 +105,12 @@ class DashboardRepository {
     }
 
     /**
-     * Queue backlog for two-way communication routing.
+     * Retired chat queue count. Two-way communication now reads conversations directly.
      *
      * @return int
      */
     public function getPendingQueueCount() {
-        if (!$this->tableExists('chat_queue')) {
-            return 0;
-        }
-        return (int)$this->safeQuery("
-            SELECT COUNT(*) FROM chat_queue
-            WHERE status IN ('pending', 'open')
-        ", 0);
+        return 0;
     }
 
     /**
@@ -349,7 +343,6 @@ class DashboardRepository {
      */
     public function getEndToEndFlowData() {
         $received = $this->getRecentCitizenMessagesCount(24);
-        $pendingQueue = $this->getPendingQueueCount();
         $activeConversations = $this->getActiveConversationsCount();
         $alertsSent = $this->getNotificationsToday();
         $successRate = max(0, min(100, (int)$this->getSuccessRate()));
@@ -358,14 +351,14 @@ class DashboardRepository {
         return [
             'labels' => [
                 'Citizen reports (24h)',
-                'Queue backlog',
+                'Unread report threads',
                 'In-progress conversations',
                 'Alerts sent today',
                 'Estimated delivered'
             ],
             'values' => [
                 $received,
-                $pendingQueue,
+                $this->getPendingMessages(),
                 $activeConversations,
                 $alertsSent,
                 $delivered
@@ -479,7 +472,6 @@ class DashboardRepository {
         $successRate = $this->getSuccessRate();
         $pendingMessages = $this->getPendingMessages();
         $activeConversations = $this->getActiveConversationsCount();
-        $pendingQueue = $this->getPendingQueueCount();
 
         $weather24h = $this->getDomainWarningCount('weather', 24);
         $earthquake24h = $this->getDomainWarningCount('earthquake', 24);
@@ -500,9 +492,9 @@ class DashboardRepository {
         }
 
         $chatStatus = 'ok';
-        if ($pendingQueue > 10 || $pendingMessages > 20) {
+        if ($pendingMessages > 20) {
             $chatStatus = 'critical';
-        } elseif ($pendingQueue > 3 || $pendingMessages > 5) {
+        } elseif ($pendingMessages > 5) {
             $chatStatus = 'warning';
         } elseif ($activeConversations === 0) {
             $chatStatus = 'info';
@@ -542,7 +534,7 @@ class DashboardRepository {
                 'status' => $chatStatus,
                 'metric' => $pendingMessages,
                 'metric_label' => 'Unread threads',
-                'secondary' => $pendingQueue . ' queued | ' . $activeConversations . ' active',
+                'secondary' => $activeConversations . ' active conversations',
                 'route' => 'two-way-communication.php'
             ],
             [

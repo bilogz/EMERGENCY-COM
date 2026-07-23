@@ -112,28 +112,6 @@ if ($method === 'POST') {
         
         $conversationId = $pdo->lastInsertId();
         
-        // Insert into chat_queue table
-        $queueSql = "INSERT INTO chat_queue (
-            conversation_id, user_id, user_name, user_email, user_phone,
-            user_location, user_concern, is_guest, message, status, created_at
-        ) VALUES (
-            :conversation_id, :user_id, :user_name, :user_email, :user_phone,
-            :user_location, :user_concern, :is_guest, :message, 'pending', NOW()
-        )";
-        
-        $queueStmt = $pdo->prepare($queueSql);
-        $queueStmt->execute([
-            ':conversation_id' => $conversationId,
-            ':user_id' => $user_id,
-            ':user_name' => $user_name,
-            ':user_email' => $user_email,
-            ':user_phone' => $user_phone,
-            ':user_location' => $user_location,
-            ':user_concern' => $user_concern,
-            ':is_guest' => $is_guest,
-            ':message' => $message
-        ]);
-        
         // Insert initial message into chat_messages
         $msgSql = "INSERT INTO chat_messages (
             conversation_id, sender_id, sender_name, sender_type,
@@ -157,8 +135,8 @@ if ($method === 'POST') {
         
         apiResponse::success([
             'conversation_id' => $conversationId,
-            'status' => 'pending',
-            'message' => 'Conversation created and queued for operator assignment'
+            'status' => 'open',
+            'message' => 'Conversation created'
         ], 'Conversation created successfully');
         
     } catch (PDOException $e) {
@@ -300,26 +278,6 @@ elseif ($method === 'PUT') {
             ':conversation_id' => $conversationId
         ]);
         
-        // If user sent message and queue is pending, update queue
-        if ($senderType === 'user') {
-            $checkQueue = "SELECT status FROM chat_queue WHERE conversation_id = ?";
-            $queueStmt = $pdo->prepare($checkQueue);
-            $queueStmt->execute([$conversationId]);
-            $queue = $queueStmt->fetch();
-            
-            if ($queue && $queue['status'] === 'pending') {
-                $updateQueue = "UPDATE chat_queue SET 
-                    message = :message,
-                    updated_at = NOW()
-                WHERE conversation_id = :conversation_id";
-                $updateQueueStmt = $pdo->prepare($updateQueue);
-                $updateQueueStmt->execute([
-                    ':message' => $messageText,
-                    ':conversation_id' => $conversationId
-                ]);
-            }
-        }
-        
         $pdo->commit();
         
         apiResponse::success([
@@ -364,12 +322,6 @@ elseif ($method === 'DELETE') {
                      WHERE conversation_id = ?";
         $updateStmt = $pdo->prepare($updateSql);
         $updateStmt->execute([$conversationId]);
-        
-        // Update queue status
-        $queueSql = "UPDATE chat_queue SET status = 'closed', updated_at = NOW() 
-                    WHERE conversation_id = ?";
-        $queueStmt = $pdo->prepare($queueSql);
-        $queueStmt->execute([$conversationId]);
         
         apiResponse::success(['status' => 'closed'], 'Conversation closed successfully');
         

@@ -518,12 +518,6 @@ try {
                 $closeStmt = $pdo->prepare($closeSql);
                 $closeStmt->execute(array_merge($setParams, $closeConversationIds));
 
-                if (twc_table_exists($pdo, 'chat_queue')) {
-                    $queueStatusClosed = twc_status_for_db($pdo, 'closed');
-                    $queueSql = "UPDATE chat_queue SET status = ?, updated_at = NOW() WHERE conversation_id IN ($closeWhere)";
-                    $queueStmt = $pdo->prepare($queueSql);
-                    $queueStmt->execute(array_merge([$queueStatusClosed], $closeConversationIds));
-                }
             }
         } elseif ($hasUserIdStringColumn && !is_numeric($userId)) {
             $sql = "
@@ -590,8 +584,6 @@ try {
                 throw new RuntimeException('Incident photo or video proof is required before starting a new conversation.');
             }
 
-            $fallbackAssignee = $hasAssignedToColumn ? twc_pick_assignee($pdo) : null;
-
             $columns = [
                 'user_id',
                 'user_name',
@@ -626,10 +618,6 @@ try {
             if ($hasUserIdStringColumn) {
                 $columns[] = 'user_id_string';
                 $values[] = is_numeric($userId) ? null : (string)$userId;
-            }
-            if ($hasAssignedToColumn && $fallbackAssignee !== null) {
-                $columns[] = 'assigned_to';
-                $values[] = $fallbackAssignee;
             }
             if ($hasCategoryColumn) {
                 $columns[] = 'category';
@@ -700,9 +688,6 @@ try {
     $convAssignStmt->execute([$conversationId]);
     $convNow = $convAssignStmt->fetch(PDO::FETCH_ASSOC);
     $assignedTo = twc_safe_int($convNow['assigned_to'] ?? null);
-    if ($assignedTo === null && $hasAssignedToColumn) {
-        $assignedTo = twc_pick_assignee($pdo);
-    }
 
     $updateParts = [
         "last_message = ?",
@@ -744,35 +729,6 @@ try {
     $updateSql = "UPDATE conversations SET " . implode(', ', $updateParts) . " WHERE conversation_id = ?";
     $updateStmt = $pdo->prepare($updateSql);
     $updateStmt->execute($updateParams);
-
-    if (twc_table_exists($pdo, 'chat_queue')) {
-        $queueHasAssigned = twc_column_exists($pdo, 'chat_queue', 'assigned_to');
-
-        $queueColumns = [
-            'conversation_id', 'user_id', 'user_name', 'user_email', 'user_phone',
-            'user_location', 'user_concern', 'is_guest', 'message', 'status', 'created_at'
-        ];
-        $queueValues = [
-            $conversationId, (string)$userId, $userName, $userEmail, $userPhone,
-            $userLocation, ($category !== '' ? $category : $userConcern), $isGuest ? 1 : 0, $lastMessagePreview, 'pending', date('Y-m-d H:i:s')
-        ];
-        if ($queueHasAssigned) {
-            $queueColumns[] = 'assigned_to';
-            $queueValues[] = $assignedTo;
-        }
-
-        $queueSql = "INSERT INTO chat_queue (" . implode(',', $queueColumns) . ")
-                     VALUES (" . twc_placeholders($queueValues) . ")
-                     ON DUPLICATE KEY UPDATE
-                        message = VALUES(message),
-                        status = 'pending',
-                        updated_at = NOW()";
-        if ($queueHasAssigned) {
-            $queueSql .= ", assigned_to = VALUES(assigned_to)";
-        }
-        $queueStmt = $pdo->prepare($queueSql);
-        $queueStmt->execute($queueValues);
-    }
 
     $pdo->commit();
 

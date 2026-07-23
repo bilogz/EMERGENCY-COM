@@ -2,7 +2,7 @@
 /**
  * Messages Send (Adapter for Mobile App)
  * Accepts: { conversation_id, user_id, content, nonce }
- * Inserts user message and updates conversation, queues for admin.
+ * Inserts user message and updates the two-way conversation.
  * Response shape matches the app's MessageResponse.
  */
 
@@ -75,7 +75,7 @@ try {
     ");
     $stmt->execute([$conversationId, $userId, $content, $ipAddress, $deviceInfo]);
 
-    // Update conversation last message and queue for admin
+    // Update conversation last message for the admin two-way communication list.
     $updateSql = "
         UPDATE conversations 
         SET last_message = ?,
@@ -97,13 +97,6 @@ try {
     $updateParams[] = $conversationId;
     $stmt = $pdo->prepare($updateSql);
     $stmt->execute($updateParams);
-
-    $stmt = $pdo->prepare("
-        INSERT INTO chat_queue (conversation_id, user_id, user_name, message, status, created_at)
-        VALUES (?, ?, NULL, ?, 'pending', NOW())
-        ON DUPLICATE KEY UPDATE message = VALUES(message), status = 'pending', created_at = NOW()
-    ");
-    $stmt->execute([$conversationId, $userId, $content]);
 
     $riskLevel = $incidentPriority['priority'] === 'critical'
         ? 'critical'

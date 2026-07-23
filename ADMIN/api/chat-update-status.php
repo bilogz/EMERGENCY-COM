@@ -74,24 +74,6 @@ try {
         exit;
     }
 
-    if (twc_table_exists($pdo, 'chat_queue')) {
-        try {
-            $queueStatus = twc_is_closed_status($normalizedStatus) ? 'closed' : 'accepted';
-            $queueSql = "UPDATE chat_queue SET status = ?, updated_at = NOW()";
-            $queueParams = [$queueStatus];
-            if ($adminId !== null && twc_column_exists($pdo, 'chat_queue', 'assigned_to')) {
-                $queueSql .= ", assigned_to = ?";
-                $queueParams[] = $adminId;
-            }
-            $queueSql .= " WHERE conversation_id = ?";
-            $queueParams[] = $conversationId;
-            $queueStmt = $pdo->prepare($queueSql);
-            $queueStmt->execute($queueParams);
-        } catch (Throwable $e) {
-            error_log('Chat queue status update warning: ' . $e->getMessage());
-        }
-    }
-
     $pdo->commit();
 
     echo json_encode([

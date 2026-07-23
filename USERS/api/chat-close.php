@@ -60,20 +60,6 @@ try {
         }
     }
     
-    // Also update chat queue if exists.
-    try {
-        $queueStatus = twc_status_for_db($pdo, 'closed');
-        $stmt = $pdo->prepare("
-            UPDATE chat_queue 
-            SET status = ?, updated_at = NOW() 
-            WHERE conversation_id = ?
-        ");
-        $stmt->execute([$queueStatus, $conversationId]);
-    } catch (PDOException $e) {
-        // Queue update is optional
-        error_log('Chat queue update warning: ' . $e->getMessage());
-    }
-    
     echo json_encode([
         'success' => true,
         'message' => 'Conversation closed successfully'

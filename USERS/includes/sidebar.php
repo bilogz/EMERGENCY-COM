@@ -4236,26 +4236,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     return false;
                 });
             }
-            
-            // Listen to chat queue to know when admin accepts (real-time updates)
-            const queueRef = database.ref('chat_queue').orderByChild('conversationId').equalTo(conversationId);
-            queueRef.on('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    const queueItems = snapshot.val();
-                    const pendingItems = Object.values(queueItems).filter(item => item.status === 'pending');
-                    const acceptedItems = Object.values(queueItems).filter(item => item.status === 'accepted');
-                    
-                    if (acceptedItems.length > 0) {
-                        updateChatStatus('admin_assigned');
-                    } else if (pendingItems.length > 0 && lastMessageSenderType === 'user') {
-                        updateChatStatus('waiting');
-                    }
-                } else if (lastMessageSenderType === 'user') {
-                    // No queue items but user sent last message - show waiting
-                    updateChatStatus('waiting');
-                }
-            });
-            
             // Function to update chat status indicator
             function updateChatStatus(status) {
                 const statusIndicator = document.getElementById('chatStatusIndicator');

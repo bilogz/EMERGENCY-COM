@@ -155,23 +155,6 @@ try {
     $updateStmt = $pdo->prepare($updateSql);
     $updateStmt->execute($updateParams);
 
-    if (twc_table_exists($pdo, 'chat_queue')) {
-        try {
-            $queueSql = "UPDATE chat_queue SET status = 'accepted', updated_at = NOW()";
-            $queueParams = [];
-            if ($adminId !== null && twc_column_exists($pdo, 'chat_queue', 'assigned_to')) {
-                $queueSql .= ", assigned_to = ?";
-                $queueParams[] = $adminId;
-            }
-            $queueSql .= " WHERE conversation_id = ?";
-            $queueParams[] = $conversationId;
-            $queueStmt = $pdo->prepare($queueSql);
-            $queueStmt->execute($queueParams);
-        } catch (Throwable $e) {
-            error_log('Chat queue update warning: ' . $e->getMessage());
-        }
-    }
-
     $pdo->commit();
 
     echo json_encode([

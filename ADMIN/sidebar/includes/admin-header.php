@@ -1001,7 +1001,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!data || !data.success) return;
 
                 const notificationUnread = parseInt(data.notification_unread || 0, 10);
-                window.updateHeaderBadges({ notifications: Number.isFinite(notificationUnread) ? notificationUnread : 0 });
+                const messageUnreadRaw = Object.prototype.hasOwnProperty.call(data, 'message_unread')
+                    ? data.message_unread
+                    : (data.incident_unread || 0);
+                const messageUnread = parseInt(messageUnreadRaw || 0, 10);
+                window.updateHeaderBadges({
+                    notifications: Number.isFinite(notificationUnread) ? notificationUnread : 0,
+                    messages: Number.isFinite(messageUnread) ? messageUnread : 0
+                });
 
                 const list = Array.isArray(data.notifications)
                     ? data.notifications
@@ -1042,207 +1049,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial fetch + refresh
     loadHeaderNotifications();
     setInterval(() => loadHeaderNotifications(), HEADER_NOTIFICATION_POLL_MS);
-    
-    // Global Chat Notification System - Redirects to Two-Way Communication
-    function initGlobalChatNotifications() {
-        // Only initialize if Firebase is available and we're not already on chat pages
-        if (typeof firebase === 'undefined') {
-            // Load Firebase SDKs - Use compat version for non-module usage
-            const firebaseAppScript = document.createElement('script');
-            firebaseAppScript.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js';
-            document.head.appendChild(firebaseAppScript);
-            
-            const firebaseDatabaseScript = document.createElement('script');
-            firebaseDatabaseScript.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js';
-            document.head.appendChild(firebaseDatabaseScript);
-            
-            // Wait for Firebase to load
-            firebaseAppScript.onload = () => {
-                firebaseDatabaseScript.onload = () => {
-                    // Add small delay to ensure Firebase is fully initialized
-                    setTimeout(() => {
-                        if (typeof firebase !== 'undefined') {
-                            setupChatNotifications();
-                        } else {
-                            console.warn('Firebase failed to load, chat notifications unavailable');
-                        }
-                    }, 100);
-                };
-            };
-            
-            // Error handling
-            firebaseAppScript.onerror = () => {
-                console.error('Failed to load Firebase App');
-            };
-            firebaseDatabaseScript.onerror = () => {
-                console.error('Failed to load Firebase Database');
-            };
-        } else {
-            setupChatNotifications();
-        }
-    }
-    
-    function setupChatNotifications() {
-        try {
-            const currentPage = window.location.pathname;
-            const isChatPage = currentPage.includes('two-way-communication') || currentPage.includes('chat-queue');
-            
-            // Verify Firebase is available
-            if (typeof firebase === 'undefined') {
-                console.warn('Firebase not available, skipping chat notifications');
-                return;
-            }
-            
-            const firebaseConfig = {
-                apiKey: "AIzaSyAvfyPTCsBp0dL76VsEVkiIrIsQkko91os",
-                authDomain: "emergencycommunicationsy-eb828.firebaseapp.com",
-                databaseURL: "https://emergencycommunicationsy-eb828-default-rtdb.asia-southeast1.firebasedatabase.app",
-                projectId: "emergencycommunicationsy-eb828",
-                storageBucket: "emergencycommunicationsy-eb828.firebasestorage.app",
-                messagingSenderId: "201064241540",
-                appId: "1:201064241540:web:4f6d026cd355404ec365d1",
-                measurementId: "G-ESQ63CMP9B"
-            };
-            
-            if (!window.firebaseApp) {
-                window.firebaseApp = firebase.initializeApp(firebaseConfig);
-            }
-            const database = firebase.database();
-            
-            // Listen for new chat queue items (toast notifications)
-            const chatQueueRef = database.ref('chat_queue').orderByChild('status').equalTo('pending');
-            
-            // Keep message badge in sync with pending queue count
-            const messageBadge = document.getElementById('messageBadge');
-            const notificationBadge = document.getElementById('notificationBadge');
-            setHeaderBadgeCount(notificationBadge, notificationBadge ? notificationBadge.textContent : 0);
-            chatQueueRef.on('value', (snapshot) => {
-                const pendingCount = snapshot.numChildren ? snapshot.numChildren() : 0;
-                setHeaderBadgeCount(messageBadge, pendingCount);
-            });
-            let lastNotificationTime = 0;
-            const notificationCooldown = 5000; // 5 seconds between notifications
-            
-            if (!isChatPage) {
-                chatQueueRef.on('child_added', (snapshot) => {
-                    const queueItem = snapshot.val();
-                    const now = Date.now();
-                    
-                    // Prevent duplicate notifications
-                    if (now - lastNotificationTime < notificationCooldown) {
-                        return;
-                    }
-                    
-                    lastNotificationTime = now;
-                    showChatNotification(queueItem);
-                });
-            }
-            
-            console.log('✅ Chat notifications initialized successfully');
-        } catch (error) {
-            console.error('❌ Error setting up chat notifications:', error);
-            // Fail gracefully - don't break the page
-        }
-    }
-    
-    function showChatNotification(queueItem) {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = 'global-chat-notification';
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-            padding: 1.25rem;
-            max-width: 380px;
-            z-index: 10000;
-            animation: slideInRight 0.3s ease;
-            border-left: 4px solid #2196f3;
-        `;
-        
-        const guestBadge = queueItem.isGuest ? '<span style="background: #ff9800; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem;">GUEST</span>' : '';
-        const concernBadge = queueItem.userConcern ? `<span style="background: #2196f3; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; text-transform: capitalize;">${queueItem.userConcern}</span>` : '';
-        
-        notification.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
-                <div style="flex: 1;">
-                    <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem; color: #333;">
-                        <i class="fas fa-comments" style="color: #2196f3; margin-right: 0.5rem;"></i>
-                        New Message${guestBadge}${concernBadge}
-                    </h4>
-                    <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #666; font-weight: 600;">
-                        ${queueItem.userName || 'User'}
-                    </p>
-                    <p style="margin: 0; font-size: 0.85rem; color: #888; line-height: 1.4;">
-                        ${queueItem.message || 'Sent a message'}
-                    </p>
-                    ${queueItem.userLocation ? `<p style="margin: 0.25rem 0 0 0; font-size: 0.8rem; color: #999;"><i class="fas fa-map-marker-alt"></i> ${queueItem.userLocation}</p>` : ''}
-                </div>
-                <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; font-size: 1.25rem; cursor: pointer; color: #999; padding: 0; margin-left: 0.5rem;">&times;</button>
-            </div>
-            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                <a href="two-way-communication.php" class="btn btn-primary" style="flex: 1; text-align: center; padding: 0.6rem; text-decoration: none; border-radius: 6px; font-size: 0.9rem;">
-                    <i class="fas fa-comments"></i> View Messages
-                </a>
-                <button onclick="this.parentElement.parentElement.remove()" class="btn btn-secondary" style="padding: 0.6rem 1rem; border-radius: 6px; font-size: 0.9rem;">
-                    Dismiss
-                </button>
-            </div>
-        `;
-        
-        document.body.appendChild(notification);
-        
-        // Auto-remove after 10 seconds
-        setTimeout(() => {
-            if (notification.parentElement) {
-                notification.style.animation = 'slideOutRight 0.3s ease';
-                setTimeout(() => notification.remove(), 300);
-            }
-        }, 10000);
-    }
-    
-    // Add CSS animations
-    if (!document.getElementById('global-chat-notification-styles')) {
-        const style = document.createElement('style');
-        style.id = 'global-chat-notification-styles';
-        style.textContent = `
-            @keyframes slideInRight {
-                from {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-                to {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-            }
-            @keyframes slideOutRight {
-                from {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-                to {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-            }
-            [data-theme="dark"] .global-chat-notification {
-                background: #1f2228;
-                border-left-color: #2196f3;
-                color: #ffffff;
-            }
-            [data-theme="dark"] .global-chat-notification h4 {
-                color: #ffffff;
-            }
-            [data-theme="dark"] .global-chat-notification p {
-                color: #cccccc;
-            }
-        `;
-        document.head.appendChild(style);
-    }
+    // Two-way communication notifications are handled by header-notifications.php polling.
+    function initGlobalChatNotifications() {}
     
     // Initialize on page load
     if (document.readyState === 'loading') {

@@ -1,7 +1,7 @@
 <?php
 /**
  * Get Unread Chat Count API (Admin)
- * Counts unread conversations across active workflow states.
+ * Counts unread Two-Way message/report items across active workflow states.
  */
 
 header('Content-Type: application/json');
@@ -34,7 +34,10 @@ try {
 
     $activeStatuses = twc_active_statuses();
     $sql = "
-        SELECT COUNT(DISTINCT c.conversation_id) AS unread_conversations
+        SELECT
+            COUNT(*) AS unread_messages,
+            COUNT(DISTINCT c.conversation_id) AS unread_conversations,
+            COALESCE(MAX(m.message_id), 0) AS latest_message_id
         FROM conversations c
         JOIN chat_messages m ON c.conversation_id = m.conversation_id
         WHERE c.status IN (" . twc_placeholders($activeStatuses) . ")
@@ -43,11 +46,15 @@ try {
     ";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($activeStatuses);
-    $unreadCount = (int)$stmt->fetchColumn();
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $unreadCount = (int)($row['unread_messages'] ?? 0);
 
     echo json_encode([
         'success' => true,
         'unreadCount' => $unreadCount,
+        'unreadMessageCount' => $unreadCount,
+        'unreadConversationCount' => (int)($row['unread_conversations'] ?? 0),
+        'latestMessageId' => (int)($row['latest_message_id'] ?? 0),
     ]);
 } catch (PDOException $e) {
     $message = $e->getMessage();
