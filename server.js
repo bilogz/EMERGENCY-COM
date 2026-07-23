@@ -77,10 +77,11 @@ io.on('connection', (socket) => {
 
   socket.on('offer', (payload, room) => {
     const signalRoom = typeof payload?.room === 'string' && payload.room.length > 0 ? payload.room : room;
+    const announcementRoom = cleanText(room, 180);
     const callId = cleanText(payload?.callId, 128);
     if (typeof signalRoom === 'string' && signalRoom.length > 0) {
       activeOffersByRoom.set(signalRoom, { payload, ts: Date.now() });
-      console.log(`[signal] offer room=${signalRoom} broadcast=${room} callId=${payload?.callId || ''}`);
+      console.log(`[signal] offer room=${signalRoom} broadcast=${announcementRoom || signalRoom} callId=${payload?.callId || ''}`);
     }
     if (callId && signalRoom) {
       const current = activeCallsById.get(callId);
@@ -95,7 +96,11 @@ io.on('connection', (socket) => {
         updatedAt: Date.now(),
       });
     }
-    socket.to(signalRoom).emit('offer', payload);
+    // The caller and accepted admin exchange media in the private signalRoom.
+    // A new incoming call is first announced to the shared admin lobby so an
+    // admin can discover it, claim it, and then join the private room.
+    const targetRoom = announcementRoom || signalRoom;
+    socket.to(targetRoom).emit('offer', payload);
   });
 
   socket.on('claim-call', (payload, acknowledge) => {

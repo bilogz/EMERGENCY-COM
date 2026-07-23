@@ -6791,3 +6791,67 @@ html body.user-admin-ui .main-content .main-container .title {
 #chatEndConversationBtn:hover:not(:disabled) {
     background: #e2e8f0 !important;
 }
+
+/* Home action cards: equal proportions and responsive layout */
+.home-download-app .app-download-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 1rem;
+    width: min(100%, 960px);
+    margin-inline: auto;
+}
+
+.home-download-app .app-download-buttons > .emergency-call-btn,
+.home-download-app .app-download-buttons > .app-download-btn {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    min-height: 82px;
+    margin: 0;
+    padding: 1rem 1.25rem;
+    box-sizing: border-box;
+    border-radius: 12px;
+    justify-content: center;
+    text-align: center;
+}
+
+.home-download-app .app-download-buttons > .emergency-call-btn i,
+.home-download-app .app-download-buttons > .app-download-btn > i {
+    flex: 0 0 auto;
+    font-size: 1.6rem;
+}
+
+.home-download-app .app-download-buttons .app-btn-text {
+    min-width: 0;
+    text-align: left;
+}
+
+@media (max-width: 767px) {
+    .home-download-app {
+        padding: 1.25rem 1rem;
+        margin-top: 1rem;
+        border-radius: 14px;
+    }
+
+    .home-download-app .app-download-buttons {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+        width: 100%;
+    }
+
+    .home-download-app .app-download-buttons > .emergency-call-btn,
+    .home-download-app .app-download-buttons > .app-download-btn {
+        min-height: 68px;
+        padding: 0.85rem 1rem;
+    }
+}
+
+@media (max-width: 380px) {
+    .home-download-app { padding-inline: 0.75rem; }
+
+    .home-download-app .app-download-buttons > .emergency-call-btn,
+    .home-download-app .app-download-buttons > .app-download-btn {
+        font-size: 0.85rem;
+    }
+}
