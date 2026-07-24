@@ -23,7 +23,9 @@ $assetBase = '../ADMIN/header/';
     <link rel="stylesheet" href="css/user.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="preconnect" href="https://cdn.socket.io" crossorigin>
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="dns-prefetch" href="//nominatim.openstreetmap.org">
     <!-- Emergency Alert System -->
     <link rel="stylesheet" href="../ADMIN/header/css/emergency-alert.css">
     <style>
@@ -858,15 +860,17 @@ $assetBase = '../ADMIN/header/';
     <audio id="remote" autoplay></audio>
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const SOCKET_IO_PATH = '/socket.io';
         const SIGNALING_URL = window.location.origin;
         const ROOT_API_BASE = '../api/';
         const transferApiUrl = () => `${ROOT_API_BASE}transfer-call.php`;
+        const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        const LEAFLET_JS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
         console.log('[call][user] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
         let socket = null;
         let socketBound = false;
+        let leafletLoadPromise = null;
         const CALL_LOBBY_ROOM = "emergency-lobby";
         let activeCallRoom = null;
         let socketRetryCount = 0;
@@ -929,6 +933,37 @@ $assetBase = '../ADMIN/header/';
             socket = window.io(SIGNALING_URL, socketOptions);
             bindSocketHandlers();
             return socket;
+        }
+
+        function loadLeafletAssets() {
+            if (window.L) return Promise.resolve(true);
+            if (leafletLoadPromise) return leafletLoadPromise;
+
+            if (!document.getElementById('leaflet-css')) {
+                const link = document.createElement('link');
+                link.id = 'leaflet-css';
+                link.rel = 'stylesheet';
+                link.href = LEAFLET_CSS_URL;
+                document.head.appendChild(link);
+            }
+
+            leafletLoadPromise = new Promise(resolve => {
+                const existing = document.getElementById('leaflet-js');
+                if (existing) {
+                    existing.addEventListener('load', () => resolve(true), { once: true });
+                    existing.addEventListener('error', () => resolve(false), { once: true });
+                    return;
+                }
+                const script = document.createElement('script');
+                script.id = 'leaflet-js';
+                script.src = LEAFLET_JS_URL;
+                script.async = true;
+                script.onload = () => resolve(true);
+                script.onerror = () => resolve(false);
+                document.head.appendChild(script);
+            });
+
+            return leafletLoadPromise;
         }
 
         function bindSocketHandlers() {
@@ -2089,6 +2124,7 @@ $assetBase = '../ADMIN/header/';
         let selectedAttachment = null;
         let activeIncidentConversationId = sessionStorage.getItem('active_incident_conversation_id') || null;
         let incidentChatPollInterval = null;
+        let incidentChatPollInFlight = false;
         let lastIncidentMessageId = 0;
         let incidentLocationMap = null;
         let incidentLocationMarker = null;
@@ -2395,7 +2431,7 @@ $assetBase = '../ADMIN/header/';
             return true;
         }
 
-        function initIncidentLocationPicker() {
+        async function initIncidentLocationPicker() {
             const input = document.getElementById('botLocationInput');
             if (!input) return;
 
@@ -2424,6 +2460,15 @@ $assetBase = '../ADMIN/header/';
             const startAddress = hasUsableCurrentLocation ? getLocationLabel(locationData) : getLocationLabel(selectedLocationData);
 
             if (startAddress) input.value = startAddress;
+
+            if (!window.L) {
+                updateIncidentLocationSelectedLabel('Loading map...');
+                const leafletReady = await loadLeafletAssets();
+                if (!leafletReady || !window.L) {
+                    updateIncidentLocationSelectedLabel('Map could not load. You can still type the location manually.');
+                    return;
+                }
+            }
 
             if (!window.L) {
                 updateIncidentLocationSelectedLabel('Map could not load. You can still type the location manually.');
@@ -2793,6 +2838,8 @@ $assetBase = '../ADMIN/header/';
             
             const fetchMessages = async () => {
                 if (activeIncidentConversationId !== conversationId) return;
+                if (incidentChatPollInFlight) return;
+                incidentChatPollInFlight = true;
                 try {
                     const response = await fetch(`api/chat-get-messages.php?conversationId=${conversationId}&lastMessageId=${lastIncidentMessageId}`);
                     const data = await response.json();
@@ -2808,6 +2855,8 @@ $assetBase = '../ADMIN/header/';
                     }
                 } catch (e) {
                     console.error('Error polling messages:', e);
+                } finally {
+                    incidentChatPollInFlight = false;
                 }
             };
             
