@@ -871,6 +871,7 @@ $assetBase = '../ADMIN/header/';
         let socket = null;
         let socketBound = false;
         let leafletLoadPromise = null;
+        let callMessageLoggingDisabled = false;
         const CALL_LOBBY_ROOM = "emergency-lobby";
         let activeCallRoom = null;
         let socketRetryCount = 0;
@@ -1376,6 +1377,7 @@ $assetBase = '../ADMIN/header/';
             }
             
             // Log to database using existing chat-send structure
+            if (callMessageLoggingDisabled) return;
             try {
                 const convId = await ensureCallConversationId();
                 if (!convId) return;
@@ -1394,9 +1396,11 @@ $assetBase = '../ADMIN/header/';
                 
                 if (!response.ok) {
                     console.error('Failed to log message to database');
+                    callMessageLoggingDisabled = true;
                 }
             } catch (e) {
                 console.error('Failed to log message:', e);
+                callMessageLoggingDisabled = true;
             }
         }
 
@@ -1574,6 +1578,7 @@ $assetBase = '../ADMIN/header/';
             }
             autoTransferInFlight = false;
             liveTransferSocketNotifiedCallId = null;
+            callMessageLoggingDisabled = false;
             if (autoTransferCompletedCallId === callId) {
                 autoTransferCompletedCallId = null;
             }
@@ -2033,7 +2038,6 @@ $assetBase = '../ADMIN/header/';
                 setStartButtonsDisabled(true);
                 s.emit("join", activeCallRoom);
                 logCall('started');
-                autoTransferCurrentCallToErs();
 
                 const activeCallId = callId;
                 tryGetLocation().then((location) => {
