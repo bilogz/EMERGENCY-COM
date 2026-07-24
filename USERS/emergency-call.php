@@ -754,8 +754,8 @@ $assetBase = '../ADMIN/header/';
     
     <!-- Emergency Call Button and Audio -->
     <button id="call" style="display: none;">Emergency Call</button>
-    <div id="callOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100000;">
-        <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px, 92vw); height:min(600px, 85vh); background:#0f172a; border:1px solid rgba(255,255,255,0.12); border-radius:16px; padding:22px; color:#fff; box-shadow:0 20px 60px rgba(0,0,0,0.5); display:flex; flex-direction:column;">
+    <div id="callOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100000; overflow:auto; padding:18px;">
+        <div style="position:relative; margin:auto; width:min(420px, 92vw); min-height:min(560px, 88vh); max-height:calc(100vh - 36px); background:#0f172a; border:1px solid rgba(255,255,255,0.12); border-radius:16px; padding:22px; color:#fff; box-shadow:0 20px 60px rgba(0,0,0,0.5); display:flex; flex-direction:column; overflow:hidden;">
             <div id="callActiveBanner" style="display:none; margin:-6px 0 12px; padding:8px 12px; border-radius:12px; background:rgba(220,38,38,0.18); border:1px solid rgba(220,38,38,0.45); color:#fecaca; font-weight:800; letter-spacing:0.6px; text-transform:uppercase; text-align:center;">CALL ON ACTIVE</div>
             <!-- Call Header -->
             <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
@@ -788,7 +788,7 @@ $assetBase = '../ADMIN/header/';
             </div>
             
             <!-- Messages Area -->
-            <div id="callMessages" style="flex:1; margin-top:16px; overflow-y:auto; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:12px; background:rgba(0,0,0,0.2); min-height:200px;">
+            <div id="callMessages" style="flex:1 1 160px; min-height:0; margin-top:16px; overflow-y:auto; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:12px; background:rgba(0,0,0,0.2);">
                 <div style="text-align:center; opacity:0.6; font-size:12px;">Messages will appear here</div>
             </div>
             
@@ -796,9 +796,9 @@ $assetBase = '../ADMIN/header/';
             <div id="callInputRow" style="margin-top:12px; display:flex; gap:10px; flex-shrink:0; align-items:center;"></div>
             
             <!-- Call Controls -->
-            <div style="margin-top:14px; display:flex; gap:10px; justify-content:flex-end; flex-shrink:0;">
-                <button id="cancelCallBtn" class="btn btn-secondary" style="min-height:44px; padding:10px 16px;"><i class="fas fa-ban"></i> Cancel Call</button>
-                <button id="endCallBtn" class="btn btn-secondary" disabled style="opacity:0.6; pointer-events:none; min-height:44px; padding:10px 16px;"><i class="fas fa-phone-slash"></i> End Call</button>
+            <div style="margin-top:14px; display:flex; gap:10px; justify-content:flex-end; flex-shrink:0; flex-wrap:wrap; width:100%;">
+                <button id="cancelCallBtn" class="btn btn-secondary" style="min-height:44px; padding:10px 16px; flex:1 1 150px;"><i class="fas fa-ban"></i> Cancel Call</button>
+                <button id="endCallBtn" class="btn btn-secondary" disabled style="opacity:0.6; pointer-events:none; min-height:44px; padding:10px 16px; flex:1 1 150px;"><i class="fas fa-phone-slash"></i> End Call</button>
             </div>
         </div>
     </div>
@@ -1343,6 +1343,7 @@ $assetBase = '../ADMIN/header/';
             // Log to database using existing chat-send structure
             try {
                 const convId = await ensureCallConversationId();
+                if (!convId) return;
                 const formData = new FormData();
                 formData.append('text', text);
                 formData.append('userId', userProfile?.id || 'guest');
@@ -1396,7 +1397,7 @@ $assetBase = '../ADMIN/header/';
         }
 
         function setOverlayVisible(visible) {
-            document.getElementById('callOverlay').style.display = visible ? 'block' : 'none';
+            document.getElementById('callOverlay').style.display = visible ? 'flex' : 'none';
             if (visible) {
                 try { bindCallOverlayUi(); } catch (e) {}
             }
@@ -1434,17 +1435,16 @@ $assetBase = '../ADMIN/header/';
 
         async function cancelCall() {
             if (!callId) return;
-            
-            await logCall('cancelled');
             const s = ensureSocket();
             if (s && callId) {
                 s.emit('hangup', { callId, room: activeCallRoom }, activeCallRoom || getCallRoom());
             }
+            logCall('cancelled');
             setStatus('Call cancelled');
             setTimeout(() => {
                 setOverlayVisible(false);
                 cleanupCall();
-            }, 800);
+            }, 250);
         }
 
         function setStartButtonsDisabled(disabled) {
@@ -1544,6 +1544,7 @@ $assetBase = '../ADMIN/header/';
             }
             callConnectedAt = null;
             callStartedAt = null;
+            callConversationId = null;
             callId = null;
             activeCallRoom = null;
             locationData = null;
@@ -1555,18 +1556,18 @@ $assetBase = '../ADMIN/header/';
             if (endingCall) return;
             endingCall = true;
             const durationSec = callConnectedAt ? Math.floor((Date.now() - callConnectedAt) / 1000) : null;
-            await logCall('ended', { durationSec });
             if (notifyPeer && callId) {
                 const s = ensureSocket();
                 if (s) {
                     s.emit('hangup', { callId, room: activeCallRoom }, activeCallRoom || getCallRoom());
                 }
             }
+            logCall('ended', { durationSec });
             setStatus('Call ended');
             setTimeout(() => {
                 setOverlayVisible(false);
                 cleanupCall();
-            }, 800);
+            }, 250);
         }
 
         async function prepareTransferredCallOffer(reason = 'transfer') {
@@ -1672,7 +1673,7 @@ $assetBase = '../ADMIN/header/';
                     }, transferRoom);
                 }
 
-                await logCall('transfer_waiting_for_response_team');
+                logCall('transfer_waiting_for_response_team');
             } catch (e) {
                 console.error('[call][user] failed to prepare transferred call', e);
                 setStatus('Transfer failed. Please stay on this page or call again.');
@@ -1744,10 +1745,16 @@ $assetBase = '../ADMIN/header/';
 
         function currentCallLocationPayload() {
             const caller = currentCallCallerPayload();
-            return {
+            const payload = {
                 ...(locationData || {}),
                 ...(caller?.address ? { address: caller.address } : {})
             };
+            const hasCoordinates = payload.lat !== undefined && payload.lat !== null
+                && payload.lng !== undefined && payload.lng !== null;
+            if (!payload.address && !hasCoordinates) {
+                payload.address = 'Location pending from transferred emergency';
+            }
+            return payload;
         }
 
         function currentLiveCallPriority() {
@@ -1987,15 +1994,24 @@ $assetBase = '../ADMIN/header/';
                 callId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `call_${Date.now()}_${Math.random().toString(16).slice(2)}`;
                 activeCallRoom = getCallRoom(callId);
                 callStartedAt = Date.now();
+                callConversationId = null;
                 setStartButtonsDisabled(true);
-                locationData = await tryGetLocation();
-                await logCall('started');
+                s.emit("join", activeCallRoom);
+                logCall('started');
+                autoTransferCurrentCallToErs();
 
-                await ensureCallConversationId();
+                const activeCallId = callId;
+                tryGetLocation().then((location) => {
+                    if (callId !== activeCallId) return;
+                    locationData = location;
+                    const guestInfo = getGuestCallerInfo();
+                    if (!userProfile && guestInfo.address && locationData) {
+                        locationData.address = guestInfo.address;
+                    }
+                }).catch(() => {});
 
                 // Add initial message so the transfer audit can link back to the call thread.
-                try {
-                    const convId = await ensureCallConversationId();
+                ensureCallConversationId().then(async (convId) => {
                     console.log('[DEBUG] Conversation ID:', convId);
                     if (convId) {
                         const formData = new FormData();
@@ -2018,12 +2034,11 @@ $assetBase = '../ADMIN/header/';
                     } else {
                         console.log('[DEBUG] No conversation ID available');
                     }
-                } catch (e) {
+                }).catch((e) => {
                     console.error('[DEBUG] Failed to log call start message:', e);
-                }
+                });
 
                 initPeer();
-                s.emit("join", activeCallRoom);
 
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
@@ -2051,7 +2066,7 @@ $assetBase = '../ADMIN/header/';
                 };
 
                 s.emit("offer", offerPayload, activeCallRoom);
-                await autoTransferCurrentCallToErs();
+                autoTransferCurrentCallToErs();
             } catch (e) {
                 console.error('[call][user] call failed', e);
                 setStatus('Call failed');
