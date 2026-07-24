@@ -985,6 +985,7 @@ $assetBase = '../ADMIN/header/';
                 }
                 try {
                     await targetPc.setRemoteDescription(description);
+                    await flushPendingRemoteIceCandidates(targetPc);
                 } catch (error) {
                     if (targetPc.signalingState === 'stable') {
                         console.warn('[call][user] Ignoring duplicate answer after connection became stable.', error);
@@ -997,11 +998,8 @@ $assetBase = '../ADMIN/header/';
             socket.on("candidate", payload => {
                 if (!signalingPayloadMatchesActiveCall(payload)) return;
                 const cand = payload && payload.candidate ? payload.candidate : payload;
-                if (transferInProgress && transferPc && cand) {
-                    transferPc.addIceCandidate(cand).catch(() => {});
-                    return;
-                }
-                if (pc && cand) pc.addIceCandidate(cand);
+                const targetPc = (transferInProgress && transferPc) ? transferPc : pc;
+                addRemoteIceCandidate(targetPc, cand);
             });
 
             const handlePeerHangup = payload => {
@@ -1117,6 +1115,33 @@ $assetBase = '../ADMIN/header/';
             return null;
         }
 
+        async function addRemoteIceCandidate(targetPc, candidate) {
+            if (!targetPc || !candidate) return;
+            if (!targetPc.remoteDescription) {
+                pendingRemoteIceCandidates.push({ pc: targetPc, candidate });
+                return;
+            }
+            try {
+                await targetPc.addIceCandidate(candidate);
+            } catch (error) {
+                console.warn('[call][user] Unable to add ICE candidate:', error);
+            }
+        }
+
+        async function flushPendingRemoteIceCandidates(targetPc) {
+            if (!targetPc || !targetPc.remoteDescription || !pendingRemoteIceCandidates.length) return;
+            const remaining = [];
+            const ready = [];
+            pendingRemoteIceCandidates.forEach(item => {
+                if (item.pc === targetPc) ready.push(item.candidate);
+                else remaining.push(item);
+            });
+            pendingRemoteIceCandidates = remaining;
+            for (const candidate of ready) {
+                await addRemoteIceCandidate(targetPc, candidate);
+            }
+        }
+
         let pc = null;
         let transferPc = null;
         let localStream = null;
@@ -1134,6 +1159,7 @@ $assetBase = '../ADMIN/header/';
         let userProfile = null;
         let messages = [];
         let audioActivityMonitors = [];
+        let pendingRemoteIceCandidates = [];
         let endingCall = false;
 
         function setSpeakingIndicator(labelId, indicatorId, active) {
@@ -1477,6 +1503,7 @@ $assetBase = '../ADMIN/header/';
         function cleanupCall() {
             endingCall = false;
             transferInProgress = false;
+            pendingRemoteIceCandidates = [];
             if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
             peerDisconnectTimer = null;
             stopTimer();
@@ -1936,6 +1963,7 @@ $assetBase = '../ADMIN/header/';
             transferInProgress = false;
             autoTransferInFlight = false;
             liveTransferSocketNotifiedCallId = null;
+            pendingRemoteIceCandidates = [];
 
             setOverlayVisible(true);
             setStatus('Connecting…');
