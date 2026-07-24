@@ -876,7 +876,7 @@ $assetBase = '../ADMIN/header/';
             return id ? `emergency-call-${id}` : CALL_LOBBY_ROOM;
         }
 
-        function waitForSocketConnected(s, timeoutMs = 8000) {
+        function waitForSocketConnected(s, timeoutMs = 25000) {
             return new Promise((resolve, reject) => {
                 if (!s) return reject(new Error('No socket'));
                 if (s.connected) return resolve(true);
@@ -888,9 +888,8 @@ $assetBase = '../ADMIN/header/';
                     cleanup();
                     resolve(true);
                 };
-                const onErr = (err) => {
-                    cleanup();
-                    reject(err || new Error('Socket connect error'));
+                const onErr = () => {
+                    if (callId) setStatus('Connecting to call service... retrying');
                 };
                 const cleanup = () => {
                     clearTimeout(t);
@@ -918,12 +917,12 @@ $assetBase = '../ADMIN/header/';
 
             const socketOptions = {
                 path: SOCKET_IO_PATH,
-                // Prefer polling transport to avoid websocket upgrade failures behind strict proxies.
-                transports: ['polling'],
+                transports: ['websocket', 'polling'],
                 reconnection: true,
                 reconnectionAttempts: MAX_SOCKET_RETRIES,
+                reconnectionDelay: 500,
                 reconnectionDelayMax: 2000,
-                timeout: 8000
+                timeout: 15000
 
             };
 
