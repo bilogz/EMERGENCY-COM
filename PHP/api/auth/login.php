@@ -32,6 +32,11 @@ try {
             name,
             email,
             phone,
+            nationality,
+            district,
+            barangay,
+            house_number,
+            street,
             status,
             user_type,
             profile_pic
@@ -66,6 +71,18 @@ try {
         'name' => $user['name'],
         'email' => $user['email'],
         'phone' => $user['phone'],
+        'nationality' => $user['nationality'] ?? null,
+        'district' => $user['district'] ?? null,
+        'barangay' => $user['barangay'] ?? null,
+        'house_number' => $user['house_number'] ?? null,
+        'house_unit' => $user['house_number'] ?? null,
+        'street' => $user['street'] ?? null,
+        'address' => trim(implode(', ', array_filter([
+            $user['house_number'] ?? null,
+            $user['street'] ?? null,
+            $user['barangay'] ?? null,
+            $user['district'] ?? null
+        ]))),
         'status' => $user['status'],
         'user_type' => $user['user_type'],
         'profile_pic' => $user['profile_pic']

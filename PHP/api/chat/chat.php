@@ -3,6 +3,7 @@
 // Chat API endpoint for real-time messaging between users and operators
 
 require_once __DIR__ . '/../shared/db_connect.php';
+require_once __DIR__ . '/../../../ADMIN/api/chat-logic.php';
 
 header('Content-Type: application/json');
 
@@ -75,40 +76,49 @@ if ($method === 'POST') {
     try {
         $pdo->beginTransaction();
         
-        // Insert into conversations table
-        $convSql = "INSERT INTO conversations (
-            user_id, user_name, user_email, user_phone, user_location, 
-            user_concern, is_guest, status, last_message, last_message_time,
-            device_info, ip_address, user_agent, created_at, updated_at,
-            incident_priority_score, incident_priority_level, incident_priority_color,
-            incident_priority_breakdown, incident_priority_manual
-        ) VALUES (
-            :user_id, :user_name, :user_email, :user_phone, :user_location,
-            :user_concern, :is_guest, 'active', :last_message, NOW(),
-            :device_info, :ip_address, :user_agent, NOW(), NOW(),
-            :incident_priority_score, :incident_priority_level, :incident_priority_color,
-            :incident_priority_breakdown, :incident_priority_manual
-        )";
-        
+        // Stay compatible with production databases that have not received
+        // every optional incident-priority migration yet.
+        $conversationColumns = [
+            'user_id', 'user_name', 'user_email', 'user_phone', 'user_location',
+            'user_concern', 'is_guest', 'status', 'last_message', 'last_message_time',
+            'device_info', 'ip_address', 'user_agent', 'created_at', 'updated_at'
+        ];
+        $conversationValues = [
+            is_numeric($user_id) ? (int)$user_id : null,
+            $user_name,
+            $user_email,
+            $user_phone,
+            $user_location,
+            $user_concern,
+            (int)$is_guest,
+            twc_status_for_db($pdo, 'open'),
+            substr($message, 0, 255),
+            date('Y-m-d H:i:s'),
+            getDeviceInfo(),
+            getClientIp(),
+            $_SERVER['HTTP_USER_AGENT'] ?? '',
+            date('Y-m-d H:i:s'),
+            date('Y-m-d H:i:s')
+        ];
+
+        $optionalPriorityValues = [
+            'incident_priority_score' => $incident_priority_score,
+            'incident_priority_level' => $incident_priority_level,
+            'incident_priority_color' => $incident_priority_color,
+            'incident_priority_breakdown' => $incident_priority_breakdown,
+            'incident_priority_manual' => $incident_priority_manual
+        ];
+        foreach ($optionalPriorityValues as $column => $value) {
+            if (twc_column_exists($pdo, 'conversations', $column)) {
+                $conversationColumns[] = $column;
+                $conversationValues[] = $value;
+            }
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($conversationValues), '?'));
+        $convSql = 'INSERT INTO conversations (' . implode(', ', $conversationColumns) . ') VALUES (' . $placeholders . ')';
         $convStmt = $pdo->prepare($convSql);
-        $convStmt->execute([
-            ':user_id' => $user_id,
-            ':user_name' => $user_name,
-            ':user_email' => $user_email,
-            ':user_phone' => $user_phone,
-            ':user_location' => $user_location,
-            ':user_concern' => $user_concern,
-            ':is_guest' => $is_guest,
-            ':last_message' => substr($message, 0, 255),
-            ':device_info' => getDeviceInfo(),
-            ':ip_address' => getClientIp(),
-            ':user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? '',
-            ':incident_priority_score' => $incident_priority_score,
-            ':incident_priority_level' => $incident_priority_level,
-            ':incident_priority_color' => $incident_priority_color,
-            ':incident_priority_breakdown' => $incident_priority_breakdown,
-            ':incident_priority_manual' => $incident_priority_manual
-        ]);
+        $convStmt->execute($conversationValues);
         
         $conversationId = $pdo->lastInsertId();
         
@@ -139,8 +149,8 @@ if ($method === 'POST') {
             'message' => 'Conversation created'
         ], 'Conversation created successfully');
         
-    } catch (PDOException $e) {
-        $pdo->rollBack();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
         error_log('Chat conversation creation failed: ' . $e->getMessage());
         apiResponse::error('Failed to create conversation', 500);
     }
