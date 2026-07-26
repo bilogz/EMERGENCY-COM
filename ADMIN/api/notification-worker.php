@@ -342,6 +342,9 @@ function getFirebaseAccessToken(array $serviceAccount, &$error = null): ?string 
 
 /** Send an alert through the supported FCM HTTP v1 API. */
 function sendFCM($token, $payload, &$error = null) {
+    if (preg_match('/^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/', (string)$token)) {
+        return sendExpoPushNotification((string)$token, $payload, $error);
+    }
     if (!function_exists('curl_init')) {
         $error = 'cURL is unavailable.';
         return false;
@@ -403,6 +406,49 @@ function sendFCM($token, $payload, &$error = null) {
     $decoded = is_string($response) ? json_decode($response, true) : null;
     if ($httpCode >= 200 && $httpCode < 300 && !empty($decoded['name'])) return true;
     $error = $error ?: (string)($decoded['error']['message'] ?? "FCM HTTP {$httpCode}");
+    return false;
+}
+
+/** Send Expo push tokens through Expo's production push gateway. */
+function sendExpoPushNotification(string $token, array $payload, &$error = null): bool {
+    if (!function_exists('curl_init')) {
+        $error = 'cURL is unavailable.';
+        return false;
+    }
+    $severity = strtolower((string)($payload['severity'] ?? 'high'));
+    $message = [
+        'to' => $token,
+        'sound' => 'default',
+        'priority' => in_array($severity, ['critical', 'high'], true) ? 'high' : 'default',
+        'channelId' => in_array($severity, ['critical', 'high'], true) ? 'emergency_critical_alerts' : 'emergency_alerts',
+        'title' => (string)($payload['title'] ?? 'Emergency Alert'),
+        'body' => (string)($payload['body'] ?? ''),
+        'data' => [
+            'type' => 'emergency_alert',
+            'alert_id' => (string)($payload['alert_id'] ?? ''),
+            'severity' => $severity,
+            'category' => (string)($payload['category'] ?? 'Emergency Alert')
+        ]
+    ];
+    $ch = curl_init('https://exp.host/--/api/v2/push/send');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POSTFIELDS => json_encode($message, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        CURLOPT_TIMEOUT => 25,
+        CURLOPT_SSL_VERIFYPEER => true
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    if ($response === false) $error = curl_error($ch);
+    curl_close($ch);
+    $decoded = is_string($response) ? json_decode($response, true) : null;
+    $ticket = $decoded['data'] ?? null;
+    if ($httpCode >= 200 && $httpCode < 300 && is_array($ticket) && ($ticket['status'] ?? '') === 'ok') {
+        return true;
+    }
+    $error = $error ?: (string)($ticket['message'] ?? $decoded['errors'][0]['message'] ?? "Expo Push HTTP {$httpCode}");
     return false;
 }
 

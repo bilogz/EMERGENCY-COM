@@ -119,83 +119,12 @@ $pageTitle = 'Mass Notification System';
                         <div class="dispatch-grid">
                             <!-- Left Column: Settings -->
                             <div class="dispatch-left">
-                                <!-- Target Audience -->
-                                <div class="module-card" id="mnCardTarget" data-mn-step="1">
-                                    <div class="module-card-header">
-                                        <h2><span class="mn-card-number">1</span> Choose who should receive it</h2>
-                                    </div>
-                                    <div class="module-card-body">
-                                        <div class="form-group">
-                                            <label for="audienceType">Who needs this message?</label>
-                                            <select id="audienceType" name="audience_type" onchange="toggleAudienceFilters()" class="form-control">
-                                                <option value="all">All Registered Citizens</option>
-                                                <option value="barangay">Specific Barangay</option>
-                                                <option value="location">Specific Location (Map)</option>
-                                                <option value="role">Specific Role (Citizen, Responder, Admin)</option>
-                                                <option value="topic">Subscribed Topic Users</option>
-                                            </select>
-                                            <div class="mn-help mn-help--large" id="mnAudienceHelp">Choose <strong>All Registered Citizens</strong> unless the alert is only for one place or group.</div>
-                                        </div>
-                                        
-                                        <div id="barangayFilter" class="form-group" style="display:none;">
-                                            <label for="barangay">Select Barangay</label>
-                                            <select id="barangay" name="barangay" style="width: 100%;">
-                                                <option value="">Loading...</option>
-                                            </select>
-                                            <div style="display:flex; gap:0.6rem; align-items:center; margin-top:0.6rem; flex-wrap:wrap;">
-                                                <button type="button" class="btn ui-btn-ghost" onclick="mnOpenMapPicker('barangay')">
-                                                    <i class="fas fa-map-marker-alt"></i> Pick on Map
-                                                </button>
-                                                <small id="mnBarangayCoordsHint" style="color: var(--text-secondary-1);"></small>
-                                            </div>
-                                            <div class="mn-help">Only citizens in this barangay will receive the alert.</div>
-                                        </div>
-
-                                        <div id="locationFilter" class="form-group" style="display:none;">
-                                            <label>Choose Location (Quezon City)</label>
-                                            <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-                                                <button type="button" class="btn btn-secondary" onclick="mnOpenMapPicker('location')">
-                                                    <i class="fas fa-map"></i> Open Map
-                                                </button>
-                                                <div style="display:flex; align-items:center; gap:0.4rem;">
-                                                    <span style="color: var(--text-secondary-1); font-size: 0.9rem;">Radius</span>
-                                                    <input id="mnRadiusM" name="radius_m" class="form-control" type="number" min="100" max="20000" step="50" value="1000" style="width: 140px;">
-                                                    <span style="color: var(--text-secondary-1); font-size: 0.9rem;">meters</span>
-                                                </div>
-                                            </div>
-                                            <input type="hidden" id="mnTargetLat" name="target_lat" value="">
-                                            <input type="hidden" id="mnTargetLng" name="target_lng" value="">
-                                            <input type="hidden" id="mnTargetAddress" name="target_address" value="">
-                                            <div class="mn-help" style="margin-top:0.6rem;">
-                                                Selected point: <strong id="mnTargetLabel">None</strong>
-                                            </div>
-                                            <div class="mn-help" id="mnTargetCoords" style="margin-top:0.15rem; color: var(--text-secondary-1);"></div>
-                                            <div class="mn-help" id="mnTargetAddrText" style="margin-top:0.15rem; color: var(--text-secondary-1);"></div>
-                                            <div style="display:flex; gap:0.6rem; align-items:center; margin-top:0.6rem; flex-wrap:wrap;">
-                                                <input id="mnTargetAddressText" class="form-control" type="text" placeholder="Location details / address (auto-filled, editable)" style="flex:1; min-width: 260px;">
-                                                <button type="button" class="btn ui-btn-ghost" id="mnLookupAddressBtn" onclick="mnLookupAddressFromWizard()">
-                                                    <i class="fas fa-location-crosshairs"></i> Lookup
-                                                </button>
-                                            </div>
-                                            <div class="mn-help">This targets citizens whose latest known location is within the radius.</div>
-                                        </div>
-
-                                        <div id="roleFilter" class="form-group" style="display:none;">
-                                            <label for="role">Select Role</label>
-                                            <select id="role" name="role" style="width: 100%;">
-                                                <option value="citizen">Citizens Only</option>
-                                                <option value="responder">Responders Only</option>
-                                                <option value="admin">Administrators Only</option>
-                                            </select>
-                                            <div class="mn-help">Use this for internal announcements (e.g., responders only).</div>
-                                        </div>
-                                    </div>
-                                </div>
+                                <input type="hidden" id="audienceType" name="audience_type" value="all">
 
                                 <!-- Dispatch Channels -->
-                                <div class="module-card" id="mnCardChannels" data-mn-step="2">
+                                <div class="module-card" id="mnCardChannels" data-mn-step="1">
                                     <div class="module-card-header">
-                                        <h2><span class="mn-card-number">2</span> Choose how people receive it</h2>
+                                        <h2><span class="mn-card-number">1</span> Choose how people receive it</h2>
                                     </div>
                                     <div class="module-card-body">
                                         <div class="channel-options">
@@ -214,11 +143,11 @@ $pageTitle = 'Mass Notification System';
                                                 <small>Sent to their email inbox</small>
                                             </label>
                                             <label class="channel-checkbox selected" id="lbl-push">
-                                                <input type="checkbox" name="channels" value="push" class="mn-visually-hidden" checked onchange="this.parentElement.classList.toggle('selected', this.checked)">
+                                                <input type="checkbox" name="channels" value="push" class="mn-visually-hidden" checked disabled>
                                                 <span class="mn-channel-check" aria-hidden="true"><i class="fas fa-check"></i></span>
                                                 <i class="fas fa-mobile-alt"></i>
-                                                <strong>Mobile App</strong>
-                                                <small>Shows on active devices</small>
+                                                <strong>Mobile App <span class="mn-recommended">Always on</span></strong>
+                                                <small>All opted-in registered and guest devices</small>
                                             </label>
                                             <label class="channel-checkbox" id="lbl-pa">
                                                 <input type="checkbox" name="channels" value="pa" class="mn-visually-hidden" onchange="this.parentElement.classList.toggle('selected', this.checked)">
@@ -229,17 +158,18 @@ $pageTitle = 'Mass Notification System';
                                             </label>
                                         </div>
                                         <div class="mn-preview-hint" id="mnChannelsHint">
-                                            Email and Mobile App are selected for broad coverage. Website popups are always published for targeted citizens.
+                                            Mobile App delivery is always enabled. Email is also selected for registered citizens.
                                         </div>
+                                        <div class="mn-help mn-help--large"><strong>Audience is automatic:</strong> every registered citizen and every opted-in Alertara app installation, including guest mode.</div>
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Right Column: Message -->
                             <div class="dispatch-right">
-                                <div class="module-card" id="mnCardMessage" data-mn-step="3">
+                                <div class="module-card" id="mnCardMessage" data-mn-step="2">
                                     <div class="module-card-header">
-                                        <h2><span class="mn-card-number">3</span> Write the alert message</h2>
+                                        <h2><span class="mn-card-number">2</span> Write the alert message</h2>
                                     </div>
                                     <div class="module-card-body">
                                         <div class="mn-writing-intro">
@@ -414,7 +344,7 @@ $pageTitle = 'Mass Notification System';
             <div class="mn-modal-header">
                 <div>
                     <h2 class="mn-modal-title"><i class="fas fa-paper-plane" style="margin-right: 0.5rem; color: var(--primary-color-1);"></i> Send a New Alert</h2>
-                    <div class="mn-modal-subtitle" id="mnWizardInstruction">Step 1 of 3: Choose the people who need this message.</div>
+                    <div class="mn-modal-subtitle" id="mnWizardInstruction">Step 1 of 2: Choose how to deliver this alert.</div>
                 </div>
                 <button class="mn-modal-close" type="button" onclick="closeDispatchWizard()" aria-label="Close wizard">&times;</button>
             </div>
@@ -422,11 +352,9 @@ $pageTitle = 'Mass Notification System';
                 <div class="mn-modal-grid">
                     <div class="mn-modal-left">
                         <div class="mn-stepper" aria-label="Wizard steps">
-                            <button type="button" class="mn-step is-active" id="mnWStep1" onclick="mnWizardRequestStep(1)"><span class="mn-step-num">1</span> People</button>
+                            <button type="button" class="mn-step is-active" id="mnWStep1" onclick="mnWizardRequestStep(1)"><span class="mn-step-num">1</span> Delivery</button>
                             <div class="mn-step-sep" aria-hidden="true"></div>
-                            <button type="button" class="mn-step" id="mnWStep2" onclick="mnWizardRequestStep(2)"><span class="mn-step-num">2</span> Delivery</button>
-                            <div class="mn-step-sep" aria-hidden="true"></div>
-                            <button type="button" class="mn-step" id="mnWStep3" onclick="mnWizardRequestStep(3)"><span class="mn-step-num">3</span> Message</button>
+                            <button type="button" class="mn-step" id="mnWStep2" onclick="mnWizardRequestStep(2)"><span class="mn-step-num">2</span> Message</button>
                         </div>
                         <div id="mnWizardHost"></div>
                     </div>
@@ -464,7 +392,7 @@ $pageTitle = 'Mass Notification System';
                 </div>
                 <div class="mn-footer-right">
                     <span class="mn-footer-reason" id="mnDispatchReason" aria-live="polite"></span>
-                    <button type="button" class="btn btn-primary mn-large-action" id="mnWizardNextBtn" onclick="mnWizardNext()">Continue to Delivery <i class="fas fa-arrow-right"></i></button>
+                    <button type="button" class="btn btn-primary mn-large-action" id="mnWizardNextBtn" onclick="mnWizardNext()">Continue to Message <i class="fas fa-arrow-right"></i></button>
                 </div>
             </div>
         </div>
@@ -640,7 +568,7 @@ $pageTitle = 'Mass Notification System';
             document.body.classList.add('ui-modal-open');
 
             mnWizardGoTo(1);
-            setTimeout(() => document.getElementById('audienceType')?.focus(), 0);
+            setTimeout(() => document.getElementById('lbl-push')?.scrollIntoView({behavior:'smooth', block:'center'}), 0);
         }
 
         function closeDispatchWizard() {
@@ -666,56 +594,56 @@ $pageTitle = 'Mass Notification System';
         }
 
         function mnWizardGoTo(step) {
+            step = Math.max(1, Math.min(2, Number(step) || 1));
             mnWizardStep = step;
             const form = document.getElementById('dispatchForm');
             if (!form) return;
 
             // show only selected card
             document.querySelectorAll('#dispatchForm .module-card').forEach(c => c.classList.remove('mn-step-active'));
-            if (step === 1) document.getElementById('mnCardTarget')?.classList.add('mn-step-active');
-            if (step === 2) document.getElementById('mnCardChannels')?.classList.add('mn-step-active');
-            if (step === 3) document.getElementById('mnCardMessage')?.classList.add('mn-step-active');
+            if (step === 1) document.getElementById('mnCardChannels')?.classList.add('mn-step-active');
+            if (step === 2) document.getElementById('mnCardMessage')?.classList.add('mn-step-active');
 
             const backBtn = document.getElementById('mnWizardBackBtn');
             const nextBtn = document.getElementById('mnWizardNextBtn');
             const instruction = document.getElementById('mnWizardInstruction');
             if (backBtn) backBtn.disabled = step === 1;
             if (nextBtn) {
-                if (step === 1) nextBtn.innerHTML = 'Continue to Delivery <i class="fas fa-arrow-right"></i>';
-                else if (step === 2) nextBtn.innerHTML = 'Continue to Message <i class="fas fa-arrow-right"></i>';
+                if (step === 1) nextBtn.innerHTML = 'Continue to Message <i class="fas fa-arrow-right"></i>';
+                else if (step === 2) nextBtn.innerHTML = '<i class="fas fa-eye"></i> Review Alert <i class="fas fa-arrow-right"></i>';
                 else nextBtn.innerHTML = '<i class="fas fa-eye"></i> Review Alert <span aria-hidden="true">→</span>';
             }
             if (instruction) {
                 const instructions = {
-                    1: 'Step 1 of 3: Choose the people who need this message.',
-                    2: 'Step 2 of 3: Choose one or more ways to deliver the message.',
-                    3: 'Step 3 of 3: Write a clear message, then review it before sending.'
+                    1: 'Step 1 of 2: Choose one or more ways to deliver the message.',
+                    2: 'Step 2 of 2: Write a clear message, then review it before sending.'
                 };
                 instruction.textContent = instructions[step];
             }
 
             document.getElementById('mnWStep1')?.classList.toggle('is-active', step === 1);
             document.getElementById('mnWStep2')?.classList.toggle('is-active', step === 2);
-            document.getElementById('mnWStep3')?.classList.toggle('is-active', step === 3);
 
             // done states based on current form
             const channels = getSelectedChannels();
             const title = document.getElementById('message_title')?.value?.trim() || '';
             const body = document.getElementById('message_body')?.value?.trim() || '';
             const catId = $('#category_id').val();
-            document.getElementById('mnWStep1')?.classList.toggle('is-done', true);
-            document.getElementById('mnWStep2')?.classList.toggle('is-done', channels.length > 0);
-            document.getElementById('mnWStep3')?.classList.toggle('is-done', !!catId && !!title && !!body);
+            document.getElementById('mnWStep1')?.classList.toggle('is-done', channels.length > 0);
+            document.getElementById('mnWStep2')?.classList.toggle('is-done', !!catId && !!title && !!body);
 
-            if (step === 1) document.getElementById('audienceType')?.focus();
-            if (step === 2) document.getElementById('lbl-sms')?.scrollIntoView({behavior:'smooth', block:'center'});
-            if (step === 3) document.getElementById('message_title')?.focus();
+            if (step === 1) document.getElementById('lbl-push')?.scrollIntoView({behavior:'smooth', block:'center'});
+            if (step === 2) document.getElementById('message_title')?.focus();
             updateDispatchCTAState();
         }
 
         function mnValidateStep(step, showMessage = true) {
             let message = '';
             let focusId = '';
+            if (step === 1 && getSelectedChannels().length === 0) {
+                message = 'Please choose at least one delivery method. Email is recommended.';
+                focusId = 'lbl-email';
+            }
             if (step === 1) {
                 const type = document.getElementById('audienceType')?.value || 'all';
                 if (type === 'barangay' && !document.getElementById('barangay')?.value) {
@@ -742,7 +670,6 @@ $pageTitle = 'Mass Notification System';
 
         function mnWizardRequestStep(step) {
             if (step > mnWizardStep && !mnValidateStep(mnWizardStep)) return;
-            if (step === 3 && !mnValidateStep(2)) return;
             mnWizardGoTo(step);
         }
 
@@ -752,8 +679,7 @@ $pageTitle = 'Mass Notification System';
                 return mnWizardGoTo(2);
             }
             if (mnWizardStep === 2) {
-                if (!mnValidateStep(2)) return;
-                return mnWizardGoTo(3);
+                return showPreview();
             }
             // step 3 finish: open preview/confirm modal (non-tech friendly)
             showPreview();
@@ -772,24 +698,6 @@ $pageTitle = 'Mass Notification System';
         }
 
         function toggleAudienceFilters() {
-            const type = document.getElementById('audienceType').value;
-            const help = document.getElementById('mnAudienceHelp');
-            document.getElementById('barangayFilter').style.display = type === 'barangay' ? 'block' : 'none';
-            document.getElementById('roleFilter').style.display = type === 'role' ? 'block' : 'none';
-            document.getElementById('locationFilter').style.display = type === 'location' ? 'block' : 'none';
-            const helpText = {
-                all: 'Every active registered citizen will receive this alert.',
-                barangay: 'Only active citizens in the barangay you choose will receive it.',
-                location: 'Only citizens near the point you choose on the map will receive it.',
-                role: 'Use this for a message meant only for citizens, responders, or administrators.',
-                topic: 'Only people subscribed to the alert category you choose in Step 3 will receive it.'
-            };
-            if (help) help.textContent = helpText[type] || helpText.all;
-            
-            if (type === 'topic') {
-                // Focus user attention on the category dropdown which now serves as the topic filter
-                $('#category_id').select2('open');
-            }
             updateDispatchCTAState();
         }
 
@@ -2012,9 +1920,9 @@ $pageTitle = 'Mass Notification System';
             }
 
             const canProceed = missing.length === 0;
-            if (btn) btn.disabled = mnWizardStep === 3 && !canProceed;
+            if (btn) btn.disabled = mnWizardStep === 2 && !canProceed;
 
-            if (!canProceed && mnWizardStep === 3) {
+            if (!canProceed && mnWizardStep === 2) {
                 reason.classList.add('is-visible');
                 const map = {category:'choose what kind of alert this is', channel:'choose how people will receive it', title:'add a short title', message:'write the message', barangay:'choose a barangay', location:'choose a location on the map', radius:'enter a valid distance'};
                 reason.textContent = 'Still needed: ' + missing.map(m => map[m]).join('; ') + '.';
@@ -2165,7 +2073,7 @@ $pageTitle = 'Mass Notification System';
                 }
             }
 
-            document.getElementById('pvAudience').textContent = document.getElementById('audienceType').options[document.getElementById('audienceType').selectedIndex].text;
+            document.getElementById('pvAudience').textContent = 'All registered citizens and opted-in app devices';
             document.getElementById('pvChannels').textContent = channels.join(', ').toUpperCase();
             document.getElementById('pvSeverity').textContent = data.severity || 'Medium';
             document.getElementById('pvTitle').textContent = data.title;
@@ -2243,10 +2151,8 @@ $pageTitle = 'Mass Notification System';
                     // Close wizard too to avoid trapping the user under overlays.
                     try { closeDispatchWizard(); } catch (e) {}
 
-                    const recipientText = Number(data.recipients || 0) === 1
-                        ? '1 citizen'
-                        : `${Number(data.recipients || 0)} citizens`;
-                    mnShowNotice(`The alert was accepted for ${recipientText}. Delivery has started. You can check its progress in Dispatch History.`, 'Alert is being sent');
+                    const deviceCount = Number(data.push_devices || 0);
+                    mnShowNotice(`The alert was accepted for all citizens and ${deviceCount} opted-in app device${deviceCount === 1 ? '' : 's'}. Delivery has started.`, 'Alert is being sent');
 
                     // Kick the worker once (local/dev friendly) so queued jobs actually send.
                     // Safe to ignore errors; deployments may run the worker via cron.

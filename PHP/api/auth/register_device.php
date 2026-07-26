@@ -19,15 +19,40 @@ try {
             apiResponse::error("Invalid JSON input.", 400);
         }
 
-        $user_id = $data['user_id'] ?? null;
+        $user_id = isset($data['user_id']) && (int)$data['user_id'] > 0 ? (int)$data['user_id'] : null;
         $device_id = $data['device_id'] ?? null;
         $device_type = $data['device_type'] ?? 'mobile';
         $device_name = $data['device_name'] ?? null;
-        $fcm_token = $data['fcm_token'] ?? null;
+        $fcm_token = trim((string)($data['fcm_token'] ?? $data['push_token'] ?? ''));
+        $token_type = trim((string)($data['token_type'] ?? 'expo'));
+        $permission = trim((string)($data['notification_permission'] ?? 'granted'));
 
         // Validate required fields
-        if (!$user_id || !$device_id) {
-            apiResponse::error("Missing required fields: user_id, device_id", 400);
+        if (!$device_id || (!$user_id && $fcm_token === '')) {
+            apiResponse::error("Missing required fields: device_id and either user_id or push_token", 400);
+        }
+
+        if ($fcm_token !== '') {
+            registerAppNotificationDevice(
+                $pdo,
+                $user_id,
+                (string)$device_id,
+                (string)$device_type,
+                $device_name,
+                $fcm_token,
+                $token_type,
+                $permission
+            );
+        }
+
+        // Keep the legacy per-user registry populated for existing APIs. Guest
+        // installations intentionally live only in app_notification_devices.
+        if (!$user_id) {
+            apiResponse::success([
+                'device_id' => $device_id,
+                'action' => 'registered',
+                'guest' => true
+            ], "Guest notification device registered successfully");
         }
 
         $deviceTable = resolveDeviceRegistryTable($pdo);

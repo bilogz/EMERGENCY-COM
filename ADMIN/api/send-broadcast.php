@@ -204,6 +204,34 @@ function dispatchLoadPushTokens(PDO $pdo, array $userIds): array {
     return array_map('array_keys', $result);
 }
 
+/** Load every opted-in app installation, including guest-mode devices. */
+function dispatchLoadBroadcastPushDevices(PDO $pdo, array $userIds): array {
+    $devices = [];
+    foreach (dispatchLoadPushTokens($pdo, $userIds) as $userId => $tokens) {
+        foreach ($tokens as $token) {
+            $devices[$token] = ['token' => $token, 'user_id' => (int)$userId];
+        }
+    }
+
+    $table = ensureAppNotificationDevicesTable($pdo);
+    $stmt = $pdo->query("SELECT user_id, push_token, token_type
+        FROM {$table}
+        WHERE is_active = 1
+          AND notification_permission = 'granted'
+          AND push_token IS NOT NULL
+          AND push_token <> ''");
+    foreach ($stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [] as $row) {
+        $token = trim((string)($row['push_token'] ?? ''));
+        if ($token === '') continue;
+        $devices[$token] = [
+            'token' => $token,
+            'user_id' => !empty($row['user_id']) ? (int)$row['user_id'] : null,
+            'token_type' => (string)($row['token_type'] ?? 'expo')
+        ];
+    }
+    return array_values($devices);
+}
+
 /**
  * Normalize category name into a routing kind used by dispatch rules.
  */
@@ -404,7 +432,9 @@ try {
     $adminId = $_SESSION['admin_user_id'] ?? 0;
 
     // 4. Gather and Sanitize Data
-    $audienceType = $_POST['audience_type'] ?? 'all';
+    // Mass notifications are always city-wide. Client-provided targeting is
+    // intentionally ignored so the policy is enforced server-side.
+    $audienceType = 'all';
     $barangay = $_POST['barangay'] ?? '';
     $role = $_POST['role'] ?? '';
     $categoryId = $_POST['category_id'] ?? null;
@@ -412,17 +442,15 @@ try {
     $targetLngRaw = $_POST['target_lng'] ?? null;
     $radiusMRaw = $_POST['radius_m'] ?? null;
     $targetAddress = trim((string)($_POST['target_address'] ?? ''));
-    if (!in_array($audienceType, ['all', 'location', 'barangay', 'role', 'topic'], true)) {
-        throw new Exception('Unsupported audience type.');
-    }
-    if ($audienceType === 'barangay' && trim((string)$barangay) === '') throw new Exception('A barangay is required.');
-    if ($audienceType === 'role' && trim((string)$role) === '') throw new Exception('A recipient role is required.');
     
     $channels = $_POST['channels'] ?? []; 
     if (is_string($channels)) {
         $channels = explode(',', $channels);
     }
     $channels = array_values(array_unique(array_map('strtolower', array_filter(array_map('trim', $channels)))));
+    if (!in_array('push', $channels, true)) {
+        $channels[] = 'push';
+    }
     $invalidChannels = array_diff($channels, ['sms', 'email', 'push', 'pa']);
     if (!empty($invalidChannels)) {
         throw new Exception('Unsupported notification channel: ' . implode(', ', $invalidChannels));
@@ -438,7 +466,6 @@ try {
     if ($categoryId !== null && $categoryId <= 0) {
         $categoryId = null;
     }
-    if ($audienceType === 'topic' && $categoryId === null) throw new Exception('An alert category is required for topic targeting.');
 
     $severityAllowed = ['Low', 'Medium', 'High', 'Critical'];
     if (!in_array($severity, $severityAllowed, true)) {
@@ -558,19 +585,19 @@ try {
     $stmt->execute($params);
     $recipients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $pushTokensByUser = in_array('push', $channels, true)
-        ? dispatchLoadPushTokens($pdo, array_column($recipients, 'id'))
+    $pushDevices = in_array('push', $channels, true)
+        ? dispatchLoadBroadcastPushDevices($pdo, array_column($recipients, 'id'))
         : [];
 
     $deliverableCount = in_array('pa', $channels, true) ? 1 : 0;
     foreach ($recipients as $recipient) {
         if (in_array('sms', $channels, true) && trim((string)($recipient['phone'] ?? '')) !== '') $deliverableCount++;
         if (in_array('email', $channels, true) && filter_var($recipient['email'] ?? '', FILTER_VALIDATE_EMAIL)) $deliverableCount++;
-        if (in_array('push', $channels, true)) $deliverableCount += count($pushTokensByUser[(int)$recipient['id']] ?? []);
     }
+    if (in_array('push', $channels, true)) $deliverableCount += count($pushDevices);
 
     // If PA is not selected, we need at least one recipient
-    if (empty($recipients) && !in_array('pa', $channels)) {
+    if (empty($recipients) && empty($pushDevices) && !in_array('pa', $channels)) {
         throw new Exception('No active recipients found for the selected audience.');
     }
     if ($deliverableCount === 0) {
@@ -737,12 +764,8 @@ try {
                 $value = $recipient['email'];
                 $type = 'email';
             } elseif ($channel === 'push') {
-                $tokens = $pushTokensByUser[$recipientId] ?? [];
-                foreach ($tokens as $token) {
-                    $qStmt = $pdo->prepare("INSERT INTO notification_queue (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, status) VALUES (?, ?, ?, 'push_token', ?, 'push', ?, ?, 'pending')");
-                    $qStmt->execute([$logId, $alertId, $recipientId, $token, $localizedTitle, $localizedBody]);
-                    $queueCount++;
-                }
+                // Push is queued once per opted-in installation below. This
+                // includes guest devices and avoids duplicates for signed-in users.
                 continue;
             }
 
@@ -754,6 +777,29 @@ try {
                 $qStmt->execute([$logId, $alertId, $recipientId, $type, $value, $channel, $localizedTitle, $localizedBody]);
                 $queueCount++;
             }
+        }
+    }
+
+    if (in_array('push', $channels, true)) {
+        foreach ($pushDevices as $device) {
+            $pushUserId = !empty($device['user_id']) ? (int)$device['user_id'] : null;
+            $localizedTitle = $title;
+            $localizedBody = $body;
+            if ($pushUserId && $translationHelper) {
+                $language = $recipientLanguages[$pushUserId] ?? 'en';
+                if ($language !== 'en') {
+                    $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $language, $title, $body);
+                    if (is_array($translatedAlert) && !empty($translatedAlert['title']) && !empty($translatedAlert['message'])) {
+                        $localizedTitle = $translatedAlert['title'];
+                        $localizedBody = $translatedAlert['message'];
+                    }
+                }
+            }
+            $qStmt = $pdo->prepare("INSERT INTO notification_queue
+                (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
+                VALUES (?, ?, ?, 'push_token', ?, 'push', ?, ?, 'pending')");
+            $qStmt->execute([$logId, $alertId, $pushUserId, $device['token'], $localizedTitle, $localizedBody]);
+            $queueCount++;
         }
     }
 
@@ -782,6 +828,7 @@ try {
         'message' => 'Notification successfully queued.',
         'log_id' => $logId,
         'recipients' => count($recipients),
+        'push_devices' => count($pushDevices),
         'targeted_recipients' => $targetedRecipientCount,
         'queued_jobs' => $queueCount,
         'alert_id' => $alertId,
