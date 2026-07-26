@@ -119,7 +119,7 @@ $pageTitle = 'Mass Notification System';
                         <div class="dispatch-grid">
                             <!-- Left Column: Settings -->
                             <div class="dispatch-left">
-                                <input type="hidden" id="audienceType" name="audience_type" value="all">
+                                <input type="hidden" id="audienceType" name="audience_type" value="all" data-draft-ignore>
 
                                 <!-- Dispatch Channels -->
                                 <div class="module-card" id="mnCardChannels" data-mn-step="1">
@@ -567,6 +567,8 @@ $pageTitle = 'Mass Notification System';
             backdrop.setAttribute('aria-hidden', 'false');
             document.body.classList.add('ui-modal-open');
 
+            const audienceField = document.getElementById('audienceType');
+            if (audienceField) audienceField.value = 'all';
             mnWizardGoTo(1);
             setTimeout(() => document.getElementById('lbl-push')?.scrollIntoView({behavior:'smooth', block:'center'}), 0);
         }
@@ -638,25 +640,11 @@ $pageTitle = 'Mass Notification System';
         }
 
         function mnValidateStep(step, showMessage = true) {
+            const audienceField = document.getElementById('audienceType');
+            if (audienceField) audienceField.value = 'all';
             let message = '';
             let focusId = '';
             if (step === 1 && getSelectedChannels().length === 0) {
-                message = 'Please choose at least one delivery method. Email is recommended.';
-                focusId = 'lbl-email';
-            }
-            if (step === 1) {
-                const type = document.getElementById('audienceType')?.value || 'all';
-                if (type === 'barangay' && !document.getElementById('barangay')?.value) {
-                    message = 'Please choose a barangay before continuing.';
-                    focusId = 'barangay';
-                } else if (type === 'location') {
-                    const lat = document.getElementById('mnTargetLat')?.value || '';
-                    const lng = document.getElementById('mnTargetLng')?.value || '';
-                    if (!lat || !lng) {
-                        message = 'Please click “Open Map” and choose the location that needs the alert.';
-                    }
-                }
-            } else if (step === 2 && getSelectedChannels().length === 0) {
                 message = 'Please choose at least one delivery method. Email is recommended.';
                 focusId = 'lbl-email';
             }
@@ -1112,11 +1100,7 @@ $pageTitle = 'Mass Notification System';
                 return 'Please take precautions.';
             };
 
-            const where = (() => {
-                if (ctx.audienceType === 'barangay' && ctx.barangay) return `in ${ctx.barangay}, Quezon City`;
-                if (ctx.audienceType === 'role' && ctx.role) return `for ${ctx.role} users in Quezon City`;
-                return 'in Quezon City';
-            })();
+            const where = 'in Quezon City';
 
             const kind = mnCategoryKindFromName(n);
 
@@ -1420,20 +1404,13 @@ $pageTitle = 'Mass Notification System';
                     : [];
 
                 const payload = {
-                    audience_type: $('#audienceType').val(),
-                    barangay: $('#barangay').val(),
-                    role: $('#role').val(),
+                    audience_type: 'all',
                     category_id: $('#category_id').val(),
                     channels,
                     severity: (document.getElementById('pvSeverity')?.textContent || '').trim() || ($('input[name="severity"]:checked').val() || 'Medium'),
                     title: (document.getElementById('pvTitle')?.textContent || '').trim(),
                     body: (document.getElementById('pvBody')?.textContent || '').trim()
                 };
-                if (payload.audience_type === 'location') {
-                    payload.target_lat = (document.getElementById('mnTargetLat')?.value || '').trim();
-                    payload.target_lng = (document.getElementById('mnTargetLng')?.value || '').trim();
-                    payload.radius_m = (document.getElementById('mnRadiusM')?.value || '').trim();
-                }
                 return payload;
             } catch (e) {
                 return null;
@@ -1442,38 +1419,13 @@ $pageTitle = 'Mass Notification System';
 
         function mnBuildDispatchPayload() {
             const data = {
-                audience_type: $('#audienceType').val(),
-                barangay: $('#barangay').val(),
-                role: $('#role').val(),
+                audience_type: 'all',
                 category_id: $('#category_id').val(),
                 channels: getSelectedChannels(),
                 severity: $('input[name="severity"]:checked').val(),
                 title: (document.getElementById('message_title')?.value || '').trim(),
                 body: (document.getElementById('message_body')?.value || '').trim()
             };
-
-            // Optional QC map target (location mode)
-            try {
-                const audienceType = data.audience_type;
-                const lat = (document.getElementById('mnTargetLat')?.value || '').trim();
-                const lng = (document.getElementById('mnTargetLng')?.value || '').trim();
-                const radiusM = (document.getElementById('mnRadiusM')?.value || '').trim();
-                const addr = (document.getElementById('mnTargetAddress')?.value || '').trim();
-
-                if (audienceType === 'location') {
-                    data.target_lat = lat;
-                    data.target_lng = lng;
-                    data.radius_m = radiusM;
-                    if (addr) data.target_address = addr;
-                } else if (audienceType === 'barangay') {
-                    // Keep coords if admin picked a pin (useful for preview/audit; backend may ignore)
-                    if (lat && lng) {
-                        data.target_lat = lat;
-                        data.target_lng = lng;
-                        if (addr) data.target_address = addr;
-                    }
-                }
-            } catch (e) {}
 
             // Include optional level fields when relevant (backend may ignore if unsupported)
             try {
@@ -1897,34 +1849,23 @@ $pageTitle = 'Mass Notification System';
             const reason = document.getElementById('mnDispatchReason');
             if (!reason) return;
 
-            const audienceType = document.getElementById('audienceType')?.value || 'all';
             const title = document.getElementById('message_title').value.trim();
             const body = document.getElementById('message_body').value.trim();
             const catId = $('#category_id').val();
             const channels = getSelectedChannels();
-            const lat = (document.getElementById('mnTargetLat')?.value || '').trim();
-            const lng = (document.getElementById('mnTargetLng')?.value || '').trim();
-            const radiusM = (document.getElementById('mnRadiusM')?.value || '').trim();
-            const barangay = document.getElementById('barangay')?.value || '';
 
             let missing = [];
             if (!catId) missing.push('category');
             if (channels.length === 0) missing.push('channel');
             if (!title) missing.push('title');
             if (!body) missing.push('message');
-            if (audienceType === 'barangay' && !barangay) missing.push('barangay');
-            if (audienceType === 'location') {
-                if (!lat || !lng) missing.push('location');
-                const r = parseInt(radiusM || '0', 10);
-                if (!Number.isFinite(r) || r <= 0) missing.push('radius');
-            }
 
             const canProceed = missing.length === 0;
             if (btn) btn.disabled = mnWizardStep === 2 && !canProceed;
 
             if (!canProceed && mnWizardStep === 2) {
                 reason.classList.add('is-visible');
-                const map = {category:'choose what kind of alert this is', channel:'choose how people will receive it', title:'add a short title', message:'write the message', barangay:'choose a barangay', location:'choose a location on the map', radius:'enter a valid distance'};
+                const map = {category:'choose what kind of alert this is', channel:'choose how people will receive it', title:'add a short title', message:'write the message'};
                 reason.textContent = 'Still needed: ' + missing.map(m => map[m]).join('; ') + '.';
             } else {
                 reason.classList.remove('is-visible');
@@ -2059,18 +2000,6 @@ $pageTitle = 'Mass Notification System';
             if (!data.title || !data.body) {
                 mnShowNotice('Please add a short title and write the message citizens should receive.', 'One more thing');
                 return;
-            }
-
-            if (data.audience_type === 'location') {
-                if (!data.target_lat || !data.target_lng) {
-                    mnShowNotice('Please choose the alert location on the map first.', 'One more thing');
-                    return;
-                }
-                const r = parseInt(data.radius_m || '0', 10);
-                if (!Number.isFinite(r) || r <= 0) {
-                    mnShowNotice('Please enter a valid distance around the selected location.', 'One more thing');
-                    return;
-                }
             }
 
             document.getElementById('pvAudience').textContent = 'All registered citizens and opted-in app devices';
