@@ -704,10 +704,18 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         ];
         
         // Polling Intervals
+        const MESSAGE_POLL_MS = 5000;
+        const FALLBACK_POLL_MS = 10000;
         let pollInterval = null;
         let messageInterval = null;
         let twcRealtimeSource = null;
         let twcRealtimeReconnectTimer = null;
+        let fallbackPollInFlight = false;
+        let messagePollInFlight = false;
+
+        function isTwoWayRealtimeOpen() {
+            return !!(twcRealtimeSource && twcRealtimeSource.readyState === 1);
+        }
 
         async function readApiResponse(response) {
             const raw = await response.text();
@@ -856,7 +864,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (!body) return;
             body.innerHTML = '<tr><td colspan="7" class="twc-logs-empty">Loading transferred records...</td></tr>';
             try {
-                const res = await fetch(transferApiUrl('?limit=50'));
+                const res = await fetch(transferApiUrl('?limit=25'));
                 const data = await readApiResponse(res);
                 const rows = Array.isArray(data.transfers) ? data.transfers : [];
                 if (!data.success || rows.length === 0) {
@@ -1861,7 +1869,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         function connectTwoWayRealtime() {
-            if (!('EventSource' in window) || twcRealtimeSource) return;
+            if (document.hidden || !('EventSource' in window) || twcRealtimeSource) return;
             twcRealtimeSource = new EventSource(API_BASE + 'realtime.php');
 
             const readEventData = (event) => {
@@ -1892,6 +1900,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         async function pollUpdates() {
+            if (document.hidden || fallbackPollInFlight || isTwoWayRealtimeOpen()) return;
+            fallbackPollInFlight = true;
             try {
                 const response = await fetch(API_BASE + 'chat-get-unread-count.php');
                 const data = await response.json();
@@ -1900,7 +1910,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 }
             } catch (e) {}
 
-            await refreshConversationListRealtime();
+            try {
+                await refreshConversationListRealtime();
+            } finally {
+                fallbackPollInFlight = false;
+            }
         }
 
         // --- DOM Helpers ---
@@ -2599,6 +2613,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             
             const fetchMsgs = async (isFirstLoad) => {
                 if (currentConversationId !== id) return;
+                if (!isFirstLoad && (document.hidden || messagePollInFlight)) return;
+                messagePollInFlight = true;
                 try {
                     const res = await fetch(`${API_BASE}chat-get-messages.php?conversationId=${id}&lastMessageId=${lastMessageId}`);
                     const data = await res.json();
@@ -2627,10 +2643,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         if (added) scrollToBottom();
                     }
                 } catch (e) { console.error(e); }
+                finally { messagePollInFlight = false; }
             };
             
             await fetchMsgs(initial); // Initial call with passed state
-            messageInterval = setInterval(() => fetchMsgs(false), 1500); // Poll faster for real-time responsiveness
+            messageInterval = setInterval(() => fetchMsgs(false), MESSAGE_POLL_MS);
         }
         
         function appendMessage(msg) {
@@ -3029,6 +3046,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (!document.hidden && currentMainView === 'chatbotLogs') {
                     loadChatbotLogs(false, { silent: true });
                 }
+                if (!document.hidden) {
+                    connectTwoWayRealtime();
+                    pollUpdates();
+                    if (currentConversationId) loadMessages(currentConversationId, false);
+                }
             });
 
             window.addEventListener('beforeunload', () => {
@@ -3115,7 +3137,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
             loadConversations(true);
             connectTwoWayRealtime();
-            pollInterval = setInterval(pollUpdates, 3000); // Fallback when SSE is unavailable/interrupted.
+            pollInterval = setInterval(pollUpdates, FALLBACK_POLL_MS); // Fallback when SSE is unavailable/interrupted.
         });
         
     </script>

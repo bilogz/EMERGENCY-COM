@@ -49,10 +49,20 @@ $conversationId = isset($_GET['conversationId']) ? (int)$_GET['conversationId'] 
 $lastMessageId = isset($_GET['lastMessageId']) ? (int)$_GET['lastMessageId'] : 0;
 
 $lastStatus = null;
+$msgStmt = null;
+$statusCheckStmt = null;
 if ($conversationId > 0) {
     $stmt = $pdo->prepare("SELECT status FROM conversations WHERE conversation_id = ? LIMIT 1");
     $stmt->execute([$conversationId]);
     $lastStatus = strtolower((string)$stmt->fetchColumn());
+    $msgStmt = $pdo->prepare("
+        SELECT message_id, conversation_id, sender_id, sender_name, sender_type, message_text, created_at, is_read
+        FROM chat_messages
+        WHERE conversation_id = ? AND message_id > ?
+        ORDER BY message_id ASC
+        LIMIT 100
+    ");
+    $statusCheckStmt = $pdo->prepare("SELECT status FROM conversations WHERE conversation_id = ? LIMIT 1");
 }
 
 $activeStatuses = twc_active_statuses();
@@ -83,20 +93,13 @@ sse_emit('ready', [
     'latestMessageId' => $lastUnreadMessageId,
 ]);
 
-$maxLoops = 15; // ~30s @ 2s interval
+$maxLoops = 10; // ~30s @ 3s interval
 for ($i = 0; $i < $maxLoops; $i++) {
     if (connection_aborted()) {
         break;
     }
 
-    if ($conversationId > 0) {
-        $msgStmt = $pdo->prepare("
-            SELECT message_id, conversation_id, sender_id, sender_name, sender_type, message_text, created_at, is_read
-            FROM chat_messages
-            WHERE conversation_id = ? AND message_id > ?
-            ORDER BY message_id ASC
-            LIMIT 100
-        ");
+    if ($conversationId > 0 && $msgStmt && $statusCheckStmt) {
         $msgStmt->execute([$conversationId, $lastMessageId]);
         $rows = $msgStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -114,9 +117,8 @@ for ($i = 0; $i < $maxLoops; $i++) {
             ]);
         }
 
-        $statusStmt = $pdo->prepare("SELECT status FROM conversations WHERE conversation_id = ? LIMIT 1");
-        $statusStmt->execute([$conversationId]);
-        $currentStatus = strtolower((string)$statusStmt->fetchColumn());
+        $statusCheckStmt->execute([$conversationId]);
+        $currentStatus = strtolower((string)$statusCheckStmt->fetchColumn());
         if ($currentStatus !== '' && $currentStatus !== $lastStatus) {
             $lastStatus = $currentStatus;
             sse_emit('conversation:status_changed', [
@@ -145,7 +147,7 @@ for ($i = 0; $i < $maxLoops; $i++) {
     }
 
     sse_emit('heartbeat', ['ts' => round(microtime(true) * 1000)]);
-    sleep(2);
+    sleep(3);
 }
 
 sse_emit('end', ['reason' => 'poll_window_complete']);

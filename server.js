@@ -9,7 +9,14 @@ const activeOffersByRoom = new Map();
 const activeCallsById = new Map();
 const CALL_LOBBY_ROOM = 'emergency-lobby';
 const TRANSFER_INBOX_ROOM = 'ers-transfer-inbox';
-const OFFER_TTL_MS = 4 * 60 * 60 * 1000;
+const OFFER_TTL_MS = 60 * 60 * 1000;
+const MAX_ACTIVE_OFFERS = Number(process.env.MAX_ACTIVE_OFFERS || 500);
+const MAX_ACTIVE_CALLS = Number(process.env.MAX_ACTIVE_CALLS || 500);
+const SOCKET_DEBUG = process.env.SOCKET_DEBUG === '1';
+
+function debugLog(message) {
+  if (SOCKET_DEBUG) console.log(message);
+}
 
 function cleanText(value, max = 200) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -26,6 +33,16 @@ function pruneExpiredCalls() {
   }
   for (const [callId, call] of activeCallsById.entries()) {
     if (!call || call.updatedAt < cutoff) activeCallsById.delete(callId);
+  }
+  while (activeOffersByRoom.size > MAX_ACTIVE_OFFERS) {
+    const oldestRoom = activeOffersByRoom.keys().next().value;
+    if (!oldestRoom) break;
+    activeOffersByRoom.delete(oldestRoom);
+  }
+  while (activeCallsById.size > MAX_ACTIVE_CALLS) {
+    const oldestCallId = activeCallsById.keys().next().value;
+    if (!oldestCallId) break;
+    activeCallsById.delete(oldestCallId);
   }
 }
 
@@ -92,20 +109,20 @@ app.get('/health', (req, res) => {
 });
 
 io.on('connection', (socket) => {
-  console.log(`[socket] connected ${socket.id}`);
+  debugLog(`[socket] connected ${socket.id}`);
 
   socket.on('join', (room) => {
     if (typeof room === 'string' && room.length > 0) {
       pruneExpiredCalls();
       socket.join(room);
-      console.log(`[socket] ${socket.id} joined room=${room}`);
+      debugLog(`[socket] ${socket.id} joined room=${room}`);
 
       const cached = activeOffersByRoom.get(room);
       const cachedCallId = cleanText(cached?.payload?.callId, 128);
       const cachedCall = cachedCallId ? activeCallsById.get(cachedCallId) : null;
       if (cached && Date.now() - cached.ts <= OFFER_TTL_MS && (!cachedCall || cachedCall.status === 'ringing')) {
         socket.emit('offer', cached.payload);
-        console.log(`[socket] replayed cached offer room=${room} callId=${cached.payload?.callId || ''}`);
+        debugLog(`[socket] replayed cached offer room=${room} callId=${cached.payload?.callId || ''}`);
       }
       if (room === CALL_LOBBY_ROOM) {
         for (const call of activeCallsById.values()) {
@@ -121,7 +138,7 @@ io.on('connection', (socket) => {
     const callId = cleanText(payload?.callId, 128);
     if (typeof signalRoom === 'string' && signalRoom.length > 0) {
       activeOffersByRoom.set(signalRoom, { payload, ts: Date.now() });
-      console.log(`[signal] offer room=${signalRoom} broadcast=${announcementRoom || signalRoom} callId=${payload?.callId || ''}`);
+      debugLog(`[signal] offer room=${signalRoom} broadcast=${announcementRoom || signalRoom} callId=${payload?.callId || ''}`);
     }
     if (callId && signalRoom) {
       const current = activeCallsById.get(callId);
@@ -211,7 +228,7 @@ io.on('connection', (socket) => {
 
   socket.on('answer', (payload, room) => {
     const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
-    console.log(`[signal] answer room=${signalRoom} callId=${payload?.callId || ''}`);
+    debugLog(`[signal] answer room=${signalRoom} callId=${payload?.callId || ''}`);
     if (signalRoom) socket.to(signalRoom).emit('answer', payload);
   });
 
@@ -226,7 +243,7 @@ io.on('connection', (socket) => {
 
   socket.on('call-message', (payload, room) => {
     if (typeof room === 'string' && room.length > 0) {
-      console.log(`[message] room=${room} callId=${payload?.callId || ''} sender=${payload?.sender || 'unknown'}`);
+      debugLog(`[message] room=${room} callId=${payload?.callId || ''} sender=${payload?.sender || 'unknown'}`);
       socket.to(room).emit('call-message', payload);
     }
   });
@@ -235,7 +252,7 @@ io.on('connection', (socket) => {
     socket.on(eventName, (payload, room) => {
       const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
       if (!signalRoom) return;
-      console.log(`[transfer-control] ${eventName} room=${signalRoom} callId=${payload?.callId || ''}`);
+      debugLog(`[transfer-control] ${eventName} room=${signalRoom} callId=${payload?.callId || ''}`);
       socket.to(signalRoom).emit(eventName, payload);
     });
   };
@@ -247,7 +264,7 @@ io.on('connection', (socket) => {
     const transferType = cleanText(payload?.transfer_type, 40) || cleanText(payload?.transferType, 40);
     const isLiveTransfer = transferType === 'live_call' || !!transferRoom;
     if (transferRoom) {
-      console.log(`[transfer] room=${transferRoom} callId=${payload?.callId || ''}`);
+      debugLog(`[transfer] room=${transferRoom} callId=${payload?.callId || ''}`);
       if (!isLiveTransfer) activeOffersByRoom.delete(transferRoom);
     }
     if (payload?.callId && !isLiveTransfer) activeCallsById.delete(String(payload.callId));
@@ -276,7 +293,7 @@ io.on('connection', (socket) => {
       source_system: cleanText(payload?.source_system, 180) || 'AlertaraQC Emergency Communication',
       transferredAt: payload?.transferredAt || payload?.transferred_at || new Date().toISOString(),
     };
-    console.log(`[transfer-notify] type=${transferType} transferId=${payload?.transferId || payload?.transfer_id || ''}`);
+    debugLog(`[transfer-notify] type=${transferType} transferId=${payload?.transferId || payload?.transfer_id || ''}`);
     io.to(TRANSFER_INBOX_ROOM).emit('incoming-transfer', transferNotice);
     io.to(TRANSFER_INBOX_ROOM).emit('ers-transfer-notify', transferNotice);
   });
@@ -286,7 +303,7 @@ io.on('connection', (socket) => {
       if (call.callerSocketId === socket.id) call.callerSocketId = null;
       if (call.adminSocketId === socket.id) call.adminSocketId = null;
     }
-    console.log(`[socket] disconnected ${socket.id} reason=${reason}`);
+    debugLog(`[socket] disconnected ${socket.id} reason=${reason}`);
   });
 });
 

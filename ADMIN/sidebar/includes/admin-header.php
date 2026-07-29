@@ -809,7 +809,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    const HEADER_NOTIFICATION_POLL_MS = 8000;
+        const HEADER_NOTIFICATION_POLL_MS = 15000;
     let lastIncidentModalKey = sessionStorage.getItem('header_last_incident_modal_key') || '';
 
     function escapeHtml(value) {
@@ -1048,7 +1048,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initial fetch + refresh
     loadHeaderNotifications();
-    setInterval(() => loadHeaderNotifications(), HEADER_NOTIFICATION_POLL_MS);
+    setInterval(() => {
+        if (!document.hidden) loadHeaderNotifications();
+    }, HEADER_NOTIFICATION_POLL_MS);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) loadHeaderNotifications();
+    });
     // Two-way communication notifications are handled by header-notifications.php polling.
     function initGlobalChatNotifications() {}
     

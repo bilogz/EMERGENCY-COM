@@ -82,25 +82,26 @@ $unreadStmt = $pdo->prepare("
 $unreadStmt->execute([$conversationId]);
 $lastUnread = (int)$unreadStmt->fetchColumn();
 
+$msgStmt = $pdo->prepare("
+    SELECT message_id, conversation_id, sender_id, sender_name, sender_type, message_text, created_at, is_read
+    FROM chat_messages
+    WHERE conversation_id = ? AND message_id > ?
+    ORDER BY message_id ASC
+    LIMIT 100
+");
+
 sse_emit_user('ready', [
     'conversationId' => $conversationId,
     'lastMessageId' => $lastMessageId,
     'unreadCount' => $lastUnread
 ]);
 
-$maxLoops = 15; // ~30s @ 2s interval
+$maxLoops = 10; // ~30s @ 3s interval
 for ($i = 0; $i < $maxLoops; $i++) {
     if (connection_aborted()) {
         break;
     }
 
-    $msgStmt = $pdo->prepare("
-        SELECT message_id, conversation_id, sender_id, sender_name, sender_type, message_text, created_at, is_read
-        FROM chat_messages
-        WHERE conversation_id = ? AND message_id > ?
-        ORDER BY message_id ASC
-        LIMIT 100
-    ");
     $msgStmt->execute([$conversationId, $lastMessageId]);
     $rows = $msgStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -137,7 +138,7 @@ for ($i = 0; $i < $maxLoops; $i++) {
     }
 
     sse_emit_user('heartbeat', ['ts' => round(microtime(true) * 1000)]);
-    sleep(2);
+    sleep(3);
 }
 
 sse_emit_user('end', ['reason' => 'poll_window_complete']);

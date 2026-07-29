@@ -201,6 +201,9 @@ $pageTitle = 'Log and Audit Trail';
                                     <!-- Data will be loaded via API -->
                                 </tbody>
                             </table>
+                            <div id="auditLazyLoadSentinel" style="text-align:center; padding:0.85rem; color:var(--text-secondary-1); font-weight:700;">
+                                Loading audit records...
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -234,6 +237,13 @@ $pageTitle = 'Log and Audit Trail';
     <script>
         let twcTransferAuditRows = [];
         let twcAssignmentAuditRows = [];
+        let auditPage = 1;
+        let auditTotalPages = 1;
+        let auditTotalRows = 0;
+        let auditPageSize = 25;
+        let auditLoading = false;
+        let auditHasMore = true;
+        let auditLazyObserver = null;
 
         function escapeAuditHtml(value) {
             const div = document.createElement('div');
@@ -315,39 +325,115 @@ $pageTitle = 'Log and Audit Trail';
             if (row) openTwcAuditDetailsModal('Admin Handover Audit', row);
         }
 
-        function loadAuditTrail() {
-            const filters = getFilters();
-            const queryParams = new URLSearchParams(filters).toString();
+        function loadAuditTrail(reset = true) {
+            if (auditLoading) return Promise.resolve();
+            auditLoading = true;
+            const tbody = document.querySelector('#auditTrailTable tbody');
+            if (reset) {
+                auditPage = 1;
+                auditHasMore = true;
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1rem;">Loading audit records...</td></tr>';
+                }
+            } else if (!auditHasMore) {
+                auditLoading = false;
+                return Promise.resolve();
+            } else {
+                auditPage += 1;
+            }
+
+            updateAuditLazyLoadStatus('Loading audit records...');
+            const params = new URLSearchParams(getFilters());
+            params.set('page', String(auditPage));
+            params.set('limit', String(auditPageSize));
             
-            fetch(`../api/audit-trail.php?action=list&${queryParams}`)
+            return fetch(`../api/audit-trail.php?action=list&${params.toString()}`)
                 .then(response => response.json())
                 .then(data => {
-                    const tbody = document.querySelector('#auditTrailTable tbody');
-                    tbody.innerHTML = '';
-                    
-                    if (data.success && data.logs) {
-                        data.logs.forEach(log => {
-                            const row = document.createElement('tr');
-                            row.innerHTML = `
-                                <td>${log.id}</td>
-                                <td><small>${log.timestamp}</small></td>
-                                <td><span class="badge" style="background: rgba(58, 118, 117, 0.1); color: var(--primary-color-1); font-weight: 700;">${log.channel.toUpperCase()}</span></td>
-                                <td>${log.recipient}</td>
-                                <td><div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${log.message}</div></td>
-                                <td><span class="badge ${log.status}">${log.status}</span></td>
-                                <td>${log.sent_by || 'System'}</td>
-                                <td><small>${log.ip_address || 'N/A'}</small></td>
-                                <td>
-                                    <button class="btn btn-sm btn-primary" onclick="viewDetails(${log.id})">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </td>
-                            `;
-                            tbody.appendChild(row);
-                        });
+                    const targetBody = document.querySelector('#auditTrailTable tbody');
+                    if (!targetBody) return;
+                    if (reset) targetBody.innerHTML = '';
+                    if (!data.success) throw new Error(data.message || 'Failed to load audit trail');
+
+                    const logs = Array.isArray(data.logs) ? data.logs : [];
+                    const pagination = data.pagination || {};
+                    auditPage = Number(pagination.page || auditPage || 1);
+                    auditTotalPages = Number(pagination.total_pages || 1);
+                    auditTotalRows = Number(pagination.total || logs.length || 0);
+                    auditHasMore = auditPage < auditTotalPages;
+
+                    if (!logs.length && reset) {
+                        targetBody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1rem;">No audit records found.</td></tr>';
+                        return;
                     }
+
+                    logs.forEach(log => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${escapeAuditHtml(log.id)}</td>
+                            <td><small>${escapeAuditHtml(log.timestamp)}</small></td>
+                            <td><span class="badge" style="background: rgba(58, 118, 117, 0.1); color: var(--primary-color-1); font-weight: 700;">${escapeAuditHtml(String(log.channel || '').toUpperCase())}</span></td>
+                            <td>${escapeAuditHtml(log.recipient)}</td>
+                            <td><div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeAuditHtml(log.message)}</div></td>
+                            <td><span class="badge ${escapeAuditHtml(log.status)}">${escapeAuditHtml(log.status)}</span></td>
+                            <td>${escapeAuditHtml(log.sent_by || 'System')}</td>
+                            <td><small>${escapeAuditHtml(log.ip_address || 'N/A')}</small></td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" onclick="viewDetails(${Number(log.id)})">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </td>
+                        `;
+                        targetBody.appendChild(row);
+                    });
+                })
+                .catch(error => {
+                    console.error('Audit trail load error:', error);
+                    if (tbody && reset) {
+                        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1rem; color:#e74c3c;">Failed to load audit records.</td></tr>';
+                    }
+                })
+                .finally(() => {
+                    auditLoading = false;
+                    updateAuditLazyLoadStatus();
                 });
         }
+
+        function loadMoreAuditTrail() {
+            if (auditLoading || !auditHasMore) return;
+            loadAuditTrail(false);
+        }
+
+        function setupAuditLazyLoader() {
+            const sentinel = document.getElementById('auditLazyLoadSentinel');
+            if (!sentinel || !('IntersectionObserver' in window)) return;
+            if (auditLazyObserver) auditLazyObserver.disconnect();
+            auditLazyObserver = new IntersectionObserver(entries => {
+                if (entries.some(entry => entry.isIntersecting)) {
+                    loadMoreAuditTrail();
+                }
+            }, { rootMargin: '260px 0px' });
+            auditLazyObserver.observe(sentinel);
+        }
+
+        function updateAuditLazyLoadStatus(message = '') {
+            const sentinel = document.getElementById('auditLazyLoadSentinel');
+            if (!sentinel) return;
+            if (auditLoading) {
+                sentinel.style.display = 'block';
+                sentinel.textContent = message || 'Loading audit records...';
+                return;
+            }
+            if (auditHasMore) {
+                sentinel.style.display = 'block';
+                sentinel.textContent = `Showing up to ${Math.min(auditPage * auditPageSize, auditTotalRows || auditPage * auditPageSize)} of ${auditTotalRows || 'more'} records. Scroll to load more.`;
+                return;
+            }
+            sentinel.style.display = auditTotalRows ? 'block' : 'none';
+            sentinel.textContent = auditTotalRows ? `All ${auditTotalRows} audit records loaded.` : '';
+        }
+
+        window.loadMoreAuditTrail = loadMoreAuditTrail;
 
         function loadStatistics() {
             fetch('../api/audit-trail.php?action=statistics')
@@ -372,12 +458,12 @@ $pageTitle = 'Log and Audit Trail';
         }
 
         function applyFilters() {
-            loadAuditTrail();
+            loadAuditTrail(true);
         }
 
         function resetFilters() {
             document.getElementById('filterForm').reset();
-            loadAuditTrail();
+            loadAuditTrail(true);
         }
 
         function viewDetails(id) {
@@ -460,7 +546,8 @@ $pageTitle = 'Log and Audit Trail';
 
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
-            loadAuditTrail();
+            setupAuditLazyLoader();
+            loadAuditTrail(true);
             loadStatistics();
             loadTwcAuditSummary();
         });

@@ -594,6 +594,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
     }
 } elseif ($action === 'list') {
     try {
+        $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        $limit = isset($_GET['limit']) ? min(50, max(10, (int)$_GET['limit'])) : 25;
+        $offset = ($page - 1) * $limit;
+        $fetchLimit = min(250, $offset + $limit + 1);
+        $sourceSaturated = false;
+
         $logsTable = mnResolveNotificationLogsTable($pdo);
         // Backward compatible list: some installs may not have all columns (e.g., response)
         $colsStmt = $pdo->query("SHOW COLUMNS FROM {$logsTable}");
@@ -651,9 +657,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             SELECT " . implode(', ', $selectParts) . "
             FROM {$logsTable}
             ORDER BY $orderBy DESC
-            LIMIT 50
+            LIMIT {$fetchLimit}
         ");
         $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $sourceSaturated = count($notifications) >= $fetchLimit;
 
         // Older PAGASA/PHIVOLCS jobs used source-specific history tables. Add
         // those legacy rows so operators have one complete dispatch history.
@@ -668,9 +675,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
                         SELECT 1 FROM {$logsTable} nl
                         WHERE nl.id = p.dispatch_log_id AND nl.sent_by = 'pagasa_auto_bulletin'
                     )
-                    ORDER BY p.created_at DESC LIMIT 50
+                    ORDER BY p.created_at DESC LIMIT {$fetchLimit}
                 ");
-                foreach ($autoStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $legacyRows = $autoStmt->fetchAll(PDO::FETCH_ASSOC);
+                $sourceSaturated = $sourceSaturated || count($legacyRows) >= $fetchLimit;
+                foreach ($legacyRows as $row) {
                     $total = (int)($row['recipients_count'] ?? 0);
                     $legacyAutomatic[] = [
                         'id' => 'PAGASA-' . $row['id'],
@@ -695,9 +704,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
                         SELECT 1 FROM {$logsTable} nl
                         WHERE nl.id = p.dispatch_log_id AND nl.sent_by = 'phivolcs_auto_bulletin'
                     )
-                    ORDER BY p.created_at DESC LIMIT 50
+                    ORDER BY p.created_at DESC LIMIT {$fetchLimit}
                 ");
-                foreach ($autoStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $legacyRows = $autoStmt->fetchAll(PDO::FETCH_ASSOC);
+                $sourceSaturated = $sourceSaturated || count($legacyRows) >= $fetchLimit;
+                foreach ($legacyRows as $row) {
                     $total = (int)($row['recipients_count'] ?? 0);
                     $legacyAutomatic[] = [
                         'id' => 'PHIVOLCS-' . $row['id'],
@@ -717,8 +728,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         if ($legacyAutomatic) {
             $notifications = array_merge($notifications, $legacyAutomatic);
             usort($notifications, static fn(array $a, array $b): int => strcmp((string)($b['sent_at'] ?? ''), (string)($a['sent_at'] ?? '')));
-            $notifications = array_slice($notifications, 0, 50);
         }
+
+        $combinedCount = count($notifications);
+        $hasMore = $sourceSaturated || $combinedCount > ($offset + $limit);
+        $notifications = array_slice($notifications, $offset, $limit);
 
         // Optional: compute queue stats when response column is missing/empty
         $queueStatsByLog = [];
@@ -795,6 +809,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         echo json_encode([
             'success' => true,
             'notifications' => $notifications,
+            'pagination' => [
+                'page' => $page,
+                'limit' => $limit,
+                'has_more' => $hasMore
+            ],
             'meta' => ['table' => $logsTable]
         ]);
     } catch (PDOException $e) {

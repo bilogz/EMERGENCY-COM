@@ -332,6 +332,9 @@ $pageTitle = 'Mass Notification System';
                                 <tbody></tbody>
                             </table>
                         </div>
+                        <div id="notificationsLazyLoadSentinel" style="text-align:center; padding:0.85rem; color:var(--text-secondary-1); font-weight:700;">
+                            Loading dispatch history...
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2617,8 +2620,24 @@ $pageTitle = 'Mass Notification System';
             }
         });
 
-        function loadNotifications() {
-            mnFetchJson('mass-notification.php?action=list')
+        const NOTIFICATIONS_PAGE_SIZE = 25;
+        let notificationPage = 1;
+        let notificationLoading = false;
+        let notificationHasMore = true;
+        let notificationRows = [];
+
+        function loadNotifications(reset = true) {
+            if (notificationLoading) return;
+
+            if (reset) {
+                notificationPage = 1;
+                notificationHasMore = true;
+            }
+
+            notificationLoading = true;
+            updateNotificationsLazyLoadStatus();
+
+            mnFetchJson('mass-notification.php?action=list&page=' + notificationPage + '&limit=' + NOTIFICATIONS_PAGE_SIZE)
                 .then(data => {
                     const tbody = document.querySelector('#notificationsTable tbody');
                     if (!tbody) return;
@@ -2629,12 +2648,16 @@ $pageTitle = 'Mass Notification System';
 
                     const rows = Array.isArray(data.notifications) ? data.notifications : [];
                     if (rows.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary-1);">No dispatch history yet.</td></tr>';
-                        updateMnAnalytics([]);
+                        if (reset) {
+                            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary-1);">No dispatch history yet.</td></tr>';
+                            notificationRows = [];
+                            updateMnAnalytics([]);
+                        }
+                        notificationHasMore = false;
                         return;
                     }
 
-                    tbody.innerHTML = rows.map(n => {
+                    const renderedRows = rows.map(n => {
                         const channelsRaw = (n.channel || '').toString();
                         const channels = channelsRaw
                             .split(',')
@@ -2676,17 +2699,66 @@ $pageTitle = 'Mass Notification System';
                             </tr>
                         `;
                     }).join('');
-                    updateMnAnalytics(rows);
+
+                    if (reset) {
+                        tbody.innerHTML = renderedRows;
+                        notificationRows = rows;
+                    } else {
+                        tbody.insertAdjacentHTML('beforeend', renderedRows);
+                        notificationRows = notificationRows.concat(rows);
+                    }
+
+                    const pagination = data.pagination || {};
+                    notificationHasMore = Boolean(pagination.has_more);
+                    updateMnAnalytics(notificationRows);
                 })
                 .catch((error) => {
                     console.error('Dispatch history load error:', error);
                     const tbody = document.querySelector('#notificationsTable tbody');
-                    if (tbody) {
+                    if (tbody && reset) {
                         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary-1);">Unable to load dispatch history.</td></tr>';
                     }
+                    notificationHasMore = false;
+                })
+                .finally(() => {
+                    notificationLoading = false;
+                    updateNotificationsLazyLoadStatus();
                 });
         }
 
+        function loadMoreNotifications() {
+            if (notificationLoading || !notificationHasMore) return;
+            notificationPage += 1;
+            loadNotifications(false);
+        }
+
+        function setupNotificationsLazyLoader() {
+            const sentinel = document.getElementById('notificationsLazyLoadSentinel');
+            if (!sentinel || !('IntersectionObserver' in window)) return;
+
+            const observer = new IntersectionObserver(entries => {
+                if (entries.some(entry => entry.isIntersecting)) loadMoreNotifications();
+            }, { rootMargin: '260px 0px' });
+            observer.observe(sentinel);
+        }
+
+        function updateNotificationsLazyLoadStatus() {
+            const sentinel = document.getElementById('notificationsLazyLoadSentinel');
+            if (!sentinel) return;
+
+            if (notificationLoading) {
+                sentinel.textContent = 'Loading dispatch history...';
+            } else if (notificationHasMore) {
+                sentinel.innerHTML = '<button type="button" class="btn btn-sm btn-secondary" onclick="loadMoreNotifications()">Load more</button>'
+                    + '<span style="margin-left:0.5rem;">' + notificationRows.length + ' loaded</span>';
+            } else {
+                sentinel.textContent = notificationRows.length > 0
+                    ? 'All dispatch records loaded'
+                    : 'No dispatch history yet';
+            }
+        }
+
+        window.loadMoreNotifications = loadMoreNotifications;
         function updateMnAnalytics(notifications) {
             const total = notifications.length;
             const completed = notifications.filter(n => n.status === 'completed').length;
@@ -2723,8 +2795,16 @@ $pageTitle = 'Mass Notification System';
         document.addEventListener('DOMContentLoaded', () => {
             loadOptions();
             loadNotifications();
-            // Poll for updates every 10 seconds
-            setInterval(loadNotifications, 10000);
+            setupNotificationsLazyLoader();
+
+            // Refresh the first page quietly; pause while hidden or while older pages are open.
+            setInterval(() => {
+                if (!document.hidden && notificationPage === 1) loadNotifications(true);
+            }, 30000);
+
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && notificationPage === 1) loadNotifications(true);
+            });
 
             // Close wizard on backdrop click / escape
             const backdrop = document.getElementById('mnDispatchWizardBackdrop');

@@ -73,7 +73,7 @@ $pageTitle = 'User Management';
 
     <!-- Include Admin Header Component -->
     <?php include 'includes/admin-header.php'; ?>
-    
+
     <div class="main-content">
         <div class="main-container">
             <div class="title">
@@ -92,7 +92,7 @@ $pageTitle = 'User Management';
                 <h1><i class="fas fa-users-cog"></i> User Management</h1>
                 <p>Create and manage administrator and staff accounts for the Emergency Communication System.</p>
             </div>
-            
+
             <div class="sub-container">
                 <div class="page-content">
                     <?php if (!$isSuperAdmin): ?>
@@ -137,7 +137,7 @@ $pageTitle = 'User Management';
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Action Bar -->
                         <div class="action-bar">
                             <div class="search-filter-container">
@@ -145,7 +145,7 @@ $pageTitle = 'User Management';
                                     <i class="fas fa-search"></i>
                                     <input type="text" id="searchInput" placeholder="Search users by name or email...">
                                 </div>
-                                
+
                                 <div class="filter-buttons">
                                     <button class="filter-btn active" data-filter="all">All</button>
                                     <button class="filter-btn" data-filter="super_admin">Super Admin</button>
@@ -153,12 +153,12 @@ $pageTitle = 'User Management';
                                     <button class="filter-btn" data-filter="staff">Staff</button>
                                 </div>
                             </div>
-                            
+
                             <button type="button" class="btn btn-primary btn-add" id="addUserBtn" onclick="(function(){const t=document.getElementById('modalTitle');if(t)t.innerHTML='<i class=\'fas fa-user-plus\'></i> Create New User';const f=document.getElementById('userForm');if(f){f.reset();const id=document.getElementById('userId');if(id)id.value='';const p=document.getElementById('userPassword');if(p){p.required=true;p.value='';}}const m=document.getElementById('userModal');if(m){m.classList.add('show');document.body.style.overflow='hidden';}}());return false;">
                                 <i class="fas fa-plus"></i> Add User
                             </button>
                         </div>
-                        
+
                         <!-- Users Table (Desktop) -->
                         <div class="users-table-container">
                             <table class="users-table">
@@ -184,12 +184,16 @@ $pageTitle = 'User Management';
                                 </tbody>
                             </table>
                         </div>
-                        
+
                         <!-- Users Cards (Mobile) -->
                         <div class="users-cards-container" id="usersCardsContainer">
                             <!-- Cards will be inserted here by JavaScript -->
                         </div>
-                        
+
+                        <div id="usersLazyLoadSentinel" style="text-align:center; padding:0.85rem; color:var(--text-secondary-1); font-weight:700;">
+                            Loading users...
+                        </div>
+
                         <!-- Pagination Container -->
                         <div class="pagination-container" id="paginationContainer">
                             <!-- Pagination controls will be inserted here by JavaScript -->
@@ -211,23 +215,23 @@ $pageTitle = 'User Management';
             <div class="modal-body">
                 <form id="userForm">
                     <input type="hidden" id="userId" name="id">
-                    
+
                     <div class="form-group">
                         <label for="userName"><i class="fas fa-user"></i> Full Name *</label>
                         <input type="text" id="userName" name="name" required placeholder="Enter full name">
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="userEmail"><i class="fas fa-envelope"></i> Email Address *</label>
                         <input type="email" id="userEmail" name="email" required placeholder="Enter email address">
                     </div>
-                    
+
                     <div class="form-group" id="passwordGroup">
                         <label for="userPassword"><i class="fas fa-lock"></i> Password *</label>
                         <input type="password" id="userPassword" name="password" placeholder="Enter password (min 8 characters)">
                         <small>Leave blank to keep existing password (when editing)</small>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="userRole"><i class="fas fa-user-tag"></i> Role *</label>
                         <select id="userRole" name="role" required>
@@ -236,7 +240,7 @@ $pageTitle = 'User Management';
                             <option value="staff">Staff</option>
                         </select>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="userStatus"><i class="fas fa-toggle-on"></i> Status *</label>
                         <select id="userStatus" name="status" required>
@@ -261,10 +265,15 @@ $pageTitle = 'User Management';
         <?php if ($isSuperAdmin): ?>
         let users = [];
         let currentFilter = 'all';
-        
+        let usersLoading = false;
+        let totalUsers = 0;
+        let usersHasMore = true;
+        let usersLazyObserver = null;
+
         // Load users on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadUsers();
+            setupUsersLazyLoader();
 
             // Search functionality
             document.getElementById('searchInput').addEventListener('input', filterUsers);
@@ -303,14 +312,14 @@ $pageTitle = 'User Management';
                     // Let buttons handle their own clicks
                 });
             }
-            
+
             // Set up button handlers as backup (inline onclick is primary)
             function setupButtons() {
                 const closeBtn = document.getElementById('modalCloseBtn');
                 const cancelBtn = document.getElementById('cancelBtn');
                 const saveBtn = document.getElementById('saveUserBtn');
                 const addUserBtn = document.getElementById('addUserBtn');
-                
+
                 // Helper to close modal directly
                 function closeModalDirect() {
                     const modal = document.getElementById('userModal');
@@ -323,7 +332,7 @@ $pageTitle = 'User Management';
                         if (userId) userId.value = '';
                     }
                 }
-                
+
                 // Helper to open create modal directly
                 function openCreateModalDirect() {
                     const title = document.getElementById('modalTitle');
@@ -342,20 +351,20 @@ $pageTitle = 'User Management';
                         document.body.style.overflow = 'hidden';
                     }
                 }
-                
+
                 // Add backup listeners
                 if (closeBtn) {
                     closeBtn.addEventListener('click', function(e) {
                         if (!e.defaultPrevented) closeModalDirect();
                     }, false);
                 }
-                
+
                 if (cancelBtn) {
                     cancelBtn.addEventListener('click', function(e) {
                         if (!e.defaultPrevented) closeModalDirect();
                     }, false);
                 }
-                
+
                 if (saveBtn) {
                     saveBtn.addEventListener('click', function(e) {
                         if (!e.defaultPrevented && typeof window.saveUser === 'function') {
@@ -363,40 +372,52 @@ $pageTitle = 'User Management';
                         }
                     }, false);
                 }
-                
+
                 if (addUserBtn) {
                     addUserBtn.addEventListener('click', function(e) {
                         if (!e.defaultPrevented) openCreateModalDirect();
                     }, false);
                 }
             }
-            
+
             // Set up backup listeners
             setTimeout(setupButtons, 100);
         });
-        
+
         // Pagination state
         let currentPage = 1;
         let totalPages = 1;
-        let pageSize = 50;
-        
-        function loadUsers(page = 1) {
+        let pageSize = 25;
+
+        function loadUsers(page = 1, append = false) {
+            if (usersLoading) return Promise.resolve();
+            usersLoading = true;
+            updateUsersLazyLoadStatus('Loading users...');
             currentPage = page;
-            fetch(`../api/user-management.php?action=list&page=${page}&limit=${pageSize}`)
+            if (!append) {
+                users = [];
+                renderUsersTableLoading();
+                document.getElementById('usersCardsContainer').innerHTML = '';
+            }
+
+            return fetch(`../api/user-management.php?action=list&page=${page}&limit=${pageSize}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        users = data.users;
+                        const pageUsers = Array.isArray(data.users) ? data.users : [];
+                        users = append ? mergeUsersById(users, pageUsers) : pageUsers;
                         updateStats(data.stats);
-                        
+
                         // Update pagination info
                         if (data.pagination) {
                             currentPage = data.pagination.page;
                             totalPages = data.pagination.total_pages;
+                            totalUsers = data.pagination.total || users.length;
+                            usersHasMore = currentPage < totalPages;
                             updatePaginationControls();
                         }
-                        
-                        renderUsers(users);
+
+                        filterUsers();
                     } else {
                         showError(data.message || 'Failed to load users');
                     }
@@ -404,74 +425,100 @@ $pageTitle = 'User Management';
                 .catch(error => {
                     console.error('Error:', error);
                     showError('Failed to load users. Please try again.');
+                })
+                .finally(() => {
+                    usersLoading = false;
+                    updateUsersLazyLoadStatus();
                 });
         }
-        
+
+        function mergeUsersById(existingUsers, nextUsers) {
+            const seen = new Set(existingUsers.map(user => String(user.id)));
+            const merged = existingUsers.slice();
+            nextUsers.forEach(user => {
+                const id = String(user.id);
+                if (!seen.has(id)) {
+                    seen.add(id);
+                    merged.push(user);
+                }
+            });
+            return merged;
+        }
+
+        function loadMoreUsers() {
+            if (usersLoading || !usersHasMore || currentPage >= totalPages) return;
+            loadUsers(currentPage + 1, true);
+        }
+
+        function setupUsersLazyLoader() {
+            const sentinel = document.getElementById('usersLazyLoadSentinel');
+            if (!sentinel || !('IntersectionObserver' in window)) return;
+            if (usersLazyObserver) usersLazyObserver.disconnect();
+            usersLazyObserver = new IntersectionObserver(entries => {
+                if (entries.some(entry => entry.isIntersecting)) {
+                    loadMoreUsers();
+                }
+            }, { rootMargin: '240px 0px' });
+            usersLazyObserver.observe(sentinel);
+        }
+
+        function updateUsersLazyLoadStatus(message = '') {
+            const sentinel = document.getElementById('usersLazyLoadSentinel');
+            if (!sentinel) return;
+            if (usersLoading) {
+                sentinel.style.display = 'block';
+                sentinel.textContent = message || 'Loading users...';
+                return;
+            }
+            if (usersHasMore) {
+                sentinel.style.display = 'block';
+                sentinel.textContent = 'Scroll to load more users';
+                return;
+            }
+            sentinel.style.display = users.length ? 'block' : 'none';
+            sentinel.textContent = users.length ? 'All loaded' : '';
+        }
+
         function updatePaginationControls() {
             const paginationContainer = document.getElementById('paginationContainer');
             if (!paginationContainer) return;
-            
-            if (totalPages <= 1) {
+
+            if (totalPages <= 1 && !totalUsers) {
                 paginationContainer.innerHTML = '';
                 return;
             }
-            
-            let paginationHTML = '<div class="pagination">';
-            
-            // Previous button
-            paginationHTML += `<button class="pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="loadUsers(${currentPage - 1})">
-                <i class="fas fa-chevron-left"></i> Previous
-            </button>`;
-            
-            // Page numbers
-            let startPage = Math.max(1, currentPage - 2);
-            let endPage = Math.min(totalPages, currentPage + 2);
-            
-            if (startPage > 1) {
-                paginationHTML += `<button class="pagination-btn" onclick="loadUsers(1)">1</button>`;
-                if (startPage > 2) paginationHTML += '<span class="pagination-ellipsis">...</span>';
-            }
-            
-            for (let i = startPage; i <= endPage; i++) {
-                paginationHTML += `<button class="pagination-btn ${i === currentPage ? 'active' : ''}" onclick="loadUsers(${i})">${i}</button>`;
-            }
-            
-            if (endPage < totalPages) {
-                if (endPage < totalPages - 1) paginationHTML += '<span class="pagination-ellipsis">...</span>';
-                paginationHTML += `<button class="pagination-btn" onclick="loadUsers(${totalPages})">${totalPages}</button>`;
-            }
-            
-            // Next button
-            paginationHTML += `<button class="pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="loadUsers(${currentPage + 1})">
-                Next <i class="fas fa-chevron-right"></i>
-            </button>`;
-            
-            paginationHTML += '</div>';
-            paginationHTML += `<div class="pagination-info">Page ${currentPage} of ${totalPages}</div>`;
-            
-            paginationContainer.innerHTML = paginationHTML;
+
+            paginationContainer.innerHTML = `
+                <div class="pagination">
+                    <button class="pagination-btn" ${!usersHasMore ? 'disabled' : ''} onclick="loadMoreUsers()">
+                        <i class="fas fa-chevron-down"></i> Load more
+                    </button>
+                </div>
+                <div class="pagination-info">Showing ${users.length} of ${totalUsers || users.length}</div>
+            `;
         }
-        
+
         // Make loadUsers available globally
         window.loadUsers = loadUsers;
-        
+        window.loadMoreUsers = loadMoreUsers;
+
         function updateStats(stats) {
             document.getElementById('totalAdmins').textContent = stats.admins || 0;
             document.getElementById('totalStaff').textContent = stats.staff || 0;
             document.getElementById('totalPending').textContent = stats.pending || 0;
             document.getElementById('totalInactive').textContent = stats.inactive || 0;
         }
-        
+
         function renderUsers(usersToRender) {
             // Render table (desktop)
             renderUsersTable(usersToRender);
             // Render cards (mobile)
             renderUsersCards(usersToRender);
         }
-        
+
         function renderUsersTable(usersToRender) {
             const tbody = document.getElementById('usersTableBody');
-            
+
             if (usersToRender.length === 0) {
                 tbody.innerHTML = `
                     <tr>
@@ -485,7 +532,7 @@ $pageTitle = 'User Management';
                 `;
                 return;
             }
-            
+
             tbody.innerHTML = usersToRender.map(user => `
                 <tr data-id="${user.id}">
                     <td>
@@ -516,10 +563,25 @@ $pageTitle = 'User Management';
                 </tr>
             `).join('');
         }
-        
+
+        function renderUsersTableLoading() {
+            const tbody = document.getElementById('usersTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Loading users...</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
         function renderUsersCards(usersToRender) {
             const container = document.getElementById('usersCardsContainer');
-            
+
             if (usersToRender.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -529,7 +591,7 @@ $pageTitle = 'User Management';
                 `;
                 return;
             }
-            
+
             container.innerHTML = usersToRender.map(user => `
                 <div class="user-card" data-id="${user.id}">
                     <div class="user-card-header">
@@ -576,22 +638,22 @@ $pageTitle = 'User Management';
                 </div>
             `).join('');
         }
-        
+
         function filterUsers() {
             // Note: With pagination, filtering should ideally be done server-side
             // For now, we'll filter the current page results client-side
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            
+
             let filtered = users.filter(user => {
-                const matchesSearch = user.name.toLowerCase().includes(searchTerm) || 
+                const matchesSearch = user.name.toLowerCase().includes(searchTerm) ||
                                      user.email.toLowerCase().includes(searchTerm);
                 const matchesFilter = currentFilter === 'all' || user.role === currentFilter;
                 return matchesSearch && matchesFilter;
             });
-            
+
             renderUsers(filtered);
         }
-        
+
         function openCreateModal() {
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-plus"></i> Create New User';
             document.getElementById('userForm').reset();
@@ -602,11 +664,11 @@ $pageTitle = 'User Management';
         }
         // Make available globally immediately
         window.openCreateModal = openCreateModal;
-        
+
         function editUser(id) {
             const user = users.find(u => u.id === id);
             if (!user) return;
-            
+
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-edit"></i> Edit User';
             document.getElementById('userId').value = user.id;
             document.getElementById('userName').value = user.name;
@@ -618,7 +680,7 @@ $pageTitle = 'User Management';
             document.getElementById('userModal').classList.add('show');
             document.body.style.overflow = 'hidden';
         }
-        
+
         function closeModal() {
             const modal = document.getElementById('userModal');
             if (modal) {
@@ -638,7 +700,7 @@ $pageTitle = 'User Management';
         }
         // Make available globally immediately
         window.closeModal = closeModal;
-        
+
         // Close modal on escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' || e.keyCode === 27) {
@@ -648,11 +710,11 @@ $pageTitle = 'User Management';
                 }
             }
         });
-        
+
         function saveUser() {
             const form = document.getElementById('userForm');
             const formData = new FormData(form);
-            
+
             const data = {
                 action: formData.get('id') ? 'update' : 'create',
                 id: formData.get('id'),
@@ -662,23 +724,23 @@ $pageTitle = 'User Management';
                 role: formData.get('role'),
                 status: formData.get('status')
             };
-            
+
             // Validation
             if (!data.name || !data.email || !data.role || !data.status) {
                 Swal.fire('Error', 'Please fill in all required fields', 'error');
                 return;
             }
-            
+
             if (!data.id && !data.password) {
                 Swal.fire('Error', 'Password is required for new users', 'error');
                 return;
             }
-            
+
             if (data.password && data.password.length < 8) {
                 Swal.fire('Error', 'Password must be at least 8 characters', 'error');
                 return;
             }
-            
+
             fetch('../api/user-management.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -711,7 +773,7 @@ $pageTitle = 'User Management';
         }
         // Make available globally immediately
         window.saveUser = saveUser;
-        
+
         function deleteUser(id, name) {
             Swal.fire({
                 title: 'Delete User?',
@@ -745,12 +807,12 @@ $pageTitle = 'User Management';
                 }
             });
         }
-        
+
         // Helper functions
         function getInitials(name) {
             return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
         }
-        
+
         function formatRole(role) {
             const roles = {
                 'super_admin': 'Super Admin',
@@ -759,7 +821,7 @@ $pageTitle = 'User Management';
             };
             return roles[role] || role;
         }
-        
+
         function formatStatus(status) {
             const statuses = {
                 'active': 'Active',
@@ -768,23 +830,23 @@ $pageTitle = 'User Management';
             };
             return statuses[status] || status;
         }
-        
+
         function formatDate(dateStr) {
             if (!dateStr) return 'N/A';
             const date = new Date(dateStr);
-            return date.toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric' 
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
             });
         }
-        
+
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
-        
+
         function showError(message) {
             document.getElementById('usersTableBody').innerHTML = `
                 <tr>
@@ -803,7 +865,7 @@ $pageTitle = 'User Management';
                 </div>
             `;
         }
-        
+
         // Make functions globally accessible BEFORE PHP conditional ends
         window.closeModal = closeModal;
         window.openCreateModal = openCreateModal;
@@ -811,7 +873,7 @@ $pageTitle = 'User Management';
         window.saveUser = saveUser;
         window.deleteUser = deleteUser;
         <?php endif; ?>
-        
+
         // Ensure closeModal is always accessible (even outside PHP conditional)
         if (typeof window.closeModal === 'undefined') {
             window.closeModal = function() {

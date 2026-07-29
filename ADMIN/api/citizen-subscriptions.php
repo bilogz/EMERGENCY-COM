@@ -62,11 +62,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         // Pagination parameters
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-        $limit = isset($_GET['limit']) ? min(100, max(10, (int)$_GET['limit'])) : 50; // Default 50, max 100
+        $limit = isset($_GET['limit']) ? min(100, max(10, (int)$_GET['limit'])) : 25;
         $offset = ($page - 1) * $limit;
-        
-        // Get total count for pagination
-        $totalCount = $pdo->query("SELECT COUNT(*) FROM subscriptions WHERE status = 'active'")->fetchColumn();
+        $search = trim((string)($_GET['q'] ?? ''));
+        $where = "s.status = 'active'";
+        $queryParams = [];
+
+        if ($search !== '') {
+            $where .= " AND (u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR u.address LIKE ?)";
+            $queryParams = array_fill(0, 4, '%' . $search . '%');
+        }
+
+        $countStmt = $pdo->prepare("
+            SELECT COUNT(*)
+            FROM subscriptions s
+            LEFT JOIN users u ON u.id = s.user_id
+            WHERE {$where}
+        ");
+        $countStmt->execute($queryParams);
+        $totalCount = (int)$countStmt->fetchColumn();
         
         // Enhanced query with comprehensive user data
         $stmt = $pdo->prepare("
@@ -105,11 +119,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 (SELECT push_notifications FROM user_preferences WHERE user_id = u.id LIMIT 1) as push_enabled
             FROM subscriptions s
             LEFT JOIN users u ON u.id = s.user_id
-            WHERE s.status = 'active'
+            WHERE {$where}
             ORDER BY s.created_at DESC
             LIMIT ? OFFSET ?
         ");
-        $stmt->execute([$limit, $offset]);
+        $bindIndex = 1;
+        foreach ($queryParams as $queryParam) {
+            $stmt->bindValue($bindIndex++, $queryParam, PDO::PARAM_STR);
+        }
+        $stmt->bindValue($bindIndex++, $limit, PDO::PARAM_INT);
+        $stmt->bindValue($bindIndex, $offset, PDO::PARAM_INT);
+        $stmt->execute();
         $subscribers = $stmt->fetchAll();
         
         // Format subscribers with comprehensive data

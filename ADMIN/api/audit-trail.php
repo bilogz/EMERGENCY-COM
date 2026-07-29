@@ -21,12 +21,12 @@ if ($action === 'list') {
         $params = [];
         
         if (!empty($dateFrom)) {
-            $query .= " AND DATE(sent_at) >= ?";
-            $params[] = $dateFrom;
+            $query .= " AND sent_at >= ?";
+            $params[] = $dateFrom . ' 00:00:00';
         }
         if (!empty($dateTo)) {
-            $query .= " AND DATE(sent_at) <= ?";
-            $params[] = $dateTo;
+            $query .= " AND sent_at < DATE_ADD(?, INTERVAL 1 DAY)";
+            $params[] = $dateTo . ' 00:00:00';
         }
         if (!empty($channel)) {
             $query .= " AND channel = ?";
@@ -39,19 +39,19 @@ if ($action === 'list') {
         
         // Pagination parameters
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-        $limit = isset($_GET['limit']) ? min(500, max(10, (int)$_GET['limit'])) : 100; // Default 100, max 500
+        $limit = isset($_GET['limit']) ? min(250, max(10, (int)$_GET['limit'])) : 25; // Default 25 for lazy tables, max 250
         $offset = ($page - 1) * $limit;
         
         // Get total count for pagination (before adding LIMIT)
         $countQuery = "SELECT COUNT(*) FROM notification_logs WHERE 1=1";
         $countParams = [];
         if (!empty($dateFrom)) {
-            $countQuery .= " AND DATE(sent_at) >= ?";
-            $countParams[] = $dateFrom;
+            $countQuery .= " AND sent_at >= ?";
+            $countParams[] = $dateFrom . ' 00:00:00';
         }
         if (!empty($dateTo)) {
-            $countQuery .= " AND DATE(sent_at) <= ?";
-            $countParams[] = $dateTo;
+            $countQuery .= " AND sent_at < DATE_ADD(?, INTERVAL 1 DAY)";
+            $countParams[] = $dateTo . ' 00:00:00';
         }
         if (!empty($channel)) {
             $countQuery .= " AND channel = ?";
@@ -111,7 +111,7 @@ if ($action === 'list') {
         $total = $pdo->query("SELECT COUNT(*) FROM notification_logs")->fetchColumn();
         $successful = $pdo->query("SELECT COUNT(*) FROM notification_logs WHERE status = 'success'")->fetchColumn();
         $failed = $pdo->query("SELECT COUNT(*) FROM notification_logs WHERE status = 'failed'")->fetchColumn();
-        $today = $pdo->query("SELECT COUNT(*) FROM notification_logs WHERE DATE(sent_at) = CURDATE()")->fetchColumn();
+        $today = $pdo->query("SELECT COUNT(*) FROM notification_logs WHERE sent_at >= CURDATE() AND sent_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY)")->fetchColumn();
         
         echo json_encode([
             'success' => true,
@@ -140,12 +140,12 @@ if ($action === 'list') {
         $params = [];
         
         if (!empty($dateFrom)) {
-            $query .= " AND DATE(sent_at) >= ?";
-            $params[] = $dateFrom;
+            $query .= " AND sent_at >= ?";
+            $params[] = $dateFrom . ' 00:00:00';
         }
         if (!empty($dateTo)) {
-            $query .= " AND DATE(sent_at) <= ?";
-            $params[] = $dateTo;
+            $query .= " AND sent_at < DATE_ADD(?, INTERVAL 1 DAY)";
+            $params[] = $dateTo . ' 00:00:00';
         }
         if (!empty($channel)) {
             $query .= " AND channel = ?";

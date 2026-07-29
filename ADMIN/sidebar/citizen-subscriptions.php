@@ -130,6 +130,9 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
                                 </tbody>
                             </table>
                         </div>
+                        <div id="subscribersLazyLoadSentinel" style="text-align:center; padding:0.85rem; color:var(--text-secondary-1); font-weight:700;">
+                            Loading subscribers...
+                        </div>
                     </div>
 
                     <!-- View/Edit Subscription Modal -->
@@ -242,51 +245,144 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
     </div>
 
     <script>
-        function loadSubscribers() {
-            fetch('../api/citizen-subscriptions.php?action=list')
-                .then(response => response.json())
-                .then(data => {
-                    const tbody = document.querySelector('#subscribersTable tbody');
-                    tbody.innerHTML = '';
-                    
-                    if (data.success && data.subscribers) {
-                        data.subscribers.forEach(sub => {
-                            const row = document.createElement('tr');
-                            const address = sub.address ? 
-                                `${sub.address.house_number || ''} ${sub.address.street || ''}, ${sub.address.barangay || ''}`.trim() || 
-                                sub.address.full_address || 'N/A' : 'N/A';
-                            const deviceInfo = sub.device ? 
-                                `${sub.device.latest_type || 'N/A'} (${sub.device.count || 0})` : 'N/A';
-                            const lastActive = sub.device && sub.device.last_active ? 
-                                new Date(sub.device.last_active).toLocaleDateString() : 'Never';
-                            
-                            row.innerHTML = `
-                                <td>${sub.id}</td>
-                                <td><strong>${sub.name || 'N/A'}</strong></td>
-                                <td>${sub.email || 'N/A'}</td>
-                                <td>${sub.phone || 'N/A'}</td>
-                                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${address}">${address}</td>
-                                <td>${deviceInfo}</td>
-                                <td>${lastActive}</td>
-                                <td>${sub.subscription.categories.join(', ') || 'None'}</td>
-                                <td>${sub.subscription.channels.join(', ') || 'None'}</td>
-                                <td>${sub.subscription.language || 'en'}</td>
-                                <td><span class="badge ${sub.subscription.status}">${sub.subscription.status}</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-primary" onclick="viewSubscription(${sub.id})" title="View Details">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteSubscription(${sub.id})" title="Delete">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </td>
-                            `;
-                            tbody.appendChild(row);
-                        });
-                    }
+        const SUBSCRIBERS_PAGE_SIZE = 25;
+        let subscribersPage = 1;
+        let subscribersTotalPages = 1;
+        let subscribersTotal = 0;
+        let subscribersLoading = false;
+        let subscribersHasMore = true;
+        let subscriberSearchTimer = null;
+
+        async function loadSubscribers(reset = true) {
+            if (subscribersLoading) return;
+
+            const tbody = document.querySelector('#subscribersTable tbody');
+            const search = document.getElementById('searchSubscribers')?.value.trim() || '';
+            if (!tbody) return;
+
+            if (reset) {
+                subscribersPage = 1;
+                subscribersTotalPages = 1;
+                subscribersTotal = 0;
+                subscribersHasMore = true;
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;">Loading subscribers...</td></tr>';
+            }
+
+            subscribersLoading = true;
+            updateSubscribersLazyLoadStatus();
+
+            try {
+                const params = new URLSearchParams({
+                    action: 'list',
+                    page: String(subscribersPage),
+                    limit: String(SUBSCRIBERS_PAGE_SIZE)
                 });
+                if (search) params.set('q', search);
+
+                const response = await fetch('../api/citizen-subscriptions.php?' + params.toString());
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Unable to load subscribers.');
+                }
+
+                if (reset) tbody.innerHTML = '';
+                const rows = Array.isArray(data.subscribers) ? data.subscribers : [];
+                rows.forEach(renderSubscriberRow);
+
+                const pagination = data.pagination || {};
+                subscribersPage = Number(pagination.page || subscribersPage);
+                subscribersTotalPages = Math.max(1, Number(pagination.total_pages || 1));
+                subscribersTotal = Number(pagination.total || rows.length);
+                subscribersHasMore = subscribersPage < subscribersTotalPages;
+
+                if (tbody.children.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; color:var(--text-secondary-1);">No subscribers found.</td></tr>';
+                }
+            } catch (error) {
+                console.error('Failed to load subscribers:', error);
+                if (reset) {
+                    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; color:#dc3545;">Unable to load subscribers.</td></tr>';
+                }
+                subscribersHasMore = false;
+            } finally {
+                subscribersLoading = false;
+                updateSubscribersLazyLoadStatus();
+            }
         }
-        
+
+        function renderSubscriberRow(sub) {
+            const tbody = document.querySelector('#subscribersTable tbody');
+            if (!tbody) return;
+
+            const row = document.createElement('tr');
+            const address = sub.address
+                ? (`${sub.address.house_number || ''} ${sub.address.street || ''}, ${sub.address.barangay || ''}`.trim()
+                    || sub.address.full_address || 'N/A')
+                : 'N/A';
+            const deviceInfo = sub.device
+                ? `${sub.device.latest_type || 'N/A'} (${sub.device.count || 0})`
+                : 'N/A';
+            const lastActive = sub.device && sub.device.last_active
+                ? new Date(sub.device.last_active).toLocaleDateString()
+                : 'Never';
+
+            row.innerHTML = `
+                <td>${sub.id}</td>
+                <td><strong>${sub.name || 'N/A'}</strong></td>
+                <td>${sub.email || 'N/A'}</td>
+                <td>${sub.phone || 'N/A'}</td>
+                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${address}">${address}</td>
+                <td>${deviceInfo}</td>
+                <td>${lastActive}</td>
+                <td>${sub.subscription.categories.join(', ') || 'None'}</td>
+                <td>${sub.subscription.channels.join(', ') || 'None'}</td>
+                <td>${sub.subscription.language || 'en'}</td>
+                <td><span class="badge ${sub.subscription.status}">${sub.subscription.status}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="viewSubscription(${sub.id})" title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteSubscription(${sub.id})" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        }
+
+        function loadMoreSubscribers() {
+            if (subscribersLoading || !subscribersHasMore) return;
+            subscribersPage += 1;
+            loadSubscribers(false);
+        }
+
+        function setupSubscribersLazyLoader() {
+            const sentinel = document.getElementById('subscribersLazyLoadSentinel');
+            if (!sentinel || !('IntersectionObserver' in window)) return;
+
+            const observer = new IntersectionObserver(entries => {
+                if (entries.some(entry => entry.isIntersecting)) loadMoreSubscribers();
+            }, { rootMargin: '240px 0px' });
+            observer.observe(sentinel);
+        }
+
+        function updateSubscribersLazyLoadStatus() {
+            const sentinel = document.getElementById('subscribersLazyLoadSentinel');
+            if (!sentinel) return;
+
+            if (subscribersLoading) {
+                sentinel.textContent = 'Loading subscribers...';
+            } else if (subscribersHasMore) {
+                const shown = Math.min(subscribersPage * SUBSCRIBERS_PAGE_SIZE, subscribersTotal);
+                sentinel.innerHTML = '<button type="button" class="btn btn-sm btn-secondary" onclick="loadMoreSubscribers()">Load more</button>'
+                    + '<span style="margin-left:0.5rem;">' + shown + ' of ' + subscribersTotal + '</span>';
+            } else {
+                sentinel.textContent = subscribersTotal > 0
+                    ? 'Showing all ' + subscribersTotal + ' subscribers'
+                    : 'No subscribers found';
+            }
+        }
+
         function switchTab(tabName) {
             // Hide all tabs
             document.querySelectorAll('.tab-content').forEach(tab => {
@@ -511,13 +607,9 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
         }
 
         // Search functionality
-        document.getElementById('searchSubscribers').addEventListener('input', function(e) {
-            const searchTerm = e.target.value.toLowerCase();
-            const rows = document.querySelectorAll('#subscribersTable tbody tr');
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(searchTerm) ? '' : 'none';
-            });
+        document.getElementById('searchSubscribers').addEventListener('input', function() {
+            clearTimeout(subscriberSearchTimer);
+            subscriberSearchTimer = setTimeout(() => loadSubscribers(true), 300);
         });
 
         // ===== Languages (80+) from supported_languages =====
@@ -554,9 +646,12 @@ $pageTitle = 'Citizen Subscription and Alert Preferences';
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadSubscribers();
+            setupSubscribersLazyLoader();
             loadStatistics();
             loadLanguagesForSelect();
         });
+
+        window.loadMoreSubscribers = loadMoreSubscribers;
     </script>
 </body>
 </html>
