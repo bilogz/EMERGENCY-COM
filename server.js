@@ -10,7 +10,7 @@ const activeCallsById = new Map();
 const recentMessagesByRoom = new Map();
 const CALL_LOBBY_ROOM = 'emergency-lobby';
 const TRANSFER_INBOX_ROOM = 'ers-transfer-inbox';
-const SIGNALING_PROTOCOL_VERSION = '2026-08-01.5';
+const SIGNALING_PROTOCOL_VERSION = '2026-08-01.6';
 const OFFER_TTL_MS = 60 * 60 * 1000;
 const MESSAGE_TTL_MS = 60 * 60 * 1000;
 const MAX_MESSAGES_PER_ROOM = 50;
@@ -454,6 +454,64 @@ io.on('connection', (socket) => {
     io.to(TRANSFER_INBOX_ROOM).emit('incoming-transfer', transferNotice);
     io.to(TRANSFER_INBOX_ROOM).emit('ers-transfer-notify', transferNotice);
     if (transferRoom) socket.to(transferRoom).emit('call-transfer', transferNotice);
+  });
+
+  // Production call route: the caller is first persisted as an Emergency-Com
+  // Two-Way Communication conversation. Only then can its own private room be
+  // handed to ERS. Nothing is emitted to the admin lobby, so Emergency-Com
+  // admins do not receive a second incoming-call popup.
+  socket.on('route-call-to-ers', (payload, acknowledge) => {
+    const callId = getSignalCallId(payload);
+    const room = cleanText(payload?.room, 180);
+    const conversationId = signalText(payload?.conversationId || payload?.conversation_id, 80);
+    const existing = callId ? activeCallsById.get(callId) : null;
+    if (!callId || !room || !conversationId) {
+      if (typeof acknowledge === 'function') {
+        acknowledge({ ok: false, reason: 'callId, room, and Emergency-Com conversationId are required.' });
+      }
+      return;
+    }
+    if (!existing || existing.callerSocketId !== socket.id) {
+      if (typeof acknowledge === 'function') {
+        acknowledge({ ok: false, reason: 'The caller must register its private room before routing to ERS.' });
+      }
+      return;
+    }
+    const transferNotice = {
+      ...(payload || {}),
+      event: 'emergency_call_transfer',
+      transfer_type: 'live_call',
+      transferType: 'live_call',
+      callId,
+      call_id: callId,
+      call_id_external: callId,
+      transferId: getSignalCallId(payload) || callId,
+      transfer_id: getSignalCallId(payload) || callId,
+      room,
+      conversationId,
+      conversation_id: conversationId,
+      socketUrl: cleanText(payload?.socketUrl, 255) || 'https://emergency-comm.alertaraqc.com',
+      socketPath: cleanText(payload?.socketPath, 100) || '/socket.io',
+      source_system: 'AlertaraQC Emergency Communication',
+      route: 'emergency-com-two-way',
+      transferredAt: payload?.transferredAt || new Date().toISOString(),
+    };
+    existing.room = room;
+    existing.offer = {
+      ...(existing.offer || {}),
+      callId,
+      room,
+      conversationId,
+      caller: transferNotice.caller || existing.offer?.caller || null,
+      location: transferNotice.locationData || transferNotice.location || existing.offer?.location || null,
+    };
+    existing.status = 'ringing';
+    existing.updatedAt = Date.now();
+    socket.join(room);
+    io.to(TRANSFER_INBOX_ROOM).emit('incoming-transfer', transferNotice);
+    io.to(TRANSFER_INBOX_ROOM).emit('ers-transfer-notify', transferNotice);
+    socket.emit('call-transferred-to-ers', { callId, room, conversationId });
+    if (typeof acknowledge === 'function') acknowledge({ ok: true, transfer: liveCallIdentity(existing) });
   });
 
   socket.on('ers-transfer-notify', (payload) => {

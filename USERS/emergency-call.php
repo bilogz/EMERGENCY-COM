@@ -1334,20 +1334,18 @@ $assetBase = '../ADMIN/header/';
 
         async function ensureCallConversationId() {
             if (callConversationId) return callConversationId;
-            if (!userProfile || !userProfile.id) {
-                console.log('[DEBUG] No user profile or ID');
-                return null;
-            }
 
             try {
+                const caller = currentCallCallerPayload();
+                const callerId = userProfile?.id || `web-guest-call-${callId || Date.now()}`;
                 const params = new URLSearchParams({
-                    userId: String(userProfile.id),
-                    userName: userProfile.name || userProfile.username || 'User',
-                    userEmail: userProfile.email || '',
-                    userPhone: userProfile.phone || '',
-                    userLocation: '',
-                    userConcern: 'emergency',
-                    isGuest: '0'
+                    userId: String(callerId),
+                    userName: caller?.name || 'Guest User',
+                    userEmail: caller?.email || '',
+                    userPhone: caller?.phone || '',
+                    userLocation: locationData?.address || '',
+                    userConcern: 'emergency_response',
+                    isGuest: userProfile?.id ? '0' : '1'
                 });
                 console.log('[DEBUG] Fetching conversation with params:', params.toString());
                 const res = await fetch(`api/chat-get-conversation.php?${params.toString()}`);
@@ -1892,9 +1890,9 @@ $assetBase = '../ADMIN/header/';
             };
         }
 
-        function notifyErsSocketTransfer(transferPayload = {}, result = {}) {
+        async function notifyErsSocketTransfer(transferPayload = {}, result = {}) {
             const s = ensureSocket();
-            if (!s || !callId) return;
+            if (!s || !callId) throw new Error('Emergency-Com call service is unavailable.');
             const transferId = transferPayload.transferId || transferPayload.transfer_id || transferPayload.callId || callId;
             const notice = {
                 ...(transferPayload || {}),
@@ -1914,13 +1912,19 @@ $assetBase = '../ADMIN/header/';
                 locationData: currentCallLocationPayload(),
                 conversationId: callConversationId || null,
                 integration: result?.integration || null,
+                route: 'emergency-com-two-way',
                 transferredAt: new Date().toISOString()
             };
-            if (s.connected) {
-                s.emit('ers-transfer-notify', notice);
-            } else {
-                s.once('connect', () => s.emit('ers-transfer-notify', notice));
-            }
+            await waitForSocketConnected(s);
+            return new Promise((resolve, reject) => {
+                s.timeout(8000).emit('route-call-to-ers', notice, (error, response) => {
+                    if (error || !response?.ok) {
+                        reject(error || new Error(response?.reason || 'Emergency-Com could not route the call to ERS.'));
+                        return;
+                    }
+                    resolve(response);
+                });
+            });
         }
 
         async function autoTransferCurrentCallToErs(attempt = 1) {
@@ -1929,6 +1933,10 @@ $assetBase = '../ADMIN/header/';
             autoTransferInFlight = true;
 
             try {
+                if (!callConversationId) await ensureCallConversationId();
+                if (!callConversationId) {
+                    throw new Error('Emergency-Com could not create the Two-Way Communication record.');
+                }
                 const priority = currentLiveCallPriority();
                 const caller = currentCallCallerPayload();
                 const location = currentCallLocationPayload();
@@ -1959,12 +1967,6 @@ $assetBase = '../ADMIN/header/';
                     conversationId: callConversationId || null
                 };
 
-                if (liveTransferSocketNotifiedCallId !== activeCallId) {
-                    notifyErsSocketTransfer(transferPayload, { integration: { pending: true } });
-                    liveTransferSocketNotifiedCallId = activeCallId;
-                    setStatus('Transfer sent. Stay connected until the response team answers...');
-                }
-
                 const response = await fetch(transferApiUrl(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1976,9 +1978,23 @@ $assetBase = '../ADMIN/header/';
                     throw new Error(formatTransferError(data));
                 }
 
+                await notifyErsSocketTransfer({
+                    ...transferPayload,
+                    ...(data.data || {}),
+                    callId: activeCallId,
+                    call_id: activeCallId,
+                    call_id_external: activeCallId,
+                    transferId: transferPayload.transferId,
+                    transfer_id: transferPayload.transfer_id,
+                    room: activeCallRoom || getCallRoom(activeCallId),
+                    socketUrl: SIGNALING_URL,
+                    socketPath: SOCKET_IO_PATH,
+                    conversationId: callConversationId,
+                    conversation_id: callConversationId
+                }, data);
                 autoTransferCompletedCallId = activeCallId;
-                setStatus('Waiting for response team to answer...');
-                notifyErsSocketTransfer(data.data || {}, data);
+                liveTransferSocketNotifiedCallId = activeCallId;
+                setStatus('Emergency-Com recorded this call and forwarded it to the response team.');
                 await logCall('auto_transferred_to_response_team', {
                     room: activeCallRoom || getCallRoom(activeCallId),
                     socketUrl: SIGNALING_URL,
@@ -2134,33 +2150,22 @@ $assetBase = '../ADMIN/header/';
                     }
                 }).catch(() => {});
 
-                // Add initial message so the transfer audit can link back to the call thread.
-                ensureCallConversationId().then(async (convId) => {
-                    console.log('[DEBUG] Conversation ID:', convId);
-                    if (convId) {
-                        const formData = new FormData();
-                        formData.append('text', '[CALL_STARTED] Emergency call initiated via Internet calling');
-                        formData.append('userId', userProfile?.id || 'guest');
-                        formData.append('userName', userProfile?.name || 'Guest User');
-                        formData.append('userEmail', userProfile?.email || '');
-                        formData.append('userPhone', userProfile?.phone || '');
-                        formData.append('conversationId', convId);
-                        formData.append('userConcern', 'emergency');
-
-                        console.log('[DEBUG] Sending message to chat-send.php');
-                        const response = await fetch('api/chat-send.php', {
-                            method: 'POST',
-                            body: formData
-                        });
-                        console.log('[DEBUG] chat-send.php response:', response.status);
-                        const result = await response.json();
-                        console.log('[DEBUG] chat-send.php result:', result);
-                    } else {
-                        console.log('[DEBUG] No conversation ID available');
-                    }
-                }).catch((e) => {
-                    console.error('[DEBUG] Failed to log call start message:', e);
-                });
+                // Emergency-Com owns this call before the private room can be
+                // routed to ERS. This creates one Two-Way Communication thread
+                // for registered and guest callers without opening an admin UI.
+                const convId = await ensureCallConversationId();
+                if (!convId) {
+                    throw new Error('Emergency-Com could not create the Two-Way Communication record.');
+                }
+                const formData = new FormData();
+                formData.append('text', '[CALL_STARTED] Emergency call initiated via Internet calling');
+                formData.append('userId', userProfile?.id || `web-guest-call-${callId}`);
+                formData.append('userName', userProfile?.name || getGuestCallerInfo().name || 'Guest User');
+                formData.append('userEmail', userProfile?.email || '');
+                formData.append('userPhone', userProfile?.phone || '');
+                formData.append('conversationId', convId);
+                formData.append('userConcern', 'emergency_response');
+                await fetch('api/chat-send.php', { method: 'POST', body: formData }).catch(() => null);
 
                 initPeer();
 

@@ -709,7 +709,13 @@ if ($targetUrl === '') {
         $payload['requestedBy']['adminUsername'] ?? $payload['requestedBy']['department'] ?? null,
     ]);
     if ($conversationId) {
-        $pdo->prepare("UPDATE conversations SET status = 'closed', last_message = '[TRANSFERRED] Report transferred to response team', updated_at = NOW() WHERE conversation_id = ?")->execute([$conversationId]);
+        if ($requestedTransferType === 'live_call') {
+            $pdo->prepare("UPDATE conversations SET last_message = '[AUTO_TRANSFERRED_TO_ERS] Live call routed to ERS', updated_at = NOW() WHERE conversation_id = ?")
+                ->execute([$conversationId]);
+        } else {
+            $pdo->prepare("UPDATE conversations SET status = 'closed', last_message = '[TRANSFERRED] Report transferred to response team', updated_at = NOW() WHERE conversation_id = ?")
+                ->execute([$conversationId]);
+        }
     }
     sendJsonResponse(
         true,
@@ -780,7 +786,13 @@ $stmt->execute([
 ]);
 
 if ($conversationId && $status === 'sent') {
-    $pdo->prepare("UPDATE conversations SET status = 'closed', last_message = '[TRANSFERRED] Report transferred to response team', updated_at = NOW() WHERE conversation_id = ?")->execute([$conversationId]);
+    if ($requestedTransferType === 'live_call') {
+        $pdo->prepare("UPDATE conversations SET last_message = '[AUTO_TRANSFERRED_TO_ERS] Live call routed to ERS', updated_at = NOW() WHERE conversation_id = ?")
+            ->execute([$conversationId]);
+    } else {
+        $pdo->prepare("UPDATE conversations SET status = 'closed', last_message = '[TRANSFERRED] Report transferred to response team', updated_at = NOW() WHERE conversation_id = ?")
+            ->execute([$conversationId]);
+    }
 }
 
 if (empty($transferResult['ok']) || $responseBody === false || $curlError !== '' || $httpStatus < 200 || $httpStatus >= 300) {
