@@ -10,7 +10,7 @@ const activeCallsById = new Map();
 const recentMessagesByRoom = new Map();
 const CALL_LOBBY_ROOM = 'emergency-lobby';
 const TRANSFER_INBOX_ROOM = 'ers-transfer-inbox';
-const SIGNALING_PROTOCOL_VERSION = '2026-08-01.4';
+const SIGNALING_PROTOCOL_VERSION = '2026-08-01.5';
 const OFFER_TTL_MS = 60 * 60 * 1000;
 const MESSAGE_TTL_MS = 60 * 60 * 1000;
 const MAX_MESSAGES_PER_ROOM = 50;
@@ -68,6 +68,22 @@ function callSummary(call) {
     location: call.offer?.location || null,
     conversationId: call.offer?.conversationId || null,
     updatedAt: call.updatedAt,
+  };
+}
+
+function liveCallIdentity(call) {
+  if (!call) return null;
+  return {
+    callId: call.callId,
+    call_id: call.callId,
+    room: call.room,
+    status: call.status,
+    conversationId: call.offer?.conversationId || null,
+    caller: call.offer?.caller || null,
+    location: call.offer?.location || null,
+    updatedAt: call.updatedAt,
+    socketUrl: 'https://emergency-comm.alertaraqc.com',
+    socketPath: '/socket.io',
   };
 }
 
@@ -299,6 +315,38 @@ io.on('connection', (socket) => {
     if (typeof acknowledge === 'function') acknowledge({ ok: true, call: callSummary(call) });
   });
 
+  socket.on('resolve-live-call', (payload, acknowledge) => {
+    if (typeof acknowledge !== 'function') return;
+    if (!socket.rooms.has(TRANSFER_INBOX_ROOM)) {
+      acknowledge({ ok: false, reason: 'ERS transfer inbox membership is required.' });
+      return;
+    }
+    pruneExpiredCalls();
+    const requestedCallId = getSignalCallId(payload);
+    const requestedRoom = cleanText(payload?.room, 180);
+    const requestedConversationId = signalText(payload?.conversationId || payload?.conversation_id, 80);
+    let call = requestedCallId ? activeCallsById.get(requestedCallId) : null;
+    if (!call && requestedRoom) {
+      call = Array.from(activeCallsById.values()).find((item) => item.room === requestedRoom) || null;
+    }
+    if (!call && requestedConversationId) {
+      call = Array.from(activeCallsById.values()).find((item) => (
+        signalText(item.offer?.conversationId, 80) === requestedConversationId
+      )) || null;
+    }
+    if (!call) {
+      const liveCandidates = Array.from(activeCallsById.values())
+        .filter((item) => item.callerSocketId && item.room && Date.now() - item.updatedAt < 10 * 60 * 1000)
+        .sort((left, right) => right.updatedAt - left.updatedAt);
+      if (liveCandidates.length === 1) call = liveCandidates[0];
+    }
+    if (!call || !call.callerSocketId || !call.room) {
+      acknowledge({ ok: false, reason: 'No matching online mobile caller was found.' });
+      return;
+    }
+    acknowledge({ ok: true, call: liveCallIdentity(call) });
+  });
+
   socket.on('answer', (payload, room) => {
     const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
     debugLog(`[signal] answer room=${signalRoom} callId=${payload?.callId || ''}`);
@@ -419,6 +467,30 @@ io.on('connection', (socket) => {
       source_system: cleanText(payload?.source_system, 180) || 'AlertaraQC Emergency Communication',
       transferredAt: payload?.transferredAt || payload?.transferred_at || new Date().toISOString(),
     };
+    if (hasLiveSignal) {
+      const callId = getSignalCallId(transferNotice);
+      const room = cleanText(transferNotice.room, 180);
+      const existing = activeCallsById.get(callId);
+      const offer = {
+        ...(existing?.offer || {}),
+        callId,
+        room,
+        conversationId: transferNotice.conversationId || transferNotice.conversation_id || existing?.offer?.conversationId || null,
+        caller: transferNotice.caller || existing?.offer?.caller || null,
+        location: transferNotice.locationData || transferNotice.location || existing?.offer?.location || null,
+      };
+      activeCallsById.set(callId, {
+        callId,
+        room,
+        offer,
+        callerSocketId: socket.id,
+        adminSocketId: existing?.adminSocketId || null,
+        adminKey: existing?.adminKey || null,
+        status: existing?.status || 'ringing',
+        updatedAt: Date.now(),
+      });
+      socket.join(room);
+    }
     debugLog(`[transfer-notify] type=${transferType} transferId=${payload?.transferId || payload?.transfer_id || ''}`);
     io.to(TRANSFER_INBOX_ROOM).emit('incoming-transfer', transferNotice);
     io.to(TRANSFER_INBOX_ROOM).emit('ers-transfer-notify', transferNotice);
