@@ -10,7 +10,7 @@ const activeCallsById = new Map();
 const recentMessagesByRoom = new Map();
 const CALL_LOBBY_ROOM = 'emergency-lobby';
 const TRANSFER_INBOX_ROOM = 'ers-transfer-inbox';
-const SIGNALING_PROTOCOL_VERSION = '2026-08-01.3';
+const SIGNALING_PROTOCOL_VERSION = '2026-08-01.4';
 const OFFER_TTL_MS = 60 * 60 * 1000;
 const MESSAGE_TTL_MS = 60 * 60 * 1000;
 const MAX_MESSAGES_PER_ROOM = 50;
@@ -162,11 +162,18 @@ io.on('connection', (socket) => {
       }
       const recentMessages = recentMessagesByRoom.get(room) || [];
       if (recentMessages.length) socket.emit('call-message-history', recentMessages);
+      const memberCount = io.sockets.adapter.rooms.get(room)?.size || 0;
+      io.to(room).emit('room-presence', {
+        room,
+        callId: roomCall?.callId || null,
+        members: memberCount,
+        responseTeamPresent: !!(roomCall?.adminSocketId),
+      });
       if (typeof acknowledge === 'function') {
         acknowledge({
           ok: true,
           room,
-          members: io.sockets.adapter.rooms.get(room)?.size || 0,
+          members: memberCount,
           callId: roomCall?.callId || null,
           responseTeamPresent: !!(roomCall?.adminSocketId),
           protocolVersion: SIGNALING_PROTOCOL_VERSION,
@@ -175,6 +182,27 @@ io.on('connection', (socket) => {
     } else if (typeof acknowledge === 'function') {
       acknowledge({ ok: false, reason: 'Invalid room.' });
     }
+  });
+
+  socket.on('leave', (room, acknowledge) => {
+    const signalRoom = cleanText(room, 180);
+    if (!signalRoom) {
+      if (typeof acknowledge === 'function') acknowledge({ ok: false, reason: 'Invalid room.' });
+      return;
+    }
+    socket.leave(signalRoom);
+    const roomCall = Array.from(activeCallsById.values()).find((call) => call.room === signalRoom) || null;
+    if (roomCall?.adminSocketId === socket.id) {
+      roomCall.adminSocketId = null;
+      roomCall.updatedAt = Date.now();
+    }
+    io.to(signalRoom).emit('room-presence', {
+      room: signalRoom,
+      callId: roomCall?.callId || null,
+      members: io.sockets.adapter.rooms.get(signalRoom)?.size || 0,
+      responseTeamPresent: !!(roomCall?.adminSocketId),
+    });
+    if (typeof acknowledge === 'function') acknowledge({ ok: true, room: signalRoom });
   });
 
   socket.on('offer', (payload, room) => {
