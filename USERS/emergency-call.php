@@ -1,6 +1,11 @@
 <?php
 // Include centralized session configuration - MUST be first
 require_once __DIR__ . '/../session-config.php';
+require_once __DIR__ . '/api/config.env.php';
+
+$turnUrl = trim((string) getSecureConfig('WEBRTC_TURN_URL', ''));
+$turnUsername = trim((string) getSecureConfig('WEBRTC_TURN_USERNAME', ''));
+$turnCredential = trim((string) getSecureConfig('WEBRTC_TURN_CREDENTIAL', ''));
 
 // User dashboard for emergency calling options (SIM and Internet/WiFi)
 $assetBase = '../ADMIN/header/';
@@ -873,6 +878,17 @@ $assetBase = '../ADMIN/header/';
         let leafletLoadPromise = null;
         let callMessageLoggingDisabled = false;
         const CALL_LOBBY_ROOM = "emergency-lobby";
+        const WEBRTC_ICE_SERVERS = [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:global.stun.twilio.com:3478' }
+            <?php if ($turnUrl !== ''): ?>,
+            {
+                urls: <?php echo json_encode($turnUrl, JSON_UNESCAPED_SLASHES); ?>,
+                username: <?php echo json_encode($turnUsername); ?>,
+                credential: <?php echo json_encode($turnCredential); ?>
+            }
+            <?php endif; ?>
+        ];
         let activeCallRoom = null;
         let socketRetryCount = 0;
         const MAX_SOCKET_RETRIES = 5;
@@ -1010,6 +1026,13 @@ $assetBase = '../ADMIN/header/';
 
             socket.on("answer", async payload => {
                 if (!signalingPayloadMatchesActiveCall(payload)) return;
+                const isTransferAnswer = payload?.transferred === true || payload?.target === 'ers';
+                if (
+                    isTransferAnswer
+                    && payload?.negotiationId
+                    && transferNegotiationId
+                    && String(payload.negotiationId) !== transferNegotiationId
+                ) return;
                 const description = normalizeRemoteAnswer(payload);
                 if (!description) return;
                 const candidates = [transferPc, pc].filter(Boolean);
@@ -1034,7 +1057,17 @@ $assetBase = '../ADMIN/header/';
             socket.on("candidate", payload => {
                 if (!signalingPayloadMatchesActiveCall(payload)) return;
                 const cand = payload && payload.candidate ? payload.candidate : payload;
-                const targetPc = (transferInProgress && transferPc) ? transferPc : pc;
+                const isTransferCandidate = payload?.transferred === true || payload?.target === 'ers';
+                if (
+                    isTransferCandidate
+                    && payload?.negotiationId
+                    && transferNegotiationId
+                    && String(payload.negotiationId) !== transferNegotiationId
+                ) return;
+                if (transferInProgress && transferPc && !isTransferCandidate) return;
+                const targetPc = isTransferCandidate
+                    ? (transferPc || pc)
+                    : ((transferInProgress && transferPc) ? transferPc : pc);
                 addRemoteIceCandidate(targetPc, cand);
             });
 
@@ -1196,7 +1229,32 @@ $assetBase = '../ADMIN/header/';
         let messages = [];
         let audioActivityMonitors = [];
         let pendingRemoteIceCandidates = [];
+        let transferNegotiationId = '';
         let endingCall = false;
+
+        function attachRemoteCallAudio(stream) {
+            const remote = document.getElementById('remote');
+            if (!remote || !stream) return;
+            remote.srcObject = stream;
+            remote.muted = false;
+            remote.volume = 1;
+            const playback = remote.play();
+            if (playback && typeof playback.catch === 'function') {
+                playback.catch(() => {
+                    setStatus('Audio connected. Tap the call screen once to enable sound.');
+                });
+            }
+        }
+
+        function resumeRemoteCallAudio() {
+            const remote = document.getElementById('remote');
+            if (!remote || !remote.srcObject) return;
+            remote.muted = false;
+            remote.volume = 1;
+            remote.play().catch(() => {});
+        }
+
+        document.addEventListener('pointerdown', resumeRemoteCallAudio, { passive: true });
 
         function setSpeakingIndicator(labelId, indicatorId, active) {
             const label = document.getElementById(labelId);
@@ -1543,6 +1601,7 @@ $assetBase = '../ADMIN/header/';
             endingCall = false;
             transferInProgress = false;
             pendingRemoteIceCandidates = [];
+            transferNegotiationId = '';
             if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
             peerDisconnectTimer = null;
             stopTimer();
@@ -1587,6 +1646,8 @@ $assetBase = '../ADMIN/header/';
             callConversationId = null;
             callId = null;
             activeCallRoom = null;
+            const remote = document.getElementById('remote');
+            if (remote) remote.srcObject = null;
             locationData = null;
             setTimer(0);
             setStartButtonsDisabled(false);
@@ -1613,6 +1674,16 @@ $assetBase = '../ADMIN/header/';
         async function prepareTransferredCallOffer(reason = 'transfer') {
             if (!callId) return;
 
+            if (
+                transferPc
+                && !['failed', 'closed', 'disconnected'].includes(transferPc.connectionState)
+            ) {
+                // ERS may issue an immediate request plus a timeout fallback.
+                // Do not destroy an active negotiation and replace it with a
+                // second peer carrying different SDP and ICE candidates.
+                return;
+            }
+
             transferInProgress = true;
             setStatus('Transfer sent. Stay connected until the response team answers...');
             setEndEnabled(true);
@@ -1630,16 +1701,16 @@ $assetBase = '../ADMIN/header/';
 
                 const previousPc = pc;
                 transferPc = new RTCPeerConnection({
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:global.stun.twilio.com:3478' }
-                    ]
+                    iceServers: WEBRTC_ICE_SERVERS
                 });
+                transferNegotiationId = `ers_${callId}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
                 transferPc.ontrack = e => {
-                    const remote = document.getElementById('remote');
-                    const remoteStream = e.streams[0];
-                    if (remote) remote.srcObject = remoteStream;
+                    if (e.track && e.track.kind === 'audio') e.track.enabled = true;
+                    const remoteStream = e.streams?.[0]
+                        || (e.track ? new MediaStream([e.track]) : null);
+                    if (!remoteStream) return;
+                    attachRemoteCallAudio(remoteStream);
                     monitorAudioActivity(remoteStream, 'adminSpeakingLabel');
                 };
 
@@ -1647,7 +1718,14 @@ $assetBase = '../ADMIN/header/';
                     if (!e.candidate) return;
                     const s = ensureSocket();
                     if (s) {
-                        s.emit('candidate', { candidate: e.candidate, callId, room: activeCallRoom }, activeCallRoom || getCallRoom());
+                        s.emit('candidate', {
+                            candidate: typeof e.candidate.toJSON === 'function' ? e.candidate.toJSON() : e.candidate,
+                            callId,
+                            room: activeCallRoom,
+                            transferred: true,
+                            target: 'ers',
+                            negotiationId: transferNegotiationId
+                        }, activeCallRoom || getCallRoom());
                     }
                 };
 
@@ -1675,6 +1753,7 @@ $assetBase = '../ADMIN/header/';
                     }
                 };
 
+                localStream.getAudioTracks().forEach(track => { track.enabled = true; });
                 localStream.getTracks().forEach(track => transferPc.addTrack(track, localStream));
 
                 const s = ensureSocket();
@@ -1709,6 +1788,8 @@ $assetBase = '../ADMIN/header/';
                         caller,
                         location: locationData || null,
                         transferred: true,
+                        target: 'ers',
+                        negotiationId: transferNegotiationId,
                         transferReason: reason
                     }, transferRoom);
                 }
@@ -1960,21 +2041,25 @@ $assetBase = '../ADMIN/header/';
 
         function initPeer() {
             pc = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478' }
-                ]
+                iceServers: WEBRTC_ICE_SERVERS
             });
             pc.ontrack = e => {
-                const remoteStream = e.streams[0];
-                document.getElementById("remote").srcObject = remoteStream;
+                if (e.track && e.track.kind === 'audio') e.track.enabled = true;
+                const remoteStream = e.streams?.[0]
+                    || (e.track ? new MediaStream([e.track]) : null);
+                if (!remoteStream) return;
+                attachRemoteCallAudio(remoteStream);
                 monitorAudioActivity(remoteStream, 'adminSpeakingLabel');
             };
             pc.onicecandidate = e => {
                 if (!e.candidate) return;
                 const s = ensureSocket();
                 if (s) {
-                    s.emit('candidate', { candidate: e.candidate, callId, room: activeCallRoom }, activeCallRoom || getCallRoom());
+                    s.emit('candidate', {
+                        candidate: typeof e.candidate.toJSON === 'function' ? e.candidate.toJSON() : e.candidate,
+                        callId,
+                        room: activeCallRoom
+                    }, activeCallRoom || getCallRoom());
                 }
             };
             pc.onconnectionstatechange = () => {
@@ -2080,6 +2165,7 @@ $assetBase = '../ADMIN/header/';
                 initPeer();
 
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                localStream.getAudioTracks().forEach(track => { track.enabled = true; });
                 localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
                 monitorAudioActivity(localStream, 'userSpeakingLabel', 'userLocalMicIndicator');
 
