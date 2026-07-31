@@ -10,7 +10,7 @@ const activeCallsById = new Map();
 const recentMessagesByRoom = new Map();
 const CALL_LOBBY_ROOM = 'emergency-lobby';
 const TRANSFER_INBOX_ROOM = 'ers-transfer-inbox';
-const SIGNALING_PROTOCOL_VERSION = '2026-08-01.2';
+const SIGNALING_PROTOCOL_VERSION = '2026-08-01.3';
 const OFFER_TTL_MS = 60 * 60 * 1000;
 const MESSAGE_TTL_MS = 60 * 60 * 1000;
 const MAX_MESSAGES_PER_ROOM = 50;
@@ -142,6 +142,24 @@ io.on('connection', (socket) => {
           if (call.status === 'ringing' && call.offer) socket.emit('offer', call.offer);
         }
       }
+      const roomCall = Array.from(activeCallsById.values()).find((call) => call.room === room) || null;
+      if (roomCall && roomCall.callerSocketId && roomCall.callerSocketId !== socket.id) {
+        roomCall.adminSocketId = socket.id;
+        roomCall.status = 'accepted';
+        roomCall.updatedAt = Date.now();
+        const responseReady = {
+          callId: roomCall.callId,
+          call_id: roomCall.callId,
+          room,
+          role: 'response_team',
+          reason: 'response-team-room-joined',
+        };
+        // Joining the private room is the authoritative acceptance signal.
+        // This prevents a missed UI control event from leaving mobile stuck
+        // at "Waiting" even though ERS has opened the call.
+        socket.to(room).emit('dispatcher-ready', responseReady);
+        socket.to(room).emit('request-transfer-offer', responseReady);
+      }
       const recentMessages = recentMessagesByRoom.get(room) || [];
       if (recentMessages.length) socket.emit('call-message-history', recentMessages);
       if (typeof acknowledge === 'function') {
@@ -149,6 +167,8 @@ io.on('connection', (socket) => {
           ok: true,
           room,
           members: io.sockets.adapter.rooms.get(room)?.size || 0,
+          callId: roomCall?.callId || null,
+          responseTeamPresent: !!(roomCall?.adminSocketId),
           protocolVersion: SIGNALING_PROTOCOL_VERSION,
         });
       }
