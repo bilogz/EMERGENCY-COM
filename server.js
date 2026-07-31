@@ -7,9 +7,13 @@ const server = http.createServer(app);
 
 const activeOffersByRoom = new Map();
 const activeCallsById = new Map();
+const recentMessagesByRoom = new Map();
 const CALL_LOBBY_ROOM = 'emergency-lobby';
 const TRANSFER_INBOX_ROOM = 'ers-transfer-inbox';
+const SIGNALING_PROTOCOL_VERSION = '2026-08-01.2';
 const OFFER_TTL_MS = 60 * 60 * 1000;
+const MESSAGE_TTL_MS = 60 * 60 * 1000;
+const MAX_MESSAGES_PER_ROOM = 50;
 const MAX_ACTIVE_OFFERS = Number(process.env.MAX_ACTIVE_OFFERS || 500);
 const MAX_ACTIVE_CALLS = Number(process.env.MAX_ACTIVE_CALLS || 500);
 const SOCKET_DEBUG = process.env.SOCKET_DEBUG === '1';
@@ -33,6 +37,13 @@ function pruneExpiredCalls() {
   }
   for (const [callId, call] of activeCallsById.entries()) {
     if (!call || call.updatedAt < cutoff) activeCallsById.delete(callId);
+  }
+  for (const [room, messages] of recentMessagesByRoom.entries()) {
+    const current = Array.isArray(messages)
+      ? messages.filter((message) => Number(message?.serverTimestamp || 0) >= Date.now() - MESSAGE_TTL_MS)
+      : [];
+    if (current.length) recentMessagesByRoom.set(room, current.slice(-MAX_MESSAGES_PER_ROOM));
+    else recentMessagesByRoom.delete(room);
   }
   while (activeOffersByRoom.size > MAX_ACTIVE_OFFERS) {
     const oldestRoom = activeOffersByRoom.keys().next().value;
@@ -86,6 +97,7 @@ function relayHangup(socket, payload = {}, room) {
 
   if (signalRoom) {
     activeOffersByRoom.delete(signalRoom);
+    recentMessagesByRoom.delete(signalRoom);
     const payloadRoom = signalText(source.room, 180);
     if (payloadRoom && payloadRoom !== signalRoom) activeOffersByRoom.delete(payloadRoom);
     console.log(`[signal] hangup room=${signalRoom} callId=${notice.callId || ''}`);
@@ -110,8 +122,9 @@ app.get('/health', (req, res) => {
 
 io.on('connection', (socket) => {
   debugLog(`[socket] connected ${socket.id}`);
+  socket.emit('server-ready', { protocolVersion: SIGNALING_PROTOCOL_VERSION, socketId: socket.id });
 
-  socket.on('join', (room) => {
+  socket.on('join', (room, acknowledge) => {
     if (typeof room === 'string' && room.length > 0) {
       pruneExpiredCalls();
       socket.join(room);
@@ -129,6 +142,18 @@ io.on('connection', (socket) => {
           if (call.status === 'ringing' && call.offer) socket.emit('offer', call.offer);
         }
       }
+      const recentMessages = recentMessagesByRoom.get(room) || [];
+      if (recentMessages.length) socket.emit('call-message-history', recentMessages);
+      if (typeof acknowledge === 'function') {
+        acknowledge({
+          ok: true,
+          room,
+          members: io.sockets.adapter.rooms.get(room)?.size || 0,
+          protocolVersion: SIGNALING_PROTOCOL_VERSION,
+        });
+      }
+    } else if (typeof acknowledge === 'function') {
+      acknowledge({ ok: false, reason: 'Invalid room.' });
     }
   });
 
@@ -241,19 +266,72 @@ io.on('connection', (socket) => {
   socket.on('call-ended', (payload, room) => relayHangup(socket, payload, room));
   socket.on('call_ended', (payload, room) => relayHangup(socket, payload, room));
 
-  socket.on('call-message', (payload, room) => {
-    if (typeof room === 'string' && room.length > 0) {
-      debugLog(`[message] room=${room} callId=${payload?.callId || ''} sender=${payload?.sender || 'unknown'}`);
-      socket.to(room).emit('call-message', payload);
+  socket.on('call-message', (payload, room, acknowledge) => {
+    const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
+    const text = cleanText(payload?.text || payload?.message, 4000);
+    if (!signalRoom || !text) {
+      if (typeof acknowledge === 'function') acknowledge({ ok: false, reason: 'Invalid message or room.' });
+      return;
+    }
+    const storedPayload = {
+      ...(payload || {}),
+      text,
+      room: signalRoom,
+      messageId: cleanText(payload?.messageId, 160) || `${socket.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      serverTimestamp: Date.now(),
+    };
+    const messages = recentMessagesByRoom.get(signalRoom) || [];
+    if (!messages.some((message) => message.messageId === storedPayload.messageId)) {
+      messages.push(storedPayload);
+      recentMessagesByRoom.set(signalRoom, messages.slice(-MAX_MESSAGES_PER_ROOM));
+    }
+    const members = io.sockets.adapter.rooms.get(signalRoom)?.size || 0;
+    debugLog(`[message] room=${signalRoom} callId=${payload?.callId || ''} sender=${payload?.sender || 'unknown'} recipients=${Math.max(0, members - 1)}`);
+    socket.to(signalRoom).emit('call-message', storedPayload);
+    const callId = getSignalCallId(storedPayload);
+    const call = callId ? activeCallsById.get(callId) : null;
+    const targetSocketId = storedPayload.sender === 'response_team'
+      ? call?.callerSocketId
+      : call?.adminSocketId;
+    const roomMembers = io.sockets.adapter.rooms.get(signalRoom);
+    let directRecipient = false;
+    if (targetSocketId && targetSocketId !== socket.id && !roomMembers?.has(targetSocketId)) {
+      io.to(targetSocketId).emit('call-message', storedPayload);
+      directRecipient = true;
+    }
+    const recipientCount = Math.max(0, members - 1) + (directRecipient ? 1 : 0);
+    if (typeof acknowledge === 'function') {
+      acknowledge({ ok: true, queued: recipientCount === 0, recipients: recipientCount, messageId: storedPayload.messageId });
     }
   });
 
   const forwardTransferControl = (eventName) => {
-    socket.on(eventName, (payload, room) => {
+    socket.on(eventName, (payload, room, acknowledge) => {
       const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
-      if (!signalRoom) return;
+      if (!signalRoom) {
+        if (typeof acknowledge === 'function') acknowledge({ ok: false, reason: 'Missing call room.' });
+        return;
+      }
       debugLog(`[transfer-control] ${eventName} room=${signalRoom} callId=${payload?.callId || ''}`);
       socket.to(signalRoom).emit(eventName, payload);
+      // A reconnect creates a new Socket.IO connection and briefly drops room
+      // membership. resume-user-call records the new caller socket, so deliver
+      // directly as a fallback when it is not yet present in the room.
+      const callId = getSignalCallId(payload);
+      const call = callId ? activeCallsById.get(callId) : null;
+      if (call && eventName !== 'request-transfer-offer') {
+        call.adminSocketId = socket.id;
+        call.status = 'accepted';
+        call.updatedAt = Date.now();
+      }
+      const callerSocketId = call?.callerSocketId;
+      const roomMembers = io.sockets.adapter.rooms.get(signalRoom);
+      if (callerSocketId && callerSocketId !== socket.id && !roomMembers?.has(callerSocketId)) {
+        io.to(callerSocketId).emit(eventName, payload);
+      }
+      if (typeof acknowledge === 'function') {
+        acknowledge({ ok: true, room: signalRoom, callerOnline: !!callerSocketId });
+      }
     });
   };
 
