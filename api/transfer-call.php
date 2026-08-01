@@ -147,6 +147,13 @@ function responseTeamFormPayload(array $payload, string $apiKey, string $action)
     if ($event === '') {
         $event = $transferType === 'live_call' ? 'emergency_call_transfer' : 'emergency_report_transfer';
     }
+    $conversationReference = trim((string)(
+        $payload['emergencyComConversationId']
+        ?? $payload['emergency_com_conversation_id']
+        ?? $payload['conversationId']
+        ?? $payload['conversation_id']
+        ?? ''
+    ));
 
     return [
         'api_key' => $apiKey,
@@ -163,8 +170,10 @@ function responseTeamFormPayload(array $payload, string $apiKey, string $action)
         'socketUrl' => $payload['socketUrl'] ?? '',
         'socket_path' => $payload['socketPath'] ?? '/socket.io',
         'socketPath' => $payload['socketPath'] ?? '/socket.io',
-        'conversation_id' => $payload['conversationId'] ?? '',
-        'conversationId' => $payload['conversationId'] ?? '',
+        'conversation_id' => $conversationReference,
+        'conversationId' => $conversationReference,
+        'emergency_com_conversation_id' => $conversationReference,
+        'emergencyComConversationId' => $conversationReference,
         'type' => $incidentType,
         'incident_type' => $incidentType,
         'emergency_type' => $incidentType,
@@ -417,8 +426,19 @@ if ($isUserSession && !$isAdminSession && $action !== 'transfer') {
     sendJsonResponse(false, 'Forbidden: user sessions can only submit emergency transfers.', [], 403);
 }
 
-$callId = trim((string)($input['callId'] ?? ''));
-$conversationId = isset($input['conversationId']) ? (int)$input['conversationId'] : null;
+$callId = trim((string)($input['callId'] ?? $input['call_id'] ?? ''));
+$conversationIdValue = trim((string)($input['conversationId'] ?? $input['conversation_id'] ?? ''));
+$conversationId = ctype_digit($conversationIdValue) && (int)$conversationIdValue > 0
+    ? (int)$conversationIdValue
+    : null;
+$emergencyComConversationId = trim((string)(
+    $input['emergencyComConversationId']
+    ?? $input['emergency_com_conversation_id']
+    ?? $conversationIdValue
+));
+if ($emergencyComConversationId === '' && $callId !== '') {
+    $emergencyComConversationId = 'call-' . $callId;
+}
 if ($action === 'update_status') {
     $transferId = (int)($input['transferId'] ?? $input['id'] ?? 0);
     $responseStatus = strtolower(trim((string)($input['responseStatus'] ?? $input['status'] ?? '')));
@@ -639,7 +659,10 @@ $payload = [
     'latestMessage' => $latestMessage,
     'caller' => is_array($input['caller'] ?? null) ? $input['caller'] : null,
     'locationData' => is_array($input['location'] ?? null) ? $input['location'] : null,
-    'conversationId' => $conversationId,
+    'conversationId' => $emergencyComConversationId !== '' ? $emergencyComConversationId : null,
+    'conversation_id' => $emergencyComConversationId !== '' ? $emergencyComConversationId : null,
+    'emergencyComConversationId' => $emergencyComConversationId !== '' ? $emergencyComConversationId : null,
+    'emergency_com_conversation_id' => $emergencyComConversationId !== '' ? $emergencyComConversationId : null,
     'messages' => $messages,
     'requestedBy' => [
         'source' => $isAdminSession ? 'admin_session' : ($isUserSession ? 'user_session' : 'department_api'),

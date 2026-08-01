@@ -1831,10 +1831,22 @@ $assetBase = '../ADMIN/header/';
             };
         }
 
+        function emergencyComCallReference(callIdValue = callId) {
+            const normalizedCallId = String(callIdValue || '').trim();
+            return normalizedCallId ? `call-${normalizedCallId}` : '';
+        }
+
         async function notifyErsSocketTransfer(transferPayload = {}, result = {}) {
             const s = ensureSocket();
             if (!s || !callId) throw new Error('Emergency-Com call service is unavailable.');
             const transferId = transferPayload.transferId || transferPayload.transfer_id || transferPayload.callId || callId;
+            const emergencyComConversationId = String(
+                transferPayload.emergencyComConversationId
+                || transferPayload.emergency_com_conversation_id
+                || transferPayload.conversationId
+                || transferPayload.conversation_id
+                || emergencyComCallReference(callId)
+            ).trim();
             const notice = {
                 ...(transferPayload || {}),
                 event: 'emergency_call_transfer',
@@ -1845,6 +1857,10 @@ $assetBase = '../ADMIN/header/';
                 call_id_external: callId,
                 transferId,
                 transfer_id: transferId,
+                conversationId: emergencyComConversationId,
+                conversation_id: emergencyComConversationId,
+                emergencyComConversationId,
+                emergency_com_conversation_id: emergencyComConversationId,
                 room: activeCallRoom || getCallRoom(callId),
                 socketUrl: SIGNALING_URL,
                 socketPath: SOCKET_IO_PATH,
@@ -1888,6 +1904,10 @@ $assetBase = '../ADMIN/header/';
                     call_id_external: activeCallId,
                     transferId: activeCallId,
                     transfer_id: activeCallId,
+                    conversationId: emergencyComCallReference(activeCallId),
+                    conversation_id: emergencyComCallReference(activeCallId),
+                    emergencyComConversationId: emergencyComCallReference(activeCallId),
+                    emergency_com_conversation_id: emergencyComCallReference(activeCallId),
                     room: activeCallRoom || getCallRoom(activeCallId),
                     socketUrl: SIGNALING_URL,
                     socketPath: SOCKET_IO_PATH,
@@ -2104,6 +2124,10 @@ $assetBase = '../ADMIN/header/';
                     sdp: offer,
                     callId,
                     room: activeCallRoom,
+                    conversationId: emergencyComCallReference(callId),
+                    conversation_id: emergencyComCallReference(callId),
+                    emergencyComConversationId: emergencyComCallReference(callId),
+                    emergency_com_conversation_id: emergencyComCallReference(callId),
                     userId: userProfile?.id || null,
                     userName: userProfile?.name || guestCaller.name || null,
                     caller,
