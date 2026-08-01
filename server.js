@@ -10,7 +10,7 @@ const activeCallsById = new Map();
 const recentMessagesByRoom = new Map();
 const CALL_LOBBY_ROOM = 'emergency-lobby';
 const TRANSFER_INBOX_ROOM = 'ers-transfer-inbox';
-const SIGNALING_PROTOCOL_VERSION = '2026-08-01.7';
+const SIGNALING_PROTOCOL_VERSION = '2026-08-01.8';
 const OFFER_TTL_MS = 60 * 60 * 1000;
 const MESSAGE_TTL_MS = 60 * 60 * 1000;
 const MAX_MESSAGES_PER_ROOM = 50;
@@ -247,6 +247,14 @@ io.on('connection', (socket) => {
     // admin can discover it, claim it, and then join the private room.
     const targetRoom = announcementRoom || signalRoom;
     socket.to(targetRoom).emit('offer', payload);
+    const activeCall = callId ? activeCallsById.get(callId) : null;
+    const peerSocketId = activeCall
+      ? (activeCall.callerSocketId === socket.id ? activeCall.adminSocketId : activeCall.callerSocketId)
+      : null;
+    const targetMembers = io.sockets.adapter.rooms.get(targetRoom);
+    if (peerSocketId && peerSocketId !== socket.id && !targetMembers?.has(peerSocketId)) {
+      io.to(peerSocketId).emit('offer', payload);
+    }
   });
 
   socket.on('claim-call', (payload, acknowledge) => {
@@ -350,12 +358,38 @@ io.on('connection', (socket) => {
   socket.on('answer', (payload, room) => {
     const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
     debugLog(`[signal] answer room=${signalRoom} callId=${payload?.callId || ''}`);
-    if (signalRoom) socket.to(signalRoom).emit('answer', payload);
+    const callId = getSignalCallId(payload);
+    const call = callId ? activeCallsById.get(callId) : null;
+    const normalizedPayload = call
+      ? { ...(payload || {}), callId: call.callId, call_id: call.callId, room: call.room }
+      : payload;
+    const targetRoom = call?.room || signalRoom;
+    if (targetRoom) socket.to(targetRoom).emit('answer', normalizedPayload);
+    const peerSocketId = call
+      ? (call.callerSocketId === socket.id ? call.adminSocketId : call.callerSocketId)
+      : null;
+    const roomMembers = targetRoom ? io.sockets.adapter.rooms.get(targetRoom) : null;
+    if (peerSocketId && peerSocketId !== socket.id && !roomMembers?.has(peerSocketId)) {
+      io.to(peerSocketId).emit('answer', normalizedPayload);
+    }
   });
 
   socket.on('candidate', (candidate, room) => {
     const signalRoom = cleanText(candidate?.room, 180) || cleanText(room, 180);
-    if (signalRoom) socket.to(signalRoom).emit('candidate', candidate);
+    const callId = getSignalCallId(candidate);
+    const call = callId ? activeCallsById.get(callId) : null;
+    const normalizedCandidate = call
+      ? { ...(candidate || {}), callId: call.callId, call_id: call.callId, room: call.room }
+      : candidate;
+    const targetRoom = call?.room || signalRoom;
+    if (targetRoom) socket.to(targetRoom).emit('candidate', normalizedCandidate);
+    const peerSocketId = call
+      ? (call.callerSocketId === socket.id ? call.adminSocketId : call.callerSocketId)
+      : null;
+    const roomMembers = targetRoom ? io.sockets.adapter.rooms.get(targetRoom) : null;
+    if (peerSocketId && peerSocketId !== socket.id && !roomMembers?.has(peerSocketId)) {
+      io.to(peerSocketId).emit('candidate', normalizedCandidate);
+    }
   });
 
   socket.on('hangup', (payload, room) => relayHangup(socket, payload, room));
