@@ -1215,7 +1215,6 @@ $assetBase = '../ADMIN/header/';
         let transferPc = null;
         let localStream = null;
         let callId = null;
-        let callConversationId = null;
         let transferInProgress = false;
         let callStartedAt = null;
         let callConnectedAt = null;
@@ -1332,38 +1331,6 @@ $assetBase = '../ADMIN/header/';
             el.style.display = userProfile && userProfile.id ? 'none' : 'block';
         }
 
-        async function ensureCallConversationId() {
-            if (callConversationId) return callConversationId;
-
-            try {
-                const caller = currentCallCallerPayload();
-                const callerId = userProfile?.id || `web-guest-call-${callId || Date.now()}`;
-                const params = new URLSearchParams({
-                    userId: String(callerId),
-                    userName: caller?.name || 'Guest User',
-                    userEmail: caller?.email || '',
-                    userPhone: caller?.phone || '',
-                    userLocation: locationData?.address || '',
-                    userConcern: 'emergency_response',
-                    isGuest: userProfile?.id ? '0' : '1'
-                });
-                console.log('[DEBUG] Fetching conversation with params:', params.toString());
-                const res = await fetch(`api/chat-get-conversation.php?${params.toString()}`);
-                console.log('[DEBUG] Conversation API response status:', res.status);
-                const data = await res.json();
-                console.log('[DEBUG] Conversation API response data:', data);
-                if (data && data.success && data.conversationId) {
-                    callConversationId = data.conversationId;
-                    console.log('[DEBUG] Conversation ID set:', callConversationId);
-                    return callConversationId;
-                }
-            } catch (e) {
-                console.error('[DEBUG] Error fetching conversation:', e);
-            }
-
-            return null;
-        }
-
         // Messaging functions
         function addMessage(text, sender = 'user', timestamp = Date.now()) {
             const messagesContainer = document.getElementById('callMessages');
@@ -1432,32 +1399,8 @@ $assetBase = '../ADMIN/header/';
                 }, activeCallRoom || getCallRoom());
             }
             
-            // Log to database using existing chat-send structure
-            if (callMessageLoggingDisabled) return;
-            try {
-                const convId = await ensureCallConversationId();
-                if (!convId) return;
-                const formData = new FormData();
-                formData.append('text', text);
-                formData.append('userId', userProfile?.id || 'guest');
-                formData.append('userName', userProfile?.name || 'Guest User');
-                formData.append('userEmail', userProfile?.email || '');
-                formData.append('userPhone', userProfile?.phone || '');
-                if (convId) formData.append('conversationId', convId);
-                
-                const response = await fetch('api/chat-send.php', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    console.error('Failed to log message to database');
-                    callMessageLoggingDisabled = true;
-                }
-            } catch (e) {
-                console.error('Failed to log message:', e);
-                callMessageLoggingDisabled = true;
-            }
+            // Live-call text stays in the caller's private Socket.IO room.
+            // It must not create an Emergency-Com Two-Way conversation.
         }
 
         async function loadUserProfile() {
@@ -1641,7 +1584,6 @@ $assetBase = '../ADMIN/header/';
             }
             callConnectedAt = null;
             callStartedAt = null;
-            callConversationId = null;
             callId = null;
             activeCallRoom = null;
             const remote = document.getElementById('remote');
@@ -1780,7 +1722,6 @@ $assetBase = '../ADMIN/header/';
                         sdp: offer,
                         callId,
                         room: transferRoom,
-                        conversationId: callConversationId,
                         userId: userProfile?.id || null,
                         userName: userProfile?.name || guestCaller.name || null,
                         caller,
@@ -1910,9 +1851,8 @@ $assetBase = '../ADMIN/header/';
                 caller: currentCallCallerPayload(),
                 location: currentCallLocationPayload(),
                 locationData: currentCallLocationPayload(),
-                conversationId: callConversationId || null,
                 integration: result?.integration || null,
-                route: 'emergency-com-two-way',
+                route: 'emergency-com-call-relay',
                 transferredAt: new Date().toISOString()
             };
             await waitForSocketConnected(s);
@@ -1933,10 +1873,6 @@ $assetBase = '../ADMIN/header/';
             autoTransferInFlight = true;
 
             try {
-                if (!callConversationId) await ensureCallConversationId();
-                if (!callConversationId) {
-                    throw new Error('Emergency-Com could not create the Two-Way Communication record.');
-                }
                 const priority = currentLiveCallPriority();
                 const caller = currentCallCallerPayload();
                 const location = currentCallLocationPayload();
@@ -1963,8 +1899,7 @@ $assetBase = '../ADMIN/header/';
                     latestMessage: '[CALL_STARTED] Emergency live call forwarded to ERS',
                     caller,
                     location,
-                    locationData: location,
-                    conversationId: callConversationId || null
+                    locationData: location
                 };
 
                 const response = await fetch(transferApiUrl(), {
@@ -1988,18 +1923,15 @@ $assetBase = '../ADMIN/header/';
                     transfer_id: transferPayload.transfer_id,
                     room: activeCallRoom || getCallRoom(activeCallId),
                     socketUrl: SIGNALING_URL,
-                    socketPath: SOCKET_IO_PATH,
-                    conversationId: callConversationId,
-                    conversation_id: callConversationId
+                    socketPath: SOCKET_IO_PATH
                 }, data);
                 autoTransferCompletedCallId = activeCallId;
                 liveTransferSocketNotifiedCallId = activeCallId;
-                setStatus('Emergency-Com recorded this call and forwarded it to the response team.');
+                setStatus('Emergency-Com forwarded this call to the response team.');
                 await logCall('auto_transferred_to_response_team', {
                     room: activeCallRoom || getCallRoom(activeCallId),
                     socketUrl: SIGNALING_URL,
-                    socketPath: SOCKET_IO_PATH,
-                    conversationId: callConversationId || null
+                    socketPath: SOCKET_IO_PATH
                 });
             } catch (error) {
                 console.error('[call][user] automatic ERS transfer failed', error);
@@ -2046,7 +1978,6 @@ $assetBase = '../ADMIN/header/';
                 sdp: offer,
                 callId,
                 room: activeCallRoom,
-                conversationId: callConversationId,
                 userId: userProfile?.id || null,
                 userName: caller?.name || null,
                 caller,
@@ -2135,7 +2066,6 @@ $assetBase = '../ADMIN/header/';
                 callId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `call_${Date.now()}_${Math.random().toString(16).slice(2)}`;
                 activeCallRoom = getCallRoom(callId);
                 callStartedAt = Date.now();
-                callConversationId = null;
                 setStartButtonsDisabled(true);
                 s.emit("join", activeCallRoom);
                 logCall('started');
@@ -2150,22 +2080,8 @@ $assetBase = '../ADMIN/header/';
                     }
                 }).catch(() => {});
 
-                // Emergency-Com owns this call before the private room can be
-                // routed to ERS. This creates one Two-Way Communication thread
-                // for registered and guest callers without opening an admin UI.
-                const convId = await ensureCallConversationId();
-                if (!convId) {
-                    throw new Error('Emergency-Com could not create the Two-Way Communication record.');
-                }
-                const formData = new FormData();
-                formData.append('text', '[CALL_STARTED] Emergency call initiated via Internet calling');
-                formData.append('userId', userProfile?.id || `web-guest-call-${callId}`);
-                formData.append('userName', userProfile?.name || getGuestCallerInfo().name || 'Guest User');
-                formData.append('userEmail', userProfile?.email || '');
-                formData.append('userPhone', userProfile?.phone || '');
-                formData.append('conversationId', convId);
-                formData.append('userConcern', 'emergency_response');
-                await fetch('api/chat-send.php', { method: 'POST', body: formData }).catch(() => null);
+                // Emergency-Com only relays this call. The unique room is sent
+                // to ERS; no Two-Way Communication record is created here.
 
                 initPeer();
 
@@ -2188,7 +2104,6 @@ $assetBase = '../ADMIN/header/';
                     sdp: offer,
                     callId,
                     room: activeCallRoom,
-                    conversationId: callConversationId,
                     userId: userProfile?.id || null,
                     userName: userProfile?.name || guestCaller.name || null,
                     caller,
