@@ -28,14 +28,39 @@ $turnUrl = trim((string) getSecureConfig('WEBRTC_TURN_URL', ''));
 $turnUsername = trim((string) getSecureConfig('WEBRTC_TURN_USERNAME', ''));
 $turnCredential = trim((string) getSecureConfig('WEBRTC_TURN_CREDENTIAL', ''));
 
+// Use the live gitignored ADMIN configuration as the final fallback. This
+// avoids a blank USERS override silently downgrading mobile calls to STUN-only.
+if ($turnUrl === '' || $turnUsername === '' || $turnCredential === '') {
+    $adminConfigPath = dirname(__DIR__) . '/ADMIN/api/config.local.php';
+    if (is_file($adminConfigPath)) {
+        $adminConfig = require $adminConfigPath;
+        if (is_array($adminConfig)) {
+            $turnUrl = $turnUrl !== '' ? $turnUrl : trim((string)($adminConfig['WEBRTC_TURN_URL'] ?? ''));
+            $turnUsername = $turnUsername !== '' ? $turnUsername : trim((string)($adminConfig['WEBRTC_TURN_USERNAME'] ?? ''));
+            $turnCredential = $turnCredential !== '' ? $turnCredential : trim((string)($adminConfig['WEBRTC_TURN_CREDENTIAL'] ?? ''));
+        }
+    }
+}
+
 if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredential !== '') {
+    $turnUrls = [$turnUrl];
+    if (preg_match('/^turns?:(?:\/\/)?([^:\/?]+)/i', $turnUrl, $hostMatch)) {
+        $turnHost = strtolower($hostMatch[1]);
+        if ($turnHost === 'global.relay.metered.ca') {
+            $turnUrls = [
+                'turn:' . $turnHost . ':80',
+                'turn:' . $turnHost . ':80?transport=tcp',
+                'turn:' . $turnHost . ':443',
+                'turns:' . $turnHost . ':443?transport=tcp',
+            ];
+        }
+    }
     $iceServers[] = [
-        'urls' => $turnUrl,
+        'urls' => array_values(array_unique($turnUrls)),
         'username' => $turnUsername,
         'credential' => $turnCredential,
     ];
 }
-
 echo json_encode([
     'success' => true,
     'data' => [

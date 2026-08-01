@@ -108,6 +108,9 @@ function getSecureConfig($key, $default = null) {
             'CHATBOT_NEON_HOST',
             'CHATBOT_NEON_DB',
             'CHATBOT_NEON_USER',
+            'WEBRTC_TURN_URL',
+            'WEBRTC_TURN_USERNAME',
+            'WEBRTC_TURN_CREDENTIAL',
         ];
         foreach ($userLocal as $cfgKey => $cfgValue) {
             if (
