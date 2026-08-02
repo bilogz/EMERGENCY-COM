@@ -906,13 +906,86 @@ document.addEventListener('DOMContentLoaded', function() {
         badge.setAttribute('aria-label', badge.textContent);
     }
 
-    function updateSidebarCommunicationBadges({ reports, generalEnquiries } = {}) {
-        if (typeof reports !== 'undefined') {
-            setSidebarCommunicationBadge('sidebarReportsUnreadBadge', reports);
+    const SIDEBAR_COMMUNICATION_STORAGE_PREFIX = 'adminCommunicationSeen:<?php echo (int)($_SESSION['admin_user_id'] ?? 0); ?>:';
+    const sidebarCommunicationScopes = {
+        reports: {
+            badgeId: 'sidebarReportsUnreadBadge',
+            storageKey: SIDEBAR_COMMUNICATION_STORAGE_PREFIX + 'reports'
+        },
+        generalEnquiries: {
+            badgeId: 'sidebarGeneralUnreadBadge',
+            storageKey: SIDEBAR_COMMUNICATION_STORAGE_PREFIX + 'generalEnquiries'
         }
-        if (typeof generalEnquiries !== 'undefined') {
-            setSidebarCommunicationBadge('sidebarGeneralUnreadBadge', generalEnquiries);
+    };
+
+    function readCommunicationSeenId(scope) {
+        try {
+            const value = localStorage.getItem(scope.storageKey);
+            if (value === null) return null;
+            const parsed = parseInt(value, 10);
+            return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+        } catch (error) {
+            return null;
         }
+    }
+
+    function writeCommunicationSeenId(scope, latestMessageId) {
+        const safeId = Math.max(0, parseInt(latestMessageId || 0, 10));
+        try {
+            localStorage.setItem(scope.storageKey, String(safeId));
+        } catch (error) {
+            console.warn('Unable to save sidebar notification state:', error);
+        }
+    }
+
+    function applySidebarCommunicationPayload(payload = {}) {
+        const values = {
+            reports: {
+                count: payload.reportNew ?? payload.report_new ?? 0,
+                latest: payload.reportLatestMessageId ?? payload.report_latest_message_id ?? 0
+            },
+            generalEnquiries: {
+                count: payload.generalEnquiryNew ?? payload.general_enquiry_new ?? 0,
+                latest: payload.generalEnquiryLatestMessageId ?? payload.general_enquiry_latest_message_id ?? 0
+            }
+        };
+
+        Object.entries(sidebarCommunicationScopes).forEach(([name, scope]) => {
+            const badge = document.getElementById(scope.badgeId);
+            if (!badge) return;
+
+            const latest = Math.max(0, parseInt(values[name].latest || 0, 10));
+            const seen = readCommunicationSeenId(scope);
+            const isCurrentModule = badge.dataset.activeModule === '1';
+            badge.dataset.latestMessageId = String(latest);
+
+            // First load establishes a baseline. Visiting the module acknowledges
+            // everything currently visible without changing conversation read state.
+            if (seen === null || isCurrentModule) {
+                writeCommunicationSeenId(scope, latest);
+                setSidebarCommunicationBadge(scope.badgeId, 0);
+                return;
+            }
+
+            const count = latest > seen
+                ? Math.max(0, parseInt(values[name].count || 0, 10))
+                : 0;
+            setSidebarCommunicationBadge(scope.badgeId, count);
+        });
+    }
+
+    function addCommunicationCursorParams(url, useRealtimeNames = false) {
+        const reportSeen = readCommunicationSeenId(sidebarCommunicationScopes.reports) ?? 0;
+        const generalSeen = readCommunicationSeenId(sidebarCommunicationScopes.generalEnquiries) ?? 0;
+        url.searchParams.set(
+            useRealtimeNames ? 'reportAfterMessageId' : 'report_after_message_id',
+            String(reportSeen)
+        );
+        url.searchParams.set(
+            useRealtimeNames ? 'generalAfterMessageId' : 'general_after_message_id',
+            String(generalSeen)
+        );
+        return url;
     }
 
     function markHeaderNotificationsRead(reload = false) {
@@ -925,7 +998,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function loadHeaderNotifications() {
         const bellBtn = document.getElementById('headerNotificationBtn');
-        if (!bellBtn || !window.API_BASE_PATH) return;
+        if (!bellBtn || !window.API_BASE_PATH) return Promise.resolve();
 
         let lastRead = parseInt(localStorage.getItem('systemNotificationsLastRead') || '0', 10);
         if (!Number.isFinite(lastRead) || lastRead <= 0) {
@@ -933,8 +1006,10 @@ document.addEventListener('DOMContentLoaded', function() {
             localStorage.setItem('systemNotificationsLastRead', String(lastRead));
         }
 
-        const url = `${window.API_BASE_PATH}header-notifications.php?since=${encodeURIComponent(String(lastRead))}`;
-        fetch(url)
+        const url = new URL(`${window.API_BASE_PATH}header-notifications.php`, window.location.href);
+        url.searchParams.set('since', String(lastRead));
+        addCommunicationCursorParams(url);
+        return fetch(url.toString())
             .then(res => res.json())
             .then(data => {
                 if (!data || !data.success) return;
@@ -948,10 +1023,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     notifications: Number.isFinite(notificationUnread) ? notificationUnread : 0,
                     messages: Number.isFinite(messageUnread) ? messageUnread : 0
                 });
-                updateSidebarCommunicationBadges({
-                    reports: data.report_unread || 0,
-                    generalEnquiries: data.general_enquiry_unread || 0
-                });
+                applySidebarCommunicationPayload(data);
 
                 const list = Array.isArray(data.notifications)
                     ? data.notifications
@@ -972,7 +1044,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Initial fetch + refresh
-    loadHeaderNotifications();
+    const initialHeaderNotificationsRequest = loadHeaderNotifications();
     setInterval(() => {
         if (!document.hidden) loadHeaderNotifications();
     }, HEADER_NOTIFICATION_POLL_MS);
@@ -984,14 +1056,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!document.getElementById('sidebarReportsUnreadBadge')
             && !document.getElementById('sidebarGeneralUnreadBadge')) return;
 
-        const source = new EventSource(window.API_BASE_PATH + 'realtime.php');
+        const realtimeUrl = new URL(window.API_BASE_PATH + 'realtime.php', window.location.href);
+        addCommunicationCursorParams(realtimeUrl, true);
+        const source = new EventSource(realtimeUrl.toString());
         const applyUnreadPayload = (event) => {
             try {
                 const data = JSON.parse(event.data || '{}');
-                updateSidebarCommunicationBadges({
-                    reports: data.reportUnread || 0,
-                    generalEnquiries: data.generalEnquiryUnread || 0
-                });
+                applySidebarCommunicationPayload(data);
             } catch (error) {
                 console.warn('Sidebar unread update failed:', error);
             }
@@ -1005,16 +1076,31 @@ document.addEventListener('DOMContentLoaded', function() {
         window.addEventListener('beforeunload', () => source.close(), { once: true });
     }
 
+    Object.values(sidebarCommunicationScopes).forEach((scope) => {
+        const badge = document.getElementById(scope.badgeId);
+        const link = badge?.closest('a');
+        if (!badge || !link) return;
+        link.addEventListener('click', () => {
+            writeCommunicationSeenId(scope, badge.dataset.latestMessageId || 0);
+            setSidebarCommunicationBadge(scope.badgeId, 0);
+        });
+    });
+
     const viewAllReportsLink = document.getElementById('headerViewAllReportsLink');
     if (viewAllReportsLink) {
         viewAllReportsLink.href = `${window.APP_BASE_PATH || ''}/ADMIN/sidebar/two-way-comm/citizen/`;
     }
     
-    // Initialize on page load
+    function startGlobalChatNotifications() {
+        Promise.resolve(initialHeaderNotificationsRequest)
+            .finally(initGlobalChatNotifications);
+    }
+
+    // Initialize realtime only after the first fetch establishes the seen cursors.
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initGlobalChatNotifications);
+        document.addEventListener('DOMContentLoaded', startGlobalChatNotifications);
     } else {
-        initGlobalChatNotifications();
+        startGlobalChatNotifications();
     }
 });
 </script>

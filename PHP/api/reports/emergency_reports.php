@@ -182,7 +182,10 @@ try {
             $ipAddress = trim(explode(',', $ipAddress)[0]);
         }
         $conversationValues = [
-            $user_id > 0 ? $user_id : null,
+            // conversations.user_id is NOT NULL in the deployed schema. Give
+            // anonymous reports a stable per-report identity so their messages
+            // remain attached to the same Two-Way Communication thread.
+            $user_id > 0 ? (string)$user_id : 'guest-report-' . $reportId,
             $user_name,
             $user_email !== '' ? $user_email : null,
             $user_phone !== '' ? $user_phone : null,

@@ -52,6 +52,8 @@ function sse_emit($event, $data) {
 $conversationId = isset($_GET['conversationId']) ? (int)$_GET['conversationId'] : 0;
 $lastMessageId = isset($_GET['lastMessageId']) ? (int)$_GET['lastMessageId'] : 0;
 $scope = strtolower(trim((string)($_GET['scope'] ?? '')));
+$reportAfterMessageId = max(0, (int)($_GET['reportAfterMessageId'] ?? 0));
+$generalAfterMessageId = max(0, (int)($_GET['generalAfterMessageId'] ?? 0));
 $scopeParams = [];
 $scopeSql = twc_scope_filter_clause($scope, $scopeParams, 'c');
 $trashSql = twc_not_trashed_clause($pdo, 'c');
@@ -86,7 +88,25 @@ $unreadSql = "
         COUNT(DISTINCT CASE
             WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) IN (" . implode(', ', array_map([$pdo, 'quote'], twc_general_enquiry_concerns())) . ")
             THEN c.conversation_id END
-        ) AS general_enquiry_unread
+        ) AS general_enquiry_unread,
+        COALESCE(MAX(CASE
+            WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) NOT IN (" . implode(', ', array_map([$pdo, 'quote'], twc_general_enquiry_concerns())) . ")
+            THEN m.message_id ELSE 0 END
+        ), 0) AS report_latest_message_id,
+        COALESCE(MAX(CASE
+            WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) IN (" . implode(', ', array_map([$pdo, 'quote'], twc_general_enquiry_concerns())) . ")
+            THEN m.message_id ELSE 0 END
+        ), 0) AS general_latest_message_id,
+        COUNT(DISTINCT CASE
+            WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) NOT IN (" . implode(', ', array_map([$pdo, 'quote'], twc_general_enquiry_concerns())) . ")
+              AND m.message_id > {$reportAfterMessageId}
+            THEN c.conversation_id END
+        ) AS report_new,
+        COUNT(DISTINCT CASE
+            WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) IN (" . implode(', ', array_map([$pdo, 'quote'], twc_general_enquiry_concerns())) . ")
+              AND m.message_id > {$generalAfterMessageId}
+            THEN c.conversation_id END
+        ) AS general_enquiry_new
     FROM conversations c
     JOIN chat_messages m ON c.conversation_id = m.conversation_id
     WHERE c.status IN (" . twc_placeholders($activeStatuses) . ")
@@ -103,6 +123,8 @@ $lastUnreadConversationCount = (int)($unreadRow['unread_conversations'] ?? 0);
 $lastUnreadMessageId = (int)($unreadRow['latest_message_id'] ?? 0);
 $lastReportUnread = (int)($unreadRow['report_unread'] ?? 0);
 $lastGeneralEnquiryUnread = (int)($unreadRow['general_enquiry_unread'] ?? 0);
+$lastReportLatestMessageId = (int)($unreadRow['report_latest_message_id'] ?? 0);
+$lastGeneralLatestMessageId = (int)($unreadRow['general_latest_message_id'] ?? 0);
 
 sse_emit('ready', [
     'conversationId' => $conversationId > 0 ? $conversationId : null,
@@ -113,6 +135,10 @@ sse_emit('ready', [
     'latestMessageId' => $lastUnreadMessageId,
     'reportUnread' => $lastReportUnread,
     'generalEnquiryUnread' => $lastGeneralEnquiryUnread,
+    'reportNew' => (int)($unreadRow['report_new'] ?? 0),
+    'generalEnquiryNew' => (int)($unreadRow['general_enquiry_new'] ?? 0),
+    'reportLatestMessageId' => $lastReportLatestMessageId,
+    'generalEnquiryLatestMessageId' => $lastGeneralLatestMessageId,
 ]);
 
 $maxLoops = 10; // ~30s @ 3s interval
@@ -158,15 +184,21 @@ for ($i = 0; $i < $maxLoops; $i++) {
     $latestUnreadMessageId = (int)($unreadRow['latest_message_id'] ?? 0);
     $reportUnread = (int)($unreadRow['report_unread'] ?? 0);
     $generalEnquiryUnread = (int)($unreadRow['general_enquiry_unread'] ?? 0);
+    $reportLatestMessageId = (int)($unreadRow['report_latest_message_id'] ?? 0);
+    $generalLatestMessageId = (int)($unreadRow['general_latest_message_id'] ?? 0);
     if ($unread !== $lastUnread
         || $latestUnreadMessageId !== $lastUnreadMessageId
         || $reportUnread !== $lastReportUnread
-        || $generalEnquiryUnread !== $lastGeneralEnquiryUnread) {
+        || $generalEnquiryUnread !== $lastGeneralEnquiryUnread
+        || $reportLatestMessageId !== $lastReportLatestMessageId
+        || $generalLatestMessageId !== $lastGeneralLatestMessageId) {
         $lastUnread = $unread;
         $lastUnreadConversationCount = $unreadConversationCount;
         $lastUnreadMessageId = $latestUnreadMessageId;
         $lastReportUnread = $reportUnread;
         $lastGeneralEnquiryUnread = $generalEnquiryUnread;
+        $lastReportLatestMessageId = $reportLatestMessageId;
+        $lastGeneralLatestMessageId = $generalLatestMessageId;
         sse_emit('conversation:unread', [
             'unreadCount' => $unread,
             'unreadMessageCount' => $unread,
@@ -174,6 +206,10 @@ for ($i = 0; $i < $maxLoops; $i++) {
             'latestMessageId' => $latestUnreadMessageId,
             'reportUnread' => $reportUnread,
             'generalEnquiryUnread' => $generalEnquiryUnread,
+            'reportNew' => (int)($unreadRow['report_new'] ?? 0),
+            'generalEnquiryNew' => (int)($unreadRow['general_enquiry_new'] ?? 0),
+            'reportLatestMessageId' => $reportLatestMessageId,
+            'generalEnquiryLatestMessageId' => $generalLatestMessageId,
         ]);
     }
 

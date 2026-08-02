@@ -276,22 +276,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 <p><?php echo htmlspecialchars($pageDescription); ?></p>
             </div>
 
-            <?php if ($pageMode === 'citizen_reports'): ?><div class="twc-primary-switch" id="twcPrimarySwitch" aria-label="Report views">
-                <button type="button" class="twc-primary-chip active" data-twc-view="conversations">
-                    <i class="fas fa-comments"></i>
-                    <span>Conversations</span>
-                </button>
-                <button type="button" class="twc-primary-chip" data-twc-view="chatbotLogs">
-                    <i class="fas fa-robot"></i>
-                    <span>Chatbot Logs</span>
-                </button>
-                <button type="button" class="twc-primary-chip" data-twc-view="transfers">
-                    <i class="fas fa-share-from-square"></i>
-                    <span>Transferred</span>
-                </button>
-            </div>
-
-            <?php endif; ?><div class="twc-new-message-notice" id="twcNewMessageNotice" role="status" aria-live="polite" hidden>
+            <div class="twc-new-message-notice" id="twcNewMessageNotice" role="status" aria-live="polite" hidden>
                 <div class="twc-new-message-notice__content">
                     <i class="fas fa-comment-dots" aria-hidden="true"></i>
                     <div>
@@ -1941,24 +1926,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (typeof window.updateHeaderBadges === 'function') {
                 window.updateHeaderBadges({ messages: count });
             }
-
-            const sidebarLinks = document.querySelectorAll('.sidebar-menu li a');
-            sidebarLinks.forEach(link => {
-                const targetRoute = PAGE_MODE === 'general_enquiries' ? 'two-way-comm/general' : 'two-way-comm/citizen';
-                if (link.href.includes(targetRoute)) {
-                    let badge = link.querySelector('.sidebar-badge');
-                    if (!badge) {
-                        badge = document.createElement('span');
-                        badge.className = 'sidebar-badge';
-                        badge.style.cssText = 'background: #ff5252; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7rem; margin-left: auto; display: none;';
-                        link.appendChild(badge);
-                        link.style.display = 'flex';
-                        link.style.alignItems = 'center';
-                    }
-                    badge.textContent = count;
-                    badge.style.display = count > 0 ? 'inline-block' : 'none';
-                }
-            });
         }
 
         function handleUnreadCount(rawCount, latestMessageId = null) {
@@ -3417,12 +3384,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 });
             }
 
-            const initialView = new URLSearchParams(window.location.search).get('view');
-            if (PAGE_MODE === 'citizen_reports' && (initialView === 'chatbotLogs' || initialView === 'transfers')) {
-                setPrimaryView(initialView, false);
-            } else {
-                setPrimaryView('conversations', false);
-            }
+            setPrimaryView('conversations', true);
 
             loadConversations(true);
             connectTwoWayRealtime();

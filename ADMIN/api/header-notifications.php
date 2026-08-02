@@ -117,6 +117,10 @@ $incidentUnread = 0;
 $messageUnread = 0;
 $reportUnread = 0;
 $generalEnquiryUnread = 0;
+$reportNew = 0;
+$generalEnquiryNew = 0;
+$reportLatestMessageId = 0;
+$generalEnquiryLatestMessageId = 0;
 $systemNotifications = [];
 $incidentNotifications = [];
 
@@ -264,17 +268,37 @@ try {
         $messageUnread = (int)$messageUnreadStmt->fetchColumn();
 
         $generalConcerns = twc_general_enquiry_concerns();
-        $generalPlaceholders = twc_placeholders($generalConcerns);
+        $generalQuoted = implode(', ', array_map([$pdo, 'quote'], $generalConcerns));
+        $reportAfterMessageId = max(0, (int)($_GET['report_after_message_id'] ?? 0));
+        $generalAfterMessageId = max(0, (int)($_GET['general_after_message_id'] ?? 0));
         $scopedUnreadStmt = $pdo->prepare("
             SELECT
                 COUNT(DISTINCT CASE
-                    WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) NOT IN ($generalPlaceholders)
+                    WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) NOT IN ($generalQuoted)
                     THEN c.conversation_id END
                 ) AS report_unread,
                 COUNT(DISTINCT CASE
-                    WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) IN ($generalPlaceholders)
+                    WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) IN ($generalQuoted)
                     THEN c.conversation_id END
-                ) AS general_enquiry_unread
+                ) AS general_enquiry_unread,
+                COALESCE(MAX(CASE
+                    WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) NOT IN ($generalQuoted)
+                    THEN m.message_id ELSE 0 END
+                ), 0) AS report_latest_message_id,
+                COALESCE(MAX(CASE
+                    WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) IN ($generalQuoted)
+                    THEN m.message_id ELSE 0 END
+                ), 0) AS general_latest_message_id,
+                COUNT(DISTINCT CASE
+                    WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) NOT IN ($generalQuoted)
+                      AND m.message_id > {$reportAfterMessageId}
+                    THEN c.conversation_id END
+                ) AS report_new,
+                COUNT(DISTINCT CASE
+                    WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) IN ($generalQuoted)
+                      AND m.message_id > {$generalAfterMessageId}
+                    THEN c.conversation_id END
+                ) AS general_enquiry_new
             FROM conversations c
             JOIN chat_messages m ON c.conversation_id = m.conversation_id
             WHERE c.status IN ($statusPlaceholders)
@@ -282,10 +306,14 @@ try {
               AND LOWER(COALESCE(m.sender_type, '')) <> 'admin'
               {$trashSql}
         ");
-        $scopedUnreadStmt->execute(array_merge($generalConcerns, $generalConcerns, $activeStatuses));
+        $scopedUnreadStmt->execute($activeStatuses);
         $scopedUnread = $scopedUnreadStmt->fetch(PDO::FETCH_ASSOC) ?: [];
         $reportUnread = (int)($scopedUnread['report_unread'] ?? 0);
         $generalEnquiryUnread = (int)($scopedUnread['general_enquiry_unread'] ?? 0);
+        $reportNew = (int)($scopedUnread['report_new'] ?? 0);
+        $generalEnquiryNew = (int)($scopedUnread['general_enquiry_new'] ?? 0);
+        $reportLatestMessageId = (int)($scopedUnread['report_latest_message_id'] ?? 0);
+        $generalEnquiryLatestMessageId = (int)($scopedUnread['general_latest_message_id'] ?? 0);
 
         $hasIncidentPriorityLevel = header_column_exists($pdo, 'conversations', 'incident_priority_level');
         $hasIncidentPriorityScore = header_column_exists($pdo, 'conversations', 'incident_priority_score');
@@ -425,6 +453,10 @@ echo json_encode([
     'message_unread' => $messageUnread,
     'report_unread' => $reportUnread,
     'general_enquiry_unread' => $generalEnquiryUnread,
+    'report_new' => $reportNew,
+    'general_enquiry_new' => $generalEnquiryNew,
+    'report_latest_message_id' => $reportLatestMessageId,
+    'general_enquiry_latest_message_id' => $generalEnquiryLatestMessageId,
     'notification_unread' => $notificationUnread,
     'system_notifications' => $systemNotifications,
     'incident_notifications' => $incidentNotifications,

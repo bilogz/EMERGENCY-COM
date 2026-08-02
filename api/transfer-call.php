@@ -735,9 +735,6 @@ if ($targetUrl === '') {
         if ($requestedTransferType === 'live_call') {
             $pdo->prepare("UPDATE conversations SET last_message = '[AUTO_TRANSFERRED_TO_ERS] Live call routed to ERS', updated_at = NOW() WHERE conversation_id = ?")
                 ->execute([$conversationId]);
-        } else {
-            $pdo->prepare("UPDATE conversations SET status = 'closed', last_message = '[TRANSFERRED] Report transferred to response team', updated_at = NOW() WHERE conversation_id = ?")
-                ->execute([$conversationId]);
         }
     }
     sendJsonResponse(
@@ -813,8 +810,11 @@ if ($conversationId && $status === 'sent') {
         $pdo->prepare("UPDATE conversations SET last_message = '[AUTO_TRANSFERRED_TO_ERS] Live call routed to ERS', updated_at = NOW() WHERE conversation_id = ?")
             ->execute([$conversationId]);
     } else {
-        $pdo->prepare("UPDATE conversations SET status = 'closed', last_message = '[TRANSFERRED] Report transferred to response team', updated_at = NOW() WHERE conversation_id = ?")
-            ->execute([$conversationId]);
+        $pendingStatus = function_exists('twc_status_for_db')
+            ? twc_status_for_db($pdo, 'waiting_user')
+            : 'waiting_user';
+        $pdo->prepare("UPDATE conversations SET status = ?, assigned_to = NULL, last_message = '[TRANSFERRED_PENDING] Report transferred to ERS; awaiting response status', updated_at = NOW() WHERE conversation_id = ?")
+            ->execute([$pendingStatus, $conversationId]);
     }
 }
 

@@ -51,12 +51,12 @@ function syncTransferredReportWorkflow(PDO $pdo, array $input): void
     }
     $rawStatus = strtolower(trim((string)($audit['response_status'] ?? '')));
     if ($action === 'transfer' && $rawStatus === '') {
-        $rawStatus = 'received';
+        $rawStatus = 'pending';
     }
     $statusMap = [
         'new' => 'received',
-        'pending' => 'received',
-        'requested' => 'received',
+        'pending' => 'pending',
+        'requested' => 'pending',
         'received' => 'received',
         'assigned' => 'dispatching',
         'acknowledged' => 'dispatching',
@@ -72,16 +72,12 @@ function syncTransferredReportWorkflow(PDO $pdo, array $input): void
     ];
     $status = $statusMap[str_replace(' ', '_', $rawStatus)] ?? 'received';
     $note = trim((string)($audit['response_status_note'] ?? ''));
-    $label = ucwords(str_replace('_', ' ', $status));
+    $label = $status === 'pending' ? 'Pending ERS Status' : ucwords(str_replace('_', ' ', $status));
     $message = '[ERS_STATUS]' . $label . ($note !== '' ? ': ' . $note : '');
     $workflow = $status === 'completed' ? 'resolved' : 'waiting_user';
     $hasResponseStatus = ensureTransferredReportStatusColumn($pdo);
 
     $pdo->beginTransaction();
-    if ($auditId > 0 && trim((string)($audit['response_status'] ?? '')) === '') {
-        $pdo->prepare("UPDATE transfer_call_audit SET response_status = 'received', status_updated_at = NOW() WHERE id = ?")
-            ->execute([$auditId]);
-    }
     $pdo->prepare("
         UPDATE conversations
         SET status = ?, assigned_to = NULL, last_message = ?, last_message_time = NOW(), updated_at = NOW()
@@ -110,6 +106,7 @@ function syncTransferredReportWorkflow(PDO $pdo, array $input): void
     $reportId = is_array($deviceInfo) ? (int)($deviceInfo['incident_report_id'] ?? 0) : 0;
     if ($reportId > 0) {
         $legacyStatus = match ($status) {
+            'pending' => 'pending',
             'received' => 'pending',
             'dispatching', 'ongoing_dispatch' => 'in_progress',
             'completed' => 'resolved',
