@@ -1,13 +1,9 @@
 <?php
 /**
- * Log and Audit Trail for Sent Notifications Page
- * Track and audit all sent notifications for accountability and compliance
+ * Unified admin audit trail.
  */
 
-// Start session and check authentication
 session_start();
-
-// Check if user is logged in
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
     header('Location: ../login.php');
     exit();
@@ -32,18 +28,12 @@ $pageTitle = 'Log and Audit Trail';
     <link rel="stylesheet" href="css/hero.css">
     <link rel="stylesheet" href="css/sidebar-footer.css">
     <link rel="stylesheet" href="css/modules.css">
-        <link rel="stylesheet" href="css/module-audit-trail.css?v=<?php echo filemtime(__DIR__ . '/css/module-audit-trail.css'); ?>">
+    <link rel="stylesheet" href="css/module-audit-trail.css?v=<?php echo filemtime(__DIR__ . '/css/module-audit-trail.css'); ?>">
 </head>
 <body>
-    <!-- Include Sidebar Component -->
     <?php include 'includes/sidebar.php'; ?>
-
-    <!-- Include Admin Header Component -->
     <?php include 'includes/admin-header.php'; ?>
-    
-    <!-- ===================================
-       MAIN CONTENT - Log and Audit Trail
-       =================================== -->
+
     <div class="main-content">
         <div class="main-container">
             <div class="title">
@@ -55,44 +45,51 @@ $pageTitle = 'Log and Audit Trail';
                         <li class="breadcrumb-item active" aria-current="page">Log and Audit Trail</li>
                     </ol>
                 </nav>
-                <h1><i class="fas fa-history" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> Log and Audit Trail</h1>
-                <p>Comprehensive logging and audit trail system to track all sent notifications for accountability, compliance, and system monitoring.</p>
+                <h1><i class="fas fa-history audit-title-icon"></i> Log and Audit Trail</h1>
+                <p>Review notification activity, admin handovers, deleted reports and enquiries, and transfers sent to the Emergency Response System.</p>
             </div>
-            
+
             <div class="sub-container">
                 <div class="page-content">
-                    <!-- Audit Statistics -->
-                    <div class="module-card">
+                    <section class="module-card" aria-labelledby="auditAnalyticsTitle">
                         <div class="module-card-header">
-                            <h2><i class="fas fa-chart-line"></i> Audit Statistics</h2>
+                            <h2 id="auditAnalyticsTitle"><i class="fas fa-chart-line"></i> Audit Analytics</h2>
                         </div>
                         <div class="stat-grid">
                             <div class="stat-card">
-                                <div class="stat-value" id="totalNotifications" style="color: #3a7675;">0</div>
-                                <div class="stat-label">Total Notifications</div>
+                                <div class="stat-value audit-stat-total" id="totalAuditRecords">0</div>
+                                <div class="stat-label" id="totalAuditLabel">Total Notifications</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-value" id="successfulNotifications" style="color: #2ecc71;">0</div>
-                                <div class="stat-label">Successful</div>
+                                <div class="stat-value audit-stat-success" id="successfulAuditRecords">0</div>
+                                <div class="stat-label" id="successfulAuditLabel">Successful</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-value" id="failedNotifications" style="color: #e74c3c;">0</div>
-                                <div class="stat-label">Failed</div>
+                                <div class="stat-value audit-stat-failed" id="failedAuditRecords">0</div>
+                                <div class="stat-label" id="failedAuditLabel">Failed</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-value" id="todayNotifications" style="color: #3498db;">0</div>
-                                <div class="stat-label">Sent Today</div>
+                                <div class="stat-value audit-stat-today" id="todayAuditRecords">0</div>
+                                <div class="stat-label" id="todayAuditLabel">Sent Today</div>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
-                    <!-- Filters -->
-                    <div class="module-card">
+                    <section class="module-card" aria-labelledby="auditFiltersTitle">
                         <div class="module-card-header">
-                            <h2><i class="fas fa-filter"></i> Filters</h2>
+                            <h2 id="auditFiltersTitle"><i class="fas fa-filter"></i> Filters</h2>
                         </div>
                         <div class="module-card-content">
-                            <form id="filterForm" class="filter-grid">
+                            <div id="filterForm" class="filter-grid audit-filter-grid">
+                                <div class="form-group audit-type-filter">
+                                    <label for="filterTrailType">Audit Trail</label>
+                                    <select id="filterTrailType" name="trail_type">
+                                        <option value="notifications">Notification Trails</option>
+                                        <option value="handovers">Admin Handover Trails</option>
+                                        <option value="deletions">Deleted Reports and Enquiries</option>
+                                        <option value="ers_transfers">Reports Transferred to ERS</option>
+                                    </select>
+                                </div>
                                 <div class="form-group">
                                     <label for="filterDateFrom">Date From</label>
                                     <input type="date" id="filterDateFrom" name="date_from">
@@ -101,149 +98,159 @@ $pageTitle = 'Log and Audit Trail';
                                     <label for="filterDateTo">Date To</label>
                                     <input type="date" id="filterDateTo" name="date_to">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" id="filterChannelGroup">
                                     <label for="filterChannel">Channel</label>
                                     <select id="filterChannel" name="channel">
                                         <option value="">All Channels</option>
                                         <option value="sms">SMS</option>
                                         <option value="email">Email</option>
                                         <option value="pa">PA System</option>
+                                        <option value="push">Push</option>
+                                        <option value="chat_risk">Chat Risk</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="filterStatus">Status</label>
-                                    <select id="filterStatus" name="status">
-                                        <option value="">All Status</option>
-                                        <option value="success">Success</option>
-                                        <option value="failed">Failed</option>
-                                        <option value="pending">Pending</option>
-                                    </select>
+                                    <label for="filterStatus" id="filterStatusLabel">Status</label>
+                                    <select id="filterStatus" name="status"></select>
                                 </div>
-                                <div class="form-group filter-actions">
-                                    <button type="button" class="btn btn-primary" onclick="applyFilters()" style="flex: 2;">
-                                        <i class="fas fa-search"></i> Apply
-                                    </button>
-                                    <button type="button" class="btn btn-secondary" onclick="resetFilters()" style="flex: 1;">
-                                        <i class="fas fa-redo"></i> Reset
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
 
-                    <!-- Two-Way Communication Audit Panels -->
-                    <div class="module-card">
-                        <div class="module-card-header">
-                            <h2><i class="fas fa-comments"></i> Messages and Calls Audit</h2>
-                        </div>
-                        <div class="module-card-content">
-                            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap:1rem;">
-                                <div class="table-responsive">
-                                    <h3 style="margin:0 0 .75rem; font-size:1rem;"><i class="fas fa-share-from-square"></i> Response Transfers</h3>
-                                    <table class="data-table" id="transferAuditTable">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>Time</th>
-                                                <th>Caller</th>
-                                                <th>Status</th>
-                                                <th>Response</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody><tr><td colspan="6">Loading...</td></tr></tbody>
-                                    </table>
-                                </div>
-                                <div class="table-responsive">
-                                    <h3 style="margin:0 0 .75rem; font-size:1rem;"><i class="fas fa-user-clock"></i> Admin Handovers</h3>
-                                    <table class="data-table" id="assignmentAuditTable">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>Time</th>
-                                                <th>Conversation</th>
-                                                <th>Action</th>
-                                                <th>Admin</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody><tr><td colspan="6">Loading...</td></tr></tbody>
-                                    </table>
-                                </div>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
-                    <!-- Audit Trail Table -->
-                    <div class="module-card">
+                    <section class="module-card" aria-labelledby="auditTableTitle">
                         <div class="module-card-header">
-                            <h2><i class="fas fa-list"></i> Audit Trail</h2>
-                            <button class="btn btn-sm btn-primary" id="exportAuditTrailPdfBtn" onclick="exportAuditTrail()">
+                            <div>
+                                <h2 id="auditTableTitle"><i class="fas fa-bell"></i> Notification Trails</h2>
+                                <p class="audit-table-description" id="auditTableDescription">System notification delivery and warning activity.</p>
+                            </div>
+                            <button class="btn btn-sm btn-primary" id="exportAuditTrailPdfBtn" type="button">
                                 <i class="fas fa-file-pdf"></i> Export PDF
                             </button>
                         </div>
-                        <div class="module-card-content table-responsive">
-                            <table class="data-table" id="auditTrailTable">
+                        <div class="module-card-content table-responsive audit-table-wrapper" id="auditTableScroll">
+                            <table class="data-table audit-unified-table" id="auditTrailTable">
                                 <thead>
                                     <tr>
                                         <th>ID</th>
                                         <th>Timestamp</th>
-                                        <th>Channel</th>
-                                        <th>Recipient</th>
-                                        <th>Message</th>
-                                        <th>Status</th>
-                                        <th>Sent By</th>
+                                        <th>Trail</th>
+                                        <th>Subject</th>
+                                        <th>Activity</th>
+                                        <th>Status / Action</th>
+                                        <th>Admin / Source</th>
                                         <th>IP Address</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <!-- Data will be loaded via API -->
+                                    <tr>
+                                        <td colspan="9" class="audit-table-message">Loading audit records...</td>
+                                    </tr>
                                 </tbody>
                             </table>
-                            <div id="auditLazyLoadSentinel" style="text-align:center; padding:0.85rem; color:var(--text-secondary-1); font-weight:700;">
-                                Loading audit records...
-                            </div>
+                            <nav id="auditPagination" class="audit-pagination" aria-label="Audit trail pages"></nav>
                         </div>
-                    </div>
+                    </section>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- View Details Modal -->
-    <div id="detailsModal" class="modal" style="display: none;">
+    <div id="detailsModal" class="modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="auditDetailsTitle">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Notification Details</h2>
-                <button class="modal-close" onclick="closeDetailsModal()">&times;</button>
+                <h2 id="auditDetailsTitle">Audit Details</h2>
+                <button class="modal-close" id="closeAuditDetails" type="button" aria-label="Close audit details">&times;</button>
             </div>
-            <div class="modal-body" id="detailsContent">
-                <!-- Details will be loaded here -->
-            </div>
-        </div>
-    </div>
-
-    <div id="twcAuditDetailsModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="twcAuditDetailsTitle">Audit Details</h2>
-                <button class="modal-close" onclick="closeTwcAuditDetailsModal()">&times;</button>
-            </div>
-            <div class="modal-body" id="twcAuditDetailsContent"></div>
+            <div class="modal-body" id="detailsContent"></div>
         </div>
     </div>
 
     <script>
-        let twcTransferAuditRows = [];
-        let twcAssignmentAuditRows = [];
+        const auditTrailConfigs = {
+            notifications: {
+                title: 'Notification Trails',
+                icon: 'fa-bell',
+                description: 'System notification delivery and warning activity.',
+                totalLabel: 'Total Notifications',
+                successfulLabel: 'Successful',
+                failedLabel: 'Failed',
+                todayLabel: 'Sent Today',
+                statusLabel: 'Status',
+                statuses: [
+                    ['', 'All Statuses'],
+                    ['success', 'Success'],
+                    ['sent', 'Sent'],
+                    ['completed', 'Completed'],
+                    ['failed', 'Failed'],
+                    ['pending', 'Pending'],
+                    ['queued', 'Queued']
+                ]
+            },
+            handovers: {
+                title: 'Admin Handover Trails',
+                icon: 'fa-user-clock',
+                description: 'Conversation claims, releases, and handovers between administrators.',
+                totalLabel: 'Total Handovers',
+                successfulLabel: 'Recorded Actions',
+                failedLabel: 'Failed',
+                todayLabel: 'Actions Today',
+                statusLabel: 'Action',
+                statuses: [
+                    ['', 'All Actions'],
+                    ['claimed', 'Claimed'],
+                    ['claimed_on_reply', 'Claimed on Reply'],
+                    ['released', 'Released']
+                ]
+            },
+            deletions: {
+                title: 'Deleted Reports and Enquiries Trails',
+                icon: 'fa-trash-alt',
+                description: 'Soft deletion, restoration, and permanent deletion activity.',
+                totalLabel: 'Deletion Events',
+                successfulLabel: 'Recorded Actions',
+                failedLabel: 'Failed',
+                todayLabel: 'Actions Today',
+                statusLabel: 'Action',
+                statuses: [
+                    ['', 'All Actions'],
+                    ['moved_to_trash', 'Moved to Trash'],
+                    ['restored', 'Restored'],
+                    ['permanently_deleted', 'Permanently Deleted']
+                ]
+            },
+            ers_transfers: {
+                title: 'Reports Transferred to ERS',
+                icon: 'fa-share-from-square',
+                description: 'Emergency reports and calls sent to the Emergency Response System.',
+                totalLabel: 'Total Transfers',
+                successfulLabel: 'Successful',
+                failedLabel: 'Failed',
+                todayLabel: 'Sent Today',
+                statusLabel: 'Transfer Status',
+                statuses: [
+                    ['', 'All Statuses'],
+                    ['prepared', 'Prepared'],
+                    ['requested', 'Status Requested'],
+                    ['pending', 'Pending'],
+                    ['sent', 'Sent'],
+                    ['accepted', 'Accepted'],
+                    ['answered', 'Answered'],
+                    ['completed', 'Completed'],
+                    ['failed', 'Failed']
+                ]
+            }
+        };
+
         let auditPage = 1;
-        let auditTotalPages = 1;
+        let auditTotalPages = 0;
         let auditTotalRows = 0;
-        let auditPageSize = 25;
+        const auditPageSize = 10;
         let auditLoading = false;
-        let auditHasMore = true;
-        let auditLazyObserver = null;
+        let auditRequestVersion = 0;
+        let auditAbortController = null;
+        const auditRows = new Map();
 
         function escapeAuditHtml(value) {
             const div = document.createElement('div');
@@ -251,205 +258,60 @@ $pageTitle = 'Log and Audit Trail';
             return div.innerHTML;
         }
 
-        function loadTwcAuditSummary() {
-            fetch('../api/twc-audit-summary.php')
-                .then(response => response.json())
-                .then(data => {
-                    if (!data.success) return;
-                    twcTransferAuditRows = data.transfers || [];
-                    twcAssignmentAuditRows = data.assignments || [];
-                    renderTransferAuditRows();
-                    renderAssignmentAuditRows();
-                });
+        function humanizeAuditValue(value) {
+            return String(value == null || value === '' ? 'N/A' : value)
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, character => character.toUpperCase());
         }
 
-        function renderTransferAuditRows() {
-            const tbody = document.querySelector('#transferAuditTable tbody');
-            if (!tbody) return;
-            if (!twcTransferAuditRows.length) {
-                tbody.innerHTML = '<tr><td colspan="6">No transfer audit records.</td></tr>';
-                return;
+        function auditStatusClass(status) {
+            const normalized = String(status || '').toLowerCase();
+            if (['success', 'sent', 'completed', 'delivered', 'accepted', 'answered', 'transferred', 'restored', 'claimed', 'claimed_on_reply'].includes(normalized)) {
+                return 'audit-status-good';
             }
-            tbody.innerHTML = twcTransferAuditRows.map(row => `
-                <tr>
-                    <td>${escapeAuditHtml(row.id)}</td>
-                    <td><small>${escapeAuditHtml(row.created_at)}</small></td>
-                    <td>${escapeAuditHtml(row.caller_name || 'Unknown')}</td>
-                    <td><span class="badge ${escapeAuditHtml(row.status || '')}">${escapeAuditHtml(row.status || 'prepared')}</span></td>
-                    <td>${escapeAuditHtml((row.response_status || 'pending').replace(/_/g, ' '))}</td>
-                    <td><button class="btn btn-sm btn-primary" onclick="viewTwcTransferAudit(${Number(row.id)})"><i class="fas fa-eye"></i></button></td>
-                </tr>
-            `).join('');
-        }
-
-        function renderAssignmentAuditRows() {
-            const tbody = document.querySelector('#assignmentAuditTable tbody');
-            if (!tbody) return;
-            if (!twcAssignmentAuditRows.length) {
-                tbody.innerHTML = '<tr><td colspan="6">No handover audit records.</td></tr>';
-                return;
+            if (['failed', 'error', 'rejected', 'permanently_deleted'].includes(normalized)) {
+                return 'audit-status-bad';
             }
-            tbody.innerHTML = twcAssignmentAuditRows.map(row => `
-                <tr>
-                    <td>${escapeAuditHtml(row.id)}</td>
-                    <td><small>${escapeAuditHtml(row.created_at)}</small></td>
-                    <td>#${escapeAuditHtml(row.conversation_id)}</td>
-                    <td>${escapeAuditHtml(row.action)}</td>
-                    <td>${escapeAuditHtml(row.admin_name || 'Admin')}</td>
-                    <td><button class="btn btn-sm btn-primary" onclick="viewTwcAssignmentAudit(${Number(row.id)})"><i class="fas fa-eye"></i></button></td>
-                </tr>
-            `).join('');
+            if (['pending', 'queued', 'prepared', 'moved_to_trash', 'released'].includes(normalized)) {
+                return 'audit-status-waiting';
+            }
+            return 'audit-status-neutral';
         }
 
-        function openTwcAuditDetailsModal(title, row) {
-            document.getElementById('twcAuditDetailsTitle').textContent = title;
-            document.getElementById('twcAuditDetailsContent').innerHTML = `
-                <pre style="white-space:pre-wrap; background:var(--bg-color-1); border:1px solid var(--border-color-1); border-radius:8px; padding:1rem;">${escapeAuditHtml(JSON.stringify(row, null, 2))}</pre>
-            `;
-            document.getElementById('twcAuditDetailsModal').style.display = 'flex';
-            document.body.style.overflow = 'hidden';
+        function currentTrailType() {
+            return document.getElementById('filterTrailType').value;
         }
 
-        function closeTwcAuditDetailsModal() {
-            document.getElementById('twcAuditDetailsModal').style.display = 'none';
-            document.body.style.overflow = '';
-        }
+        function updateTrailControls() {
+            const trailType = currentTrailType();
+            const config = auditTrailConfigs[trailType];
+            const statusSelect = document.getElementById('filterStatus');
+            const previousStatus = statusSelect.value;
 
-        function viewTwcTransferAudit(id) {
-            const row = twcTransferAuditRows.find(item => Number(item.id) === Number(id));
-            if (row) openTwcAuditDetailsModal('Response Transfer Audit', row);
-        }
-
-        function viewTwcAssignmentAudit(id) {
-            const row = twcAssignmentAuditRows.find(item => Number(item.id) === Number(id));
-            if (row) openTwcAuditDetailsModal('Admin Handover Audit', row);
-        }
-
-        function loadAuditTrail(reset = true) {
-            if (auditLoading) return Promise.resolve();
-            auditLoading = true;
-            const tbody = document.querySelector('#auditTrailTable tbody');
-            if (reset) {
-                auditPage = 1;
-                auditHasMore = true;
-                if (tbody) {
-                    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1rem;">Loading audit records...</td></tr>';
-                }
-            } else if (!auditHasMore) {
-                auditLoading = false;
-                return Promise.resolve();
-            } else {
-                auditPage += 1;
+            document.getElementById('filterChannelGroup').hidden = trailType !== 'notifications';
+            if (trailType !== 'notifications') {
+                document.getElementById('filterChannel').value = '';
             }
 
-            updateAuditLazyLoadStatus('Loading audit records...');
-            const params = new URLSearchParams(getFilters());
-            params.set('page', String(auditPage));
-            params.set('limit', String(auditPageSize));
-            
-            return fetch(`../api/audit-trail.php?action=list&${params.toString()}`)
-                .then(response => response.json())
-                .then(data => {
-                    const targetBody = document.querySelector('#auditTrailTable tbody');
-                    if (!targetBody) return;
-                    if (reset) targetBody.innerHTML = '';
-                    if (!data.success) throw new Error(data.message || 'Failed to load audit trail');
-
-                    const logs = Array.isArray(data.logs) ? data.logs : [];
-                    const pagination = data.pagination || {};
-                    auditPage = Number(pagination.page || auditPage || 1);
-                    auditTotalPages = Number(pagination.total_pages || 1);
-                    auditTotalRows = Number(pagination.total || logs.length || 0);
-                    auditHasMore = auditPage < auditTotalPages;
-
-                    if (!logs.length && reset) {
-                        targetBody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1rem;">No audit records found.</td></tr>';
-                        return;
-                    }
-
-                    logs.forEach(log => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${escapeAuditHtml(log.id)}</td>
-                            <td><small>${escapeAuditHtml(log.timestamp)}</small></td>
-                            <td><span class="badge" style="background: rgba(58, 118, 117, 0.1); color: var(--primary-color-1); font-weight: 700;">${escapeAuditHtml(String(log.channel || '').toUpperCase())}</span></td>
-                            <td>${escapeAuditHtml(log.recipient)}</td>
-                            <td><div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeAuditHtml(log.message)}</div></td>
-                            <td><span class="badge ${escapeAuditHtml(log.status)}">${escapeAuditHtml(log.status)}</span></td>
-                            <td>${escapeAuditHtml(log.sent_by || 'System')}</td>
-                            <td><small>${escapeAuditHtml(log.ip_address || 'N/A')}</small></td>
-                            <td>
-                                <button class="btn btn-sm btn-primary" onclick="viewDetails(${Number(log.id)})">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </td>
-                        `;
-                        targetBody.appendChild(row);
-                    });
-                })
-                .catch(error => {
-                    console.error('Audit trail load error:', error);
-                    if (tbody && reset) {
-                        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1rem; color:#e74c3c;">Failed to load audit records.</td></tr>';
-                    }
-                })
-                .finally(() => {
-                    auditLoading = false;
-                    updateAuditLazyLoadStatus();
-                });
-        }
-
-        function loadMoreAuditTrail() {
-            if (auditLoading || !auditHasMore) return;
-            loadAuditTrail(false);
-        }
-
-        function setupAuditLazyLoader() {
-            const sentinel = document.getElementById('auditLazyLoadSentinel');
-            if (!sentinel || !('IntersectionObserver' in window)) return;
-            if (auditLazyObserver) auditLazyObserver.disconnect();
-            auditLazyObserver = new IntersectionObserver(entries => {
-                if (entries.some(entry => entry.isIntersecting)) {
-                    loadMoreAuditTrail();
-                }
-            }, { rootMargin: '260px 0px' });
-            auditLazyObserver.observe(sentinel);
-        }
-
-        function updateAuditLazyLoadStatus(message = '') {
-            const sentinel = document.getElementById('auditLazyLoadSentinel');
-            if (!sentinel) return;
-            if (auditLoading) {
-                sentinel.style.display = 'block';
-                sentinel.textContent = message || 'Loading audit records...';
-                return;
+            statusSelect.innerHTML = config.statuses
+                .map(option => `<option value="${escapeAuditHtml(option[0])}">${escapeAuditHtml(option[1])}</option>`)
+                .join('');
+            if (config.statuses.some(option => option[0] === previousStatus)) {
+                statusSelect.value = previousStatus;
             }
-            if (auditHasMore) {
-                sentinel.style.display = 'block';
-                sentinel.textContent = `Showing up to ${Math.min(auditPage * auditPageSize, auditTotalRows || auditPage * auditPageSize)} of ${auditTotalRows || 'more'} records. Scroll to load more.`;
-                return;
-            }
-            sentinel.style.display = auditTotalRows ? 'block' : 'none';
-            sentinel.textContent = auditTotalRows ? `All ${auditTotalRows} audit records loaded.` : '';
+
+            document.getElementById('filterStatusLabel').textContent = config.statusLabel;
+            document.getElementById('auditTableTitle').innerHTML = `<i class="fas ${config.icon}"></i> ${escapeAuditHtml(config.title)}`;
+            document.getElementById('auditTableDescription').textContent = config.description;
+            document.getElementById('totalAuditLabel').textContent = config.totalLabel;
+            document.getElementById('successfulAuditLabel').textContent = config.successfulLabel;
+            document.getElementById('failedAuditLabel').textContent = config.failedLabel;
+            document.getElementById('todayAuditLabel').textContent = config.todayLabel;
         }
 
-        window.loadMoreAuditTrail = loadMoreAuditTrail;
-
-        function loadStatistics() {
-            fetch('../api/audit-trail.php?action=statistics')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('totalNotifications').textContent = data.total || 0;
-                        document.getElementById('successfulNotifications').textContent = data.successful || 0;
-                        document.getElementById('failedNotifications').textContent = data.failed || 0;
-                        document.getElementById('todayNotifications').textContent = data.today || 0;
-                    }
-                });
-        }
-
-        function getFilters() {
+        function getAuditFilters() {
             return {
+                trail_type: currentTrailType(),
                 date_from: document.getElementById('filterDateFrom').value,
                 date_to: document.getElementById('filterDateTo').value,
                 channel: document.getElementById('filterChannel').value,
@@ -457,75 +319,209 @@ $pageTitle = 'Log and Audit Trail';
             };
         }
 
-        function applyFilters() {
-            loadAuditTrail(true);
+        function setAuditTableMessage(message, isError = false) {
+            const tbody = document.querySelector('#auditTrailTable tbody');
+            tbody.innerHTML = `<tr><td colspan="9" class="audit-table-message${isError ? ' audit-table-error' : ''}">${escapeAuditHtml(message)}</td></tr>`;
         }
 
-        function resetFilters() {
-            document.getElementById('filterForm').reset();
-            loadAuditTrail(true);
+        function renderAuditRows(logs) {
+            const tbody = document.querySelector('#auditTrailTable tbody');
+            logs.forEach(log => {
+                const rowKey = `${log.trail_type}:${log.id}`;
+                auditRows.set(rowKey, log);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${escapeAuditHtml(log.id)}</td>
+                    <td><small>${escapeAuditHtml(log.timestamp || 'N/A')}</small></td>
+                    <td><span class="audit-trail-chip">${escapeAuditHtml(log.trail_label || 'Audit')}</span></td>
+                    <td><div class="audit-cell-subject" title="${escapeAuditHtml(log.subject || '')}">${escapeAuditHtml(log.subject || 'N/A')}</div></td>
+                    <td><div class="audit-cell-activity" title="${escapeAuditHtml(log.activity || '')}">${escapeAuditHtml(log.activity || 'N/A')}</div></td>
+                    <td><span class="badge ${auditStatusClass(log.status)}">${escapeAuditHtml(humanizeAuditValue(log.status))}</span></td>
+                    <td>${escapeAuditHtml(log.admin || 'System')}</td>
+                    <td><small>${escapeAuditHtml(log.ip_address || 'N/A')}</small></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary audit-view-button" type="button" data-audit-key="${escapeAuditHtml(rowKey)}" title="View audit details" aria-label="View audit details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
         }
 
-        function viewDetails(id) {
-            fetch(`../api/audit-trail.php?action=get&id=${id}`)
+        function loadAuditTrail(page = 1) {
+            const requestedPage = Math.max(1, Number(page) || 1);
+            auditRequestVersion += 1;
+            const requestVersion = auditRequestVersion;
+
+            if (auditAbortController) {
+                auditAbortController.abort();
+            }
+            auditAbortController = new AbortController();
+            auditLoading = true;
+            auditRows.clear();
+            setAuditTableMessage('Loading audit records...');
+            renderAuditPagination(0);
+
+            const params = new URLSearchParams(getAuditFilters());
+            params.set('page', String(requestedPage));
+            params.set('limit', String(auditPageSize));
+
+            return fetch(`../api/audit-trail.php?action=list&${params.toString()}`, {
+                signal: auditAbortController.signal
+            })
                 .then(response => response.json())
                 .then(data => {
-                    if (data.success && data.log) {
-                        const log = data.log;
-                        const content = document.getElementById('detailsContent');
-                        content.innerHTML = `
-                            <div class="details-grid">
-                                <div class="detail-item">
-                                    <span class="detail-label">Log ID</span>
-                                    <span class="detail-value">#${log.id}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">Timestamp</span>
-                                    <span class="detail-value">${log.timestamp}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">Channel</span>
-                                    <span class="detail-value"><span class="badge" style="background: rgba(58, 118, 117, 0.1); color: var(--primary-color-1); font-weight: 700;">${log.channel.toUpperCase()}</span></span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">Status</span>
-                                    <span class="detail-value"><span class="badge ${log.status}">${log.status}</span></span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">Recipient</span>
-                                    <span class="detail-value">${log.recipient}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">Sent By</span>
-                                    <span class="detail-value">${log.sent_by || 'System'}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">IP Address</span>
-                                    <span class="detail-value">${log.ip_address || 'N/A'}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">Response Code</span>
-                                    <span class="detail-value">${log.response || 'N/A'}</span>
-                                </div>
-                                <div class="detail-item" style="grid-column: span 2; margin-top: 1rem;">
-                                    <span class="detail-label">Message Content</span>
-                                    <div style="background: var(--bg-color-1); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color-1); margin-top: 0.5rem; line-height: 1.5;">${log.message}</div>
-                                </div>
-                                ${log.error_message ? `
-                                <div class="detail-item" style="grid-column: span 2; margin-top: 1rem;">
-                                    <span class="detail-label" style="color: #e74c3c;">Error Message</span>
-                                    <div style="color: #e74c3c; font-weight: 500;">${log.error_message}</div>
-                                </div>
-                                ` : ''}
-                            </div>
-                        `;
-                        document.getElementById('detailsModal').style.display = 'flex';
-                        document.body.style.overflow = 'hidden';
+                    if (requestVersion !== auditRequestVersion) return;
+                    if (!data.success) throw new Error(data.message || 'Failed to load audit trail');
+
+                    const tbody = document.querySelector('#auditTrailTable tbody');
+                    const logs = Array.isArray(data.logs) ? data.logs : [];
+                    const pagination = data.pagination || {};
+                    tbody.innerHTML = '';
+
+                    auditPage = Number(pagination.page || requestedPage);
+                    auditTotalPages = Number(pagination.total_pages || 0);
+                    auditTotalRows = Number(pagination.total || 0);
+
+                    if (!logs.length) {
+                        setAuditTableMessage('No audit records found for this trail.');
+                        renderAuditPagination(0);
+                        return;
+                    }
+
+                    renderAuditRows(logs);
+                    renderAuditPagination(auditTotalPages);
+                })
+                .catch(error => {
+                    if (error.name === 'AbortError' || requestVersion !== auditRequestVersion) return;
+                    console.error('Audit trail load error:', error);
+                    setAuditTableMessage('Failed to load audit records.', true);
+                    renderAuditPagination(0);
+                })
+                .finally(() => {
+                    if (requestVersion === auditRequestVersion) {
+                        auditLoading = false;
                     }
                 });
         }
 
-        function closeDetailsModal() {
+        function renderAuditPagination(totalPages) {
+            const container = document.getElementById('auditPagination');
+            if (!container) return;
+
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                container.hidden = true;
+                return;
+            }
+
+            const pages = [];
+            const startPage = Math.max(1, auditPage - 2);
+            const endPage = Math.min(totalPages, auditPage + 2);
+            if (startPage > 1) pages.push(1);
+            if (startPage > 2) pages.push('ellipsis-start');
+            for (let page = startPage; page <= endPage; page += 1) pages.push(page);
+            if (endPage < totalPages - 1) pages.push('ellipsis-end');
+            if (endPage < totalPages) pages.push(totalPages);
+
+            const pageButtons = pages.map(page => {
+                if (typeof page !== 'number') {
+                    return '<span class="audit-page-ellipsis" aria-hidden="true">&hellip;</span>';
+                }
+                const active = page === auditPage;
+                return `<button type="button" class="audit-page-btn${active ? ' active' : ''}" data-page="${page}" ${active ? 'aria-current="page"' : ''}>${page}</button>`;
+            }).join('');
+
+            container.innerHTML = `
+                <button type="button" class="audit-page-btn audit-page-nav" data-page="${auditPage - 1}" ${auditPage <= 1 ? 'disabled' : ''} aria-label="Previous page">&lsaquo;</button>
+                ${pageButtons}
+                <button type="button" class="audit-page-btn audit-page-nav" data-page="${auditPage + 1}" ${auditPage >= totalPages ? 'disabled' : ''} aria-label="Next page">&rsaquo;</button>
+            `;
+            container.hidden = false;
+        }
+
+        function goToAuditPage(page) {
+            const targetPage = Number(page);
+            if (auditLoading || !Number.isInteger(targetPage) || targetPage < 1 || targetPage > auditTotalPages || targetPage === auditPage) {
+                return;
+            }
+
+            loadAuditTrail(targetPage).then(() => {
+                document.getElementById('auditTrailTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        }
+        function loadStatistics() {
+            const params = new URLSearchParams(getAuditFilters());
+            return fetch(`../api/audit-trail.php?action=statistics&${params.toString()}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) throw new Error(data.message || 'Failed to load statistics');
+                    document.getElementById('totalAuditRecords').textContent = data.total || 0;
+                    document.getElementById('successfulAuditRecords').textContent = data.successful || 0;
+                    document.getElementById('failedAuditRecords').textContent = data.failed || 0;
+                    document.getElementById('todayAuditRecords').textContent = data.today || 0;
+                })
+                .catch(error => console.error('Audit statistics load error:', error));
+        }
+
+        function refreshSelectedAudit() {
+            loadAuditTrail(1);
+            loadStatistics();
+        }
+
+        function detailLabel(key) {
+            return String(key).replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase());
+        }
+
+        function detailValue(value) {
+            if (value == null || value === '') return 'N/A';
+            if (typeof value === 'object') return JSON.stringify(value, null, 2);
+            return String(value);
+        }
+
+        function openAuditDetails(row) {
+            const details = row.details && typeof row.details === 'object' ? row.details : {};
+            const detailRows = Object.entries(details).map(([key, value]) => {
+                const formattedValue = detailValue(value);
+                const usePre = typeof value === 'object' || formattedValue.length > 160 || formattedValue.includes('\n');
+                return `
+                    <div class="detail-item audit-detail-wide">
+                        <span class="detail-label">${escapeAuditHtml(detailLabel(key))}</span>
+                        ${usePre
+                            ? `<pre class="audit-detail-pre">${escapeAuditHtml(formattedValue)}</pre>`
+                            : `<span class="detail-value">${escapeAuditHtml(formattedValue)}</span>`}
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('auditDetailsTitle').textContent = `${row.trail_label || 'Audit'} Details`;
+            document.getElementById('detailsContent').innerHTML = `
+                <div class="details-grid audit-details-summary">
+                    <div class="detail-item">
+                        <span class="detail-label">Audit ID</span>
+                        <span class="detail-value">#${escapeAuditHtml(row.id)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Timestamp</span>
+                        <span class="detail-value">${escapeAuditHtml(row.timestamp || 'N/A')}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Subject</span>
+                        <span class="detail-value">${escapeAuditHtml(row.subject || 'N/A')}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Status / Action</span>
+                        <span class="detail-value"><span class="badge ${auditStatusClass(row.status)}">${escapeAuditHtml(humanizeAuditValue(row.status))}</span></span>
+                    </div>
+                    ${detailRows}
+                </div>
+            `;
+            document.getElementById('detailsModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAuditDetails() {
             document.getElementById('detailsModal').style.display = 'none';
             document.body.style.overflow = '';
         }
@@ -534,22 +530,49 @@ $pageTitle = 'Log and Audit Trail';
             const exportButton = document.getElementById('exportAuditTrailPdfBtn');
             if (window.AdminReportPdfExporter && typeof window.AdminReportPdfExporter.exportCurrentPage === 'function') {
                 window.AdminReportPdfExporter.exportCurrentPage({
-                    filenamePrefix: 'audit-trail-report',
+                    filenamePrefix: `audit-trail-${currentTrailType()}`,
                     targetSelector: '.main-content .main-container',
                     triggerButton: exportButton
                 });
                 return;
             }
-
-            alert('PDF export is currently unavailable.');
+            window.alert('PDF export is currently unavailable.');
         }
 
-        // Load data on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            setupAuditLazyLoader();
-            loadAuditTrail(true);
-            loadStatistics();
-            loadTwcAuditSummary();
+        document.addEventListener('DOMContentLoaded', function () {
+            updateTrailControls();
+            refreshSelectedAudit();
+
+            document.getElementById('filterTrailType').addEventListener('change', function () {
+                updateTrailControls();
+                refreshSelectedAudit();
+            });
+
+            ['filterDateFrom', 'filterDateTo', 'filterChannel', 'filterStatus'].forEach(function (controlId) {
+                document.getElementById(controlId).addEventListener('change', refreshSelectedAudit);
+            });
+
+            document.getElementById('auditPagination').addEventListener('click', function (event) {
+                const button = event.target.closest('.audit-page-btn[data-page]');
+                if (!button || button.disabled) return;
+                goToAuditPage(button.dataset.page);
+            });
+
+            document.querySelector('#auditTrailTable tbody').addEventListener('click', function (event) {
+                const button = event.target.closest('.audit-view-button');
+                if (!button) return;
+                const row = auditRows.get(button.dataset.auditKey);
+                if (row) openAuditDetails(row);
+            });
+
+            document.getElementById('exportAuditTrailPdfBtn').addEventListener('click', exportAuditTrail);
+            document.getElementById('closeAuditDetails').addEventListener('click', closeAuditDetails);
+            document.getElementById('detailsModal').addEventListener('click', function (event) {
+                if (event.target === this) closeAuditDetails();
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') closeAuditDetails();
+            });
         });
     </script>
 </body>

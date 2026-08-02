@@ -115,6 +115,8 @@ $activeAlerts = 0;
 $systemUnread = 0;
 $incidentUnread = 0;
 $messageUnread = 0;
+$reportUnread = 0;
+$generalEnquiryUnread = 0;
 $systemNotifications = [];
 $incidentNotifications = [];
 
@@ -247,6 +249,7 @@ try {
     if (function_exists('twc_chat_storage_available') && twc_chat_storage_available($pdo)) {
         $activeStatuses = twc_active_statuses();
         $statusPlaceholders = twc_placeholders($activeStatuses);
+        $trashSql = twc_not_trashed_clause($pdo, 'c');
 
         $messageUnreadStmt = $pdo->prepare("
             SELECT COUNT(*)
@@ -255,9 +258,34 @@ try {
             WHERE c.status IN ($statusPlaceholders)
               AND COALESCE(m.is_read, 0) = 0
               AND LOWER(COALESCE(m.sender_type, '')) <> 'admin'
+              {$trashSql}
         ");
         $messageUnreadStmt->execute($activeStatuses);
         $messageUnread = (int)$messageUnreadStmt->fetchColumn();
+
+        $generalConcerns = twc_general_enquiry_concerns();
+        $generalPlaceholders = twc_placeholders($generalConcerns);
+        $scopedUnreadStmt = $pdo->prepare("
+            SELECT
+                COUNT(DISTINCT CASE
+                    WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) NOT IN ($generalPlaceholders)
+                    THEN c.conversation_id END
+                ) AS report_unread,
+                COUNT(DISTINCT CASE
+                    WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) IN ($generalPlaceholders)
+                    THEN c.conversation_id END
+                ) AS general_enquiry_unread
+            FROM conversations c
+            JOIN chat_messages m ON c.conversation_id = m.conversation_id
+            WHERE c.status IN ($statusPlaceholders)
+              AND COALESCE(m.is_read, 0) = 0
+              AND LOWER(COALESCE(m.sender_type, '')) <> 'admin'
+              {$trashSql}
+        ");
+        $scopedUnreadStmt->execute(array_merge($generalConcerns, $generalConcerns, $activeStatuses));
+        $scopedUnread = $scopedUnreadStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $reportUnread = (int)($scopedUnread['report_unread'] ?? 0);
+        $generalEnquiryUnread = (int)($scopedUnread['general_enquiry_unread'] ?? 0);
 
         $hasIncidentPriorityLevel = header_column_exists($pdo, 'conversations', 'incident_priority_level');
         $hasIncidentPriorityScore = header_column_exists($pdo, 'conversations', 'incident_priority_score');
@@ -293,6 +321,7 @@ try {
                 ) latest ON latest.max_message_id = m1.message_id
             ) lm ON lm.conversation_id = c.conversation_id
             WHERE c.status IN ($statusPlaceholders)
+              {$trashSql}
             ORDER BY lm.created_at DESC, lm.message_id DESC
             LIMIT 12
         ");
@@ -306,6 +335,7 @@ try {
             }
 
             $concern = strtolower(trim((string)($row['user_concern'] ?? '')));
+            $isGeneralEnquiry = in_array($concern, twc_general_enquiry_concerns(), true);
             $isIncidentReport = $concern === 'incident_report'
                 || stripos($messageText, 'Incident Type:') !== false
                 || stripos($messageText, '[CALL_') === 0;
@@ -336,8 +366,8 @@ try {
             $incidentNotifications[] = [
                 'id' => 'msg_' . (string)($row['message_id'] ?? md5($messageText)),
                 'type' => 'incident',
-                'channel' => $isIncidentReport ? 'incident_report' : 'two_way_message',
-                'title' => $isIncidentReport ? 'New Incident Report' : 'New Message Report',
+                'channel' => $isGeneralEnquiry ? 'general_enquiry' : ($isIncidentReport ? 'incident_report' : 'report_message'),
+                'title' => $isGeneralEnquiry ? 'New General Enquiry' : ($isIncidentReport ? 'New Incident Report' : 'New Report Message'),
                 'message' => $senderName . ': ' . $snippet,
                 'status' => 'unread',
                 'priority' => $priority,
@@ -393,6 +423,8 @@ echo json_encode([
     'system_unread' => $systemUnread,
     'incident_unread' => $incidentUnread,
     'message_unread' => $messageUnread,
+    'report_unread' => $reportUnread,
+    'general_enquiry_unread' => $generalEnquiryUnread,
     'notification_unread' => $notificationUnread,
     'system_notifications' => $systemNotifications,
     'incident_notifications' => $incidentNotifications,

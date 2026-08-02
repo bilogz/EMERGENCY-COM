@@ -9,6 +9,25 @@ require_once __DIR__ . '/../../../ADMIN/api/chat-logic.php';
 // Handle different HTTP methods
 $method = $_SERVER['REQUEST_METHOD'];
 
+$hasUserHiddenAt = twc_column_exists($pdo, 'incident_reports', 'user_hidden_at');
+if (!$hasUserHiddenAt) {
+    try {
+        $pdo->exec("ALTER TABLE incident_reports ADD COLUMN user_hidden_at DATETIME NULL AFTER admin_notes");
+        $hasUserHiddenAt = twc_column_exists($pdo, 'incident_reports', 'user_hidden_at', true);
+    } catch (Throwable $migrationError) {
+        error_log('Incident report soft-delete migration skipped: ' . $migrationError->getMessage());
+    }
+}
+$hasResponseStatus = twc_column_exists($pdo, 'incident_reports', 'response_status');
+if (!$hasResponseStatus) {
+    try {
+        $pdo->exec("ALTER TABLE incident_reports ADD COLUMN response_status VARCHAR(40) NULL AFTER status");
+        $hasResponseStatus = twc_column_exists($pdo, 'incident_reports', 'response_status', true);
+    } catch (Throwable $migrationError) {
+        error_log('Incident report response-status migration skipped: ' . $migrationError->getMessage());
+    }
+}
+
 try {
     if ($method === 'POST') {
         // Submit emergency report
@@ -111,7 +130,11 @@ try {
             'Incident Type: ' . $categoryLabel,
             $user_location !== '' ? 'Location: ' . $user_location : '',
             $coordinates !== '' ? 'Coordinates: ' . $coordinates : '',
-            $coordinates !== '' ? 'Map: https://www.google.com/maps?q=' . rawurlencode($coordinates) : '',
+            $coordinates !== ''
+                ? 'Map: https://www.openstreetmap.org/?mlat=' . rawurlencode((string)$latitude)
+                    . '&mlon=' . rawurlencode((string)$longitude)
+                    . '#map=18/' . rawurlencode((string)$latitude) . '/' . rawurlencode((string)$longitude)
+                : '',
             'Severity: ' . ucfirst($severity),
             '',
             trim((string)$description),
@@ -243,7 +266,7 @@ try {
                 description,
                 latitude,
                 longitude,
-                status,
+                " . ($hasResponseStatus ? "COALESCE(NULLIF(response_status, ''), status)" : "status") . " AS status,
                 media_url,
                 admin_notes,
                 created_at
@@ -262,6 +285,14 @@ try {
     } elseif ($method === 'GET') {
         // Get emergency reports
         $userId = isset($_GET['user_id']) ? $_GET['user_id'] : null;
+        $reportIdFilter = isset($_GET['report_id']) ? (int)$_GET['report_id'] : 0;
+        $reportIdsFilter = [];
+        if (isset($_GET['report_ids'])) {
+            $reportIdsFilter = array_slice(array_values(array_unique(array_filter(
+                array_map('intval', explode(',', (string)$_GET['report_ids'])),
+                static fn($id) => $id > 0
+            ))), 0, 50);
+        }
 
         $sql = "
             SELECT
@@ -271,7 +302,7 @@ try {
                 ir.description,
                 ir.latitude,
                 ir.longitude,
-                ir.status,
+                " . ($hasResponseStatus ? "COALESCE(NULLIF(ir.response_status, ''), ir.status)" : "ir.status") . " AS status,
                 ir.media_url,
                 ir.admin_notes,
                 ir.created_at,
@@ -286,8 +317,21 @@ try {
             FROM incident_reports ir
         ";
 
+        $where = [];
         if ($userId) {
-            $sql .= " WHERE ir.user_id = :user_id";
+            $where[] = "ir.user_id = :user_id";
+        }
+        if ($reportIdFilter > 0) {
+            $where[] = "ir.id = :report_id";
+        }
+        if ($reportIdsFilter) {
+            $where[] = "ir.id IN (" . implode(',', $reportIdsFilter) . ")";
+        }
+        if ($hasUserHiddenAt) {
+            $where[] = "ir.user_hidden_at IS NULL";
+        }
+        if ($where) {
+            $sql .= " WHERE " . implode(' AND ', $where);
         }
 
         $sql .= " ORDER BY ir.created_at DESC";
@@ -296,6 +340,9 @@ try {
 
         if ($userId) {
             $stmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+        }
+        if ($reportIdFilter > 0) {
+            $stmt->bindParam(':report_id', $reportIdFilter, PDO::PARAM_INT);
         }
 
         $stmt->execute();
@@ -322,7 +369,20 @@ try {
         }
 
         // Validate status
-        $validStatuses = ['pending', 'received', 'in_progress', 'resolved', 'rejected'];
+        $status = strtolower(trim((string)$status));
+        $statusAliases = [
+            'dispatching' => 'dispatching',
+            'dispatched' => 'dispatching',
+            'ongoing dispatch' => 'ongoing_dispatch',
+            'ongoing_dispatch' => 'ongoing_dispatch',
+            'in progress' => 'in_progress',
+            'complete' => 'completed',
+        ];
+        $status = $statusAliases[$status] ?? str_replace(' ', '_', $status);
+        $validStatuses = [
+            'pending', 'received', 'dispatching', 'ongoing_dispatch',
+            'in_progress', 'resolved', 'completed', 'rejected'
+        ];
         if (!in_array($status, $validStatuses)) {
             apiResponse::error("Invalid status. Must be one of: " . implode(', ', $validStatuses), 400);
         }
@@ -338,15 +398,51 @@ try {
         }
 
         // Update status
-        $updateQuery = "
-            UPDATE incident_reports
-            SET status = ?,
-                admin_notes = ?
-            WHERE id = ?
-        ";
+        $legacyStatus = match ($status) {
+            'received' => 'pending',
+            'dispatching', 'ongoing_dispatch' => 'in_progress',
+            'completed' => 'resolved',
+            default => $status,
+        };
+        if ($hasResponseStatus) {
+            $updateStmt = $pdo->prepare("
+                UPDATE incident_reports
+                SET status = ?, response_status = ?, admin_notes = ?
+                WHERE id = ?
+            ");
+            $updateStmt->execute([$legacyStatus, $status, $admin_notes, $report_id]);
+        } else {
+            $updateStmt = $pdo->prepare("
+                UPDATE incident_reports
+                SET status = ?, admin_notes = ?
+                WHERE id = ?
+            ");
+            $updateStmt->execute([$legacyStatus, $admin_notes, $report_id]);
+        }
 
-        $updateStmt = $pdo->prepare($updateQuery);
-        $updateStmt->execute([$status, $admin_notes, $report_id]);
+        $conversationStmt = $pdo->prepare("
+            SELECT conversation_id
+            FROM conversations
+            WHERE JSON_VALID(device_info)
+              AND JSON_UNQUOTE(JSON_EXTRACT(device_info, '$.incident_report_id')) = ?
+            ORDER BY conversation_id DESC
+            LIMIT 1
+        ");
+        $conversationStmt->execute([(string)$report_id]);
+        $conversationId = (int)$conversationStmt->fetchColumn();
+        if ($conversationId > 0) {
+            $statusLabel = ucwords(str_replace('_', ' ', $status));
+            $workflowStatus = $status === 'completed' ? 'resolved' : 'waiting_user';
+            $pdo->prepare("
+                UPDATE conversations
+                SET status = ?, last_message = ?, last_message_time = NOW(), updated_at = NOW()
+                WHERE conversation_id = ?
+            ")->execute([
+                twc_status_for_db($pdo, $workflowStatus),
+                '[ERS_STATUS]' . $statusLabel,
+                $conversationId,
+            ]);
+        }
 
         apiResponse::success([
             'report_id' => $report_id,
@@ -354,8 +450,40 @@ try {
             'admin_notes' => $admin_notes
         ], "Incident status updated successfully");
 
+    } elseif ($method === 'DELETE') {
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
+        if (!is_array($data)) {
+            apiResponse::error('Invalid JSON input.', 400);
+        }
+
+        $reportId = (int)($data['report_id'] ?? 0);
+        $userId = (int)($data['user_id'] ?? 0);
+        if ($reportId <= 0 || $userId <= 0) {
+            apiResponse::error('Missing report_id or user_id.', 400);
+        }
+        if (!$hasUserHiddenAt) {
+            apiResponse::error('Report deletion is temporarily unavailable.', 503);
+        }
+
+        $statusExpression = $hasResponseStatus
+            ? "COALESCE(NULLIF(response_status, ''), status)"
+            : 'status';
+        $stmt = $pdo->prepare("SELECT {$statusExpression} FROM incident_reports WHERE id = ? AND user_id = ? LIMIT 1");
+        $stmt->execute([$reportId, $userId]);
+        $reportStatus = strtolower(trim((string)$stmt->fetchColumn()));
+        if ($reportStatus === '') {
+            apiResponse::error('Report not found.', 404);
+        }
+        if ($reportStatus !== 'completed') {
+            apiResponse::error('Active reports cannot be deleted. Wait until ERS marks the report Completed.', 409);
+        }
+
+        $pdo->prepare('UPDATE incident_reports SET user_hidden_at = NOW() WHERE id = ? AND user_id = ?')
+            ->execute([$reportId, $userId]);
+        apiResponse::success(['report_id' => $reportId], 'Completed report conversation removed.');
     } else {
-        apiResponse::error("Invalid request method. Use GET, POST, PUT, or PATCH.", 405);
+        apiResponse::error("Invalid request method. Use GET, POST, PUT, PATCH, or DELETE.", 405);
     }
 
 } catch (PDOException $e) {

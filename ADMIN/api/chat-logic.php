@@ -134,6 +134,95 @@ if (!function_exists('twc_column_exists')) {
     }
 }
 
+if (!function_exists('twc_ensure_conversation_trash_storage')) {
+    /**
+     * Creates the soft-delete index and immutable deletion audit used by Reports
+     * and General Enquiries. Messages remain intact until permanent deletion.
+     */
+    function twc_ensure_conversation_trash_storage(PDO $pdo): bool {
+        static $ready = null;
+        if ($ready !== null) {
+            return $ready;
+        }
+
+        try {
+            if (!twc_table_exists($pdo, 'twc_conversation_trash')) {
+                $pdo->exec("
+                    CREATE TABLE IF NOT EXISTS twc_conversation_trash (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        conversation_id INT NOT NULL,
+                        item_type VARCHAR(32) NOT NULL,
+                        deletion_reason VARCHAR(50) NOT NULL,
+                        deletion_details TEXT NULL,
+                        deleted_by_admin_id INT NULL,
+                        deleted_by_admin_name VARCHAR(255) NOT NULL,
+                        conversation_snapshot MEDIUMTEXT NULL,
+                        deleted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY uq_twc_trash_conversation (conversation_id),
+                        INDEX idx_twc_trash_type (item_type),
+                        INDEX idx_twc_trash_reason (deletion_reason),
+                        INDEX idx_twc_trash_deleted_at (deleted_at)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ");
+            }
+
+            if (!twc_table_exists($pdo, 'twc_conversation_deletion_audit')) {
+                $pdo->exec("
+                    CREATE TABLE IF NOT EXISTS twc_conversation_deletion_audit (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        conversation_id INT NOT NULL,
+                        trash_id INT NULL,
+                        action VARCHAR(40) NOT NULL,
+                        item_type VARCHAR(32) NOT NULL,
+                        deletion_reason VARCHAR(50) NULL,
+                        deletion_details TEXT NULL,
+                        admin_id INT NULL,
+                        admin_name VARCHAR(255) NOT NULL,
+                        item_name VARCHAR(255) NULL,
+                        item_location TEXT NULL,
+                        last_message TEXT NULL,
+                        ip_address VARCHAR(45) NULL,
+                        user_agent TEXT NULL,
+                        snapshot MEDIUMTEXT NULL,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_twc_deletion_conversation (conversation_id),
+                        INDEX idx_twc_deletion_action (action),
+                        INDEX idx_twc_deletion_created_at (created_at)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ");
+            }
+
+            $ready = true;
+        } catch (Throwable $e) {
+            error_log('TWC trash storage initialization failed: ' . $e->getMessage());
+            $ready = false;
+        }
+
+        return $ready;
+    }
+}
+
+if (!function_exists('twc_conversation_item_type')) {
+    function twc_conversation_item_type($userConcern): string {
+        $concern = strtolower(trim((string)$userConcern));
+        return in_array($concern, twc_general_enquiry_concerns(), true)
+            ? 'general_enquiry'
+            : 'report';
+    }
+}
+
+if (!function_exists('twc_not_trashed_clause')) {
+    function twc_not_trashed_clause(PDO $pdo, string $alias = 'c'): string {
+        if (!twc_table_exists($pdo, 'twc_conversation_trash')) {
+            return '';
+        }
+
+        return " AND NOT EXISTS (
+            SELECT 1 FROM twc_conversation_trash twc_trash
+            WHERE twc_trash.conversation_id = {$alias}.conversation_id
+        ) ";
+    }
+}
 if (!function_exists('twc_placeholders')) {
     function twc_placeholders(array $values): string {
         return implode(',', array_fill(0, count($values), '?'));
@@ -152,13 +241,13 @@ if (!function_exists('twc_status_filter_clause')) {
         }
 
         if ($statusFilter === 'assigned') {
-            $active = twc_active_statuses();
+            $active = ['active', 'open', 'in_progress', 'waiting_user'];
             $params = array_merge($params, $active);
             return " AND {$alias}.status IN (" . twc_placeholders($active) . ") AND COALESCE({$alias}.assigned_to, 0) > 0 ";
         }
 
         if ($statusFilter === 'active' || $statusFilter === 'open') {
-            $active = twc_active_statuses();
+            $active = ['active', 'open', 'in_progress'];
             $params = array_merge($params, $active);
             return " AND {$alias}.status IN (" . twc_placeholders($active) . ") ";
         }
@@ -169,8 +258,50 @@ if (!function_exists('twc_status_filter_clause')) {
             return " AND {$alias}.status IN (" . twc_placeholders($closed) . ") ";
         }
 
+        if ($statusFilter === 'pending') {
+            $params[] = 'waiting_user';
+            return " AND {$alias}.status = ? AND COALESCE({$alias}.assigned_to, 0) = 0 ";
+        }
+
         $params[] = $statusFilter;
         return " AND {$alias}.status = ? ";
+    }
+}
+
+if (!function_exists('twc_general_enquiry_concerns')) {
+    /**
+     * Conversation concern values reserved for non-emergency support chats.
+     */
+    function twc_general_enquiry_concerns(): array {
+        return [
+            'general',
+            'general_support',
+            'general support',
+            'general_inquiry',
+            'general inquiry',
+            'general_enquiry',
+            'general enquiry',
+        ];
+    }
+}
+
+if (!function_exists('twc_scope_filter_clause')) {
+    /**
+     * Returns the concern filter shared by report and general-enquiry inboxes.
+     * Appends bind params into $params.
+     */
+    function twc_scope_filter_clause(string $scope, array &$params, string $alias = 'c'): string {
+        $scope = strtolower(trim($scope));
+        if (!in_array($scope, ['citizen_reports', 'general_enquiries'], true)) {
+            return '';
+        }
+
+        $concerns = twc_general_enquiry_concerns();
+        $params = array_merge($params, $concerns);
+        $operator = $scope === 'general_enquiries' ? 'IN' : 'NOT IN';
+
+        return " AND LOWER(TRIM(COALESCE({$alias}.user_concern, ''))) {$operator} ("
+            . twc_placeholders($concerns) . ') ';
     }
 }
 

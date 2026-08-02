@@ -67,23 +67,22 @@ try {
     }
   }
 
-  // Validate file size (limit to 20MB)
-  $maxFileSize = 20 * 1024 * 1024; // 20 megabytes
+  $imageOnly = filter_var($_GET['image_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
+  $maxFileSize = ($imageOnly ? 10 : 20) * 1024 * 1024;
   if ($file['size'] > $maxFileSize) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'File size exceeds the limit of 20MB.']);
+    echo json_encode(['success' => false, 'message' => $imageOnly
+      ? 'Picture size exceeds the limit of 10MB.'
+      : 'File size exceeds the limit of 20MB.']);
     exit;
   }
 
   // Validate mime type or extension
-  $allowedExtensions = [
-    // Images
-    'jpg', 'jpeg', 'png', 'gif', 'webp',
-    // Videos
-    'mp4', 'mov', 'avi', 'mkv', '3gp',
-    // Audios
-    'mp3', 'wav', 'm4a', 'aac', 'ogg'
-  ];
+  $imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+  $allowedExtensions = $imageOnly ? $imageExtensions : array_merge(
+    $imageExtensions,
+    ['mp4', 'mov', 'avi', 'mkv', '3gp', 'mp3', 'wav', 'm4a', 'aac', 'ogg']
+  );
 
   $filename = $file['name'];
   $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
@@ -91,6 +90,12 @@ try {
   if (!in_array($ext, $allowedExtensions)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Invalid file type. Allowed types: ' . implode(', ', $allowedExtensions)]);
+    exit;
+  }
+
+  if ($imageOnly && @getimagesize($file['tmp_name']) === false) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Only valid picture files are allowed for incident reports.']);
     exit;
   }
 

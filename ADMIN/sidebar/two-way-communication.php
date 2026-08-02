@@ -269,14 +269,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     <li class="breadcrumb-item">
                         <a href="dashboard.php" class="breadcrumb-link">Dashboard</a>
                         </li>
-                        <li class="breadcrumb-item active" aria-current="page">Two-Way Communication</li>
+                        <li class="breadcrumb-item active" aria-current="page"><?php echo htmlspecialchars($pageHeading); ?></li>
                     </ol>
                 </nav>
                 <h1><i class="fas fa-comments" style="color: var(--primary-color-1); margin-right: 0.5rem;"></i> <?php echo htmlspecialchars($pageHeading); ?></h1>
                 <p><?php echo htmlspecialchars($pageDescription); ?></p>
             </div>
 
-            <div class="twc-primary-switch" id="twcPrimarySwitch" aria-label="Two-way communication views">
+            <?php if ($pageMode === 'citizen_reports'): ?><div class="twc-primary-switch" id="twcPrimarySwitch" aria-label="Report views">
                 <button type="button" class="twc-primary-chip active" data-twc-view="conversations">
                     <i class="fas fa-comments"></i>
                     <span>Conversations</span>
@@ -289,6 +289,24 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     <i class="fas fa-share-from-square"></i>
                     <span>Transferred</span>
                 </button>
+            </div>
+
+            <?php endif; ?><div class="twc-new-message-notice" id="twcNewMessageNotice" role="status" aria-live="polite" hidden>
+                <div class="twc-new-message-notice__content">
+                    <i class="fas fa-comment-dots" aria-hidden="true"></i>
+                    <div>
+                        <strong><?php echo $pageMode === 'general_enquiries' ? 'New general enquiry' : 'New message/report'; ?></strong>
+                        <span id="twcNewMessageNoticeText"><?php echo $pageMode === 'general_enquiries' ? 'A new mobile enquiry was added to Open.' : 'A new citizen message was added to Open.'; ?></span>
+                    </div>
+                </div>
+                <div class="twc-new-message-notice__actions">
+                    <button type="button" class="btn btn-primary btn-sm" id="twcViewOpenMessagesBtn">
+                        <i class="fas fa-inbox" aria-hidden="true"></i> View Open
+                    </button>
+                    <button type="button" class="twc-icon-button" id="twcDismissNewMessageBtn" aria-label="Dismiss notification" title="Dismiss">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
 
             <div id="twcConversationsShell">
@@ -306,11 +324,17 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 <div class="chat-tab" onclick="switchTab('assigned')">
                                     <i class="fas fa-user-check"></i> Assigned
                                 </div>
-                                <div class="chat-tab" onclick="switchTab('closed')">
+                                <?php if ($pageMode === 'citizen_reports'): ?>
+                                <div class="chat-tab" onclick="switchTab('pending')">
                                     <i class="fas fa-hourglass-half"></i> Pending Status
                                 </div>
+                                <?php else: ?>
+                                <div class="chat-tab" onclick="switchTab('closed')">
+                                    <i class="fas fa-circle-check"></i> Closed
+                                </div>
+                                <?php endif; ?>
                             </div>
-                            <div class="chat-filters">
+                            <?php if ($pageMode === 'citizen_reports'): ?><div class="chat-filters">
 
                                 <label for="priorityFilter">Priority</label>
                                 <select id="priorityFilter">
@@ -327,7 +351,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                     <?php endif; ?>
                                 </select>
                             </div>
-                            <div class="conversations-list-table-wrapper" id="scrollableList" style="flex: 1; overflow-y: auto; overflow-x: auto; padding: 0.75rem;">
+                            <?php endif; ?><div class="conversations-list-table-wrapper" id="scrollableList" style="flex: 1; overflow-y: auto; overflow-x: auto; padding: 0.75rem;">
                                 <div id="incomingEmergencyCallRow" style="display:none;"></div>
                                 <table class="twc-table">
                                     <thead>
@@ -335,7 +359,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                             <th>Citizen</th>
                                             <th>Location</th>
                                             <th>Last Message</th>
-                                            <th>Priority</th>
+                                            <?php if ($pageMode === 'citizen_reports'): ?><th>Priority</th><?php endif; ?>
                                             <th>Admin Assigned</th>
                                             <th>Status</th>
                                             <th style="text-align: right;">Action</th>
@@ -395,13 +419,17 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                         </div>
                                     </div>
                                     <?php endif; ?>
+                                     <?php if ($pageMode === 'citizen_reports'): ?>
                                      <button class="btn btn-sm btn-secondary" id="transferConversationBtn" style="display: none;">
                                          <i class="fas fa-share-from-square"></i> Transfer
                                      </button>
+                                     <?php endif; ?>
                                      <button class="btn btn-sm btn-secondary" id="releaseConversationBtn" style="display: none;">
                                          <i class="fas fa-door-open"></i> Hand Over
                                      </button>
-                                     <button class="btn btn-sm btn-secondary" id="toggleStatusBtn" style="display: none;">
+                                     <button class="btn btn-sm btn-danger" id="deleteConversationBtn" style="display: none;">
+                                         <i class="fas fa-trash-alt"></i> Delete
+                                     </button>                                     <button class="btn btn-sm btn-secondary" id="toggleStatusBtn" style="display: none;">
                                          <i class="fas fa-check"></i> Close Chat
                                      </button>
                                  </div>
@@ -487,6 +515,46 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             </div>
 
 
+            <div class="twc-modal-backdrop" id="twcDeleteModal" aria-hidden="true">
+                <div class="twc-transfer-modal" role="dialog" aria-modal="true" aria-labelledby="twcDeleteModalTitle">
+                    <div class="twc-transfer-modal__head">
+                        <div class="twc-transfer-modal__icon" style="background:#dc2626;">
+                            <i class="fas fa-trash-alt"></i>
+                        </div>
+                        <div>
+                            <h3 id="twcDeleteModalTitle">Delete conversation</h3>
+                            <p id="twcDeleteModalSubtitle">This item will be moved to Trash Bin.</p>
+                        </div>
+                    </div>
+                    <div class="twc-transfer-modal__body">
+                        <div class="twc-transfer-description" style="margin-top:0;">
+                            <label for="twcDeleteReason">Reason <span aria-hidden="true">*</span></label>
+                            <select id="twcDeleteReason" required>
+                                <option value="">Choose a reason...</option>
+                                <option value="duplicate">Duplicate</option>
+                                <option value="false_report">False report</option>
+                                <option value="spam">Spam or irrelevant</option>
+                                <option value="test_report">Test submission</option>
+                                <option value="resolved_elsewhere">Resolved elsewhere</option>
+                                <option value="privacy_request">Privacy request</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="twc-transfer-description">
+                            <label for="twcDeleteDetails">Additional details</label>
+                            <textarea id="twcDeleteDetails" rows="3" maxlength="500" placeholder="Add context for the audit trail."></textarea>
+                            <small>Details are required when Other is selected.</small>
+                        </div>
+                        <div class="twc-transfer-modal__message" id="twcDeleteMessage">Select a reason to continue.</div>
+                    </div>
+                    <div class="twc-transfer-modal__actions">
+                        <button type="button" class="btn btn-secondary" id="twcDeleteCancelBtn">Cancel</button>
+                        <button type="button" class="btn btn-danger" id="twcDeleteConfirmBtn">
+                            <i class="fas fa-trash-alt"></i> Move to Trash
+                        </button>
+                    </div>
+                </div>
+            </div>
             <div class="twc-chatbot-logs-shell" id="twcChatbotLogsShell" hidden>
                 <div class="twc-logs-intro">
                     <h3><i class="fas fa-robot"></i> Chatbot Interaction Logs</h3>
@@ -641,7 +709,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             return index >= 0 ? path.slice(0, index) : '';
         })();
         const ROOT_API_BASE = `${APP_ROOT}/api/`;
-        const transferApiUrl = (suffix = '') => `${ROOT_API_BASE}transfer-call.php${suffix}`;
+        const transferApiUrl = (suffix = '') => `${ROOT_API_BASE}transfer-report.php${suffix}`;
         const ADMIN_USERNAME = <?php echo json_encode($adminUsername); ?>;
         const ADMIN_ID = <?php echo json_encode($_SESSION['admin_user_id'] ?? null); ?>;
         const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=4c8a89&color=fff&size=128`;
@@ -704,7 +772,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         ];
         
         // Polling Intervals
-        const MESSAGE_POLL_MS = 5000;
+        const MESSAGE_POLL_MS = 10000;
         const FALLBACK_POLL_MS = 10000;
         let pollInterval = null;
         let messageInterval = null;
@@ -712,6 +780,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         let twcRealtimeReconnectTimer = null;
         let fallbackPollInFlight = false;
         let messagePollInFlight = false;
+        let conversationLoadController = null;
+        let conversationLoadSequence = 0;
+        let newMessageNoticeCount = 0;
+        let pendingDeleteConversation = null;
 
         function isTwoWayRealtimeOpen() {
             return !!(twcRealtimeSource && twcRealtimeSource.readyState === 1);
@@ -745,22 +817,23 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         // --- View Management ---
         
         function switchTab(status) {
-            if (currentStatus === status) return;
             currentStatus = status;
-            
-            // UI Update
+
             document.querySelectorAll('.chat-tab').forEach(tab => {
                 const onclick = tab.getAttribute('onclick') || '';
                 tab.classList.toggle('active', onclick.includes(`'${status}'`));
             });
 
-            // Reset List
             currentPage = 1;
             hasMore = true;
-            document.getElementById('conversationsList').innerHTML = '';
             document.getElementById('paginationContainer').style.display = 'none';
-            
-            loadConversations(true);
+            if (status === 'open') {
+                hideNewMessageNotice();
+            }
+
+            // A second click is also a manual refresh. The loader aborts any stale
+            // request so rapid tab changes cannot leave the table blank.
+            loadConversations(true, false, false);
         }
         
         function closeMobileChat() {
@@ -779,6 +852,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             currentConversationData = null;
             const transferBtn = document.getElementById('transferConversationBtn');
             if (transferBtn) transferBtn.style.display = 'none';
+            const deleteBtn = document.getElementById('deleteConversationBtn');
+            if (deleteBtn) deleteBtn.style.display = 'none';
         }
 
         function clearConversationIdQueryParam() {
@@ -913,9 +988,37 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
         }
 
+        let transferStatusSyncing = false;
+        async function syncPendingTransferStatuses() {
+            if (transferStatusSyncing || document.hidden) return;
+            transferStatusSyncing = true;
+            try {
+                const listResponse = await fetch(transferApiUrl('?limit=25'));
+                const listData = await readApiResponse(listResponse);
+                const rows = Array.isArray(listData.transfers) ? listData.transfers : [];
+                const pendingReports = rows.filter((row) => {
+                    const payload = row.payload || {};
+                    const transferType = String(payload.transfer_type || payload.transferType || '').toLowerCase();
+                    const status = String(row.response_status || '').toLowerCase();
+                    return transferType !== 'live_call' && !['completed'].includes(status);
+                }).slice(0, 8);
+                await Promise.allSettled(pendingReports.map((row) =>
+                    fetch(transferApiUrl(), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'request_status', transferId: Number(row.id) })
+                    })
+                ));
+            } catch (error) {
+                console.warn('Automatic ERS status sync skipped:', error);
+            } finally {
+                transferStatusSyncing = false;
+            }
+        }
+
         async function updateTransferEmergencyStatus(transferId) {
-            const allowed = 'requested, received, fake_call, rescue_ongoing, responders_dispatched, arrived_on_scene, resolved, cancelled, unable_to_locate, duplicate';
-            const responseStatus = prompt(`Enter emergency status:\n${allowed}`, 'rescue_ongoing');
+            const allowed = 'received, dispatching, ongoing_dispatch, resolved, completed';
+            const responseStatus = prompt(`Enter emergency status:\n${allowed}`, 'received');
             if (!responseStatus) return;
             const note = prompt('Optional status note:', '') || '';
             try {
@@ -934,6 +1037,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         window.requestTransferEmergencyStatus = requestTransferEmergencyStatus;
         window.updateTransferEmergencyStatus = updateTransferEmergencyStatus;
+        window.setTimeout(syncPendingTransferStatuses, 1200);
+        window.setInterval(syncPendingTransferStatuses, 15000);
 
         function stopChatbotLogsRealtime() {
             if (chatbotLogsRealtimeTimer) {
@@ -1634,16 +1739,21 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         async function loadConversations(isInitial = false, append = false, silent = false) {
-            if (isLoading) return;
+            const requestSequence = ++conversationLoadSequence;
+            if (conversationLoadController) {
+                conversationLoadController.abort();
+            }
+            const controller = new AbortController();
+            conversationLoadController = controller;
             isLoading = true;
-            
+
             const listContainer = document.getElementById('conversationsList');
             const spinner = document.getElementById('loadingSpinner');
             if (isInitial && !append && !silent) {
-                spinner.style.display = 'block';
-                listContainer.innerHTML = ''; // Clear for initial load
+                if (spinner) spinner.style.display = 'block';
+                listContainer.innerHTML = '';
             }
-            
+
             try {
                 const params = new URLSearchParams({
                     status: currentStatus,
@@ -1655,6 +1765,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 }
                 if (PAGE_MODE === 'citizen_reports') {
                     params.set('scope', 'citizen_reports');
+                } else if (PAGE_MODE === 'general_enquiries') {
+                    params.set('scope', 'general_enquiries');
+                }
+                if (!conversationFromQueryOpened && conversationIdFromQuery > 0) {
+                    params.set('conversationId', String(conversationIdFromQuery));
                 }
                 if (currentDept !== 'all') {
                     params.set('category', currentDept);
@@ -1662,16 +1777,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (currentPriority !== 'all') {
                     params.set('priority', currentPriority);
                 }
-                
-                const response = await fetch(`${API_BASE}chat-get-conversations.php?${params}`);
+
+                const response = await fetch(`${API_BASE}chat-get-conversations.php?${params}`, {
+                    signal: controller.signal
+                });
                 const data = await response.json();
-                
-                if (!silent) {
-                    spinner.style.display = 'none';
-                }
-                
-                if (!data.success) throw new Error(data.message);
-                
+                if (requestSequence !== conversationLoadSequence) return;
+                if (!data.success) throw new Error(data.message || 'Failed to load conversations.');
+
                 let conversations = data.conversations || [];
                 updateDepartmentNavCounts(conversations);
                 const openBadge = document.getElementById('openCount');
@@ -1693,11 +1806,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (currentTopic !== 'all') {
                     conversations = conversations.filter(conv => mapConversationTopic(conv) === currentTopic);
                 }
-                
-                // Handle Empty State
+
                 if (conversations.length === 0) {
                     hasMore = false;
-                    if (isInitial && !append) {
+                    if (!append) {
                         const suffix = currentDept === 'all' ? '' : ' for this department';
                         const topicSuffix = currentTopic === 'all' ? '' : ' for this topic';
                         listContainer.innerHTML = `<p style="text-align: center; color: var(--text-secondary-1); padding: 2rem;">No ${currentStatus} conversations${suffix}${topicSuffix}</p>`;
@@ -1709,19 +1821,22 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 const totalPages = Math.max(1, Number(data.pagination?.total_pages) || 1);
                 hasMore = currentPage < totalPages;
                 renderConversationPagination(totalPages);
-                
-                // Render Items (grouped by department)
                 renderGroupedConversations(conversations, false);
                 tryOpenConversationFromQuery(conversations);
-                
             } catch (error) {
+                if (error && error.name === 'AbortError') return;
                 console.error('Error loading conversations:', error);
-                if (isInitial && !silent) listContainer.innerHTML = '<p style="color: #e74c3c; text-align: center; padding: 1rem;">Failed to load data</p>';
-            } finally {
-                if (!silent) {
-                    spinner.style.display = 'none';
+                if (requestSequence === conversationLoadSequence && !silent) {
+                    listContainer.innerHTML = '<p style="color: #e74c3c; text-align: center; padding: 1rem;">Failed to load data</p>';
                 }
-                isLoading = false;
+            } finally {
+                if (requestSequence === conversationLoadSequence) {
+                    if (spinner) spinner.style.display = 'none';
+                    if (conversationLoadController === controller) {
+                        conversationLoadController = null;
+                    }
+                    isLoading = false;
+                }
             }
         }
         
@@ -1747,13 +1862,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const pageButtons = pages.map(page => {
                 if (typeof page !== 'number') return '<span class="twc-page-ellipsis" aria-hidden="true">&hellip;</span>';
                 const active = page === currentPage;
-                return `<button type="button" class="twc-page-btn${active ? ' active' : ''}" onclick="goToConversationPage(${page})" ${active ? 'aria-current="page"' : ''}>${page}</button>`;
+                return `<button type="button" class="twc-page-btn${active ? ' active' : ''}" data-conversation-page="${page}" ${active ? 'aria-current="page"' : ''}>${page}</button>`;
             }).join('');
 
             container.innerHTML = `
-                <button type="button" class="twc-page-btn twc-page-nav" onclick="goToConversationPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''} aria-label="Previous page">&lsaquo;</button>
+                <button type="button" class="twc-page-btn twc-page-nav" data-conversation-page="${currentPage - 1}" ${currentPage <= 1 ? 'disabled' : ''} aria-label="Previous page">&lsaquo;</button>
                 ${pageButtons}
-                <button type="button" class="twc-page-btn twc-page-nav" onclick="goToConversationPage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''} aria-label="Next page">&rsaquo;</button>
+                <button type="button" class="twc-page-btn twc-page-nav" data-conversation-page="${currentPage + 1}" ${currentPage >= totalPages ? 'disabled' : ''} aria-label="Next page">&rsaquo;</button>
             `;
             container.style.display = 'flex';
         }
@@ -1766,6 +1881,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 document.getElementById('scrollableList')?.scrollTo({ top: 0, behavior: 'smooth' });
             });
         }
+
+        document.getElementById('paginationContainer')?.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-conversation-page]');
+            if (!button || button.disabled) return;
+            goToConversationPage(Number(button.dataset.conversationPage));
+        });
         
         // --- Real-time Polling ---
         
@@ -1795,7 +1916,25 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         function formatMessageReportCount(diff) {
+            if (PAGE_MODE === 'general_enquiries') {
+                return diff === 1 ? '1 new general enquiry' : `${diff} new general enquiries`;
+            }
             return diff === 1 ? '1 new message/report' : `${diff} new message/reports`;
+        }
+
+        function hideNewMessageNotice() {
+            const notice = document.getElementById('twcNewMessageNotice');
+            if (notice) notice.hidden = true;
+            newMessageNoticeCount = 0;
+        }
+
+        function showNewMessageNotice(diff = 1) {
+            const notice = document.getElementById('twcNewMessageNotice');
+            const message = document.getElementById('twcNewMessageNoticeText');
+            if (!notice || !message) return;
+            newMessageNoticeCount += Math.max(1, Number(diff) || 1);
+            message.textContent = `${formatMessageReportCount(newMessageNoticeCount)} received. The conversation list has been updated.`;
+            notice.hidden = false;
         }
 
         function updateTwoWayBadges(count) {
@@ -1805,7 +1944,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
             const sidebarLinks = document.querySelectorAll('.sidebar-menu li a');
             sidebarLinks.forEach(link => {
-                if (link.href.includes('two-way-communication.php')) {
+                const targetRoute = PAGE_MODE === 'general_enquiries' ? 'two-way-comm/general' : 'two-way-comm/citizen';
+                if (link.href.includes(targetRoute)) {
                     let badge = link.querySelector('.sidebar-badge');
                     if (!badge) {
                         badge = document.createElement('span');
@@ -1833,7 +1973,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 hasUnreadBaseline = true;
             } else if (count > lastUnreadCount || (hasLatestId && latestId > lastUnreadMessageId)) {
                 const diff = count > lastUnreadCount ? count - lastUnreadCount : 1;
-                showToast('New message/report', formatMessageReportCount(diff));
+                showToast(PAGE_MODE === 'general_enquiries' ? 'New general enquiry' : 'New message/report', formatMessageReportCount(diff));
+                showNewMessageNotice(diff);
                 lastUnreadCount = count;
             } else if (count < lastUnreadCount) {
                 lastUnreadCount = count;
@@ -1847,7 +1988,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         async function refreshConversationListRealtime() {
             if (currentMainView !== 'conversations') return;
-            if (!isLoading && currentPage === 1 && ['open', 'active', 'assigned', 'closed'].includes(currentStatus)) {
+            if (currentPage === 1 && ['open', 'active', 'assigned', 'pending', 'closed'].includes(currentStatus)) {
                 await loadConversations(false, false, true);
             }
         }
@@ -1870,7 +2011,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         function connectTwoWayRealtime() {
             if (document.hidden || !('EventSource' in window) || twcRealtimeSource) return;
-            twcRealtimeSource = new EventSource(API_BASE + 'realtime.php');
+            const realtimeUrl = new URL(API_BASE + 'realtime.php', window.location.href);
+            realtimeUrl.searchParams.set('scope', PAGE_MODE);
+            if (currentConversationId) {
+                realtimeUrl.searchParams.set('conversationId', currentConversationId);
+                realtimeUrl.searchParams.set('lastMessageId', lastMessageId);
+            }
+            twcRealtimeSource = new EventSource(realtimeUrl.toString());
 
             const readEventData = (event) => {
                 try { return JSON.parse(event.data || '{}'); } catch (e) { return {}; }
@@ -1880,6 +2027,22 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 const data = readEventData(event);
                 handleUnreadCount(data.unreadMessageCount ?? data.unreadCount, data.latestMessageId);
                 refreshConversationListRealtime();
+            });
+
+            twcRealtimeSource.addEventListener('message:new', (event) => {
+                const data = readEventData(event);
+                const messageId = Number(data.id || 0);
+                if (!currentConversationId || Number(data.conversationId || 0) !== Number(currentConversationId)) return;
+                if (!messageId || messageId <= lastMessageId) return;
+                appendMessage({
+                    id: messageId,
+                    text: data.body || '',
+                    senderType: data.senderRole === 'staff' ? 'admin' : 'user',
+                    senderName: data.senderName || '',
+                    timestamp: Number(data.createdAt || Date.now())
+                });
+                lastMessageId = messageId;
+                scrollToBottom();
             });
 
             twcRealtimeSource.addEventListener('conversation:unread', (event) => {
@@ -1903,7 +2066,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (document.hidden || fallbackPollInFlight || isTwoWayRealtimeOpen()) return;
             fallbackPollInFlight = true;
             try {
-                const response = await fetch(API_BASE + 'chat-get-unread-count.php');
+                const response = await fetch(API_BASE + 'chat-get-unread-count.php?scope=' + encodeURIComponent(PAGE_MODE));
                 const data = await response.json();
                 if (data.success) {
                     handleUnreadCount(data.unreadMessageCount ?? data.unreadCount, data.latestMessageId);
@@ -1947,6 +2110,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     transferConversationReport(rowData);
                     return;
                 }
+                if (event.target.closest('.delete-conversation-btn')) {
+                    event.stopPropagation();
+                    openDeleteConversationModal(rowData);
+                    return;
+                }
                 openConversation(conv.id, rowData, this);
             });
             
@@ -1954,80 +2122,83 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         
         function getConversationHTML(conv) {
-            const guestBadge = conv.isGuest ? '<span class="list-chip list-chip-guest" style="background: #e67e22; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; margin-left: 0.25rem;">GUEST</span>' : '';
-            const concernBadge = conv.userConcern ? `<span class="list-chip list-chip-concern" style="background: #2ecc71; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; margin-left: 0.25rem;">${conv.userConcern}</span>` : '';
-            const callBadge = conv.hasCall ? '<span class="list-chip list-chip-call" style="background: #3498db; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; margin-left: 0.25rem;"><i class="fas fa-phone"></i> Call</span>' : '';
-            const unreadBadge = conv.unreadCount > 0 ? `<span class="list-chip list-chip-unread" style="background: #e74c3c; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; margin-left: 0.25rem;">${conv.unreadCount}</span>` : '';
+            const guestBadge = conv.isGuest
+                ? '<span class="list-chip list-chip-guest" style="background:#e67e22;color:white;padding:2px 6px;border-radius:4px;font-size:0.7rem;font-weight:700;margin-left:0.25rem;">GUEST</span>'
+                : '';
+            const concernLabel = PAGE_MODE === 'general_enquiries' ? 'GENERAL' : String(conv.userConcern || '');
+            const concernBadge = concernLabel
+                ? `<span class="list-chip list-chip-concern" style="background:#2ecc71;color:white;padding:2px 6px;border-radius:4px;font-size:0.7rem;font-weight:700;margin-left:0.25rem;">${escapeHtml(concernLabel)}</span>`
+                : '';
+            const callBadge = conv.hasCall
+                ? '<span class="list-chip list-chip-call" style="background:#3498db;color:white;padding:2px 6px;border-radius:4px;font-size:0.7rem;font-weight:700;margin-left:0.25rem;"><i class="fas fa-phone"></i> Call</span>'
+                : '';
+            const unreadBadge = conv.unreadCount > 0
+                ? `<span class="list-chip list-chip-unread" style="background:#e74c3c;color:white;padding:2px 6px;border-radius:4px;font-size:0.7rem;font-weight:700;margin-left:0.25rem;">${conv.unreadCount}</span>`
+                : '';
             const workflowRaw = (conv.workflowStatus || '').toLowerCase();
             const workflowLabelMap = {
-                open: 'Open',
-                active: 'Open',
-                in_progress: 'In Progress',
-                waiting_user: 'Waiting User',
-                resolved: 'Resolved',
-                closed: 'Closed'
+                open: 'Open', active: 'Open', in_progress: 'In Progress', waiting_user: 'Waiting User',
+                pending: 'Pending ERS Status', resolved: 'Resolved', closed: 'Closed'
+            };
+            const workflowClassMap = {
+                open: 'workflow-open', active: 'workflow-open', in_progress: 'workflow-progress',
+                waiting_user: 'workflow-waiting', resolved: 'workflow-resolved', closed: 'workflow-closed'
             };
             const workflowLabel = workflowLabelMap[workflowRaw] || 'Open';
-            const workflowClassMap = {
-                open: 'workflow-open',
-                active: 'workflow-open',
-                in_progress: 'workflow-progress',
-                waiting_user: 'workflow-waiting',
-                resolved: 'workflow-resolved',
-                closed: 'workflow-closed'
-            };
             const workflowClass = workflowClassMap[workflowRaw] || 'workflow-open';
             const statusBadge = `<span class="workflow-pill ${workflowClass}">${workflowLabel}</span>`;
-            const incidentBadge = incidentPriorityBadgeHtml(conv);
             const assignedAdmin = conv.assignedAdminName
                 ? `<span class="assigned-admin-pill"><i class="fas fa-user-shield"></i> ${escapeHtml(conv.assignedAdminName)}</span>`
                 : '<span class="assigned-admin-empty">Unassigned</span>';
-            const statusDot = `<span class="status-dot"></span>`;
-
             const timestamp = getConversationTimestamp(conv);
             const displayTime = timestamp
-                ? `${new Date(timestamp).toLocaleDateString([], { month: 'short', day: '2-digit' })} ${new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
+                ? `${new Date(timestamp).toLocaleDateString([], { month: 'short', day: '2-digit' })} ${new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                : '';
+            const location = conv.userLocation
+                ? escapeHtml(conv.userLocation)
+                : '<span style="opacity:0.5;">Not specified</span>';
+            const lastMsg = conv.lastMessage
+                ? escapeHtml(conv.lastMessage)
+                : '<span style="opacity:0.5;font-style:italic;">No messages</span>';
+            const priorityCell = PAGE_MODE === 'citizen_reports'
+                ? `<td style="padding:0.85rem 0.75rem;vertical-align:middle;">${incidentPriorityBadgeHtml(conv)}</td>`
+                : '';
+            const transferAction = PAGE_MODE === 'citizen_reports'
+                ? `<button class="btn btn-secondary transfer-report-btn" data-conversation-id="${conv.id}" style="padding:0.35rem 0.65rem;font-size:0.75rem;border-radius:4px;cursor:pointer;margin-right:0.35rem;">
+                       <i class="fas fa-share-from-square"></i> Transfer
+                   </button>`
                 : '';
 
-            const location = conv.userLocation || '<span style="opacity:0.5;">Not specified</span>';
-            const lastMsg = conv.lastMessage || '<span style="opacity:0.5;font-style:italic;">No messages</span>';
-
             return `
-                <td style="padding: 0.85rem 0.75rem; vertical-align: middle;">
-                    <div style="display: flex; align-items: center; gap: 0.35rem;">
-                        ${statusDot}
-                        <strong>${conv.userName || 'Unknown'}</strong>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;">
+                    <div style="display:flex;align-items:center;gap:0.35rem;">
+                        <span class="status-dot"></span>
+                        <strong>${escapeHtml(conv.userName || 'Unknown')}</strong>
                         ${guestBadge} ${concernBadge} ${callBadge} ${unreadBadge}
                     </div>
-                    ${conv.userPhone ? `<div style="font-size: 0.75rem; opacity: 0.6; margin-top: 0.15rem;"><i class="fas fa-phone" style="font-size:0.7rem;"></i> ${conv.userPhone}</div>` : ''}
+                    ${conv.userPhone ? `<div style="font-size:0.75rem;opacity:0.6;margin-top:0.15rem;"><i class="fas fa-phone" style="font-size:0.7rem;"></i> ${escapeHtml(conv.userPhone)}</div>` : ''}
                 </td>
-                <td style="padding: 0.85rem 0.75rem; vertical-align: middle; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                    <i class="fas fa-map-marker-alt" style="color: var(--primary-color-1); font-size:0.8rem;"></i> ${location}
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                    <i class="fas fa-map-marker-alt" style="color:var(--primary-color-1);font-size:0.8rem;"></i> ${location}
                 </td>
-                <td style="padding: 0.85rem 0.75rem; vertical-align: middle; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                     ${lastMsg}
-                    <div style="font-size: 0.7rem; opacity: 0.5; margin-top: 0.15rem;">${displayTime}</div>
+                    <div style="font-size:0.7rem;opacity:0.5;margin-top:0.15rem;">${displayTime}</div>
                 </td>
-                <td style="padding: 0.85rem 0.75rem; vertical-align: middle;">
-                    ${incidentBadge}
-                </td>
-                <td style="padding: 0.85rem 0.75rem; vertical-align: middle;">
-                    ${assignedAdmin}
-                </td>
-                <td style="padding: 0.85rem 0.75rem; vertical-align: middle;">
-                    ${statusBadge}
-                </td>
-                <td style="padding: 0.85rem 0.75rem; vertical-align: middle; text-align: right;">
-                    <button class="btn btn-secondary transfer-report-btn" data-conversation-id="${conv.id}" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 4px; cursor: pointer; margin-right:0.35rem;">
-                        <i class="fas fa-share-from-square"></i> Transfer
+                ${priorityCell}
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;">${assignedAdmin}</td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;">${statusBadge}</td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;text-align:right;">
+                    ${transferAction}
+                    <button class="btn btn-secondary delete-conversation-btn" title="Move to Trash Bin" style="padding:0.35rem 0.55rem;font-size:0.75rem;border-radius:4px;cursor:pointer;margin-right:0.35rem;">
+                        <i class="fas fa-trash-alt"></i> Delete
                     </button>
-                    <button class="btn btn-primary respond-btn" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 4px; cursor: pointer; background: var(--primary-color-1); color: white; border: none;">
+                    <button class="btn btn-primary respond-btn" style="padding:0.35rem 0.65rem;font-size:0.75rem;border-radius:4px;cursor:pointer;background:var(--primary-color-1);color:white;border:none;">
                         <i class="fas fa-reply"></i> Open Chat
                     </button>
                 </td>
             `;
         }
-
         function updateIncidentPriorityControl(data) {
             const control = document.getElementById('incidentPriorityControl');
             const badge = document.getElementById('incidentPriorityBadge');
@@ -2035,7 +2206,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const menu = document.getElementById('incidentPriorityMenu');
             const transferBtn = document.getElementById('transferConversationBtn');
             if (transferBtn) {
-                transferBtn.style.display = data ? 'inline-flex' : 'none';
+                transferBtn.style.display = PAGE_MODE === 'citizen_reports' && data ? 'inline-flex' : 'none';
                 transferBtn.disabled = !data;
             }
             if (!control || !badge || !button || !menu) return;
@@ -2371,6 +2542,102 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
         }
 
+        function openDeleteConversationModal(conversation = null) {
+            const target = conversation || currentConversationData;
+            if (!target || !target.id) return;
+
+            pendingDeleteConversation = target;
+            const noun = PAGE_MODE === 'general_enquiries' ? 'enquiry' : 'report';
+            document.getElementById('twcDeleteModalTitle').textContent =
+                'Are you sure you want to delete this ' + noun + '?';
+            document.getElementById('twcDeleteModalSubtitle').textContent =
+                'This ' + noun + ' and its messages will move to Trash Bin.';
+            document.getElementById('twcDeleteReason').value = '';
+            document.getElementById('twcDeleteDetails').value = '';
+            const message = document.getElementById('twcDeleteMessage');
+            message.className = 'twc-transfer-modal__message';
+            message.textContent = 'Select a reason to continue.';
+
+            const modal = document.getElementById('twcDeleteModal');
+            modal.classList.add('active');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('twcDeleteReason').focus();
+        }
+
+        function closeDeleteConversationModal() {
+            const modal = document.getElementById('twcDeleteModal');
+            modal.classList.remove('active');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            pendingDeleteConversation = null;
+        }
+
+        async function confirmDeleteConversation() {
+            if (!pendingDeleteConversation || !pendingDeleteConversation.id) return;
+
+            const reason = document.getElementById('twcDeleteReason').value;
+            const details = document.getElementById('twcDeleteDetails').value.trim();
+            const message = document.getElementById('twcDeleteMessage');
+            const button = document.getElementById('twcDeleteConfirmBtn');
+
+            if (!reason) {
+                message.className = 'twc-transfer-modal__message error';
+                message.textContent = 'Choose a deletion reason.';
+                document.getElementById('twcDeleteReason').focus();
+                return;
+            }
+            if (reason === 'other' && !details) {
+                message.className = 'twc-transfer-modal__message error';
+                message.textContent = 'Add details when Other is selected.';
+                document.getElementById('twcDeleteDetails').focus();
+                return;
+            }
+
+            const conversationId = Number(pendingDeleteConversation.id);
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+
+            try {
+                const response = await fetch(API_BASE + 'chat-trash.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'trash', conversationId, reason, details })
+                });
+                const data = await readApiResponse(response);
+                if (!data.success) {
+                    throw new Error(data.message || 'Unable to delete this conversation.');
+                }
+
+                closeDeleteConversationModal();
+                if (String(currentConversationId || '') === String(conversationId)) {
+                    if (currentConversationData) currentConversationData.assignedTo = null;
+                    currentConversationId = null;
+                    currentConversationData = null;
+                    closeMobileChat();
+                    document.getElementById('chatUserName').textContent = 'Select a conversation';
+                    document.getElementById('chatUserStatus').textContent = '';
+                    document.getElementById('chatMessages').innerHTML =
+                        '<div style="text-align:center;color:var(--text-secondary-1);padding:3rem;"><i class="fas fa-comments" style="font-size:3rem;opacity:.2;"></i><p>Select a conversation from the list to start messaging</p></div>';
+                    setupInputState(true);
+                    setupCloseButton(true);
+                    updateIncidentPriorityControl(null);
+                    const deleteBtn = document.getElementById('deleteConversationBtn');
+                    if (deleteBtn) deleteBtn.style.display = 'none';
+                    const releaseBtn = document.getElementById('releaseConversationBtn');
+                    if (releaseBtn) releaseBtn.style.display = 'none';
+                }
+
+                resetConversationsAndReload();
+                showToast('Moved to Trash Bin', data.message || 'Conversation deleted.');
+            } catch (error) {
+                message.className = 'twc-transfer-modal__message error';
+                message.textContent = error.message || 'Unable to delete this conversation.';
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-trash-alt"></i> Move to Trash';
+            }
+        }
         async function updateIncidentPriorityManual(level) {
             if (!currentConversationId || PAGE_MODE !== 'citizen_reports') return;
             const button = document.getElementById('incidentPriorityButton');
@@ -2489,6 +2756,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             setupCloseButton(isClosed);
             const releaseBtn = document.getElementById('releaseConversationBtn');
             if (releaseBtn) releaseBtn.style.display = isClosed ? 'none' : 'inline-flex';
+            const deleteBtn = document.getElementById('deleteConversationBtn');
+            if (deleteBtn) deleteBtn.style.display = 'inline-flex';
             if (!isClosed) {
                 const claimed = await claimConversationForAdmin(id);
                 if (!claimed) {
@@ -2502,7 +2771,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
 
             // Load Messages
-            loadMessages(id, true);
+            await loadMessages(id, true);
+            closeTwoWayRealtimeSource();
+            connectTwoWayRealtime();
         }
         
         function setupInputState(isClosed) {
@@ -3100,6 +3371,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     resetConversationsAndReload();
                 });
             }
+            const viewOpenMessagesBtn = document.getElementById('twcViewOpenMessagesBtn');
+            if (viewOpenMessagesBtn) {
+                viewOpenMessagesBtn.addEventListener('click', () => switchTab('open'));
+            }
+            const dismissNewMessageBtn = document.getElementById('twcDismissNewMessageBtn');
+            if (dismissNewMessageBtn) {
+                dismissNewMessageBtn.addEventListener('click', hideNewMessageNotice);
+            }
+
             const transferConversationBtn = document.getElementById('transferConversationBtn');
             if (transferConversationBtn) {
                 transferConversationBtn.addEventListener('click', () => transferConversationReport());
@@ -3108,6 +3388,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (releaseConversationBtn) {
                 releaseConversationBtn.addEventListener('click', releaseConversationForOtherAdmin);
             }
+            const deleteConversationBtn = document.getElementById('deleteConversationBtn');
+            if (deleteConversationBtn) {
+                deleteConversationBtn.addEventListener('click', () => openDeleteConversationModal());
+            }
+            document.getElementById('twcDeleteCancelBtn')?.addEventListener('click', closeDeleteConversationModal);
+            document.getElementById('twcDeleteConfirmBtn')?.addEventListener('click', confirmDeleteConversation);
+            document.getElementById('twcDeleteModal')?.addEventListener('click', (event) => {
+                if (event.target.id === 'twcDeleteModal') closeDeleteConversationModal();
+            });
             const incidentPriorityButton = document.getElementById('incidentPriorityButton');
             const incidentPriorityMenu = document.getElementById('incidentPriorityMenu');
             if (incidentPriorityButton && incidentPriorityMenu) {
@@ -3129,7 +3418,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
 
             const initialView = new URLSearchParams(window.location.search).get('view');
-            if (initialView === 'chatbotLogs' || initialView === 'transfers') {
+            if (PAGE_MODE === 'citizen_reports' && (initialView === 'chatbotLogs' || initialView === 'transfers')) {
                 setPrimaryView(initialView, false);
             } else {
                 setPrimaryView('conversations', false);

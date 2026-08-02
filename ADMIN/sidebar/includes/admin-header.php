@@ -198,32 +198,11 @@ $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
         </div>
         <div class="modal-footer">
             <button type="button" class="view-all-link" id="headerMarkNotificationsReadBtn">Mark all as read</button>
-            <a href="two-way-communication.php" class="view-all-link">Open Queue</a>
+            <a href="two-way-comm/citizen/" class="view-all-link" id="headerViewAllReportsLink">All Reports</a>
         </div>
     </div>
 </div>
 
-<!-- Incident Report Pop Modal -->
-<div class="header-incident-modal" id="headerIncidentModal" aria-hidden="true">
-    <div class="header-incident-modal-card" role="dialog" aria-modal="true" aria-labelledby="headerIncidentModalTitle">
-        <div class="header-incident-modal-head">
-            <h4 id="headerIncidentModalTitle"><i class="fas fa-triangle-exclamation"></i> New Incident Report</h4>
-            <button type="button" class="header-incident-modal-close" id="headerIncidentModalClose" aria-label="Close">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="header-incident-modal-body">
-            <p class="header-incident-modal-message" id="headerIncidentModalMessage"></p>
-            <p class="header-incident-modal-meta" id="headerIncidentModalMeta"></p>
-        </div>
-        <div class="header-incident-modal-actions">
-            <button type="button" class="btn btn-secondary btn-sm" id="headerIncidentModalDismiss">Dismiss</button>
-            <a href="two-way-communication.php" class="btn btn-primary btn-sm" id="headerIncidentModalOpen">
-                <i class="fas fa-comments"></i> Open Queue
-            </a>
-        </div>
-    </div>
-</div>
 <?php endif; ?>
 
 <!-- Message Modal -->
@@ -809,8 +788,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-        const HEADER_NOTIFICATION_POLL_MS = 15000;
-    let lastIncidentModalKey = sessionStorage.getItem('header_last_incident_modal_key') || '';
+    const HEADER_NOTIFICATION_POLL_MS = 15000;
 
     function escapeHtml(value) {
         const text = value == null ? '' : String(value);
@@ -861,10 +839,15 @@ document.addEventListener('DOMContentLoaded', function() {
             return null;
         }
         const convId = parseInt(item && item.conversation_id ? item.conversation_id : 0, 10);
+        const channel = String(item && item.channel ? item.channel : '').toLowerCase();
+        const route = channel === 'general_enquiry'
+            ? 'two-way-comm/general/'
+            : 'two-way-comm/citizen/';
+        const targetBase = `${window.APP_BASE_PATH || ''}/ADMIN/sidebar/${route}`;
         if (convId > 0) {
-            return `two-way-communication.php?conversationId=${encodeURIComponent(convId)}`;
+            return `${targetBase}?conversationId=${encodeURIComponent(convId)}`;
         }
-        return 'two-way-communication.php';
+        return targetBase;
     }
 
     function renderSystemNotifications(items) {
@@ -887,7 +870,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const itemClass = type === 'incident' ? 'notification-item--incident' : 'notification-item--system';
             const target = buildNotificationTarget(safeItem);
             const actionHtml = target
-                ? `<a href="${escapeHtml(target)}" class="notification-action-link"><i class="fas fa-arrow-up-right-from-square"></i> Open</a>`
+                ? `<a href="${escapeHtml(target)}" class="notification-action-link"><i class="fas fa-arrow-up-right-from-square"></i> View Messages</a>`
                 : '';
 
             return `
@@ -907,84 +890,40 @@ document.addEventListener('DOMContentLoaded', function() {
         }).join('');
     }
 
-    function incidentModalElements() {
-        return {
-            shell: document.getElementById('headerIncidentModal'),
-            message: document.getElementById('headerIncidentModalMessage'),
-            meta: document.getElementById('headerIncidentModalMeta'),
-            open: document.getElementById('headerIncidentModalOpen'),
-            close: document.getElementById('headerIncidentModalClose'),
-            dismiss: document.getElementById('headerIncidentModalDismiss'),
-        };
+    function setSidebarCommunicationBadge(elementId, count) {
+        const badge = document.getElementById(elementId);
+        if (!badge) return;
+
+        const safeCount = Math.max(0, parseInt(count || 0, 10));
+        const isCurrentModule = badge.dataset.activeModule === '1';
+        badge.hidden = isCurrentModule || safeCount === 0;
+        if (badge.hidden) return;
+
+        const label = safeCount === 1
+            ? badge.dataset.labelSingular
+            : badge.dataset.labelPlural;
+        badge.textContent = `${safeCount} ${label}`;
+        badge.setAttribute('aria-label', badge.textContent);
     }
 
-    function closeIncidentReportModal() {
-        const { shell } = incidentModalElements();
-        if (!shell) return;
-        shell.classList.remove('show');
-        shell.setAttribute('aria-hidden', 'true');
-    }
-
-    function openIncidentReportModal(item) {
-        const elements = incidentModalElements();
-        if (!elements.shell || !elements.message || !elements.meta) {
-            return;
+    function updateSidebarCommunicationBadges({ reports, generalEnquiries } = {}) {
+        if (typeof reports !== 'undefined') {
+            setSidebarCommunicationBadge('sidebarReportsUnreadBadge', reports);
         }
-
-        const title = String(item && item.title ? item.title : 'Incident Report').trim();
-        const message = String(item && item.message ? item.message : 'A new incident was reported.').trim();
-        const location = String(item && item.location ? item.location : '').trim();
-        const sentAt = item && (item.sent_at || item.created_at || item.event_time) ? (item.sent_at || item.created_at || item.event_time) : '';
-        const timeText = formatTimeAgo(sentAt);
-
-        elements.message.textContent = `${title}: ${message}`;
-        const metaParts = [];
-        if (location) metaParts.push(`Location: ${location}`);
-        if (timeText) metaParts.push(timeText);
-        elements.meta.textContent = metaParts.join(' | ');
-
-        if (elements.open) {
-            const target = buildNotificationTarget(item) || 'two-way-communication.php';
-            elements.open.setAttribute('href', target);
+        if (typeof generalEnquiries !== 'undefined') {
+            setSidebarCommunicationBadge('sidebarGeneralUnreadBadge', generalEnquiries);
         }
-
-        elements.shell.classList.add('show');
-        elements.shell.setAttribute('aria-hidden', 'false');
-    }
-
-    function buildIncidentItemKey(item) {
-        if (!item || typeof item !== 'object') return '';
-        const id = item.id ? String(item.id) : '';
-        const conv = item.conversation_id ? String(item.conversation_id) : '';
-        const ts = item.sent_at ? String(item.sent_at) : '';
-        const msg = item.message ? String(item.message).slice(0, 80) : '';
-        return [id, conv, ts, msg].join('|');
-    }
-
-    function maybeShowIncidentReportModal(incidentItems) {
-        if (!Array.isArray(incidentItems) || incidentItems.length === 0) {
-            return;
-        }
-        const latest = incidentItems[0];
-        const key = buildIncidentItemKey(latest);
-        if (!key || key === lastIncidentModalKey) {
-            return;
-        }
-        lastIncidentModalKey = key;
-        sessionStorage.setItem('header_last_incident_modal_key', key);
-        openIncidentReportModal(latest);
     }
 
     function markHeaderNotificationsRead(reload = false) {
         localStorage.setItem('systemNotificationsLastRead', String(Date.now()));
         window.updateHeaderBadges({ notifications: 0 });
         if (reload) {
-            loadHeaderNotifications({ suppressIncidentModal: true });
+            loadHeaderNotifications();
         }
     }
 
-    function loadHeaderNotifications(options = {}) {
-        const suppressIncidentModal = !!(options && options.suppressIncidentModal);
+    function loadHeaderNotifications() {
         const bellBtn = document.getElementById('headerNotificationBtn');
         if (!bellBtn || !window.API_BASE_PATH) return;
 
@@ -1009,15 +948,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     notifications: Number.isFinite(notificationUnread) ? notificationUnread : 0,
                     messages: Number.isFinite(messageUnread) ? messageUnread : 0
                 });
+                updateSidebarCommunicationBadges({
+                    reports: data.report_unread || 0,
+                    generalEnquiries: data.general_enquiry_unread || 0
+                });
 
                 const list = Array.isArray(data.notifications)
                     ? data.notifications
                     : (Array.isArray(data.system_notifications) ? data.system_notifications : []);
                 renderSystemNotifications(list);
 
-                if (!suppressIncidentModal && !document.hidden) {
-                    maybeShowIncidentReportModal(Array.isArray(data.incident_notifications) ? data.incident_notifications : []);
-                }
             })
             .catch((error) => {
                 console.warn('header notifications fetch failed:', error);
@@ -1031,21 +971,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const incidentModalEls = incidentModalElements();
-    if (incidentModalEls.close) {
-        incidentModalEls.close.addEventListener('click', closeIncidentReportModal);
-    }
-    if (incidentModalEls.dismiss) {
-        incidentModalEls.dismiss.addEventListener('click', closeIncidentReportModal);
-    }
-    if (incidentModalEls.shell) {
-        incidentModalEls.shell.addEventListener('click', function (event) {
-            if (event.target === incidentModalEls.shell) {
-                closeIncidentReportModal();
-            }
-        });
-    }
-
     // Initial fetch + refresh
     loadHeaderNotifications();
     setInterval(() => {
@@ -1054,8 +979,36 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) loadHeaderNotifications();
     });
-    // Two-way communication notifications are handled by header-notifications.php polling.
-    function initGlobalChatNotifications() {}
+    function initGlobalChatNotifications() {
+        if (!window.EventSource || !window.API_BASE_PATH) return;
+        if (!document.getElementById('sidebarReportsUnreadBadge')
+            && !document.getElementById('sidebarGeneralUnreadBadge')) return;
+
+        const source = new EventSource(window.API_BASE_PATH + 'realtime.php');
+        const applyUnreadPayload = (event) => {
+            try {
+                const data = JSON.parse(event.data || '{}');
+                updateSidebarCommunicationBadges({
+                    reports: data.reportUnread || 0,
+                    generalEnquiries: data.generalEnquiryUnread || 0
+                });
+            } catch (error) {
+                console.warn('Sidebar unread update failed:', error);
+            }
+        };
+
+        source.addEventListener('ready', applyUnreadPayload);
+        source.addEventListener('conversation:unread', (event) => {
+            applyUnreadPayload(event);
+            loadHeaderNotifications();
+        });
+        window.addEventListener('beforeunload', () => source.close(), { once: true });
+    }
+
+    const viewAllReportsLink = document.getElementById('headerViewAllReportsLink');
+    if (viewAllReportsLink) {
+        viewAllReportsLink.href = `${window.APP_BASE_PATH || ''}/ADMIN/sidebar/two-way-comm/citizen/`;
+    }
     
     // Initialize on page load
     if (document.readyState === 'loading') {

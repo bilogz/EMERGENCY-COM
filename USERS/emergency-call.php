@@ -235,6 +235,12 @@ $assetBase = '../ADMIN/header/';
             text-align: center;
         }
 
+        .chat-other-report-label {
+            color: var(--text-primary, #1f2937);
+            font-size: 0.82rem;
+            font-weight: 700;
+        }
+
         .chat-options-bubble .chat-option-btn:hover {
             background: var(--primary-light, rgba(142, 68, 173, 0.08));
             border-color: var(--primary-color, #8e44ad);
@@ -818,7 +824,7 @@ $assetBase = '../ADMIN/header/';
                         <i class="fas fa-shield-alt"></i>
                     </div>
                     <div>
-                        <h3>Emergency Response Chat</h3>
+                        <h3>Send Report</h3>
                         <small id="chatConnectionStatus">Active Connection</small>
                     </div>
                 </div>
@@ -2249,27 +2255,45 @@ $assetBase = '../ADMIN/header/';
             document.getElementById('incidentLinkBtn').disabled = true;
             document.getElementById('incidentFileBtn').disabled = true;
 
-            appendBotMessage("Hello! I am your Emergency Chat Assistant. Please select the type of incident you want to report:");
+            appendBotMessage("Hello! I am your Emergency Report Assistant. What would you like to report?");
 
             const optionsHtml = `
                 <div class="chat-options-bubble" id="botIncidentTypeOptions">
-                    <button class="chat-option-btn" onclick="selectIncidentType('Medical Emergency', 'Medical Emergency')">
-                        <i class="fas fa-heartbeat"></i> Medical Emergency
+                    <button class="chat-option-btn" onclick="selectIncidentType('Medical Needs', 'Medical Needs')">
+                        <i class="fas fa-hospital" aria-hidden="true"></i>
+                        Medical Needs
                     </button>
-                    <button class="chat-option-btn" onclick="selectIncidentType('Fire Emergency', 'Fire Emergency')">
-                        <i class="fas fa-fire"></i> Fire Emergency
+                    <button class="chat-option-btn" onclick="selectIncidentType('Fire Hazards', 'Fire Hazards')">
+                        <i class="fas fa-fire" aria-hidden="true"></i>
+                        Fire Hazards
                     </button>
-                    <button class="chat-option-btn" onclick="selectIncidentType('Vehicular Accident', 'Vehicular Accident')">
-                        <i class="fas fa-car-crash"></i> Vehicular Accident
+                    <button class="chat-option-btn" onclick="selectIncidentType('Chemical / Hazardous Materials', 'Chemical / Hazardous Materials')">
+                        <i class="fas fa-biohazard" aria-hidden="true"></i>
+                        Chemical / Hazardous Materials
                     </button>
-                    <button class="chat-option-btn" onclick="selectIncidentType('Flood or Weather', 'Flood or Weather Incident')">
-                        <i class="fas fa-cloud-showers-heavy"></i> Flood or Weather
+                    <button class="chat-option-btn" onclick="selectIncidentType('Traffic &amp; Vehicular Incidents', 'Traffic &amp; Vehicular Incidents')">
+                        <i class="fas fa-car-crash" aria-hidden="true"></i>
+                        Traffic &amp; Vehicular Incidents
                     </button>
-                    <button class="chat-option-btn" onclick="selectIncidentType('Crime/Public Safety', 'Crime or Public Safety')">
-                        <i class="fas fa-shield-alt"></i> Crime/Public Safety
+                    <button class="chat-option-btn" onclick="selectIncidentType('Floods &amp; Natural Hazards', 'Floods &amp; Natural Hazards')">
+                        <i class="fas fa-water" aria-hidden="true"></i>
+                        Floods &amp; Natural Hazards
                     </button>
-                    <button class="chat-option-btn" onclick="selectIncidentType('Other Emergency', 'Other Incident')">
-                        <i class="fas fa-exclamation-triangle"></i> Other Incident
+                    <button class="chat-option-btn" onclick="selectIncidentType('Crime &amp; Public Safety', 'Crime &amp; Public Safety')">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                        Crime &amp; Public Safety
+                    </button>
+                    <button class="chat-option-btn" onclick="selectIncidentType('Utility &amp; Infrastructure', 'Utility &amp; Infrastructure')">
+                        <i class="fas fa-bolt" aria-hidden="true"></i>
+                        Utility &amp; Infrastructure
+                    </button>
+                    <button class="chat-option-btn" onclick="selectIncidentType('Animal Rescue / Animal Concern', 'Animal Rescue / Animal Concern')">
+                        <i class="fas fa-paw" aria-hidden="true"></i>
+                        Animal Rescue / Animal Concern
+                    </button>
+                    <button class="chat-option-btn" onclick="selectIncidentType('Other Report', 'Other Report')">
+                        <i class="fas fa-bullhorn" aria-hidden="true"></i>
+                        Other Report
                     </button>
                 </div>
             `;
@@ -2279,6 +2303,29 @@ $assetBase = '../ADMIN/header/';
         window.selectIncidentType = function(label, value) {
             const options = document.getElementById('botIncidentTypeOptions');
             if (options) options.remove();
+
+            if (value === 'Other Report') {
+                appendUserMessage(label);
+                appendBotMessage('Please identify the report.');
+                appendBotMessage(`
+                    <div class="chat-location-input-bubble" id="botOtherReportBubble">
+                        <label class="chat-other-report-label" for="botOtherReportInput">Identify the report</label>
+                        <input
+                            type="text"
+                            id="botOtherReportInput"
+                            placeholder="Identify the report"
+                            maxlength="120"
+                            autocomplete="off"
+                            onkeydown="if (event.key === 'Enter') confirmOtherReportType()"
+                        >
+                        <button class="chat-location-btn primary" onclick="confirmOtherReportType()">
+                            Continue <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                `);
+                setTimeout(() => document.getElementById('botOtherReportInput')?.focus(), 100);
+                return;
+            }
 
             selectedCategory = value;
             appendUserMessage(label);
@@ -2312,6 +2359,24 @@ $assetBase = '../ADMIN/header/';
                 appendBotMessage(locationBubbleHtml);
                 setTimeout(initIncidentLocationPicker, 50);
             }, 500);
+        };
+
+        window.confirmOtherReportType = function() {
+            const input = document.getElementById('botOtherReportInput');
+            const customType = input ? input.value.trim() : '';
+
+            if (!customType) {
+                if (input) {
+                    input.setCustomValidity('Please identify the report.');
+                    input.reportValidity();
+                    input.addEventListener('input', () => input.setCustomValidity(''), { once: true });
+                }
+                return;
+            }
+
+            const bubble = document.getElementById('botOtherReportBubble');
+            if (bubble) bubble.remove();
+            window.selectIncidentType(customType, `Other Report: ${customType}`);
         };
 
         function getLocationLabel(location) {

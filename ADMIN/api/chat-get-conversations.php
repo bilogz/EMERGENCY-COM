@@ -34,7 +34,15 @@ try {
     $assignedTo = twc_safe_int($_GET['assigned_to'] ?? null);
     $assignedToMe = filter_var($_GET['assigned_to_me'] ?? false, FILTER_VALIDATE_BOOLEAN);
     $unassignedOnly = filter_var($_GET['unassigned_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    $requestedConversationId = max(0, (int)($_GET['conversationId'] ?? 0));
     $adminSessionId = twc_safe_int($_SESSION['admin_user_id'] ?? null);
+
+    if ($requestedConversationId > 0) {
+        $statusFilter = 'all';
+        $assignedTo = null;
+        $assignedToMe = false;
+        $unassignedOnly = false;
+    }
 
     $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
     $limit = isset($_GET['limit']) ? min(100, max(10, (int)$_GET['limit'])) : 50;
@@ -76,9 +84,16 @@ try {
 
     $params = [];
     $whereSql = " WHERE 1=1 ";
+    $whereSql .= twc_not_trashed_clause($pdo, 'c');
     $whereSql .= twc_status_filter_clause($statusFilter, $params, 'c');
+    $whereSql .= twc_scope_filter_clause($scope, $params, 'c');
 
-    if ($scope === 'citizen_reports') {
+    if ($requestedConversationId > 0) {
+        $whereSql .= " AND c.conversation_id = ? ";
+        $params[] = $requestedConversationId;
+    }
+
+    if (in_array($scope, ['citizen_reports', 'general_enquiries'], true)) {
         $whereSql .= " AND EXISTS (
             SELECT 1
             FROM chat_messages citizen_msg

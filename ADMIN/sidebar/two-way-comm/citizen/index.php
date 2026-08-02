@@ -4,9 +4,9 @@
  * Entry point for citizen report conversations.
  */
 
-$pageTitle = 'Citizen Reports';
-$pageHeading = 'Citizen Reports';
-$pageDescription = 'Incoming citizen reports and issue threads inside the Two-Way Communication console.';
+$pageTitle = 'Reports';
+$pageHeading = 'Reports';
+$pageDescription = 'Incoming incident reports and emergency message threads from citizens.';
 $pageMode = 'citizen_reports';
 $assetBaseUrl = '../../';
 

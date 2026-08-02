@@ -19,6 +19,10 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit;
 }
 
+// Release the PHP session lock before holding this request open. Otherwise every
+// admin API request from the same browser waits for the SSE stream to finish.
+session_write_close();
+
 if (!$pdo) {
     http_response_code(500);
     header('Content-Type: application/json');
@@ -47,6 +51,10 @@ function sse_emit($event, $data) {
 
 $conversationId = isset($_GET['conversationId']) ? (int)$_GET['conversationId'] : 0;
 $lastMessageId = isset($_GET['lastMessageId']) ? (int)$_GET['lastMessageId'] : 0;
+$scope = strtolower(trim((string)($_GET['scope'] ?? '')));
+$scopeParams = [];
+$scopeSql = twc_scope_filter_clause($scope, $scopeParams, 'c');
+$trashSql = twc_not_trashed_clause($pdo, 'c');
 
 $lastStatus = null;
 $msgStmt = null;
@@ -70,19 +78,31 @@ $unreadSql = "
     SELECT
         COUNT(*) AS unread_messages,
         COUNT(DISTINCT c.conversation_id) AS unread_conversations,
-        COALESCE(MAX(m.message_id), 0) AS latest_message_id
+        COALESCE(MAX(m.message_id), 0) AS latest_message_id,
+        COUNT(DISTINCT CASE
+            WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) NOT IN (" . implode(', ', array_map([$pdo, 'quote'], twc_general_enquiry_concerns())) . ")
+            THEN c.conversation_id END
+        ) AS report_unread,
+        COUNT(DISTINCT CASE
+            WHEN LOWER(TRIM(COALESCE(c.user_concern, ''))) IN (" . implode(', ', array_map([$pdo, 'quote'], twc_general_enquiry_concerns())) . ")
+            THEN c.conversation_id END
+        ) AS general_enquiry_unread
     FROM conversations c
     JOIN chat_messages m ON c.conversation_id = m.conversation_id
     WHERE c.status IN (" . twc_placeholders($activeStatuses) . ")
       AND m.is_read = 0
       AND m.sender_type <> 'admin'
+    {$trashSql}
+    {$scopeSql}
 ";
 $unreadStmt = $pdo->prepare($unreadSql);
-$unreadStmt->execute($activeStatuses);
+$unreadStmt->execute(array_merge($activeStatuses, $scopeParams));
 $unreadRow = $unreadStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 $lastUnread = (int)($unreadRow['unread_messages'] ?? 0);
 $lastUnreadConversationCount = (int)($unreadRow['unread_conversations'] ?? 0);
 $lastUnreadMessageId = (int)($unreadRow['latest_message_id'] ?? 0);
+$lastReportUnread = (int)($unreadRow['report_unread'] ?? 0);
+$lastGeneralEnquiryUnread = (int)($unreadRow['general_enquiry_unread'] ?? 0);
 
 sse_emit('ready', [
     'conversationId' => $conversationId > 0 ? $conversationId : null,
@@ -91,6 +111,8 @@ sse_emit('ready', [
     'unreadMessageCount' => $lastUnread,
     'unreadConversationCount' => $lastUnreadConversationCount,
     'latestMessageId' => $lastUnreadMessageId,
+    'reportUnread' => $lastReportUnread,
+    'generalEnquiryUnread' => $lastGeneralEnquiryUnread,
 ]);
 
 $maxLoops = 10; // ~30s @ 3s interval
@@ -129,20 +151,29 @@ for ($i = 0; $i < $maxLoops; $i++) {
         }
     }
 
-    $unreadStmt->execute($activeStatuses);
+    $unreadStmt->execute(array_merge($activeStatuses, $scopeParams));
     $unreadRow = $unreadStmt->fetch(PDO::FETCH_ASSOC) ?: [];
     $unread = (int)($unreadRow['unread_messages'] ?? 0);
     $unreadConversationCount = (int)($unreadRow['unread_conversations'] ?? 0);
     $latestUnreadMessageId = (int)($unreadRow['latest_message_id'] ?? 0);
-    if ($unread !== $lastUnread || $latestUnreadMessageId !== $lastUnreadMessageId) {
+    $reportUnread = (int)($unreadRow['report_unread'] ?? 0);
+    $generalEnquiryUnread = (int)($unreadRow['general_enquiry_unread'] ?? 0);
+    if ($unread !== $lastUnread
+        || $latestUnreadMessageId !== $lastUnreadMessageId
+        || $reportUnread !== $lastReportUnread
+        || $generalEnquiryUnread !== $lastGeneralEnquiryUnread) {
         $lastUnread = $unread;
         $lastUnreadConversationCount = $unreadConversationCount;
         $lastUnreadMessageId = $latestUnreadMessageId;
+        $lastReportUnread = $reportUnread;
+        $lastGeneralEnquiryUnread = $generalEnquiryUnread;
         sse_emit('conversation:unread', [
             'unreadCount' => $unread,
             'unreadMessageCount' => $unread,
             'unreadConversationCount' => $unreadConversationCount,
             'latestMessageId' => $latestUnreadMessageId,
+            'reportUnread' => $reportUnread,
+            'generalEnquiryUnread' => $generalEnquiryUnread,
         ]);
     }
 

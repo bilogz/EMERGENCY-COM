@@ -1,7 +1,8 @@
 <?php
 /**
  * Send Chat Message API (User/Citizen)
- * User reply flow: creates/routs thread and keeps status in_progress.
+ * User reply flow: creates or routes a thread into the Open inbox unless an
+ * admin already owns the conversation.
  */
 
 header('Content-Type: application/json');
@@ -688,6 +689,7 @@ try {
     $convAssignStmt->execute([$conversationId]);
     $convNow = $convAssignStmt->fetch(PDO::FETCH_ASSOC);
     $assignedTo = twc_safe_int($convNow['assigned_to'] ?? null);
+    $nextConversationStatus = $assignedTo !== null ? $statusInProgress : $statusOpen;
 
     $updateParts = [
         "last_message = ?",
@@ -698,7 +700,7 @@ try {
     ];
     $updateParams = [
         $lastMessagePreview,
-        $statusInProgress,
+        $nextConversationStatus,
         $category !== '' ? $category : $userConcern,
     ];
 
@@ -750,7 +752,7 @@ try {
         'success' => true,
         'messageId' => $messageId,
         'conversationId' => $conversationId,
-        'workflowStatus' => $statusInProgress,
+        'workflowStatus' => $nextConversationStatus,
         'category' => $category,
         'priority' => $priority,
         'incidentPriority' => $incidentPriority,

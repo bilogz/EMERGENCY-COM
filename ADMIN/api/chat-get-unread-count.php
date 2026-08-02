@@ -33,6 +33,10 @@ try {
     }
 
     $activeStatuses = twc_active_statuses();
+    $scope = strtolower(trim((string)($_GET['scope'] ?? '')));
+    $scopeParams = [];
+    $scopeSql = twc_scope_filter_clause($scope, $scopeParams, 'c');
+    $trashSql = twc_not_trashed_clause($pdo, 'c');
     $sql = "
         SELECT
             COUNT(*) AS unread_messages,
@@ -43,9 +47,11 @@ try {
         WHERE c.status IN (" . twc_placeholders($activeStatuses) . ")
           AND m.is_read = 0
           AND m.sender_type <> 'admin'
+        {$trashSql}
+        {$scopeSql}
     ";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute($activeStatuses);
+    $stmt->execute(array_merge($activeStatuses, $scopeParams));
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
     $unreadCount = (int)($row['unread_messages'] ?? 0);
 

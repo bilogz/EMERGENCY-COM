@@ -119,21 +119,35 @@ if (!function_exists('sidebarRouteContains')) {
                         </a>
                     </li>
                     
-                    <!-- Two-Way Communication -->
+                    <!-- Reports -->
                     <?php
-                    $isTwoWayPage = (
+                    $isReportsPage = (
                         basename($_SERVER['PHP_SELF']) == 'two-way-communication.php'
                         || basename($_SERVER['PHP_SELF']) == 'two-way-communication-new.php'
-                        || sidebarRouteContains('/sidebar/two-way-comm/')
+                        || sidebarRouteContains('/sidebar/two-way-comm/citizen')
                     );
+                    $isGeneralEnquiriesPage = sidebarRouteContains('/sidebar/two-way-comm/general');
                     ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>two-way-comm/citizen/" class="sidebar-link sidebar-accent-2way <?php echo $isTwoWayPage ? 'active' : ''; ?>">
-                            <i class="fas fa-comments sidebar-icon" aria-hidden="true"></i>
-                            <span>Two-Way Communication</span>
+                        <a href="<?php echo $sidebarBase; ?>two-way-comm/citizen/" class="sidebar-link sidebar-accent-2way <?php echo $isReportsPage ? 'active' : ''; ?>">
+                            <i class="fas fa-clipboard-list sidebar-icon" aria-hidden="true"></i>
+                            <span class="sidebar-link-label">Reports</span>
+                            <span class="sidebar-realtime-badge" id="sidebarReportsUnreadBadge"
+                                data-label-singular="new report" data-label-plural="new reports"
+                                data-active-module="<?php echo $isReportsPage ? '1' : '0'; ?>" hidden></span>
                         </a>
                     </li>
 
+                    <!-- General Enquiries -->
+                    <li class="sidebar-menu-item">
+                        <a href="<?php echo $sidebarBase; ?>two-way-comm/general/" class="sidebar-link sidebar-accent-2way <?php echo $isGeneralEnquiriesPage ? 'active' : ''; ?>">
+                            <i class="fas fa-comments sidebar-icon" aria-hidden="true"></i>
+                            <span class="sidebar-link-label">General Enquiries</span>
+                            <span class="sidebar-realtime-badge" id="sidebarGeneralUnreadBadge"
+                                data-label-singular="new enquiry" data-label-plural="new enquiries"
+                                data-active-module="<?php echo $isGeneralEnquiriesPage ? '1' : '0'; ?>" hidden></span>
+                        </a>
+                    </li>
                     <!-- Automated Warnings -->
                     <?php 
                     $isAutoWarningsActive = (basename($_SERVER['PHP_SELF']) == 'automated-warnings.php' || basename($_SERVER['PHP_SELF']) == 'automated-warnings-analytics.php' || basename($_SERVER['PHP_SELF']) == 'weather-monitoring.php' || basename($_SERVER['PHP_SELF']) == 'earthquake-monitoring.php');
@@ -211,6 +225,15 @@ if (!function_exists('sidebarRouteContains')) {
                         <a href="<?php echo $sidebarBase; ?>audit-trail.php" class="sidebar-link sidebar-accent-audit <?php echo $isActive ? 'active' : ''; ?>">
                             <i class="fas fa-history sidebar-icon" aria-hidden="true"></i>
                             <span>Audit Trail</span>
+                        </a>
+                    </li>
+
+                    <!-- Trash Bin -->
+                    <?php $isActive = basename($_SERVER['PHP_SELF']) == 'trash-bin.php'; ?>
+                    <li class="sidebar-menu-item">
+                        <a href="<?php echo $sidebarBase; ?>trash-bin.php" class="sidebar-link sidebar-accent-audit <?php echo $isActive ? 'active' : ''; ?>">
+                            <i class="fas fa-trash-alt sidebar-icon" aria-hidden="true"></i>
+                            <span>Trash Bin</span>
                         </a>
                     </li>
                 </ul>

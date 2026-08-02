@@ -1,7 +1,7 @@
 <?php
 /**
  * Send Chat Message API (Admin)
- * Staff/admin reply flow: updates thread to waiting_user.
+ * Staff/admin reply flow: keeps the claimed thread assigned and in progress.
  */
 
 header('Content-Type: application/json');
@@ -88,7 +88,7 @@ try {
 
     $category = twc_normalize_category($rawCategory ?? $conversation['user_concern'] ?? '');
     $priority = twc_normalize_priority($rawPriority ?? '', $text, $category);
-    $targetStatus = twc_status_for_db($pdo, 'waiting_user');
+    $targetStatus = twc_status_for_db($pdo, 'in_progress');
 
     $pdo->beginTransaction();
 
