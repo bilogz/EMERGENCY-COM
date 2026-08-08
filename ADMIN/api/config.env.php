@@ -30,6 +30,8 @@ function loadRootEnv() {
         $candidatePaths[] = trim((string)$explicitPath);
     }
     $candidatePaths[] = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.env'; // <project>/.env
+    $candidatePaths[] = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'PHP' . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . '.env'; // shared PHP API env
+    $candidatePaths[] = __DIR__ . DIRECTORY_SEPARATOR . '.env'; // ADMIN/api/.env fallback
     $candidatePaths[] = dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . '.env'; // parent fallback
 
     $rootEnvPath = null;
@@ -197,4 +199,5 @@ function isProduction() {
 function isDevelopment() {
     return getSecureConfig('APP_ENV', 'development') === 'development';
 }
+
 
