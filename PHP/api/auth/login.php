@@ -1,6 +1,7 @@
 <?php
 header("Content-Type: application/json; charset=UTF-8");
 require_once '../shared/db_connect.php';
+require_once '../shared/user_schema.php';
 
 /** @var PDO $pdo */
 
@@ -97,3 +98,4 @@ try {
     error_log("Login Error: " . $e->getMessage());
     apiResponse::error("An unexpected error occurred.", 500);
 }
+
