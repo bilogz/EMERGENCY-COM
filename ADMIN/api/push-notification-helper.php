@@ -90,7 +90,7 @@ function pushHelperSendExpo(string $token, string $title, string $message, array
         'to' => $token,
         'sound' => 'default',
         'priority' => 'high',
-        'channelId' => 'emergency-alerts',
+        'channelId' => 'emergency-alerts-v2',
         'title' => $title,
         'body' => $message,
         'data' => $data
@@ -140,7 +140,7 @@ function pushHelperSendFcmV1(string $token, string $title, string $message, arra
             'priority' => 'HIGH',
             'ttl' => '86400s',
             'notification' => [
-                'channel_id' => 'emergency-alerts',
+                'channel_id' => 'emergency-alerts-v2',
                 'sound' => 'default',
                 'default_vibrate_timings' => true,
                 'visibility' => 'PUBLIC',
@@ -240,4 +240,5 @@ function logPushNotification($userId, $deviceId, $title, $message, $alertId, $st
     }
 }
 ?>
+
 

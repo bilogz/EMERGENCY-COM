@@ -105,11 +105,11 @@ $pageTitle = 'Mass Notification System';
                         </div>
                         <div class="mn-stat mn-stat--rate">
                             <div class="mn-stat-top">
-                                <div class="mn-stat-label">Success Rate</div>
+                                <div class="mn-stat-label">Delivery</div>
                                 <div class="mn-stat-icon" aria-hidden="true"><i class="fas fa-chart-line"></i></div>
                             </div>
                             <div class="mn-stat-value"><span id="mnSuccessRate">-</span><span style="font-size:0.95rem; color: var(--text-secondary-1); font-weight:800;">%</span></div>
-                            <div class="mn-stat-sub" id="mnSuccessRateSub">Based on completed</div>
+                            <div class="mn-stat-sub" id="mnSuccessRateSub">Delivered / attempted</div>
                         </div>
                     </div>
 
@@ -326,7 +326,7 @@ $pageTitle = 'Mass Notification System';
                                         <th>Message Preview</th>
                                         <th>Status</th>
                                         <th>Sent At</th>
-                                        <th>Success Rate</th>
+                                        <th>Delivered</th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
@@ -2669,15 +2669,15 @@ $pageTitle = 'Mass Notification System';
                         const progress = n.progress || 0;
                         const stats = n.stats || {sent: 0, failed: 0, total: 0};
                         const status = (n.status || 'pending').toString().toLowerCase();
-                        const sentAt = n.sent_at || '-';
+                        const sentAt = formatDispatchDateTime(n.sent_at);
                         const target = n.recipients || '-';
                         const sender = (n.sent_by || '').toString().toLowerCase();
                         const automaticSource = sender.endsWith('_auto_bulletin')
                             ? sender.replace('_auto_bulletin', '').toUpperCase()
                             : '';
                         const message = (n.message || '').toString();
-                        const successRate = (status === 'completed' && Number(stats.total) > 0)
-                            ? `<strong>${Math.round((Number(stats.sent) / Number(stats.total)) * 100)}%</strong> <br><small style="color: var(--text-secondary-1);">${stats.sent}/${stats.total}</small>`
+                        const successRate = Number(stats.total) > 0
+                            ? `<strong>${Number(stats.sent || 0)}/${Number(stats.total || 0)}</strong> <br><small style="color: var(--text-secondary-1);">${Math.round((Number(stats.sent || 0) / Number(stats.total || 1)) * 100)}% delivered</small>`
                             : '--';
                         return `
                             <tr>
@@ -2758,6 +2758,19 @@ $pageTitle = 'Mass Notification System';
             }
         }
 
+
+        function formatDispatchDateTime(value) {
+            if (!value) return '-';
+            const raw = String(value).trim();
+            const isoLike = raw.includes('T') ? raw : raw.replace(' ', 'T');
+            const date = new Date(isoLike);
+            if (Number.isNaN(date.getTime())) return raw;
+            return date.toLocaleString('en-PH', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: true
+            });
+        }
         window.loadMoreNotifications = loadMoreNotifications;
         function updateMnAnalytics(notifications) {
             const total = notifications.length;
@@ -2779,7 +2792,7 @@ $pageTitle = 'Mass Notification System';
             document.getElementById('mnInProgressDispatches').textContent = inProgress;
             document.getElementById('mnSuccessRate').textContent = rate;
             const sub = document.getElementById('mnSuccessRateSub');
-            if (sub) sub.textContent = successTotal > 0 ? `${successSent}/${successTotal} delivered` : 'Based on completed';
+            if (sub) sub.textContent = successTotal > 0 ? `${successSent}/${successTotal} delivered` : 'No completed delivery yet';
         }
 
         function getIcon(channel) {
@@ -2823,6 +2836,8 @@ $pageTitle = 'Mass Notification System';
     </script>
 </body>
 </html>
+
+
 
 
 

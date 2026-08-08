@@ -431,7 +431,7 @@ function sendFCM($token, $payload, &$error = null) {
             'priority' => 'HIGH',
             'ttl' => '86400s',
             'notification' => [
-                'channel_id' => 'emergency-alerts',
+                'channel_id' => 'emergency-alerts-v2',
                 'sound' => 'default',
                 'default_vibrate_timings' => true,
                 'visibility' => 'PUBLIC',
@@ -477,7 +477,7 @@ function sendExpoPushNotification(string $token, array $payload, &$error = null)
         'to' => $token,
         'sound' => 'default',
         'priority' => in_array($severity, ['critical', 'high'], true) ? 'high' : 'default',
-        'channelId' => 'emergency-alerts',
+        'channelId' => 'emergency-alerts-v2',
         'title' => (string)($payload['title'] ?? 'Emergency Alert'),
         'body' => (string)($payload['body'] ?? ''),
         'data' => [
@@ -517,6 +517,7 @@ function broadcastPA($message) {
     // error_log("PA Broadcast: $message");
     return true;
 }
+
 
 
 
