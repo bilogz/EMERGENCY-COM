@@ -6,12 +6,10 @@ require_once '../device_registry.php';
 
 /** @var PDO $pdo */
 
-// Handle different HTTP methods
 $method = $_SERVER['REQUEST_METHOD'];
 
 try {
     if ($method === 'POST') {
-        // Register or update device
         $json = file_get_contents('php://input');
         $data = json_decode($json, true);
 
@@ -23,30 +21,31 @@ try {
         $device_id = $data['device_id'] ?? null;
         $device_type = $data['device_type'] ?? 'mobile';
         $device_name = $data['device_name'] ?? null;
-        $fcm_token = trim((string)($data['fcm_token'] ?? $data['push_token'] ?? ''));
-        $token_type = trim((string)($data['token_type'] ?? 'expo'));
+        $expo_push_token = trim((string)($data['push_token'] ?? ''));
+        $native_fcm_token = trim((string)($data['fcm_token'] ?? ''));
+        $primary_push_token = $expo_push_token !== '' ? $expo_push_token : $native_fcm_token;
+        $fcm_token = $native_fcm_token !== '' ? $native_fcm_token : $primary_push_token;
+        $token_type = $native_fcm_token !== '' ? 'fcm' : trim((string)($data['token_type'] ?? 'expo'));
         $permission = trim((string)($data['notification_permission'] ?? 'granted'));
 
-        // Validate required fields
-        if (!$device_id || (!$user_id && $fcm_token === '')) {
+        if (!$device_id || (!$user_id && $primary_push_token === '')) {
             apiResponse::error("Missing required fields: device_id and either user_id or push_token", 400);
         }
 
-        if ($fcm_token !== '') {
+        if ($primary_push_token !== '') {
             registerAppNotificationDevice(
                 $pdo,
                 $user_id,
                 (string)$device_id,
                 (string)$device_type,
                 $device_name,
-                $fcm_token,
+                $primary_push_token,
                 $token_type,
-                $permission
+                $permission,
+                $native_fcm_token !== '' ? $native_fcm_token : null
             );
         }
 
-        // Keep the legacy per-user registry populated for existing APIs. Guest
-        // installations intentionally live only in app_notification_devices.
         if (!$user_id) {
             apiResponse::success([
                 'device_id' => $device_id,
@@ -56,19 +55,18 @@ try {
         }
 
         $deviceTable = resolveDeviceRegistryTable($pdo);
-        // Check if device already exists
         $checkQuery = "SELECT id FROM {$deviceTable} WHERE user_id = ? AND device_id = ?";
         $checkStmt = $pdo->prepare($checkQuery);
         $checkStmt->execute([$user_id, $device_id]);
         $existingDevice = $checkStmt->fetch(PDO::FETCH_ASSOC);
 
         if ($existingDevice) {
-            // Update existing device
             $updateQuery = "
                 UPDATE {$deviceTable}
                 SET device_type = ?,
                     device_name = ?,
                     fcm_token = ?,
+                    push_token = ?,
                     is_active = 1,
                     last_active = NOW()
                 WHERE id = ?
@@ -78,6 +76,7 @@ try {
                 $device_type,
                 $device_name,
                 $fcm_token,
+                $primary_push_token,
                 $existingDevice['id']
             ]);
 
@@ -86,11 +85,10 @@ try {
                 'action' => 'updated'
             ], "Device updated successfully");
         } else {
-            // Insert new device
             $insertQuery = "
                 INSERT INTO {$deviceTable}
-                (user_id, device_id, device_type, device_name, fcm_token, is_active, last_active)
-                VALUES (?, ?, ?, ?, ?, 1, NOW())
+                (user_id, device_id, device_type, device_name, fcm_token, push_token, is_active, last_active)
+                VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
             ";
             $insertStmt = $pdo->prepare($insertQuery);
             $insertStmt->execute([
@@ -98,7 +96,8 @@ try {
                 $device_id,
                 $device_type,
                 $device_name,
-                $fcm_token
+                $fcm_token,
+                $primary_push_token
             ]);
 
             apiResponse::success([
@@ -108,7 +107,6 @@ try {
         }
 
     } elseif ($method === 'GET') {
-        // Get user devices
         $userId = isset($_GET['user_id']) ? $_GET['user_id'] : null;
 
         if (!$userId) {
@@ -123,6 +121,7 @@ try {
                 device_type,
                 device_name,
                 fcm_token,
+                push_token,
                 is_active,
                 last_active,
                 created_at
@@ -139,7 +138,6 @@ try {
         apiResponse::success($devices, "User devices fetched successfully");
 
     } elseif ($method === 'DELETE') {
-        // Deactivate device
         $json = file_get_contents('php://input');
         $data = json_decode($json, true);
 

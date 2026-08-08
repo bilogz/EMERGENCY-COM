@@ -56,6 +56,7 @@ function ensureAppNotificationDevicesTable(PDO $pdo): string {
         device_type VARCHAR(40) NOT NULL DEFAULT 'android',
         device_name VARCHAR(255) NULL,
         push_token VARCHAR(512) NOT NULL,
+        fcm_token VARCHAR(1024) NULL,
         token_type VARCHAR(20) NOT NULL DEFAULT 'expo',
         notification_permission VARCHAR(20) NOT NULL DEFAULT 'granted',
         is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -67,6 +68,22 @@ function ensureAppNotificationDevicesTable(PDO $pdo): string {
         INDEX idx_app_notification_active (is_active, notification_permission),
         INDEX idx_app_notification_user (user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    try {
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM {$table}");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        if (!in_array('fcm_token', $cols, true)) {
+            $pdo->exec("ALTER TABLE {$table} ADD COLUMN fcm_token VARCHAR(1024) NULL AFTER push_token");
+        }
+        try {
+            $pdo->exec("ALTER TABLE {$table} ADD UNIQUE KEY uniq_app_notification_fcm_token (fcm_token)");
+        } catch (Throwable $e) {
+            // Key may already exist, or older MySQL may reject long indexed tokens.
+        }
+    } catch (Throwable $e) {
+        error_log('App notification device schema migration skipped: ' . $e->getMessage());
+    }
+
     return $table;
 }
 
@@ -78,18 +95,20 @@ function registerAppNotificationDevice(
     ?string $deviceName,
     string $pushToken,
     string $tokenType = 'expo',
-    string $permission = 'granted'
+    string $permission = 'granted',
+    ?string $fcmToken = null
 ): bool {
     $deviceId = trim($deviceId);
     $pushToken = trim($pushToken);
+    $fcmToken = trim((string)$fcmToken);
     if ($deviceId === '' || $pushToken === '') return false;
     $table = ensureAppNotificationDevicesTable($pdo);
     $resolvedUserId = $userId !== null && $userId > 0 ? $userId : null;
     $stmt = $pdo->prepare("INSERT INTO {$table}
-        (user_id, device_id, device_type, device_name, push_token, token_type, notification_permission, is_active, last_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW())
+        (user_id, device_id, device_type, device_name, push_token, fcm_token, token_type, notification_permission, is_active, last_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
         ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), device_type = VALUES(device_type),
-            device_name = VALUES(device_name), push_token = VALUES(push_token), token_type = VALUES(token_type),
+            device_name = VALUES(device_name), push_token = VALUES(push_token), fcm_token = VALUES(fcm_token), token_type = VALUES(token_type),
             notification_permission = VALUES(notification_permission), is_active = 1, last_active = NOW()");
     return $stmt->execute([
         $resolvedUserId,
@@ -97,6 +116,7 @@ function registerAppNotificationDevice(
         trim($deviceType) ?: 'android',
         $deviceName,
         $pushToken,
+        $fcmToken !== '' ? $fcmToken : null,
         trim($tokenType) ?: 'expo',
         trim($permission) ?: 'granted'
     ]);

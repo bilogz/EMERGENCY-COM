@@ -204,31 +204,61 @@ function dispatchLoadPushTokens(PDO $pdo, array $userIds): array {
     return array_map('array_keys', $result);
 }
 
+function dispatchSecureConfigValue(string $key): string {
+    if (function_exists('getSecureConfig')) {
+        $value = getSecureConfig($key, '');
+        if (is_scalar($value) && trim((string)$value) !== '') return trim((string)$value);
+    }
+    $value = getenv($key);
+    return is_string($value) ? trim($value) : '';
+}
+
 /** Load every opted-in app installation, including guest-mode devices. */
 function dispatchLoadBroadcastPushDevices(PDO $pdo, array $userIds): array {
     $devices = [];
     foreach (dispatchLoadPushTokens($pdo, $userIds) as $userId => $tokens) {
         foreach ($tokens as $token) {
-            $devices[$token] = ['token' => $token, 'user_id' => (int)$userId];
+            $devices[$token] = ['token' => $token, 'user_id' => (int)$userId, 'token_type' => 'fcm'];
         }
     }
 
     $table = ensureAppNotificationDevicesTable($pdo);
-    $stmt = $pdo->query("SELECT user_id, push_token, token_type
+    $columns = dispatchReadableTableColumns($pdo, $table);
+    $hasFcmToken = isset($columns['fcm_token']);
+    $select = $hasFcmToken ? 'user_id, device_id, push_token, fcm_token, token_type' : 'user_id, device_id, push_token, token_type';
+    $condition = $hasFcmToken
+        ? "((fcm_token IS NOT NULL AND fcm_token <> '') OR (push_token IS NOT NULL AND push_token <> ''))"
+        : "(push_token IS NOT NULL AND push_token <> '')";
+    $stmt = $pdo->query("SELECT {$select}
         FROM {$table}
         WHERE is_active = 1
           AND notification_permission = 'granted'
-          AND push_token IS NOT NULL
-          AND push_token <> ''");
+          AND {$condition}");
     foreach ($stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [] as $row) {
-        $token = trim((string)($row['push_token'] ?? ''));
+        $fcmToken = trim((string)($row['fcm_token'] ?? ''));
+        $expoToken = trim((string)($row['push_token'] ?? ''));
+        $token = $fcmToken !== '' ? $fcmToken : $expoToken;
         if ($token === '') continue;
         $devices[$token] = [
             'token' => $token,
             'user_id' => !empty($row['user_id']) ? (int)$row['user_id'] : null,
-            'token_type' => (string)($row['token_type'] ?? 'expo')
+            'device_id' => (string)($row['device_id'] ?? ''),
+            'token_type' => $fcmToken !== '' ? 'fcm' : (string)($row['token_type'] ?? 'expo')
         ];
     }
+
+    $testToken = dispatchSecureConfigValue('FCM_TEST_TOKEN');
+    $testDeviceId = dispatchSecureConfigValue('FCM_TEST_DEVICE_ID');
+    $testUserId = (int)dispatchSecureConfigValue('FCM_TEST_USER_ID');
+    if ($testToken !== '' || $testDeviceId !== '' || $testUserId > 0) {
+        $devices = array_filter($devices, function ($device) use ($testToken, $testDeviceId, $testUserId) {
+            if ($testToken !== '' && hash_equals($testToken, (string)($device['token'] ?? ''))) return true;
+            if ($testDeviceId !== '' && hash_equals($testDeviceId, (string)($device['device_id'] ?? ''))) return true;
+            if ($testUserId > 0 && (int)($device['user_id'] ?? 0) === $testUserId) return true;
+            return false;
+        });
+    }
+
     return array_values($devices);
 }
 
@@ -859,3 +889,4 @@ try {
     ]);
     exit;
 }
+

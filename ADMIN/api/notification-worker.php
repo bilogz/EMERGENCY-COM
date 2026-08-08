@@ -135,6 +135,9 @@ try {
                         'severity' => $alertMeta['severity'],
                         'category' => $alertMeta['category']
                     ], $error);
+                    if (!$success && isPermanentPushTokenError($error)) {
+                        disableInvalidPushToken($pdo, (string)$job['recipient_value'], $error);
+                    }
                     break;
                 case 'pa':
                     $success = broadcastPA($job['message']);
@@ -277,6 +280,58 @@ function getWorkerAlertMetadata(PDO $pdo, int $alertId): array {
     }
 }
 
+function isPermanentPushTokenError(?string $error): bool {
+    $e = strtoupper((string)$error);
+    foreach (['UNREGISTERED', 'NOT_FOUND', 'INVALID_ARGUMENT', 'INVALID_REGISTRATION', 'DEVICE_NOT_REGISTERED'] as $needle) {
+        if (strpos($e, $needle) !== false) return true;
+    }
+    return false;
+}
+
+function disableInvalidPushToken(PDO $pdo, string $token, ?string $error = null): void {
+    $token = trim($token);
+    if ($token === '') return;
+
+    try {
+        $appTable = 'app_notification_devices';
+        $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($appTable));
+        if ($exists && $exists->fetch()) {
+            $colsStmt = $pdo->query("SHOW COLUMNS FROM {$appTable}");
+            $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+            $conditions = [];
+            $params = [];
+            if (in_array('push_token', $cols, true)) { $conditions[] = 'push_token = ?'; $params[] = $token; }
+            if (in_array('fcm_token', $cols, true)) { $conditions[] = 'fcm_token = ?'; $params[] = $token; }
+            if ($conditions) {
+                $sql = "UPDATE {$appTable} SET is_active = 0, notification_permission = 'denied' WHERE " . implode(' OR ', $conditions);
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('Unable to disable invalid app push token: ' . $e->getMessage());
+    }
+
+    try {
+        require_once dirname(__DIR__, 2) . '/PHP/api/device_registry.php';
+        $deviceTable = resolveDeviceRegistryTable($pdo);
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM {$deviceTable}");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        $conditions = [];
+        $params = [];
+        if (in_array('push_token', $cols, true)) { $conditions[] = 'push_token = ?'; $params[] = $token; }
+        if (in_array('fcm_token', $cols, true)) { $conditions[] = 'fcm_token = ?'; $params[] = $token; }
+        if ($conditions && in_array('is_active', $cols, true)) {
+            $sql = "UPDATE {$deviceTable} SET is_active = 0 WHERE " . implode(' OR ', $conditions);
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+        }
+    } catch (Throwable $e) {
+        error_log('Unable to disable invalid legacy push token: ' . $e->getMessage());
+    }
+
+    error_log('Disabled invalid push token after Firebase permanent error: ' . (string)$error);
+}
 /** Load Firebase service-account credentials without exposing them to logs. */
 function loadFirebaseServiceAccount(&$error = null): ?array {
     $error = null;
@@ -376,7 +431,7 @@ function sendFCM($token, $payload, &$error = null) {
             'priority' => 'HIGH',
             'ttl' => '86400s',
             'notification' => [
-                'channel_id' => $isCritical ? 'alertara_critical_alerts_v2' : 'alertara_emergency_alerts_v2',
+                'channel_id' => 'emergency-alerts',
                 'sound' => 'default',
                 'default_vibrate_timings' => true,
                 'visibility' => 'PUBLIC',
@@ -405,7 +460,9 @@ function sendFCM($token, $payload, &$error = null) {
     curl_close($ch);
     $decoded = is_string($response) ? json_decode($response, true) : null;
     if ($httpCode >= 200 && $httpCode < 300 && !empty($decoded['name'])) return true;
-    $error = $error ?: (string)($decoded['error']['message'] ?? "FCM HTTP {$httpCode}");
+    $status = (string)($decoded['error']['status'] ?? '');
+    $messageText = (string)($decoded['error']['message'] ?? "FCM HTTP {$httpCode}");
+    $error = $error ?: trim($status . ': ' . $messageText, ': ');
     return false;
 }
 
@@ -420,7 +477,7 @@ function sendExpoPushNotification(string $token, array $payload, &$error = null)
         'to' => $token,
         'sound' => 'default',
         'priority' => in_array($severity, ['critical', 'high'], true) ? 'high' : 'default',
-        'channelId' => in_array($severity, ['critical', 'high'], true) ? 'alertara_critical_alerts_v2' : 'alertara_emergency_alerts_v2',
+        'channelId' => 'emergency-alerts',
         'title' => (string)($payload['title'] ?? 'Emergency Alert'),
         'body' => (string)($payload['body'] ?? ''),
         'data' => [
@@ -460,3 +517,6 @@ function broadcastPA($message) {
     // error_log("PA Broadcast: $message");
     return true;
 }
+
+
+
