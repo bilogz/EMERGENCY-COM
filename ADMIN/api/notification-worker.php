@@ -270,12 +270,28 @@ function getWorkerAlertMetadata(PDO $pdo, int $alertId): array {
     if ($alertId <= 0) return ['severity' => 'high', 'category' => 'Emergency Alert'];
     if (isset($cache[$alertId])) return $cache[$alertId];
     try {
-        $stmt = $pdo->prepare("SELECT severity, category FROM alerts WHERE id = ? LIMIT 1");
+        $columns = [];
+        $colStmt = $pdo->query("SHOW COLUMNS FROM alerts");
+        foreach ($colStmt ? $colStmt->fetchAll(PDO::FETCH_ASSOC) : [] as $col) {
+            $columns[strtolower((string)$col['Field'])] = true;
+        }
+        $select = ['severity'];
+        foreach (['category', 'source', 'title', 'message', 'content'] as $column) {
+            if (isset($columns[$column])) $select[] = $column;
+        }
+        $stmt = $pdo->prepare("SELECT " . implode(', ', array_map(fn($c) => "`{$c}`", $select)) . " FROM alerts WHERE id = ? LIMIT 1");
         $stmt->execute([$alertId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $haystack = strtolower(trim(implode(' ', array_map('strval', $row))));
+        $category = (string)($row['category'] ?? '');
+        if ($category === '') {
+            if (preg_match('/weather|pagasa|rain|flood|typhoon|storm|wind|landslide/', $haystack)) $category = 'Weather';
+            elseif (preg_match('/earthquake|seismic|phivolcs|aftershock|tsunami/', $haystack)) $category = 'Earthquake';
+            else $category = 'Emergency Alert';
+        }
         return $cache[$alertId] = [
             'severity' => strtolower((string)($row['severity'] ?? 'high')),
-            'category' => (string)($row['category'] ?? 'Emergency Alert')
+            'category' => $category
         ];
     } catch (Throwable $e) {
         return $cache[$alertId] = ['severity' => 'high', 'category' => 'Emergency Alert'];

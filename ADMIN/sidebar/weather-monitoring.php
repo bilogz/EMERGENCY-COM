@@ -145,7 +145,7 @@ $pageTitle = 'Weather Monitoring';
                             <i class="fas fa-robot" style="color: #8e44ad;"></i> AI Weather Analysis
                             <span id="aiStatus" class="ai-status">Ready</span>
                         </h3>
-                        <div id="aiAnalysis" class="ai-analysis-content">
+<div id="aiAnalysis" class="ai-analysis-content">
                             <button onclick="getAIWeatherAnalysis()" class="ai-analyze-btn">
                                 <i class="fas fa-brain"></i> Analyze Weather
                             </button>
@@ -1716,7 +1716,7 @@ Keep concise and actionable.`;
             
             container.innerHTML = html;
         }
-        
+
         // Send Weather Alert
         async function sendWeatherAlert() {
             const statusBadge = document.getElementById('aiStatus');

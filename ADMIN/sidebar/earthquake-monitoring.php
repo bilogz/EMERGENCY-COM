@@ -137,6 +137,23 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                         </div>
                     </div>
 
+                    <!-- AI Earthquake Analysis + Auto Alerts -->
+                    <div class="module-card" style="background:linear-gradient(135deg, #241238, #132f3c); border-radius:8px; border:1px solid rgba(255,255,255,0.12); overflow:hidden; margin-bottom:1.5rem; color:white;">
+                        <div style="padding:1rem 1.25rem; display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap; border-bottom:1px solid rgba(255,255,255,0.12);">
+                            <h2 style="margin:0; font-size:1.05rem; font-weight:800; display:flex; align-items:center; gap:0.5rem;"><i class="fas fa-robot" style="color:#ff7675;"></i> AI Earthquake Analysis</h2>
+                            <span id="eqAiStatus" style="background:#14532d; color:#dcfce7; border:1px solid rgba(255,255,255,0.18); border-radius:999px; padding:0.2rem 0.65rem; font-size:0.7rem; font-weight:800; text-transform:uppercase;">Ready</span>
+                        </div>
+                        <div style="padding:1rem 1.25rem; display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:1rem; align-items:start;">
+                            <div id="eqAiAnalysis" style="min-height:90px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); border-radius:7px; padding:0.85rem; font-size:0.86rem; line-height:1.55; color:rgba(255,255,255,0.92);">
+                                Select Analyze Earthquake to summarize the latest PHIVOLCS bulletin for Quezon City response planning.
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:0.65rem;">
+<button onclick="getAIEarthquakeAnalysis()" style="background:linear-gradient(135deg,#8e44ad,#9b59b6); color:white; border:none; border-radius:7px; padding:0.75rem 1rem; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.45rem;"><i class="fas fa-brain"></i> Analyze Earthquake</button>
+                                <button onclick="sendEarthquakeAlert()" style="background:linear-gradient(135deg,#27ae60,#229954); color:white; border:none; border-radius:7px; padding:0.75rem 1rem; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.45rem;"><i class="fas fa-paper-plane"></i> Send Alert</button>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -399,6 +416,72 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
 
         function focusQuezonCity() { if (map) map.flyTo([14.6488, 121.0509], 12); }
 
+        function latestEarthquakeForAnalysis() {
+            return phivolcsData && phivolcsData.length ? phivolcsData[0] : null;
+        }
+
+        function earthquakeLocalAnalysis(q) {
+            if (!q) return 'No PHIVOLCS bulletin is loaded yet.';
+            const distance = calculateDistanceKm(q.latitude, q.longitude, 14.6488, 121.0509).toFixed(0);
+            let level = 'Low';
+            if (q.magnitude >= 5 || distance <= 100) level = 'High';
+            else if (q.magnitude >= 4 || distance <= 200) level = 'Moderate';
+            return `<strong>Latest event:</strong> Magnitude ${Number(q.magnitude).toFixed(1)} near ${q.location || 'the Philippines'}<br><strong>QC distance:</strong> about ${distance} km<br><strong>Suggested level:</strong> ${level}<br><strong>Actions:</strong> Monitor PHIVOLCS updates, prepare public advisory, remind citizens to Drop, Cover, and Hold On if shaking is felt, and check buildings for visible damage.`;
+        }
+
+        async function getAIEarthquakeAnalysis() {
+            const container = document.getElementById('eqAiAnalysis');
+            const status = document.getElementById('eqAiStatus');
+            const q = latestEarthquakeForAnalysis();
+            if (!q) {
+                container.innerHTML = 'Please wait for PHIVOLCS bulletins to load.';
+                return;
+            }
+            status.textContent = 'Analyzing...';
+            status.style.background = '#7c2d12';
+            container.innerHTML = '<i class="fas fa-spinner fa-spin"></i> AI is analyzing the latest earthquake bulletin...';
+            try {
+                const prompt = `Analyze this PHIVOLCS earthquake bulletin for Quezon City emergency communications. Keep it concise and practical. Include risk level, possible impact, recommended LGU actions, and citizen alert wording. Data: ${JSON.stringify(q)}`;
+                const response = await fetch('../api/gemini-proxy.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+                const data = await response.json();
+                if (data.success && data.response) {
+                    container.innerHTML = String(data.response).replace(/\n/g, '<br>');
+                    status.textContent = 'Complete';
+                    status.style.background = '#14532d';
+                    return;
+                }
+                throw new Error(data.message || 'AI response unavailable');
+            } catch (error) {
+                console.error('Earthquake AI analysis error:', error);
+                container.innerHTML = earthquakeLocalAnalysis(q);
+                status.textContent = 'Local';
+                status.style.background = '#334155';
+            }
+        }
+
+        async function sendEarthquakeAlert() {
+            if (!confirm('Send the latest qualifying PHIVOLCS earthquake alert to users by push notification and email?')) return;
+            const status = document.getElementById('eqAiStatus');
+            status.textContent = 'Sending...';
+            status.style.background = '#7c2d12';
+            try {
+                const response = await fetch('../api/phivolcs-auto-alert.php?action=force');
+                const data = await response.json();
+                if (!data.success) throw new Error(data.message || 'Unable to send earthquake alert.');
+                status.textContent = data.alerted ? 'Sent' : 'Ready';
+                status.style.background = data.alerted ? '#14532d' : '#334155';
+                alert(data.message || (data.alerted ? 'Earthquake alert queued.' : 'No qualifying event to send.'));
+            } catch (error) {
+                console.error('PHIVOLCS manual send error:', error);
+                status.textContent = 'Error';
+                status.style.background = '#991b1b';
+                alert('Unable to send earthquake alert: ' + error.message);
+            }
+        }
         // Auto-refresh every 2 minutes
         document.addEventListener('DOMContentLoaded', () => {
             loadPhivolcsBulletins();

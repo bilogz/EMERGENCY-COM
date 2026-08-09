@@ -272,6 +272,15 @@ function fetchPagasaBulletins(): ?array {
 /**
  * Count active citizens for notification audience.
  */
+function pagasaDetailedMessage(array $bulletin): string
+{
+    $description = trim((string)($bulletin['description'] ?? 'PAGASA has issued a new weather bulletin. Monitor official updates and follow local instructions.'));
+    $link = trim((string)($bulletin['link'] ?? ''));
+    $parts = [$description];
+    $parts[] = "\nAction steps:\n- Monitor official PAGASA and Quezon City advisories.\n- Prepare emergency supplies and keep phones charged.\n- Avoid flood-prone, landslide-prone, or wind-exposed areas when advised.";
+    $parts[] = "\nSee more info: " . ($link !== '' ? $link : 'https://emergency-comm.alertaraqc.com/USERS/weather-map.php');
+    return trim(implode("\n", $parts));
+}
 function countActiveCitizens(PDO $pdo): int {
     // Try subscriptions first, fallback to users table
     foreach (['subscriptions', 'users'] as $table) {
@@ -648,7 +657,7 @@ switch ($action) {
         $channels = getSetting($pdo, 'channels', 'push,email');
         $dispatch = queueBulletinBroadcast($pdo, [
             'title' => 'PAGASA Weather Alert: ' . ($latestBulletin['title'] ?? 'New Bulletin'),
-            'message' => $latestBulletin['description'] ?? 'PAGASA has issued a new weather bulletin. Monitor official updates and follow local instructions.',
+            'message' => pagasaDetailedMessage($latestBulletin),
             'severity' => $latestBulletin['severity'] ?? 'medium',
             'source' => 'pagasa',
             'category' => 'weather',
@@ -732,7 +741,7 @@ switch ($action) {
         $channels = getSetting($pdo, 'channels', 'push,email');
         $dispatch = queueBulletinBroadcast($pdo, [
             'title' => 'PAGASA Weather Alert: ' . ($latestBulletin['title'] ?? 'New Bulletin'),
-            'message' => $latestBulletin['description'] ?? 'PAGASA has issued a new weather bulletin. Monitor official updates and follow local instructions.',
+            'message' => pagasaDetailedMessage($latestBulletin),
             'severity' => $latestBulletin['severity'] ?? 'medium',
             'source' => 'pagasa',
             'category' => 'weather',
