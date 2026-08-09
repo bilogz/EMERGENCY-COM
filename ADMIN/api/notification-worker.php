@@ -334,6 +334,22 @@ function disableInvalidPushToken(PDO $pdo, string $token, ?string $error = null)
 
     error_log('Disabled invalid push token after Firebase permanent error: ' . (string)$error);
 }
+function findExpoFallbackTokenForNativeToken(PDO $pdo, string $nativeToken): string {
+    $nativeToken = trim($nativeToken);
+    if ($nativeToken === '' || preg_match('/^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/', $nativeToken)) return '';
+    try {
+        $table = 'app_notification_devices';
+        $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+        if (!$exists || !$exists->fetch()) return '';
+        $stmt = $pdo->prepare("SELECT push_token FROM {$table} WHERE fcm_token = ? AND is_active = 1 AND notification_permission = 'granted' AND push_token IS NOT NULL AND push_token <> '' LIMIT 1");
+        $stmt->execute([$nativeToken]);
+        $token = trim((string)$stmt->fetchColumn());
+        return preg_match('/^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/', $token) ? $token : '';
+    } catch (Throwable $e) {
+        error_log('Unable to find Expo fallback token: ' . $e->getMessage());
+        return '';
+    }
+}
 /** Load Firebase service-account credentials without exposing them to logs. */
 function loadFirebaseServiceAccount(&$error = null): ?array {
     $error = null;
@@ -533,6 +549,7 @@ function broadcastPA($message) {
     // error_log("PA Broadcast: $message");
     return true;
 }
+
 
 
 
