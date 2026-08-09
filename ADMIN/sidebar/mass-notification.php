@@ -2078,6 +2078,7 @@ $pageTitle = 'Mass Notification System';
                     $('#category_id').val(null).trigger('change');
                     try { window.DraftPersist?.clearDraft('admin-mn-dispatch'); } catch {}
                     mnPendingDispatchPayload = null;
+                    mnPlayDispatchQueueSound();
                     loadNotifications();
 
                     // Close wizard too to avoid trapping the user under overlays.
@@ -2625,6 +2626,60 @@ $pageTitle = 'Mass Notification System';
         let notificationLoading = false;
         let notificationHasMore = true;
         let notificationRows = [];
+        let mnDispatchSoundCtx = null;
+        let mnDispatchSoundUnlocked = false;
+        let mnKnownDispatchIds = new Set();
+        let mnHistoryHasLoadedOnce = false;
+
+        function mnUnlockDispatchSound() {
+            if (mnDispatchSoundUnlocked) return;
+            try {
+                mnDispatchSoundCtx = mnDispatchSoundCtx || new (window.AudioContext || window.webkitAudioContext)();
+                if (mnDispatchSoundCtx.state === 'suspended') mnDispatchSoundCtx.resume();
+                mnDispatchSoundUnlocked = true;
+            } catch (e) {
+                mnDispatchSoundUnlocked = false;
+            }
+        }
+
+        document.addEventListener('pointerdown', mnUnlockDispatchSound, { once: true });
+        document.addEventListener('keydown', mnUnlockDispatchSound, { once: true });
+
+        function mnPlayDispatchQueueSound() {
+            try {
+                mnUnlockDispatchSound();
+                const ctx = mnDispatchSoundCtx || new (window.AudioContext || window.webkitAudioContext)();
+                mnDispatchSoundCtx = ctx;
+                const now = ctx.currentTime;
+                [740, 988, 1320].forEach((freq, index) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, now + index * 0.1);
+                    gain.gain.setValueAtTime(0.0001, now + index * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.16, now + index * 0.1 + 0.015);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.1 + 0.11);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now + index * 0.1);
+                    osc.stop(now + index * 0.1 + 0.13);
+                });
+            } catch (e) {}
+        }
+
+        function mnTrackDispatchSound(rows, reset) {
+            const activeStatuses = new Set(['pending', 'queued', 'sending', 'processing', 'in_progress']);
+            const activeNewIds = [];
+            rows.forEach(row => {
+                const id = String(row.id || '');
+                if (!id) return;
+                const status = String(row.status || '').toLowerCase();
+                if (mnHistoryHasLoadedOnce && reset && !mnKnownDispatchIds.has(id) && activeStatuses.has(status)) activeNewIds.push(id);
+                mnKnownDispatchIds.add(id);
+            });
+            if (activeNewIds.length > 0) mnPlayDispatchQueueSound();
+            mnHistoryHasLoadedOnce = true;
+        }
 
         function loadNotifications(reset = true) {
             if (notificationLoading) return;
@@ -2657,6 +2712,8 @@ $pageTitle = 'Mass Notification System';
                         return;
                     }
 
+                    mnTrackDispatchSound(rows, reset);
+
                     const renderedRows = rows.map(n => {
                         const channelsRaw = (n.channel || '').toString();
                         const channels = channelsRaw
@@ -2676,9 +2733,14 @@ $pageTitle = 'Mass Notification System';
                             ? sender.replace('_auto_bulletin', '').toUpperCase()
                             : '';
                         const message = (n.message || '').toString();
+                        const numericProgress = Math.max(0, Math.min(100, Number(progress) || 0));
+                        const isActiveDispatch = ['pending', 'queued', 'sending', 'processing', 'in_progress'].includes(status);
+                        const progressText = Number(stats.total) > 0
+                            ? `${Number(stats.sent || 0) + Number(stats.failed || 0)}/${Number(stats.total || 0)} processed`
+                            : `${numericProgress}% processed`;
                         const successRate = Number(stats.total) > 0
                             ? `<strong>${Number(stats.sent || 0)}/${Number(stats.total || 0)}</strong> <br><small style="color: var(--text-secondary-1);">${Math.round((Number(stats.sent || 0) / Number(stats.total || 1)) * 100)}% delivered</small>`
-                            : '--';
+                            : (isActiveDispatch ? '<small style="color: var(--text-secondary-1);">Waiting for worker</small>' : '--');
                         return `
                             <tr>
                                 <td>#${n.id}</td>
@@ -2690,7 +2752,8 @@ $pageTitle = 'Mass Notification System';
                                 <td><div style="max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: 0.9rem;">${message}</div></td>
                                 <td>
                                     <span class="badge ${status}">${status.toUpperCase()}</span>
-                                    <div class="progress-container" title="${progress}% sent"><div class="progress-bar" style="width: ${progress}%"></div></div>
+                                    <div class="mn-dispatch-progress ${isActiveDispatch ? 'is-active' : ''}" title="${numericProgress}% processed"><div class="mn-dispatch-progress-bar" style="width: ${numericProgress}%"></div></div>
+                                    <small class="mn-dispatch-progress-text">${isActiveDispatch ? 'Sending: ' : 'Progress: '}${progressText}</small>
                                 </td>
                                 <td><small style="color: var(--text-secondary-1);">${sentAt}</small></td>
                                 <td>
@@ -2836,6 +2899,9 @@ $pageTitle = 'Mass Notification System';
     </script>
 </body>
 </html>
+
+
+
 
 
 
