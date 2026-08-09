@@ -431,20 +431,40 @@ function loadFirebaseServiceAccount(&$error = null): ?array {
     $error = null;
     $json = function_exists('getSecureConfig') ? getSecureConfig('FIREBASE_SERVICE_ACCOUNT_JSON', '') : getenv('FIREBASE_SERVICE_ACCOUNT_JSON');
     $path = function_exists('getSecureConfig') ? getSecureConfig('FIREBASE_SERVICE_ACCOUNT_PATH', '') : getenv('FIREBASE_SERVICE_ACCOUNT_PATH');
+
+    $decoded = null;
     if (is_string($json) && trim($json) !== '') {
         $decoded = json_decode($json, true);
-    } elseif (is_string($path) && trim($path) !== '' && is_readable($path)) {
+        if (!is_array($decoded)) {
+            $error = 'Firebase service-account JSON is not valid JSON.';
+            return null;
+        }
+    } elseif (is_string($path) && trim($path) !== '') {
+        $path = trim($path);
+        if (!file_exists($path)) {
+            $error = 'Firebase service-account file does not exist: ' . $path;
+            return null;
+        }
+        if (!is_readable($path)) {
+            $error = 'Firebase service-account file is not readable by PHP: ' . $path;
+            return null;
+        }
         $decoded = json_decode((string)file_get_contents($path), true);
+        if (!is_array($decoded)) {
+            $error = 'Firebase service-account file is not valid JSON: ' . $path;
+            return null;
+        }
     } else {
+        $error = 'Firebase service account is not configured. Set FIREBASE_SERVICE_ACCOUNT_PATH in ADMIN/api/config.local.php.';
         return null;
     }
-    if (!is_array($decoded) || empty($decoded['client_email']) || empty($decoded['private_key']) || empty($decoded['project_id'])) {
+
+    if (empty($decoded['client_email']) || empty($decoded['private_key']) || empty($decoded['project_id'])) {
         $error = 'Firebase service-account configuration is incomplete.';
         return null;
     }
     return $decoded;
 }
-
 function getFirebaseAccessToken(array $serviceAccount, &$error = null): ?string {
     static $cached = null;
     if (is_array($cached) && ($cached['expires_at'] ?? 0) > time() + 60) return $cached['token'];
@@ -660,6 +680,7 @@ function broadcastPA($message) {
     // error_log("PA Broadcast: $message");
     return true;
 }
+
 
 
 
