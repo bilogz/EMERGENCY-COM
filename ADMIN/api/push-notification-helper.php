@@ -1,8 +1,27 @@
-<?php
+﻿<?php
 /** Push notification helper using Firebase Cloud Messaging HTTP v1. */
 
 require_once dirname(__DIR__, 2) . '/PHP/api/device_registry.php';
 
+const PUSH_HELPER_EMERGENCY_CHANNEL_ID = 'alertara-emergency-default-v3';
+
+function pushHelperMoreInfoUrl(array $data): string {
+    $haystack = strtolower((string)($data['category'] ?? '') . ' ' . (string)($data['type'] ?? '') . ' ' . (string)($data['source'] ?? ''));
+    if (preg_match('/weather|pagasa|rain|flood|typhoon|storm|wind|landslide/', $haystack)) {
+        return 'https://emergency-comm.alertaraqc.com/USERS/weather-map.php';
+    }
+    if (preg_match('/earthquake|seismic|phivolcs|aftershock|tsunami/', $haystack)) {
+        return 'https://emergency-comm.alertaraqc.com/USERS/earthquake-monitoring.php';
+    }
+    return '';
+}
+
+function pushHelperWithRoutingData(array $data): array {
+    $data['click_action'] = $data['click_action'] ?? 'OPEN_EMERGENCY_ALERT';
+    $moreInfoUrl = pushHelperMoreInfoUrl($data);
+    if ($moreInfoUrl !== '') $data['moreInfoUrl'] = $moreInfoUrl;
+    return $data;
+}
 function pushHelperConfig(string $key): string {
     if (function_exists('getSecureConfig')) {
         $value = getSecureConfig($key, '');
@@ -90,7 +109,7 @@ function pushHelperSendExpo(string $token, string $title, string $message, array
         'to' => $token,
         'sound' => 'default',
         'priority' => 'high',
-        'channelId' => 'emergency-alerts-v2',
+        'channelId' => PUSH_HELPER_EMERGENCY_CHANNEL_ID,
         'title' => $title,
         'body' => $message,
         'data' => $data
@@ -116,6 +135,7 @@ function pushHelperSendExpo(string $token, string $title, string $message, array
 }
 
 function pushHelperSendFcmV1(string $token, string $title, string $message, array $data, ?string &$error = null): bool {
+    $data = pushHelperWithRoutingData($data);
     if (preg_match('/^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/', $token)) {
         return pushHelperSendExpo($token, $title, $message, $data, $error);
     }
@@ -140,7 +160,7 @@ function pushHelperSendFcmV1(string $token, string $title, string $message, arra
             'priority' => 'HIGH',
             'ttl' => '86400s',
             'notification' => [
-                'channel_id' => 'emergency-alerts-v2',
+                'channel_id' => PUSH_HELPER_EMERGENCY_CHANNEL_ID,
                 'sound' => 'default',
                 'default_vibrate_timings' => true,
                 'visibility' => 'PUBLIC',
@@ -240,5 +260,9 @@ function logPushNotification($userId, $deviceId, $title, $message, $alertId, $st
     }
 }
 ?>
+
+
+
+
 
 

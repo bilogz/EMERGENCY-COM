@@ -1,10 +1,12 @@
-<?php
+﻿<?php
 /**
  * Notification Background Worker
  * Processes the notification_queue in batches
  */
 
 require_once 'db_connect.php';
+
+const FCM_EMERGENCY_CHANNEL_ID = 'alertara-emergency-default-v3';
 
 if (php_sapi_name() !== 'cli') {
     if (session_status() === PHP_SESSION_NONE) session_start();
@@ -395,6 +397,16 @@ function getFirebaseAccessToken(array $serviceAccount, &$error = null): ?string 
     return $cached['token'];
 }
 
+function workerAlertMoreInfoUrl(string $category): string {
+    $needle = strtolower($category);
+    if (preg_match('/weather|pagasa|rain|flood|typhoon|storm|wind|landslide/', $needle)) {
+        return 'https://emergency-comm.alertaraqc.com/USERS/weather-map.php';
+    }
+    if (preg_match('/earthquake|seismic|phivolcs|aftershock|tsunami/', $needle)) {
+        return 'https://emergency-comm.alertaraqc.com/USERS/earthquake-monitoring.php';
+    }
+    return '';
+}
 /** Send an alert through the supported FCM HTTP v1 API. */
 function sendFCM($token, $payload, &$error = null) {
     if (preg_match('/^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/', (string)$token)) {
@@ -423,6 +435,8 @@ function sendFCM($token, $payload, &$error = null) {
         'body' => (string)($payload['body'] ?? ''),
         'click_action' => 'OPEN_EMERGENCY_ALERT'
     ];
+    $moreInfoUrl = workerAlertMoreInfoUrl($data['category']);
+    if ($moreInfoUrl !== '') $data['moreInfoUrl'] = $moreInfoUrl;
     $message = ['message' => [
         'token' => (string)$token,
         'notification' => ['title' => $data['title'], 'body' => $data['body']],
@@ -431,7 +445,7 @@ function sendFCM($token, $payload, &$error = null) {
             'priority' => 'HIGH',
             'ttl' => '86400s',
             'notification' => [
-                'channel_id' => 'emergency-alerts-v2',
+                'channel_id' => FCM_EMERGENCY_CHANNEL_ID,
                 'sound' => 'default',
                 'default_vibrate_timings' => true,
                 'visibility' => 'PUBLIC',
@@ -477,7 +491,7 @@ function sendExpoPushNotification(string $token, array $payload, &$error = null)
         'to' => $token,
         'sound' => 'default',
         'priority' => in_array($severity, ['critical', 'high'], true) ? 'high' : 'default',
-        'channelId' => 'emergency-alerts-v2',
+        'channelId' => FCM_EMERGENCY_CHANNEL_ID,
         'title' => (string)($payload['title'] ?? 'Emergency Alert'),
         'body' => (string)($payload['body'] ?? ''),
         'data' => [
@@ -487,6 +501,8 @@ function sendExpoPushNotification(string $token, array $payload, &$error = null)
             'category' => (string)($payload['category'] ?? 'Emergency Alert')
         ]
     ];
+    $moreInfoUrl = workerAlertMoreInfoUrl((string)($message['data']['category'] ?? ''));
+    if ($moreInfoUrl !== '') $message['data']['moreInfoUrl'] = $moreInfoUrl;
     $ch = curl_init('https://exp.host/--/api/v2/push/send');
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
@@ -517,6 +533,12 @@ function broadcastPA($message) {
     // error_log("PA Broadcast: $message");
     return true;
 }
+
+
+
+
+
+
 
 
 
