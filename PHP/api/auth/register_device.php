@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 header('Content-Type: application/json; charset=utf-8');
 
 require_once '../shared/db_connect.php';
@@ -27,6 +27,8 @@ try {
         $fcm_token = $native_fcm_token !== '' ? $native_fcm_token : $primary_push_token;
         $token_type = $native_fcm_token !== '' ? 'fcm' : trim((string)($data['token_type'] ?? 'expo'));
         $permission = trim((string)($data['notification_permission'] ?? 'granted'));
+        $notification_channel = trim((string)($data['notification_channel'] ?? 'alertara-emergency-default-v3'));
+        $notification_sound = trim((string)($data['notification_sound'] ?? 'emergency'));
 
         if (!$device_id || (!$user_id && $primary_push_token === '')) {
             apiResponse::error("Missing required fields: device_id and either user_id or push_token", 400);
@@ -42,7 +44,9 @@ try {
                 $primary_push_token,
                 $token_type,
                 $permission,
-                $native_fcm_token !== '' ? $native_fcm_token : null
+                $native_fcm_token !== '' ? $native_fcm_token : null,
+                $notification_channel,
+                $notification_sound
             );
         }
 
@@ -182,3 +186,5 @@ try {
     error_log("User Devices Error: " . $e->getMessage());
     apiResponse::error("An unexpected error occurred.", 500);
 }
+
+

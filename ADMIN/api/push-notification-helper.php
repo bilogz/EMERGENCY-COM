@@ -16,11 +16,42 @@ function pushHelperMoreInfoUrl(array $data): string {
     return '';
 }
 
+
 function pushHelperWithRoutingData(array $data): array {
     $data['click_action'] = $data['click_action'] ?? 'OPEN_EMERGENCY_ALERT';
     $moreInfoUrl = pushHelperMoreInfoUrl($data);
     if ($moreInfoUrl !== '') $data['moreInfoUrl'] = $moreInfoUrl;
     return $data;
+}
+
+function pushHelperValidNotificationChannel(?string $channel): string {
+    $channel = trim((string)$channel);
+    return preg_match('/^[A-Za-z0-9_.-]{1,120}$/', $channel) ? $channel : PUSH_HELPER_EMERGENCY_CHANNEL_ID;
+}
+
+function pushHelperNotificationChannelForToken(string $token): string {
+    global $pdo;
+    $token = trim($token);
+    if (!$pdo instanceof PDO || $token === '') return PUSH_HELPER_EMERGENCY_CHANNEL_ID;
+    try {
+        $table = 'app_notification_devices';
+        $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+        if (!$exists || !$exists->fetch()) return PUSH_HELPER_EMERGENCY_CHANNEL_ID;
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM {$table}");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        if (!in_array('notification_channel', $cols, true)) return PUSH_HELPER_EMERGENCY_CHANNEL_ID;
+        $conditions = [];
+        $params = [];
+        if (in_array('fcm_token', $cols, true)) { $conditions[] = 'fcm_token = ?'; $params[] = $token; }
+        if (in_array('push_token', $cols, true)) { $conditions[] = 'push_token = ?'; $params[] = $token; }
+        if (!$conditions) return PUSH_HELPER_EMERGENCY_CHANNEL_ID;
+        $stmt = $pdo->prepare("SELECT notification_channel FROM {$table} WHERE is_active = 1 AND notification_permission = 'granted' AND (" . implode(' OR ', $conditions) . ") ORDER BY last_active DESC LIMIT 1");
+        $stmt->execute($params);
+        return pushHelperValidNotificationChannel($stmt->fetchColumn() ?: '');
+    } catch (Throwable $e) {
+        error_log('Push helper notification channel lookup failed: ' . $e->getMessage());
+        return PUSH_HELPER_EMERGENCY_CHANNEL_ID;
+    }
 }
 function pushHelperConfig(string $key): string {
     if (function_exists('getSecureConfig')) {
@@ -109,7 +140,7 @@ function pushHelperSendExpo(string $token, string $title, string $message, array
         'to' => $token,
         'sound' => 'default',
         'priority' => 'high',
-        'channelId' => PUSH_HELPER_EMERGENCY_CHANNEL_ID,
+        'channelId' => pushHelperNotificationChannelForToken($token),
         'title' => $title,
         'body' => $message,
         'data' => $data
@@ -160,7 +191,7 @@ function pushHelperSendFcmV1(string $token, string $title, string $message, arra
             'priority' => 'HIGH',
             'ttl' => '86400s',
             'notification' => [
-                'channel_id' => PUSH_HELPER_EMERGENCY_CHANNEL_ID,
+                'channel_id' => pushHelperNotificationChannelForToken($token),
                 'sound' => 'default',
                 'default_vibrate_timings' => true,
                 'visibility' => 'PUBLIC',
@@ -260,6 +291,8 @@ function logPushNotification($userId, $deviceId, $title, $message, $alertId, $st
     }
 }
 ?>
+
+
 
 
 

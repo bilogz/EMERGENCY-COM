@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Notification Background Worker
  * Processes the notification_queue in batches
@@ -423,6 +423,35 @@ function workerAlertMoreInfoUrl(string $category): string {
     }
     return '';
 }
+
+function workerValidNotificationChannel(?string $channel): string {
+    $channel = trim((string)$channel);
+    return preg_match('/^[A-Za-z0-9_.-]{1,120}$/', $channel) ? $channel : FCM_EMERGENCY_CHANNEL_ID;
+}
+
+function workerNotificationChannelForToken(PDO $pdo, string $token): string {
+    $token = trim($token);
+    if ($token === '') return FCM_EMERGENCY_CHANNEL_ID;
+    try {
+        $table = 'app_notification_devices';
+        $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+        if (!$exists || !$exists->fetch()) return FCM_EMERGENCY_CHANNEL_ID;
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM {$table}");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        if (!in_array('notification_channel', $cols, true)) return FCM_EMERGENCY_CHANNEL_ID;
+        $conditions = [];
+        $params = [];
+        if (in_array('fcm_token', $cols, true)) { $conditions[] = 'fcm_token = ?'; $params[] = $token; }
+        if (in_array('push_token', $cols, true)) { $conditions[] = 'push_token = ?'; $params[] = $token; }
+        if (!$conditions) return FCM_EMERGENCY_CHANNEL_ID;
+        $stmt = $pdo->prepare("SELECT notification_channel FROM {$table} WHERE is_active = 1 AND notification_permission = 'granted' AND (" . implode(' OR ', $conditions) . ") ORDER BY last_active DESC LIMIT 1");
+        $stmt->execute($params);
+        return workerValidNotificationChannel($stmt->fetchColumn() ?: '');
+    } catch (Throwable $e) {
+        error_log('Unable to resolve notification channel: ' . $e->getMessage());
+        return FCM_EMERGENCY_CHANNEL_ID;
+    }
+}
 /** Send an alert through the supported FCM HTTP v1 API. */
 function sendFCM($token, $payload, &$error = null) {
     if (preg_match('/^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/', (string)$token)) {
@@ -451,6 +480,9 @@ function sendFCM($token, $payload, &$error = null) {
         'body' => (string)($payload['body'] ?? ''),
         'click_action' => 'OPEN_EMERGENCY_ALERT'
     ];
+    foreach (['source', 'latitude', 'longitude', 'locationName'] as $key) {
+        if (isset($payload[$key]) && trim((string)$payload[$key]) !== '') $data[$key] = (string)$payload[$key];
+    }
     $moreInfoUrl = workerAlertMoreInfoUrl($data['category']);
     if ($moreInfoUrl !== '') $data['moreInfoUrl'] = $moreInfoUrl;
     $message = ['message' => [
@@ -461,7 +493,7 @@ function sendFCM($token, $payload, &$error = null) {
             'priority' => 'HIGH',
             'ttl' => '86400s',
             'notification' => [
-                'channel_id' => FCM_EMERGENCY_CHANNEL_ID,
+                'channel_id' => workerValidNotificationChannel((string)($payload['notification_channel'] ?? FCM_EMERGENCY_CHANNEL_ID)),
                 'sound' => 'default',
                 'default_vibrate_timings' => true,
                 'visibility' => 'PUBLIC',
@@ -507,7 +539,7 @@ function sendExpoPushNotification(string $token, array $payload, &$error = null)
         'to' => $token,
         'sound' => 'default',
         'priority' => in_array($severity, ['critical', 'high'], true) ? 'high' : 'default',
-        'channelId' => FCM_EMERGENCY_CHANNEL_ID,
+        'channelId' => workerValidNotificationChannel((string)($payload['notification_channel'] ?? FCM_EMERGENCY_CHANNEL_ID)),
         'title' => (string)($payload['title'] ?? 'Emergency Alert'),
         'body' => (string)($payload['body'] ?? ''),
         'data' => [
@@ -517,6 +549,9 @@ function sendExpoPushNotification(string $token, array $payload, &$error = null)
             'category' => (string)($payload['category'] ?? 'Emergency Alert')
         ]
     ];
+    foreach (['source', 'latitude', 'longitude', 'locationName'] as $key) {
+        if (isset($payload[$key]) && trim((string)$payload[$key]) !== '') $message['data'][$key] = (string)$payload[$key];
+    }
     $moreInfoUrl = workerAlertMoreInfoUrl((string)($message['data']['category'] ?? ''));
     if ($moreInfoUrl !== '') $message['data']['moreInfoUrl'] = $moreInfoUrl;
     $ch = curl_init('https://exp.host/--/api/v2/push/send');
@@ -549,6 +584,8 @@ function broadcastPA($message) {
     // error_log("PA Broadcast: $message");
     return true;
 }
+
+
 
 
 

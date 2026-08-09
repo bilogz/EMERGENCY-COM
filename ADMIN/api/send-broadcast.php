@@ -472,6 +472,9 @@ try {
     $targetLngRaw = $_POST['target_lng'] ?? null;
     $radiusMRaw = $_POST['radius_m'] ?? null;
     $targetAddress = trim((string)($_POST['target_address'] ?? ''));
+    $alertLatRaw = $_POST['alert_latitude'] ?? null;
+    $alertLngRaw = $_POST['alert_longitude'] ?? null;
+    $alertLocationName = trim((string)($_POST['alert_location_name'] ?? $_POST['alert_location'] ?? ''));
     
     $channels = $_POST['channels'] ?? []; 
     if (is_string($channels)) {
@@ -537,6 +540,19 @@ try {
         $radiusM = is_numeric($radiusMRaw) ? (int)$radiusMRaw : 0;
         if ($radiusM <= 0 || $radiusM > 20000) {
             throw new Exception('Invalid radius. Please set a radius between 1 and 20000 meters.');
+        }
+    }
+
+    $alertLat = null;
+    $alertLng = null;
+    if ($alertLatRaw !== null && $alertLatRaw !== '' && $alertLngRaw !== null && $alertLngRaw !== '') {
+        if (!is_numeric($alertLatRaw) || !is_numeric($alertLngRaw)) {
+            throw new Exception('Invalid alert location coordinates.');
+        }
+        $alertLat = (float)$alertLatRaw;
+        $alertLng = (float)$alertLngRaw;
+        if ($alertLat < -90 || $alertLat > 90 || $alertLng < -180 || $alertLng > 180) {
+            throw new Exception('Invalid alert location coordinates.');
         }
     }
 
@@ -711,22 +727,29 @@ try {
         $alertVals[] = 'mass_notification';
         $alertPlaceholders[] = '?';
     }
-    if ($audienceType === 'location' && $targetLat !== null && $targetLng !== null) {
+    $storedAlertLat = $alertLat ?? $targetLat;
+    $storedAlertLng = $alertLng ?? $targetLng;
+    $storedAlertLocation = $alertLocationName !== '' ? $alertLocationName : $targetAddress;
+    if ($storedAlertLat !== null && $storedAlertLng !== null) {
         if ($hasLatitudeCol) {
             $alertCols[] = 'latitude';
-            $alertVals[] = $targetLat;
+            $alertVals[] = $storedAlertLat;
             $alertPlaceholders[] = '?';
         }
         if ($hasLongitudeCol) {
             $alertCols[] = 'longitude';
-            $alertVals[] = $targetLng;
+            $alertVals[] = $storedAlertLng;
             $alertPlaceholders[] = '?';
         }
         if ($hasLocationCol) {
             $alertCols[] = 'location';
-            $alertVals[] = ($targetAddress !== '' ? $targetAddress : ($targetLat . ',' . $targetLng));
+            $alertVals[] = ($storedAlertLocation !== '' ? $storedAlertLocation : ($storedAlertLat . ',' . $storedAlertLng));
             $alertPlaceholders[] = '?';
         }
+    } elseif ($storedAlertLocation !== '' && $hasLocationCol) {
+        $alertCols[] = 'location';
+        $alertVals[] = $storedAlertLocation;
+        $alertPlaceholders[] = '?';
     }
 
     $alertCols[] = 'created_at';

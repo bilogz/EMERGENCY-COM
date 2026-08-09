@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Mass Notification System Page
  * Manage SMS, Email, and PA (Public Address) Systems for broad communication
@@ -215,7 +215,7 @@ $pageTitle = 'Mass Notification System';
                                             <label for="message_body">2. Tell people what happened and what to do <span class="mn-required">Required</span></label>
                                             <div class="mn-guided-message" id="mnGuidedMessage">
                                                 <div class="mn-guided-heading">
-                                                    <div><strong>Answer these 3 simple questions</strong><span id="mnGuidedProgress">0 of 3 answered · The complete message will be written for you.</span></div>
+                                                    <div><strong>Answer these 3 simple questions</strong><span id="mnGuidedProgress">0 of 3 answered Â· The complete message will be written for you.</span></div>
                                                     <button type="button" class="btn ui-btn-ghost mn-clear-message-btn" onclick="mnClearMessageBuilder()"><i class="fas fa-eraser"></i> Clear</button>
                                                 </div>
 
@@ -249,7 +249,7 @@ $pageTitle = 'Mass Notification System';
                                                             <input type="text" id="mnActionToTake" placeholder="Example: Move to higher ground now">
                                                             <button type="button" class="mn-dictate-btn" onclick="mnStartDictation('mnActionToTake', this)" aria-label="Speak what people should do" title="Speak instead of typing"><i class="fas fa-microphone"></i></button>
                                                         </div>
-                                                        <div class="mn-action-chip-label">Quick actions — select one or more:</div>
+                                                        <div class="mn-action-chip-label">Quick actions â€” select one or more:</div>
                                                         <div class="mn-action-chips" role="group" aria-label="Recommended emergency actions">
                                                             <button type="button" aria-pressed="false" onclick="mnApplyActionChip('Duck, cover, and hold on', this)">Duck, Cover &amp; Hold</button>
                                                             <button type="button" aria-pressed="false" onclick="mnApplyActionChip('Evacuate immediately and follow official evacuation routes', this)">Evacuate Immediately</button>
@@ -269,13 +269,31 @@ $pageTitle = 'Mass Notification System';
                                             <textarea id="message_body" name="body" rows="6" required onkeyup="updateCharCount(this)" placeholder="Your complete alert message will appear here as you answer the questions above. You can also type or edit it directly."></textarea>
                                             <div class="mn-field-note"><i class="fas fa-pen"></i> Read this message once. You can click inside it and change any word.</div>
                                             <div class="mn-sms-counter" id="mnSmsCounter" aria-live="polite">
-                                                <span><i class="fas fa-comment-sms" aria-hidden="true"></i> <strong id="mnSmsMetrics">0 / 160 characters • 1 SMS Segment</strong></span>
+                                                <span><i class="fas fa-comment-sms" aria-hidden="true"></i> <strong id="mnSmsMetrics">0 / 160 characters â€¢ 1 SMS Segment</strong></span>
                                                 <span class="mn-sms-encoding" id="mnSmsEncoding">Standard SMS</span>
                                             </div>
                                             <div class="mn-sms-warning" id="mnSmsWarning" role="status"></div>
                                             <div class="mn-dictation-status" id="mnDictationStatus" aria-live="polite"></div>
                                         </div>
 
+                                        <div class="form-group mn-alert-location-card">
+                                            <label>Optional alert location or evacuation point</label>
+                                            <input type="hidden" id="mnTargetLat" name="alert_latitude" data-draft-ignore>
+                                            <input type="hidden" id="mnTargetLng" name="alert_longitude" data-draft-ignore>
+                                            <input type="hidden" id="mnTargetAddress" name="alert_location_name">
+                                            <input type="hidden" id="mnRadiusM" name="radius_m" value="5000" data-draft-ignore>
+                                            <div class="mn-location-summary">
+                                                <strong id="mnTargetLabel">No location selected</strong>
+                                                <span id="mnTargetCoords">Pick a place only when the alert needs a map or evacuation point.</span>
+                                                <span id="mnTargetAddrText" class="mn-location-address"></span>
+                                            </div>
+                                            <div class="mn-location-actions">
+                                                <input type="text" id="mnTargetAddressText" class="form-control" placeholder="Search or type a location name (optional)">
+                                                <button type="button" class="btn btn-secondary" id="mnLookupAddressBtn" onclick="mnLookupAddressFromWizard()"><i class="fas fa-search-location"></i> Search</button>
+                                                <button type="button" class="btn btn-secondary" onclick="mnOpenMapPicker('wizard')"><i class="fas fa-map-marker-alt"></i> Select on Map</button>
+                                            </div>
+                                            <div class="mn-help">This does not target only nearby users. It adds a place to the alert details and mobile More Info flow.</div>
+                                        </div>
                                         <details class="mn-more-settings" id="mnAdvancedSettings">
                                             <summary><span><i class="fas fa-sliders"></i> Urgency and alert level</span><small id="mnUrgencySummary">Medium urgency</small></summary>
                                             <div class="mn-more-settings-body">
@@ -432,6 +450,7 @@ $pageTitle = 'Mass Notification System';
                     <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">Audience:</td><td id="pvAudience" style="padding: 0.5rem 0; font-weight: 600; text-align: right;"></td></tr>
                     <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">Channels:</td><td id="pvChannels" style="padding: 0.5rem 0; font-weight: 600; text-align: right;"></td></tr>
                     <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">Severity:</td><td id="pvSeverity" style="padding: 0.5rem 0; font-weight: 600; text-align: right;"></td></tr>
+                    <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">Location:</td><td id="pvLocation" style="padding: 0.5rem 0; font-weight: 600; text-align: right;">None</td></tr>
                 </table>
                 <div style="background: var(--bg-color-1); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color-1);">
                     <div id="pvTitle" style="font-weight: 700; color: var(--text-color-1); margin-bottom: 0.5rem;"></div>
@@ -616,7 +635,7 @@ $pageTitle = 'Mass Notification System';
             if (nextBtn) {
                 if (step === 1) nextBtn.innerHTML = 'Continue to Message <i class="fas fa-arrow-right"></i>';
                 else if (step === 2) nextBtn.innerHTML = '<i class="fas fa-eye"></i> Review Alert <i class="fas fa-arrow-right"></i>';
-                else nextBtn.innerHTML = '<i class="fas fa-eye"></i> Review Alert <span aria-hidden="true">→</span>';
+                else nextBtn.innerHTML = '<i class="fas fa-eye"></i> Review Alert <span aria-hidden="true">â†’</span>';
             }
             if (instruction) {
                 const instructions = {
@@ -745,8 +764,8 @@ $pageTitle = 'Mass Notification System';
             const weatherVisible = document.getElementById('mnWeatherSignalWrap')?.style.display !== 'none';
             const fireVisible = document.getElementById('mnFireLevelWrap')?.style.display !== 'none';
             let text = `${severity} urgency`;
-            if (weatherVisible) text += ` · Signal ${document.getElementById('mnWeatherSignal')?.value || '-'}`;
-            if (fireVisible) text += ` · Fire Level ${document.getElementById('mnFireLevel')?.value || '-'}`;
+            if (weatherVisible) text += ` Â· Signal ${document.getElementById('mnWeatherSignal')?.value || '-'}`;
+            if (fireVisible) text += ` Â· Fire Level ${document.getElementById('mnFireLevel')?.value || '-'}`;
             summary.textContent = text;
         }
 
@@ -1122,7 +1141,7 @@ $pageTitle = 'Mass Notification System';
                 return mnDefaultFireLevelFromSeverity(sev);
             })();
 
-            // Special: Weather signal (1–5)
+            // Special: Weather signal (1â€“5)
             const weatherSignal = (() => {
                 if (kind !== 'weather') return null;
                 const provided = String(ctx.weatherSignal || '').trim();
@@ -1339,8 +1358,8 @@ $pageTitle = 'Mass Notification System';
         function updateCharCount(textarea) {
             const value = String(textarea?.value || '');
             const characters = Array.from(value).length;
-            const gsmBasic = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
-            const gsmExtended = "^{}\\[~]|€";
+            const gsmBasic = "@Â£$Â¥Ã¨Ã©Ã¹Ã¬Ã²Ã‡\nÃ˜Ã¸\rÃ…Ã¥Î”_Î¦Î“Î›Î©Î Î¨Î£Î˜ÎžÃ†Ã¦ÃŸÃ‰ !\"#Â¤%&'()*+,-./0123456789:;<=>?Â¡ABCDEFGHIJKLMNOPQRSTUVWXYZÃ„Ã–Ã‘ÃœÂ§Â¿abcdefghijklmnopqrstuvwxyzÃ¤Ã¶Ã±Ã¼Ã ";
+            const gsmExtended = "^{}\\[~]|â‚¬";
             let gsmUnits = 0;
             let isGsm = true;
             for (const char of Array.from(value)) {
@@ -1358,7 +1377,7 @@ $pageTitle = 'Mass Notification System';
             const encoding = document.getElementById('mnSmsEncoding');
             const counter = document.getElementById('mnSmsCounter');
             const warning = document.getElementById('mnSmsWarning');
-            if (metrics) metrics.textContent = `${characters} / ${singleLimit} characters • ${segments} SMS Segment${segments === 1 ? '' : 's'}`;
+            if (metrics) metrics.textContent = `${characters} / ${singleLimit} characters â€¢ ${segments} SMS Segment${segments === 1 ? '' : 's'}`;
             if (encoding) encoding.textContent = isGsm ? 'Standard SMS' : 'Unicode SMS';
             counter?.classList.toggle('is-warning', segments > 1);
             counter?.classList.toggle('is-critical', segments > 3);
@@ -1430,6 +1449,14 @@ $pageTitle = 'Mass Notification System';
                 body: (document.getElementById('message_body')?.value || '').trim()
             };
 
+            const alertLat = (document.getElementById('mnTargetLat')?.value || '').trim();
+            const alertLng = (document.getElementById('mnTargetLng')?.value || '').trim();
+            const alertLocation = (document.getElementById('mnTargetAddress')?.value || document.getElementById('mnTargetAddressText')?.value || '').trim();
+            if (alertLat && alertLng) {
+                data.alert_latitude = alertLat;
+                data.alert_longitude = alertLng;
+            }
+            if (alertLocation) data.alert_location_name = alertLocation;
             // Include optional level fields when relevant (backend may ignore if unsupported)
             try {
                 const cat = categoriesData.find(c => c.id == data.category_id);
@@ -1560,7 +1587,7 @@ $pageTitle = 'Mass Notification System';
         function mnFormatMessageForDisplay(message) {
             return String(message || '')
                 .replace(/\r\n?/g, '\n')
-                .replace(/[ \t]*•[ \t]*/g, '\n\n• ')
+                .replace(/[ \t]*â€¢[ \t]*/g, '\n\nâ€¢ ')
                 .replace(/\n{3,}/g, '\n\n')
                 .trim();
         }
@@ -1774,8 +1801,8 @@ $pageTitle = 'Mass Notification System';
                 progress.textContent = completed === 0 && hasCompleteMessage
                     ? 'A complete message is already provided. You may skip these questions.'
                     : completed === 3
-                    ? 'All 3 answered · Your complete message is ready below.'
-                    : `${completed} of 3 answered · Complete the remaining questions.`;
+                    ? 'All 3 answered Â· Your complete message is ready below.'
+                    : `${completed} of 3 answered Â· Complete the remaining questions.`;
             }
         }
 
@@ -1819,7 +1846,7 @@ $pageTitle = 'Mass Notification System';
             recognition.interimResults = false;
             recognition.continuous = false;
             button?.classList.add('is-listening');
-            if (status) status.textContent = 'Listening… Speak clearly, then pause.';
+            if (status) status.textContent = 'Listeningâ€¦ Speak clearly, then pause.';
 
             recognition.onresult = event => {
                 const spoken = Array.from(event.results).map(result => result[0]?.transcript || '').join(' ').trim();
@@ -2010,6 +2037,11 @@ $pageTitle = 'Mass Notification System';
             document.getElementById('pvSeverity').textContent = data.severity || 'Medium';
             document.getElementById('pvTitle').textContent = data.title;
             document.getElementById('pvBody').textContent = mnFormatMessageForDisplay(data.body);
+            const locationPreview = document.getElementById('pvLocation');
+            if (locationPreview) {
+                const locationText = data.alert_location_name || (data.alert_latitude && data.alert_longitude ? `${data.alert_latitude}, ${data.alert_longitude}` : '');
+                locationPreview.textContent = locationText || 'None';
+            }
 
             // Use class-based modal show/hide (compatible with global modal helpers)
             mnOpenModal('previewModal');
@@ -2899,6 +2931,7 @@ $pageTitle = 'Mass Notification System';
     </script>
 </body>
 </html>
+
 
 
 
