@@ -44,6 +44,19 @@ $pageTitle = 'Weather Monitoring';
         }
     </style>
     <?php endif; ?>
+    <style>
+        .alertara-action-modal { position:fixed; inset:0; z-index:100000; display:none; align-items:center; justify-content:center; padding:1.25rem; background:rgba(4,15,20,0.62); backdrop-filter:blur(4px); }
+        .alertara-action-dialog { width:min(470px, 100%); background:var(--card-bg-1); color:var(--text-color-1); border:1px solid var(--border-color-1); border-radius:10px; box-shadow:0 22px 60px rgba(0,0,0,0.32); padding:1.25rem; display:grid; grid-template-columns:auto 1fr; gap:1rem; }
+        .alertara-action-icon { width:48px; height:48px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; background:linear-gradient(135deg,#2563eb,#06b6d4); font-size:1.25rem; }
+        .alertara-action-copy h3 { margin:0 0 0.4rem; font-size:1rem; font-weight:800; }
+        .alertara-action-copy p { margin:0; color:var(--text-secondary-1); line-height:1.45; font-size:0.9rem; }
+        .alertara-action-actions { grid-column:1 / -1; display:flex; justify-content:flex-end; gap:0.7rem; margin-top:0.6rem; }
+        .alertara-action-actions.single { justify-content:flex-end; }
+        .alertara-modal-primary, .alertara-modal-secondary { border:0; border-radius:8px; padding:0.7rem 1rem; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:0.4rem; }
+        .alertara-modal-primary { background:#4f9a97; color:#fff; }
+        .alertara-modal-secondary { background:var(--bg-color-2); color:var(--text-color-1); border:1px solid var(--border-color-1); }
+        .alertara-action-modal.is-error .alertara-action-icon { background:linear-gradient(135deg,#991b1b,#ef4444); }
+    </style>
 </head>
 <body class="<?php echo $publicView ? 'public-view' : ''; ?>" data-disable-auto-darkmode="true">
     <?php if (!$publicView): ?>
@@ -533,14 +546,14 @@ $pageTitle = 'Weather Monitoring';
                                 }
                             }, 600000); // 10 minutes
                         } else {
-                            alert('Radar data is currently unavailable. Please try again later.');
+                            showWeatherSendResult('Weather Notice', 'Radar data is currently unavailable. Please try again later.', true);
                             radarEnabled = false;
                             btn.classList.remove('active');
                         }
                     })
                     .catch(error => {
                         console.error('Error loading radar:', error);
-                        alert('Could not load radar data. Please check your internet connection.');
+                        showWeatherSendResult('Weather Notice', 'Could not load radar data. Please check your internet connection.', true);
                         radarEnabled = false;
                         btn.classList.remove('active');
                     });
@@ -715,12 +728,12 @@ $pageTitle = 'Weather Monitoring';
                         layer.setUrl(url.replace('{apiKey}', data.apiKey));
                         layer.addTo(map);
                     } else {
-                        alert('OpenWeatherMap API key not configured. Please set it up in Automated Warnings.');
+                        showWeatherSendResult('Weather Notice', 'OpenWeatherMap API key not configured. Please set it up in Automated Warnings.', true);
                     }
                 })
                 .catch(error => {
                     console.error('Error loading API key:', error);
-                    alert('Could not load weather layer. API key may not be configured.');
+                    showWeatherSendResult('Weather Notice', 'Could not load weather layer. API key may not be configured.', true);
                 });
         }
         
@@ -1716,47 +1729,90 @@ Keep concise and actionable.`;
             
             container.innerHTML = html;
         }
+        function showWeatherSendModal(message, onConfirm) {
+            let modal = document.getElementById('weatherSendModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'weatherSendModal';
+                modal.className = 'alertara-action-modal';
+                modal.innerHTML = `
+                    <div class="alertara-action-dialog">
+                        <div class="alertara-action-icon"><i class="fas fa-cloud-sun-rain"></i></div>
+                        <div class="alertara-action-copy">
+                            <h3>Send Weather Alert</h3>
+                            <p id="weatherSendModalMessage"></p>
+                        </div>
+                        <div class="alertara-action-actions">
+                            <button type="button" class="alertara-modal-secondary" data-action="cancel">Cancel</button>
+                            <button type="button" class="alertara-modal-primary" data-action="confirm"><i class="fas fa-paper-plane"></i> Send Alert</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+            }
+            modal.querySelector('#weatherSendModalMessage').textContent = message;
+            modal.style.display = 'flex';
+            const close = () => { modal.style.display = 'none'; };
+            modal.querySelector('[data-action="cancel"]').onclick = close;
+            modal.querySelector('[data-action="confirm"]').onclick = () => { close(); onConfirm(); };
+            modal.onclick = (event) => { if (event.target === modal) close(); };
+        }
+
+        function showWeatherSendResult(title, message, isError = false) {
+            let modal = document.getElementById('weatherResultModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'weatherResultModal';
+                modal.className = 'alertara-action-modal';
+                modal.innerHTML = `
+                    <div class="alertara-action-dialog">
+                        <div class="alertara-action-icon"><i class="fas fa-bell"></i></div>
+                        <div class="alertara-action-copy">
+                            <h3 id="weatherResultTitle"></h3>
+                            <p id="weatherResultMessage"></p>
+                        </div>
+                        <div class="alertara-action-actions single">
+                            <button type="button" class="alertara-modal-primary" data-action="ok">OK</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+            }
+            modal.classList.toggle('is-error', isError);
+            modal.querySelector('#weatherResultTitle').textContent = title;
+            modal.querySelector('#weatherResultMessage').textContent = message;
+            modal.style.display = 'flex';
+            const close = () => { modal.style.display = 'none'; };
+            modal.querySelector('[data-action="ok"]').onclick = close;
+            modal.onclick = (event) => { if (event.target === modal) close(); };
+        }
 
         // Send Weather Alert
         async function sendWeatherAlert() {
-            const statusBadge = document.getElementById('aiStatus');
-            const container = document.getElementById('aiAnalysis');
-            
-            if (!confirm('Send weather analysis alert to all subscribed users?')) {
-                return;
-            }
-            
-            statusBadge.textContent = 'Sending...';
-            statusBadge.className = 'ai-status loading';
-            
-            try {
-                const response = await fetch('../api/ai-warnings.php?action=sendWeatherAnalysis');
-                const data = await response.json();
-                
-                if (data.success) {
+            showWeatherSendModal('Send weather analysis alert to all subscribed users?', async () => {
+                const statusBadge = document.getElementById('aiStatus');
+                statusBadge.textContent = 'Sending...';
+                statusBadge.className = 'ai-status loading';
+                try {
+                    const response = await fetch('../api/ai-warnings.php?action=sendWeatherAnalysis');
+                    const text = await response.text();
+                    let data = {};
+                    try { data = text ? JSON.parse(text) : {}; } catch (_) { data = { success: false, message: text || 'Invalid server response.' }; }
+                    if (!response.ok || !data.success) throw new Error(data.message || 'Failed to send alert');
                     statusBadge.textContent = 'Sent';
                     statusBadge.className = 'ai-status';
-                    alert(`Alert sent successfully!\n\nRecipients: ${data.recipients || 0}\nNotifications Sent: ${data.notifications_sent || 0}`);
-                    
-                    // Reset status after 3 seconds
+                    showWeatherSendResult('Weather Alert Sent', `Recipients: ${data.recipients || 0}. Notifications sent: ${data.notifications_sent || 0}.`);
                     setTimeout(() => {
                         statusBadge.textContent = 'Ready';
                         statusBadge.className = 'ai-status';
                     }, 3000);
-                } else {
+                } catch (error) {
                     statusBadge.textContent = 'Error';
                     statusBadge.className = 'ai-status error';
-                    alert('Error: ' + (data.message || 'Failed to send alert'));
+                    console.error('Error sending alert:', error);
+                    showWeatherSendResult('Weather Alert Failed', error.message, true);
                 }
-            } catch (error) {
-                statusBadge.textContent = 'Error';
-                statusBadge.className = 'ai-status error';
-                console.error('Error sending alert:', error);
-                alert('Error sending alert: ' + error.message);
-            }
+            });
         }
-        
-        // AI Auto-Send Alerts
+                // AI Auto-Send Alerts
         let aiAutoSendInterval = null;
         
         async function checkAndStartAIAutoSend() {
@@ -2410,14 +2466,14 @@ Keep concise and actionable.`;
                 btn.disabled = false;
 
                 if (resData.success) {
-                    alert('✅ Success: PAGASA Bulletin details pushed to the Emergency Response Team!');
+                    showWeatherSendResult('Response Team Updated', 'PAGASA Bulletin details pushed to the Emergency Response Team.');
                 } else {
-                    alert('❌ Error: ' + (resData.message || 'Failed to push bulletin status.'));
+                    showWeatherSendResult('Response Team Update Failed', resData.message || 'Failed to push bulletin status.', true);
                 }
             } catch (e) {
                 btn.innerHTML = originalHTML;
                 btn.disabled = false;
-                alert('❌ Error pushing status: ' + e.message);
+                showWeatherSendResult('Response Team Update Failed', e.message, true);
             }
         }
 
@@ -2435,16 +2491,16 @@ Keep concise and actionable.`;
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert(`✅ Success: Weather bulletin converted and broadcasted to ${data.recipients || 0} citizens successfully!`);
+                    showWeatherSendResult('Weather Alert Broadcasted', `Weather bulletin converted and broadcasted to ${data.recipients || 0} citizens successfully.`);
                     if (typeof archiveLoaded !== 'undefined' && archiveLoaded) {
                         loadPagasaHistory();
                     }
                 } else {
-                    alert('❌ Failed to broadcast alert: ' + (data.message || 'Unknown error'));
+                    showWeatherSendResult('Weather Broadcast Failed', data.message || 'Unknown error', true);
                 }
             } catch (e) {
                 console.error(e);
-                alert('❌ Network error: Could not complete the broadcast request.');
+                showWeatherSendResult('Weather Broadcast Failed', 'Network error: Could not complete the broadcast request.', true);
             } finally {
                 if (btn) {
                     btn.disabled = false;
@@ -2600,3 +2656,5 @@ Keep concise and actionable.`;
     </style>
 </body>
 </html>
+
+

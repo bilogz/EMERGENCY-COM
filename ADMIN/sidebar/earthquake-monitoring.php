@@ -74,6 +74,9 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 <div class="page-content" style="padding: 0;">
                     <div class="module-analytics-strip" style="display: none;" aria-hidden="true"></div>
 
+                    <div class="earthquake-layout-grid">
+                        <div class="earthquake-main-column">
+
                     <!-- Statistics Grid -->
                     <div class="stat-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
                         <div class="stat-card" style="background: var(--card-bg-1); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border-color-1); text-align: center;">
@@ -137,13 +140,15 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                         </div>
                     </div>
 
+                        </div>
+                        <aside class="earthquake-sidebar">
                     <!-- AI Earthquake Analysis + Auto Alerts -->
                     <div class="module-card" style="background:linear-gradient(135deg, #241238, #132f3c); border-radius:8px; border:1px solid rgba(255,255,255,0.12); overflow:hidden; margin-bottom:1.5rem; color:white;">
                         <div style="padding:1rem 1.25rem; display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap; border-bottom:1px solid rgba(255,255,255,0.12);">
                             <h2 style="margin:0; font-size:1.05rem; font-weight:800; display:flex; align-items:center; gap:0.5rem;"><i class="fas fa-robot" style="color:#ff7675;"></i> AI Earthquake Analysis</h2>
                             <span id="eqAiStatus" style="background:#14532d; color:#dcfce7; border:1px solid rgba(255,255,255,0.18); border-radius:999px; padding:0.2rem 0.65rem; font-size:0.7rem; font-weight:800; text-transform:uppercase;">Ready</span>
                         </div>
-                        <div style="padding:1rem 1.25rem; display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:1rem; align-items:start;">
+                        <div style="padding:1rem 1.25rem; display:flex; flex-direction:column; gap:1rem; align-items:stretch;">
                             <div id="eqAiAnalysis" style="min-height:90px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); border-radius:7px; padding:0.85rem; font-size:0.86rem; line-height:1.55; color:rgba(255,255,255,0.92);">
                                 Select Analyze Earthquake to summarize the latest PHIVOLCS bulletin for Quezon City response planning.
                             </div>
@@ -153,11 +158,14 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                             </div>
                         </div>
                     </div>
+                        </aside>
+                    </div>
 
                 </div>
             </div>
         </div>
     </div>
+
 
     <script>
         let map;
@@ -463,24 +471,84 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             }
         }
 
-        async function sendEarthquakeAlert() {
-            if (!confirm('Send the latest qualifying PHIVOLCS earthquake alert to users by push notification and email?')) return;
-            const status = document.getElementById('eqAiStatus');
-            status.textContent = 'Sending...';
-            status.style.background = '#7c2d12';
-            try {
-                const response = await fetch('../api/phivolcs-auto-alert.php?action=force');
-                const data = await response.json();
-                if (!data.success) throw new Error(data.message || 'Unable to send earthquake alert.');
-                status.textContent = data.alerted ? 'Sent' : 'Ready';
-                status.style.background = data.alerted ? '#14532d' : '#334155';
-                alert(data.message || (data.alerted ? 'Earthquake alert queued.' : 'No qualifying event to send.'));
-            } catch (error) {
-                console.error('PHIVOLCS manual send error:', error);
-                status.textContent = 'Error';
-                status.style.background = '#991b1b';
-                alert('Unable to send earthquake alert: ' + error.message);
+        function showEarthquakeSendModal(message, onConfirm) {
+            let modal = document.getElementById('earthquakeSendModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'earthquakeSendModal';
+                modal.className = 'alertara-action-modal';
+                modal.innerHTML = `
+                    <div class="alertara-action-dialog">
+                        <div class="alertara-action-icon"><i class="fas fa-mountain"></i></div>
+                        <div class="alertara-action-copy">
+                            <h3>Send Earthquake Alert</h3>
+                            <p id="earthquakeSendModalMessage"></p>
+                        </div>
+                        <div class="alertara-action-actions">
+                            <button type="button" class="alertara-modal-secondary" data-action="cancel">Cancel</button>
+                            <button type="button" class="alertara-modal-primary" data-action="confirm"><i class="fas fa-paper-plane"></i> Send Alert</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
             }
+            modal.querySelector('#earthquakeSendModalMessage').textContent = message;
+            modal.style.display = 'flex';
+            const close = () => { modal.style.display = 'none'; };
+            modal.querySelector('[data-action="cancel"]').onclick = close;
+            modal.querySelector('[data-action="confirm"]').onclick = () => { close(); onConfirm(); };
+            modal.onclick = (event) => { if (event.target === modal) close(); };
+        }
+
+        function showEarthquakeSendResult(title, message, isError = false) {
+            let modal = document.getElementById('earthquakeResultModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'earthquakeResultModal';
+                modal.className = 'alertara-action-modal';
+                modal.innerHTML = `
+                    <div class="alertara-action-dialog">
+                        <div class="alertara-action-icon"><i class="fas fa-bell"></i></div>
+                        <div class="alertara-action-copy">
+                            <h3 id="earthquakeResultTitle"></h3>
+                            <p id="earthquakeResultMessage"></p>
+                        </div>
+                        <div class="alertara-action-actions single">
+                            <button type="button" class="alertara-modal-primary" data-action="ok">OK</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+            }
+            modal.classList.toggle('is-error', isError);
+            modal.querySelector('#earthquakeResultTitle').textContent = title;
+            modal.querySelector('#earthquakeResultMessage').textContent = message;
+            modal.style.display = 'flex';
+            const close = () => { modal.style.display = 'none'; };
+            modal.querySelector('[data-action="ok"]').onclick = close;
+            modal.onclick = (event) => { if (event.target === modal) close(); };
+        }
+
+        async function sendEarthquakeAlert() {
+            showEarthquakeSendModal('Send the latest qualifying PHIVOLCS earthquake alert to users by push notification and email?', async () => {
+                const status = document.getElementById('eqAiStatus');
+                status.textContent = 'Sending...';
+                status.style.background = '#7c2d12';
+                try {
+                    const response = await fetch('../api/phivolcs-auto-alert.php?action=force');
+                    const text = await response.text();
+                    let data = {};
+                    try { data = text ? JSON.parse(text) : {}; } catch (_) { data = { success: false, message: text || 'Invalid server response.' }; }
+                    if (!response.ok || !data.success) throw new Error(data.message || 'Unable to send earthquake alert.');
+                    status.textContent = data.alerted ? 'Sent' : 'Ready';
+                    status.style.background = data.alerted ? '#14532d' : '#334155';
+                    const queued = data.dispatch && typeof data.dispatch.queued_jobs !== 'undefined' ? ` Queued jobs: ${data.dispatch.queued_jobs}.` : '';
+                    showEarthquakeSendResult(data.alerted ? 'Earthquake Alert Queued' : 'No Alert Needed', (data.message || (data.alerted ? 'Earthquake alert queued.' : 'No qualifying event to send.')) + queued, false);
+                } catch (error) {
+                    console.error('PHIVOLCS manual send error:', error);
+                    status.textContent = 'Error';
+                    status.style.background = '#991b1b';
+                    showEarthquakeSendResult('Earthquake Alert Failed', error.message, true);
+                }
+            });
         }
         // Auto-refresh every 2 minutes
         document.addEventListener('DOMContentLoaded', () => {
@@ -515,6 +583,20 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
     </div>
 
     <style>
+        .earthquake-layout-grid { display:grid; grid-template-columns:minmax(0, 1fr) 360px; gap:1.5rem; align-items:start; }
+        .earthquake-sidebar { position:sticky; top:1rem; }
+        .alertara-action-modal { position:fixed; inset:0; z-index:100000; display:none; align-items:center; justify-content:center; padding:1.25rem; background:rgba(4,15,20,0.62); backdrop-filter:blur(4px); }
+        .alertara-action-dialog { width:min(470px, 100%); background:var(--card-bg-1); color:var(--text-color-1); border:1px solid var(--border-color-1); border-radius:10px; box-shadow:0 22px 60px rgba(0,0,0,0.32); padding:1.25rem; display:grid; grid-template-columns:auto 1fr; gap:1rem; }
+        .alertara-action-icon { width:48px; height:48px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; background:linear-gradient(135deg,#c0392b,#e74c3c); font-size:1.25rem; }
+        .alertara-action-copy h3 { margin:0 0 0.4rem; font-size:1rem; font-weight:800; }
+        .alertara-action-copy p { margin:0; color:var(--text-secondary-1); line-height:1.45; font-size:0.9rem; }
+        .alertara-action-actions { grid-column:1 / -1; display:flex; justify-content:flex-end; gap:0.7rem; margin-top:0.6rem; }
+        .alertara-action-actions.single { justify-content:flex-end; }
+        .alertara-modal-primary, .alertara-modal-secondary { border:0; border-radius:8px; padding:0.7rem 1rem; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:0.4rem; }
+        .alertara-modal-primary { background:#4f9a97; color:#fff; }
+        .alertara-modal-secondary { background:var(--bg-color-2); color:var(--text-color-1); border:1px solid var(--border-color-1); }
+        .alertara-action-modal.is-error .alertara-action-icon { background:linear-gradient(135deg,#991b1b,#ef4444); }
+        @media (max-width: 1100px) { .earthquake-layout-grid { grid-template-columns:1fr; } .earthquake-sidebar { position:static; } }
         .eq-live-dot { width:7px; height:7px; border-radius:50%; background:#27ae60; display:inline-block; animation:eqPulse 2s infinite; }
         @keyframes eqPulse {
             0% { box-shadow:0 0 0 0 rgba(39,174,96,0.7); }

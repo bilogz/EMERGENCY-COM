@@ -245,6 +245,14 @@ try {
         ]);
         setPhivolcsSetting($pdo, 'last_check_at', date('Y-m-d H:i:s'));
         setPhivolcsSetting($pdo, 'last_event_hash', $event['event_hash']);
+        try {
+            ob_start();
+            @include __DIR__ . '/notification-worker.php';
+            ob_end_clean();
+        } catch (Throwable $workerError) {
+            if (ob_get_level() > 0) ob_end_clean();
+            error_log('PHIVOLCS force worker trigger failed: ' . $workerError->getMessage());
+        }
         echo json_encode(['success' => true, 'alerted' => true, 'message' => 'Latest PHIVOLCS earthquake alert queued.', 'event' => $event, 'severity' => $severity, 'dispatch' => $dispatch]);
         exit;
     }

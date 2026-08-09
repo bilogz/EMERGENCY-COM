@@ -106,8 +106,12 @@ try {
     $jobs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (empty($jobs)) {
-        if (php_sapi_name() === 'cli') echo "No pending jobs.\n";
-        else echo json_encode(['success' => true, 'processed' => 0]);
+        if (php_sapi_name() === 'cli') {
+            echo "No pending jobs.\n";
+            echo getNotificationWorkerQueueSnapshot($pdo);
+        } else {
+            echo json_encode(['success' => true, 'processed' => 0]);
+        }
         return;
     }
 
@@ -245,6 +249,62 @@ function updateLogProgress($pdo, $logId) {
     }
 }
 
+/**
+ * CLI-only visibility for production checks. This keeps the worker behavior the
+ * same, but shows whether alerts were already processed, failed, or never queued.
+ */
+function getNotificationWorkerQueueSnapshot(PDO $pdo): string {
+    $lines = [];
+
+    try {
+        $stmt = $pdo->query("
+            SELECT status, COUNT(*) AS count
+            FROM notification_queue
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            GROUP BY status
+            ORDER BY status
+        ");
+        $stats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        if (!empty($stats)) {
+            $parts = [];
+            foreach ($stats as $status => $count) {
+                $parts[] = $status . '=' . $count;
+            }
+            $lines[] = 'Queue last 24h: ' . implode(', ', $parts);
+        } else {
+            $lines[] = 'Queue last 24h: none';
+        }
+    } catch (PDOException $e) {
+        $lines[] = 'Queue snapshot unavailable: ' . $e->getMessage();
+    }
+
+    try {
+        $stmt = $pdo->query("
+            SELECT id, status, channel, LEFT(message, 70) AS preview, sent_at
+            FROM notification_logs
+            ORDER BY id DESC
+            LIMIT 3
+        ");
+        $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!empty($logs)) {
+            $lines[] = 'Recent notification logs:';
+            foreach ($logs as $log) {
+                $lines[] = sprintf(
+                    '  #%s %s [%s] %s %s',
+                    $log['id'] ?? '-',
+                    $log['status'] ?? '-',
+                    $log['channel'] ?? '-',
+                    $log['sent_at'] ?? '',
+                    trim((string)($log['preview'] ?? ''))
+                );
+            }
+        }
+    } catch (PDOException $e) {
+        $lines[] = 'Recent logs unavailable: ' . $e->getMessage();
+    }
+
+    return implode("\n", $lines) . "\n";
+}
 /**
  * PLACEHOLDER: SMS Dispatch
  */
