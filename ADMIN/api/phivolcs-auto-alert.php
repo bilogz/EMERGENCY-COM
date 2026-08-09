@@ -144,10 +144,8 @@ function normalizePhivolcsEvents(array $events): array
 
 function qualifyingPhivolcsEvent(array $event): bool
 {
-    // PHIVOLCS bulletin visibility covers the full severity scale. Freshness,
-    // deduplication, and the six-hour scheduler prevent stale/repeated popups;
-    // severity controls how strongly the citizen UI presents the event.
-    return (float)$event['magnitude'] > 0;
+    // Only citizen-broadcast earthquake alerts for meaningful activity.
+    return (float)($event['magnitude'] ?? 0) >= 4.5;
 }
 
 function phivolcsSeverity(array $event): string
@@ -276,9 +274,10 @@ try {
         exit;
     }
 
+    $isRealtimeCheck = in_array($action, ['realtime', 'check-now'], true);
     $lastCheck = phivolcsSetting($pdo, 'last_check_at', '');
     $lastCheckTs = $lastCheck !== '' ? strtotime($lastCheck) : false;
-    if ($lastCheckTs && $lastCheckTs + PHIVOLCS_INTERVAL_MINUTES * 60 > time()) {
+    if (!$isRealtimeCheck && $lastCheckTs && $lastCheckTs + PHIVOLCS_INTERVAL_MINUTES * 60 > time()) {
         echo json_encode([
             'success' => true, 'alerted' => false, 'message' => 'Automatic PHIVOLCS checks run every 6 hours.',
             'last_check_at' => $lastCheck,

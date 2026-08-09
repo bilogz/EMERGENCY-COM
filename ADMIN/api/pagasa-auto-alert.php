@@ -551,6 +551,7 @@ switch ($action) {
     // CHECK: Poll PAGASA feed and send alert if new bulletin found
     // ----------------------------------------------------------
     case 'dry-run':
+    case 'realtime':
     case 'check':
         $lastCheck = getSetting($pdo, 'last_check_at', '');
         $lastCheckTs = $lastCheck !== '' ? strtotime($lastCheck) : false;
@@ -569,7 +570,7 @@ switch ($action) {
 
         // Fetch bulletins
         $bulletins = fetchPagasaBulletins();
-        if ($action === 'check') {
+        if ($action === 'check' || $action === 'realtime') {
             setSetting($pdo, 'last_check_at', date('Y-m-d H:i:s'));
         }
 

@@ -6,7 +6,8 @@
 
 require_once 'db_connect.php';
 
-const FCM_EMERGENCY_CHANNEL_ID = 'alertara-emergency-default-v4';
+const FCM_EMERGENCY_CHANNEL_ID = 'alertara-emergency-default-v5';
+const FCM_EMERGENCY_SOUND = 'alertara_emergency';
 const FCM_SILENT_CHANNEL_ID = 'alertara-emergency-silent-v1';
 
 if (php_sapi_name() !== 'cli') {
@@ -140,7 +141,8 @@ try {
                         'body' => $job['message'],
                         'alert_id' => (string)($job['alert_id'] ?? ''),
                         'severity' => $alertMeta['severity'],
-                        'category' => $alertMeta['category']
+                        'category' => $alertMeta['category'],
+                        'notification_channel' => workerNotificationChannelForToken($pdo, (string)$job['recipient_value'])
                     ], $error);
                     if (!$success && isPermanentPushTokenError($error)) {
                         disableInvalidPushToken($pdo, (string)$job['recipient_value'], $error);
@@ -524,7 +526,7 @@ function workerAlertMoreInfoUrl(string $category): string {
 function workerValidNotificationChannel(?string $channel): string {
     $channel = trim((string)$channel);
     if ($channel === FCM_SILENT_CHANNEL_ID) return FCM_SILENT_CHANNEL_ID;
-    if (in_array($channel, ['emergency-alerts-v2', 'alertara_critical_alerts_v2', 'alertara-emergency-default-v3'], true)) {
+    if (in_array($channel, ['emergency-alerts-v2', 'alertara_critical_alerts_v2', 'alertara-emergency-default-v3', 'alertara-emergency-default-v4'], true)) {
         return FCM_EMERGENCY_CHANNEL_ID;
     }
     return preg_match('/^[A-Za-z0-9_.-]{1,120}$/', $channel) ? $channel : FCM_EMERGENCY_CHANNEL_ID;
@@ -586,6 +588,23 @@ function sendFCM($token, $payload, &$error = null) {
     }
     $moreInfoUrl = workerAlertMoreInfoUrl($data['category']);
     if ($moreInfoUrl !== '') $data['moreInfoUrl'] = $moreInfoUrl;
+    $channelId = workerValidNotificationChannel((string)($payload['notification_channel'] ?? FCM_EMERGENCY_CHANNEL_ID));
+    $isSilentChannel = $channelId === FCM_SILENT_CHANNEL_ID;
+    $androidNotification = [
+        'channel_id' => $channelId,
+        'visibility' => 'PUBLIC',
+        'notification_priority' => $isCritical ? 'PRIORITY_MAX' : 'PRIORITY_HIGH',
+        'click_action' => 'OPEN_EMERGENCY_ALERT'
+    ];
+    if ($isSilentChannel) {
+        $androidNotification['default_sound'] = false;
+        $androidNotification['default_vibrate_timings'] = false;
+    } else {
+        $androidNotification['sound'] = FCM_EMERGENCY_SOUND;
+        $androidNotification['default_sound'] = false;
+        $androidNotification['default_vibrate_timings'] = true;
+    }
+
     $message = ['message' => [
         'token' => (string)$token,
         'notification' => ['title' => $data['title'], 'body' => $data['body']],
@@ -593,19 +612,11 @@ function sendFCM($token, $payload, &$error = null) {
         'android' => [
             'priority' => 'HIGH',
             'ttl' => '86400s',
-            'notification' => [
-                'channel_id' => workerValidNotificationChannel((string)($payload['notification_channel'] ?? FCM_EMERGENCY_CHANNEL_ID)),
-                'sound' => 'default',
-                'default_sound' => true,
-                'default_vibrate_timings' => true,
-                'visibility' => 'PUBLIC',
-                'notification_priority' => $isCritical ? 'PRIORITY_MAX' : 'PRIORITY_HIGH',
-                'click_action' => 'OPEN_EMERGENCY_ALERT'
-            ]
+            'notification' => $androidNotification
         ],
         'apns' => [
             'headers' => ['apns-priority' => '10'],
-            'payload' => ['aps' => ['sound' => 'default', 'content-available' => 1, 'interruption-level' => $isCritical ? 'time-sensitive' : 'active']]
+            'payload' => ['aps' => ['sound' => $isSilentChannel ? null : 'default', 'content-available' => 1, 'interruption-level' => $isCritical ? 'time-sensitive' : 'active']]
         ]
     ]];
     $url = 'https://fcm.googleapis.com/v1/projects/' . rawurlencode($serviceAccount['project_id']) . '/messages:send';
@@ -639,7 +650,7 @@ function sendExpoPushNotification(string $token, array $payload, &$error = null)
     $severity = strtolower((string)($payload['severity'] ?? 'high'));
     $message = [
         'to' => $token,
-        'sound' => 'default',
+        'sound' => workerValidNotificationChannel((string)($payload['notification_channel'] ?? FCM_EMERGENCY_CHANNEL_ID)) === FCM_SILENT_CHANNEL_ID ? null : 'alertara_emergency.wav',
         'priority' => in_array($severity, ['critical', 'high'], true) ? 'high' : 'default',
         'channelId' => workerValidNotificationChannel((string)($payload['notification_channel'] ?? FCM_EMERGENCY_CHANNEL_ID)),
         'title' => (string)($payload['title'] ?? 'Emergency Alert'),

@@ -2142,13 +2142,13 @@ Keep concise and actionable.`;
             // Fetch bulletins
             fetchPagasaBulletins(null);
             
-            // Real-time auto-refresh for PAGASA bulletins (every 60 seconds)
+            // Real-time auto-refresh for PAGASA bulletins. Successful refreshes trigger the auto-alert dedupe check.
             setInterval(() => {
                 fetchPagasaBulletins(null);
                 if (archiveLoaded) {
                     loadPagasaHistory();
                 }
-            }, 60000);
+            }, 30000);
             
             // Start automated warnings check
             setTimeout(() => {
@@ -2276,6 +2276,7 @@ Keep concise and actionable.`;
         }
 
         let activePagasaData = null;
+        let pagasaAutoAlertInFlight = false;
 
         async function fetchPagasaBulletins(event) {
             let btn = null;
@@ -2310,6 +2311,7 @@ Keep concise and actionable.`;
                 if (data.success && data.bulletins) {
                     activePagasaData = data;
                     renderPagasaBulletins(data.bulletins, data.is_mock);
+                    maybeAutoSendPagasaAlert(data.bulletins, data.is_mock);
                 } else {
                     if (container) {
                         container.innerHTML = `
@@ -2344,6 +2346,38 @@ Keep concise and actionable.`;
             }
         }
 
+
+        function pagasaBulletinAutoKey(bulletin) {
+            if (!bulletin) return '';
+            return bulletin.hash || [bulletin.title || '', bulletin.issued_at || bulletin.pubDate || '', bulletin.link || ''].join('|');
+        }
+
+        async function maybeAutoSendPagasaAlert(bulletins, isMock) {
+            if (isMock || !Array.isArray(bulletins) || !bulletins.length || pagasaAutoAlertInFlight) return;
+
+            const latest = bulletins[0];
+            const key = pagasaBulletinAutoKey(latest);
+            if (key && localStorage.getItem('pagasaAutoAlertLastKey') === key) return;
+
+            pagasaAutoAlertInFlight = true;
+            try {
+                const response = await fetch('../api/pagasa-auto-alert.php?action=realtime');
+                const data = await response.json().catch(() => ({}));
+                if (data && data.success && key && (data.alerted || /no new bulletins|already alerted|already sent/i.test(String(data.message || '')))) {
+                    localStorage.setItem('pagasaAutoAlertLastKey', key);
+                }
+                if (data && data.alerted && typeof loadNotificationStats === 'function') {
+                    loadNotificationStats();
+                }
+                if (data && data.alerted && typeof archiveLoaded !== 'undefined' && archiveLoaded) {
+                    loadPagasaHistory();
+                }
+            } catch (error) {
+                console.warn('PAGASA realtime auto-alert check failed:', error);
+            } finally {
+                pagasaAutoAlertInFlight = false;
+            }
+        }
         function renderPagasaBulletins(bulletins, isMock) {
             const container = document.getElementById('pagasaBulletinsFeed');
             if (!container) return;

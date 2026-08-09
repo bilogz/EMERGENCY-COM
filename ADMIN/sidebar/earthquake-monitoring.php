@@ -253,6 +253,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         }
 
         let isCachedData = false;
+        let phivolcsAutoAlertInFlight = false;
 
         function loadPhivolcsBulletins() {
             const container = document.getElementById('earthquakeBulletinFeed');
@@ -264,6 +265,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                         phivolcsData = data.earthquakes;
                         isCachedData = !!data.is_cached;
                         filterAndRenderBulletins();
+                        maybeAutoSendEarthquakeAlert();
                     } else {
                         container.innerHTML = `<div style="text-align:center; padding:2.5rem;"><i class="fas fa-exclamation-triangle" style="font-size:2.5rem; color:#e67e22; margin-bottom:0.75rem; display:block;"></i><p style="font-size:1rem; font-weight:600; color:var(--text-color-1);">Unable to fetch PHIVOLCS data</p><p style="font-size:0.85rem; color:var(--text-secondary-1);">${data.message || 'Please try again later.'}</p><button onclick="loadPhivolcsBulletins()" style="margin-top:0.75rem; background:#e74c3c; color:white; border:none; padding:0.5rem 1rem; border-radius:5px; cursor:pointer; font-weight:600;"><i class="fas fa-redo"></i> Retry</button></div>`;
                     }
@@ -560,6 +562,10 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             return phivolcsData && phivolcsData.length ? phivolcsData[0] : null;
         }
 
+        function latestEarthquakeForAlert() {
+            return phivolcsData && phivolcsData.length ? phivolcsData.find(q => Number(q.magnitude || 0) >= 4.5) || null : null;
+        }
+
         function earthquakeLocalAnalysis(q) {
             if (!q) return 'No PHIVOLCS bulletin is loaded yet.';
             const distance = calculateDistanceKm(q.latitude, q.longitude, 14.6488, 121.0509).toFixed(0);
@@ -659,13 +665,58 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             modal.onclick = (event) => { if (event.target === modal) close(); };
         }
 
+
+        function earthquakeEventAutoKey(event) {
+            if (!event) return '';
+            return [
+                event.event_hash || event.bulletin_link || '',
+                event.date_time || '',
+                Number(event.magnitude || 0).toFixed(1),
+                event.location || '',
+                event.depth_km || ''
+            ].join('|');
+        }
+
+        async function maybeAutoSendEarthquakeAlert() {
+            const latest = latestEarthquakeForAlert();
+            if (isCachedData || !latest || Number(latest.magnitude || 0) < 4.5 || phivolcsAutoAlertInFlight) return;
+
+            const key = earthquakeEventAutoKey(latest);
+            if (key && localStorage.getItem('phivolcsAutoAlertLastKey') === key) return;
+
+            phivolcsAutoAlertInFlight = true;
+            try {
+                const response = await fetch('../api/phivolcs-auto-alert.php?action=realtime', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ event: latest })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (data && data.success && key && (data.alerted || /already sent|already alerted/i.test(String(data.message || '')))) {
+                    localStorage.setItem('phivolcsAutoAlertLastKey', key);
+                }
+                if (data && data.alerted && typeof loadNotificationStats === 'function') {
+                    loadNotificationStats();
+                }
+            } catch (error) {
+                console.warn('PHIVOLCS realtime auto-alert check failed:', error);
+            } finally {
+                phivolcsAutoAlertInFlight = false;
+            }
+        }
         async function sendEarthquakeAlert() {
-            showEarthquakeSendModal('Send the latest qualifying PHIVOLCS earthquake alert to users by push notification and email?', async () => {
+            showEarthquakeSendModal('Send the latest PHIVOLCS earthquake activity above magnitude 4.5 to users by push notification and email?', async () => {
                 const status = document.getElementById('eqAiStatus');
                 status.textContent = 'Sending...';
                 status.style.background = '#7c2d12';
                 try {
-                    const latest = latestEarthquakeForAnalysis();
+                    const latest = latestEarthquakeForAlert();
+                    if (!latest) {
+                        status.textContent = 'Ready';
+                        status.style.background = '#334155';
+                        showEarthquakeSendResult('No Alert Needed', 'No latest PHIVOLCS earthquake activity above magnitude 4.5 is available to send.', false);
+                        return;
+                    }
                     const response = await fetch('../api/phivolcs-auto-alert.php?action=force', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -687,12 +738,12 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 }
             });
         }
-        // Auto-refresh every 2 minutes
+        // Auto-refresh frequently so qualifying 4.5+ PHIVOLCS events are broadcast quickly.
         document.addEventListener('DOMContentLoaded', () => {
             loadPhivolcsBulletins();
             setInterval(() => {
                 loadPhivolcsBulletins();
-            }, 60000);
+            }, 30000);
         });
     </script>
 
