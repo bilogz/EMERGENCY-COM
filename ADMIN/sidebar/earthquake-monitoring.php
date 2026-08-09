@@ -36,6 +36,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
     <link rel="stylesheet" href="css/modules.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="css/module-earthquake-monitoring.css?v=<?php echo filemtime(__DIR__ . '/css/module-earthquake-monitoring.css'); ?>">
     <?php if ($publicView): ?>
     <style>
@@ -142,6 +143,35 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
 
                         </div>
                         <aside class="earthquake-sidebar">
+                    <div class="eq-analytics-card">
+                        <div class="eq-card-heading">
+                            <h3><i class="fas fa-chart-line"></i> Seismic Analytics</h3>
+                            <span class="eq-live-pill"><span class="eq-live-dot"></span> Live</span>
+                        </div>
+                        <div class="eq-analytics-grid">
+                            <div class="eq-metric-tile"><span>Average Mag</span><strong id="eqAverageMagnitude">-</strong></div>
+                            <div class="eq-metric-tile"><span>Nearest QC</span><strong id="eqNearestDistance">-</strong></div>
+                            <div class="eq-metric-tile"><span>Last 6h</span><strong id="eqSixHourCount">-</strong></div>
+                            <div class="eq-metric-tile"><span>Risk Level</span><strong id="eqRiskLevel">-</strong></div>
+                        </div>
+                    </div>
+
+                    <div class="eq-analytics-card">
+                        <div class="eq-card-heading"><h3><i class="fas fa-wave-square"></i> Magnitude Frequency</h3></div>
+                        <canvas id="eqMagnitudeChart" height="150"></canvas>
+                    </div>
+
+                    <div class="eq-analytics-card">
+                        <div class="eq-card-heading"><h3><i class="fas fa-layer-group"></i> Intensity Mix</h3></div>
+                        <canvas id="eqIntensityChart" height="150"></canvas>
+                    </div>
+
+                    <div class="eq-analytics-card">
+                        <div class="eq-card-heading"><h3><i class="fas fa-clock"></i> Bulletin Frequency</h3></div>
+                        <div id="eqFrequencyRows" class="eq-frequency-rows">
+                            <div class="eq-frequency-empty">Waiting for PHIVOLCS data...</div>
+                        </div>
+                    </div>
                     <!-- AI Earthquake Analysis + Auto Alerts -->
                     <div class="module-card" style="background:linear-gradient(135deg, #241238, #132f3c); border-radius:8px; border:1px solid rgba(255,255,255,0.12); overflow:hidden; margin-bottom:1.5rem; color:white;">
                         <div style="padding:1rem 1.25rem; display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap; border-bottom:1px solid rgba(255,255,255,0.12);">
@@ -171,6 +201,8 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         let map;
         let earthquakeMarkers = [];
         let phivolcsData = [];
+        let eqMagnitudeChart = null;
+        let eqIntensityChart = null;
 
         function initMap() {
             map = L.map('earthquakeMap').setView([12.8797, 121.7740], 6);
@@ -245,13 +277,18 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
         }
 
         function parsePhivolcsDate(dateStr) {
-            const parts = dateStr.split('-');
+            const parts = String(dateStr || '').split('-');
             if (parts.length === 0) return null;
             const datePart = parts[0].trim(); // "12 July 2026"
             const d = new Date(datePart);
             return isNaN(d.getTime()) ? null : d;
         }
 
+        function parsePhivolcsDateTime(dateStr) {
+            const cleaned = String(dateStr || '').replace(/\s+-\s+/, ' ').trim();
+            const parsed = new Date(cleaned);
+            return isNaN(parsed.getTime()) ? parsePhivolcsDate(dateStr) : parsed;
+        }
         function isSameDay(d, dateInputStr) {
             if (!d || !dateInputStr) return false;
             const parts = dateInputStr.split('-');
@@ -300,6 +337,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             // Render bulletins
             renderBulletins(limited, isCachedData);
             updateStats(filtered); // stats reflect the total filtered set
+            updateEarthquakeAnalytics(filtered);
             
             // Update pagination UI
             updatePaginationControls(totalItems, currentPage, totalPages);
@@ -350,6 +388,100 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         }
 
+        function earthquakeSeverityLabel(mag) {
+            if (mag >= 5.0) return 'Critical';
+            if (mag >= 4.0) return 'Moderate';
+            if (mag >= 3.0) return 'Light';
+            return 'Minor';
+        }
+
+        function updateEarthquakeAnalytics(quakes) {
+            const safeQuakes = Array.isArray(quakes) ? quakes.filter(q => Number(q.magnitude) > 0) : [];
+            const avgEl = document.getElementById('eqAverageMagnitude');
+            const nearEl = document.getElementById('eqNearestDistance');
+            const sixEl = document.getElementById('eqSixHourCount');
+            const riskEl = document.getElementById('eqRiskLevel');
+            if (!avgEl || !nearEl || !sixEl || !riskEl) return;
+
+            if (!safeQuakes.length) {
+                avgEl.textContent = '-'; nearEl.textContent = '-'; sixEl.textContent = '-'; riskEl.textContent = '-';
+                renderMagnitudeChart([0, 0, 0, 0]);
+                renderIntensityChart([0, 0, 0, 0]);
+                renderFrequencyRows([]);
+                return;
+            }
+
+            const average = safeQuakes.reduce((sum, q) => sum + Number(q.magnitude || 0), 0) / safeQuakes.length;
+            const distances = safeQuakes.map(q => calculateDistanceKm(Number(q.latitude || 0), Number(q.longitude || 0), 14.6488, 121.0509)).filter(Number.isFinite);
+            const nearest = distances.length ? Math.min(...distances) : null;
+            const now = Date.now();
+            const sixHourCount = safeQuakes.filter(q => {
+                const parsed = parsePhivolcsDateTime(q.date_time);
+                return parsed && (now - parsed.getTime()) <= 6 * 60 * 60 * 1000;
+            }).length;
+            const strongest = Math.max(...safeQuakes.map(q => Number(q.magnitude || 0)));
+            let risk = 'Low';
+            if (strongest >= 5 || (nearest !== null && nearest <= 100)) risk = 'High';
+            else if (strongest >= 4 || (nearest !== null && nearest <= 200)) risk = 'Moderate';
+
+            avgEl.textContent = average.toFixed(1);
+            nearEl.textContent = nearest !== null ? `${nearest.toFixed(0)} km` : '-';
+            sixEl.textContent = String(sixHourCount);
+            riskEl.textContent = risk;
+
+            const buckets = { minor: 0, light: 0, moderate: 0, critical: 0 };
+            safeQuakes.forEach(q => {
+                const mag = Number(q.magnitude || 0);
+                if (mag >= 5) buckets.critical++;
+                else if (mag >= 4) buckets.moderate++;
+                else if (mag >= 3) buckets.light++;
+                else buckets.minor++;
+            });
+            renderMagnitudeChart([buckets.minor, buckets.light, buckets.moderate, buckets.critical]);
+            renderIntensityChart([buckets.minor, buckets.light, buckets.moderate, buckets.critical]);
+            renderFrequencyRows(safeQuakes);
+        }
+
+        function chartThemeColors() {
+            return {
+                text: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary-1').trim() || '#64748b',
+                grid: getComputedStyle(document.documentElement).getPropertyValue('--border-color-1').trim() || 'rgba(148,163,184,0.25)'
+            };
+        }
+
+        function renderMagnitudeChart(values) {
+            const canvas = document.getElementById('eqMagnitudeChart');
+            if (!canvas || typeof Chart === 'undefined') return;
+            const theme = chartThemeColors();
+            const data = { labels: ['<3.0', '3.0-3.9', '4.0-4.9', '5.0+'], datasets: [{ label: 'Events', data: values, backgroundColor: ['#2ecc71', '#f39c12', '#e67e22', '#e74c3c'], borderRadius: 6 }] };
+            if (eqMagnitudeChart) { eqMagnitudeChart.data = data; eqMagnitudeChart.update('none'); return; }
+            eqMagnitudeChart = new Chart(canvas, { type: 'bar', data, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: theme.text }, grid: { display: false } }, y: { beginAtZero: true, ticks: { color: theme.text, precision: 0 }, grid: { color: theme.grid } } } } });
+        }
+
+        function renderIntensityChart(values) {
+            const canvas = document.getElementById('eqIntensityChart');
+            if (!canvas || typeof Chart === 'undefined') return;
+            const data = { labels: ['Minor', 'Light', 'Moderate', 'Critical'], datasets: [{ data: values, backgroundColor: ['#2ecc71', '#f39c12', '#e67e22', '#e74c3c'], borderWidth: 0 }] };
+            if (eqIntensityChart) { eqIntensityChart.data = data; eqIntensityChart.update('none'); return; }
+            eqIntensityChart = new Chart(canvas, { type: 'doughnut', data, options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } } } } });
+        }
+
+        function renderFrequencyRows(quakes) {
+            const container = document.getElementById('eqFrequencyRows');
+            if (!container) return;
+            if (!quakes.length) { container.innerHTML = '<div class="eq-frequency-empty">Waiting for PHIVOLCS data...</div>'; return; }
+            const groups = new Map();
+            quakes.forEach(q => {
+                const parsed = parsePhivolcsDate(q.date_time);
+                const key = parsed ? parsed.toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Unknown';
+                groups.set(key, (groups.get(key) || 0) + 1);
+            });
+            const max = Math.max(...groups.values());
+            container.innerHTML = Array.from(groups.entries()).slice(0, 7).map(([label, count]) => {
+                const pct = max ? Math.max(8, (count / max) * 100) : 0;
+                return `<div class="eq-frequency-row"><span>${label}</span><div><b style="width:${pct}%"></b></div><strong>${count}</strong></div>`;
+            }).join('');
+        }
         function renderBulletins(quakes, isCached) {
             const container = document.getElementById('earthquakeBulletinFeed');
             if (!container) return;
@@ -533,7 +665,12 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
                 status.textContent = 'Sending...';
                 status.style.background = '#7c2d12';
                 try {
-                    const response = await fetch('../api/phivolcs-auto-alert.php?action=force');
+                    const latest = latestEarthquakeForAnalysis();
+                    const response = await fetch('../api/phivolcs-auto-alert.php?action=force', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ event: latest })
+                    });
                     const text = await response.text();
                     let data = {};
                     try { data = text ? JSON.parse(text) : {}; } catch (_) { data = { success: false, message: text || 'Invalid server response.' }; }
@@ -555,7 +692,7 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
             loadPhivolcsBulletins();
             setInterval(() => {
                 loadPhivolcsBulletins();
-            }, 120000);
+            }, 60000);
         });
     </script>
 
@@ -583,8 +720,26 @@ $pageTitle = 'PHIVOLCS Earthquake Monitoring';
     </div>
 
     <style>
-        .earthquake-layout-grid { display:grid; grid-template-columns:minmax(0, 1fr) 360px; gap:1.5rem; align-items:start; }
-        .earthquake-sidebar { position:sticky; top:1rem; }
+        .earthquake-layout-grid { display:grid; grid-template-columns:minmax(0, 1fr) 420px; gap:1.5rem; align-items:start; }
+        .earthquake-main-column { min-width:0; }
+        .earthquake-sidebar { position:sticky; top:5.25rem; max-height:calc(100vh - 6.25rem); overflow-y:auto; padding-right:0.35rem; scrollbar-width:thin; }
+        #earthquakeBulletinFeed { max-height:calc(100vh - 360px) !important; min-height:460px; }
+        .eq-analytics-card { background:var(--card-bg-1); border:1px solid var(--border-color-1); border-radius:8px; padding:1.05rem; margin-bottom:1rem; box-shadow:0 8px 20px rgba(15,23,42,0.08); }
+        .eq-card-heading { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; margin-bottom:0.85rem; }
+        .eq-card-heading h3 { margin:0; font-size:0.95rem; font-weight:800; color:var(--text-color-1); display:flex; align-items:center; gap:0.45rem; }
+        .eq-card-heading i { color:#e74c3c; }
+        .eq-live-pill { border:1px solid rgba(39,174,96,0.32); background:rgba(39,174,96,0.11); color:#16a34a; border-radius:999px; padding:0.18rem 0.55rem; font-size:0.68rem; font-weight:800; display:inline-flex; align-items:center; gap:0.3rem; text-transform:uppercase; }
+        .eq-analytics-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:0.65rem; }
+        .eq-metric-tile { background:var(--bg-color-2); border:1px solid var(--border-color-1); border-radius:7px; padding:0.75rem; min-height:72px; display:flex; flex-direction:column; justify-content:space-between; }
+        .eq-metric-tile span { color:var(--text-secondary-1); font-size:0.7rem; text-transform:uppercase; font-weight:800; letter-spacing:0.03em; }
+        .eq-metric-tile strong { color:var(--text-color-1); font-size:1.25rem; font-weight:900; line-height:1.1; }
+        .eq-analytics-card canvas { width:100% !important; max-height:180px; }
+        .eq-frequency-rows { display:flex; flex-direction:column; gap:0.55rem; }
+        .eq-frequency-row { display:grid; grid-template-columns:70px 1fr 32px; align-items:center; gap:0.55rem; color:var(--text-color-1); font-size:0.78rem; font-weight:700; }
+        .eq-frequency-row div { height:9px; background:var(--bg-color-2); border-radius:999px; overflow:hidden; border:1px solid var(--border-color-1); }
+        .eq-frequency-row b { height:100%; display:block; background:linear-gradient(90deg,#f39c12,#e74c3c); border-radius:999px; }
+        .eq-frequency-row strong { text-align:right; color:var(--text-secondary-1); }
+        .eq-frequency-empty { color:var(--text-secondary-1); border:1px dashed var(--border-color-1); border-radius:7px; padding:1rem; text-align:center; font-size:0.82rem; }
         .alertara-action-modal { position:fixed; inset:0; z-index:100000; display:none; align-items:center; justify-content:center; padding:1.25rem; background:rgba(4,15,20,0.62); backdrop-filter:blur(4px); }
         .alertara-action-dialog { width:min(470px, 100%); background:var(--card-bg-1); color:var(--text-color-1); border:1px solid var(--border-color-1); border-radius:10px; box-shadow:0 22px 60px rgba(0,0,0,0.32); padding:1.25rem; display:grid; grid-template-columns:auto 1fr; gap:1rem; }
         .alertara-action-icon { width:48px; height:48px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; background:linear-gradient(135deg,#c0392b,#e74c3c); font-size:1.25rem; }

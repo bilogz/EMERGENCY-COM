@@ -6,7 +6,8 @@
 
 require_once 'db_connect.php';
 
-const FCM_EMERGENCY_CHANNEL_ID = 'alertara-emergency-default-v3';
+const FCM_EMERGENCY_CHANNEL_ID = 'alertara-emergency-default-v4';
+const FCM_SILENT_CHANNEL_ID = 'alertara-emergency-silent-v1';
 
 if (php_sapi_name() !== 'cli') {
     if (session_status() === PHP_SESSION_NONE) session_start();
@@ -522,6 +523,10 @@ function workerAlertMoreInfoUrl(string $category): string {
 
 function workerValidNotificationChannel(?string $channel): string {
     $channel = trim((string)$channel);
+    if ($channel === FCM_SILENT_CHANNEL_ID) return FCM_SILENT_CHANNEL_ID;
+    if (in_array($channel, ['emergency-alerts-v2', 'alertara_critical_alerts_v2', 'alertara-emergency-default-v3'], true)) {
+        return FCM_EMERGENCY_CHANNEL_ID;
+    }
     return preg_match('/^[A-Za-z0-9_.-]{1,120}$/', $channel) ? $channel : FCM_EMERGENCY_CHANNEL_ID;
 }
 
@@ -591,6 +596,7 @@ function sendFCM($token, $payload, &$error = null) {
             'notification' => [
                 'channel_id' => workerValidNotificationChannel((string)($payload['notification_channel'] ?? FCM_EMERGENCY_CHANNEL_ID)),
                 'sound' => 'default',
+                'default_sound' => true,
                 'default_vibrate_timings' => true,
                 'visibility' => 'PUBLIC',
                 'notification_priority' => $isCritical ? 'PRIORITY_MAX' : 'PRIORITY_HIGH',

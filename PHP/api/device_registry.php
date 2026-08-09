@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /** Resilient mobile device-token registry shared by web and mobile APIs. */
 
 function deviceRegistryTableReadable(PDO $pdo, string $table): bool {
@@ -59,7 +59,7 @@ function ensureAppNotificationDevicesTable(PDO $pdo): string {
         fcm_token VARCHAR(1024) NULL,
         token_type VARCHAR(20) NOT NULL DEFAULT 'expo',
         notification_permission VARCHAR(20) NOT NULL DEFAULT 'granted',
-        notification_channel VARCHAR(120) NOT NULL DEFAULT 'alertara-emergency-default-v3',
+        notification_channel VARCHAR(120) NOT NULL DEFAULT 'alertara-emergency-default-v4',
         notification_sound VARCHAR(60) NOT NULL DEFAULT 'emergency',
         is_active TINYINT(1) NOT NULL DEFAULT 1,
         last_active DATETIME NULL,
@@ -78,7 +78,7 @@ function ensureAppNotificationDevicesTable(PDO $pdo): string {
             $pdo->exec("ALTER TABLE {$table} ADD COLUMN fcm_token VARCHAR(1024) NULL AFTER push_token");
         }
         if (!in_array('notification_channel', $cols, true)) {
-            $pdo->exec("ALTER TABLE {$table} ADD COLUMN notification_channel VARCHAR(120) NOT NULL DEFAULT 'alertara-emergency-default-v3' AFTER notification_permission");
+            $pdo->exec("ALTER TABLE {$table} ADD COLUMN notification_channel VARCHAR(120) NOT NULL DEFAULT 'alertara-emergency-default-v4' AFTER notification_permission");
         }
         if (!in_array('notification_sound', $cols, true)) {
             $pdo->exec("ALTER TABLE {$table} ADD COLUMN notification_sound VARCHAR(60) NOT NULL DEFAULT 'emergency' AFTER notification_channel");
@@ -105,7 +105,7 @@ function registerAppNotificationDevice(
     string $tokenType = 'expo',
     string $permission = 'granted',
     ?string $fcmToken = null,
-    string $notificationChannel = 'alertara-emergency-default-v3',
+    string $notificationChannel = 'alertara-emergency-default-v4',
     string $notificationSound = 'emergency'
 ): bool {
     $deviceId = trim($deviceId);
@@ -129,7 +129,7 @@ function registerAppNotificationDevice(
         $fcmToken !== '' ? $fcmToken : null,
         trim($tokenType) ?: 'expo',
         trim($permission) ?: 'granted',
-        preg_match('/^[A-Za-z0-9_.-]{1,120}$/', trim($notificationChannel)) ? trim($notificationChannel) : 'alertara-emergency-default-v3',
+        preg_match('/^[A-Za-z0-9_.-]{1,120}$/', trim($notificationChannel)) ? trim($notificationChannel) : 'alertara-emergency-default-v4',
         trim($notificationSound) === 'silent' ? 'silent' : 'emergency'
     ]);
 }

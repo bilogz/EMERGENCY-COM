@@ -1,9 +1,10 @@
-﻿<?php
+<?php
 /** Push notification helper using Firebase Cloud Messaging HTTP v1. */
 
 require_once dirname(__DIR__, 2) . '/PHP/api/device_registry.php';
 
-const PUSH_HELPER_EMERGENCY_CHANNEL_ID = 'alertara-emergency-default-v3';
+const PUSH_HELPER_EMERGENCY_CHANNEL_ID = 'alertara-emergency-default-v4';
+const PUSH_HELPER_SILENT_CHANNEL_ID = 'alertara-emergency-silent-v1';
 
 function pushHelperMoreInfoUrl(array $data): string {
     $haystack = strtolower((string)($data['category'] ?? '') . ' ' . (string)($data['type'] ?? '') . ' ' . (string)($data['source'] ?? ''));
@@ -26,6 +27,10 @@ function pushHelperWithRoutingData(array $data): array {
 
 function pushHelperValidNotificationChannel(?string $channel): string {
     $channel = trim((string)$channel);
+    if ($channel === PUSH_HELPER_SILENT_CHANNEL_ID) return PUSH_HELPER_SILENT_CHANNEL_ID;
+    if (in_array($channel, ['emergency-alerts-v2', 'alertara_critical_alerts_v2', 'alertara-emergency-default-v3'], true)) {
+        return PUSH_HELPER_EMERGENCY_CHANNEL_ID;
+    }
     return preg_match('/^[A-Za-z0-9_.-]{1,120}$/', $channel) ? $channel : PUSH_HELPER_EMERGENCY_CHANNEL_ID;
 }
 
@@ -193,6 +198,7 @@ function pushHelperSendFcmV1(string $token, string $title, string $message, arra
             'notification' => [
                 'channel_id' => pushHelperNotificationChannelForToken($token),
                 'sound' => 'default',
+                'default_sound' => true,
                 'default_vibrate_timings' => true,
                 'visibility' => 'PUBLIC',
                 'notification_priority' => 'PRIORITY_HIGH',

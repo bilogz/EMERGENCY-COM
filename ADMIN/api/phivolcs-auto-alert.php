@@ -214,12 +214,22 @@ try {
         exit;
     }
 
-    $feedData = fetchPhivolcsAutoFeed();
-    $events = normalizePhivolcsEvents($feedData['earthquakes']);
-    $freshCutoff = time() - (PHIVOLCS_FRESHNESS_HOURS * 3600);
-    $fresh = array_values(array_filter($events, fn($event) => $event['event_timestamp'] >= $freshCutoff && $event['event_timestamp'] <= time() + 300));
-    $qualifying = array_values(array_filter($fresh, 'qualifyingPhivolcsEvent'));
 
+    $postedInput = (!$isCli && $_SERVER['REQUEST_METHOD'] === 'POST') ? (json_decode(file_get_contents('php://input'), true) ?: []) : [];
+    $postedEvent = is_array($postedInput['event'] ?? null) ? $postedInput['event'] : null;
+
+    if ($action === 'force' && $postedEvent) {
+        $events = normalizePhivolcsEvents([$postedEvent]);
+        $fresh = $events;
+        $qualifying = array_values(array_filter($events, 'qualifyingPhivolcsEvent'));
+        $feedData = ['earthquakes' => $events, 'is_cached' => false];
+    } else {
+        $feedData = fetchPhivolcsAutoFeed();
+        $events = normalizePhivolcsEvents($feedData['earthquakes']);
+        $freshCutoff = time() - (PHIVOLCS_FRESHNESS_HOURS * 3600);
+        $fresh = array_values(array_filter($events, fn($event) => $event['event_timestamp'] >= $freshCutoff && $event['event_timestamp'] <= time() + 300));
+        $qualifying = array_values(array_filter($fresh, 'qualifyingPhivolcsEvent'));
+    }
     if ($action === 'force') {
         if (!$qualifying) {
             echo json_encode(['success' => true, 'alerted' => false, 'message' => 'No fresh PHIVOLCS event requires a citizen bulletin.', 'fresh_events' => count($fresh)]);

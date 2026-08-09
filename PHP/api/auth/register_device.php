@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 header('Content-Type: application/json; charset=utf-8');
 
 require_once '../shared/db_connect.php';
@@ -27,7 +27,7 @@ try {
         $fcm_token = $native_fcm_token !== '' ? $native_fcm_token : $primary_push_token;
         $token_type = $native_fcm_token !== '' ? 'fcm' : trim((string)($data['token_type'] ?? 'expo'));
         $permission = trim((string)($data['notification_permission'] ?? 'granted'));
-        $notification_channel = trim((string)($data['notification_channel'] ?? 'alertara-emergency-default-v3'));
+        $notification_channel = trim((string)($data['notification_channel'] ?? 'alertara-emergency-default-v4'));
         $notification_sound = trim((string)($data['notification_sound'] ?? 'emergency'));
 
         if (!$device_id || (!$user_id && $primary_push_token === '')) {
