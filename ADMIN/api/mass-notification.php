@@ -163,12 +163,33 @@ function mnEnsureNotificationLogsTable(PDO $pdo, string $tableName): bool {
                 sent_at DATETIME NULL,
                 sent_by VARCHAR(120) NULL,
                 ip_address VARCHAR(64) NULL,
+                alert_id BIGINT UNSIGNED NULL,
+                category_id INT UNSIGNED NULL,
+                category_name VARCHAR(120) NULL,
+                sent_by_name VARCHAR(160) NULL,
+                is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+                deleted_at DATETIME NULL,
                 response LONGTEXT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_status_sent_at (status, sent_at),
                 INDEX idx_channel (channel)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM {$tableName}");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        $optionalColumns = [
+            'alert_id' => "ALTER TABLE {$tableName} ADD COLUMN alert_id BIGINT UNSIGNED NULL AFTER ip_address",
+            'category_id' => "ALTER TABLE {$tableName} ADD COLUMN category_id INT UNSIGNED NULL AFTER alert_id",
+            'category_name' => "ALTER TABLE {$tableName} ADD COLUMN category_name VARCHAR(120) NULL AFTER category_id",
+            'sent_by_name' => "ALTER TABLE {$tableName} ADD COLUMN sent_by_name VARCHAR(160) NULL AFTER sent_by",
+            'is_deleted' => "ALTER TABLE {$tableName} ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0 AFTER response",
+            'deleted_at' => "ALTER TABLE {$tableName} ADD COLUMN deleted_at DATETIME NULL AFTER is_deleted"
+        ];
+        foreach ($optionalColumns as $column => $sql) {
+            if (!in_array($column, $cols, true)) {
+                try { $pdo->exec($sql); } catch (Throwable $e) {}
+            }
+        }
         $pdo->query("SELECT 1 FROM {$tableName} LIMIT 1");
         return true;
     } catch (Throwable $e) {
@@ -183,7 +204,87 @@ function mnResolveNotificationLogsTable(PDO $pdo): string {
     }
     mnEnsureNotificationLogsTable($pdo, 'notification_logs_runtime');
     return 'notification_logs_runtime';
+}function mnResolveAdminDisplayName(PDO $pdo, string $sentBy): string {
+    $sentBy = trim($sentBy);
+    if ($sentBy === '') return 'System';
+    if (!preg_match('/admin_(\d+)/', $sentBy, $m)) return ucwords(str_replace('_', ' ', $sentBy));
+    $adminId = (int)$m[1];
+    foreach (['admins', 'admin_users', 'users'] as $table) {
+        try {
+            $colsStmt = $pdo->query("SHOW COLUMNS FROM `{$table}`");
+            $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+            if (!in_array('id', $cols, true)) continue;
+            $nameCols = array_values(array_filter(['name', 'full_name', 'username', 'email'], fn($c) => in_array($c, $cols, true)));
+            if (!$nameCols) continue;
+            $select = implode(', ', array_map(fn($c) => "`{$c}`", $nameCols));
+            $stmt = $pdo->prepare("SELECT {$select} FROM `{$table}` WHERE id = ? LIMIT 1");
+            $stmt->execute([$adminId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($row) {
+                foreach ($row as $value) {
+                    $value = trim((string)$value);
+                    if ($value !== '') return $value;
+                }
+            }
+        } catch (Throwable $e) {}
+    }
+    return 'Admin #' . $adminId;
 }
+
+function mnCategoryNameById(PDO $pdo, $categoryId): string {
+    $id = (int)$categoryId;
+    if ($id <= 0) return 'General';
+    foreach (['alert_categories', 'alert_categories_catalog'] as $table) {
+        try {
+            $colsStmt = $pdo->query("SHOW COLUMNS FROM `{$table}`");
+            $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+            if (!in_array('id', $cols, true) || !in_array('name', $cols, true)) continue;
+            $stmt = $pdo->prepare("SELECT name FROM `{$table}` WHERE id = ? LIMIT 1");
+            $stmt->execute([$id]);
+            $name = trim((string)$stmt->fetchColumn());
+            if ($name !== '') return $name;
+        } catch (Throwable $e) {}
+    }
+    return 'General';
+}
+
+function mnEnsureNotificationTemplatesTable(PDO $pdo): void {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS notification_templates (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            category_id INT UNSIGNED NULL,
+            title VARCHAR(160) NOT NULL,
+            body TEXT NOT NULL,
+            what_happened TEXT NULL,
+            where_happening TEXT NULL,
+            action_to_take TEXT NULL,
+            weather_signal TINYINT UNSIGNED NULL,
+            fire_level TINYINT UNSIGNED NULL,
+            severity VARCHAR(20) NOT NULL DEFAULT 'Medium',
+            created_by BIGINT UNSIGNED NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_category (category_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+    try {
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM notification_templates");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        $optionalColumns = [
+            'what_happened' => "ALTER TABLE notification_templates ADD COLUMN what_happened TEXT NULL AFTER body",
+            'where_happening' => "ALTER TABLE notification_templates ADD COLUMN where_happening TEXT NULL AFTER what_happened",
+            'action_to_take' => "ALTER TABLE notification_templates ADD COLUMN action_to_take TEXT NULL AFTER where_happening",
+            'weather_signal' => "ALTER TABLE notification_templates ADD COLUMN weather_signal TINYINT UNSIGNED NULL AFTER action_to_take",
+            'fire_level' => "ALTER TABLE notification_templates ADD COLUMN fire_level TINYINT UNSIGNED NULL AFTER weather_signal"
+        ];
+        foreach ($optionalColumns as $column => $sql) {
+            if (!in_array($column, $cols, true)) {
+                try { $pdo->exec($sql); } catch (Throwable $e) {}
+            }
+        }
+    } catch (Throwable $e) {}
+}
+
 
 function mnEnsureAlertRecipientsTable(PDO $pdo): void {
     $pdo->exec("
@@ -197,6 +298,7 @@ function mnEnsureAlertRecipientsTable(PDO $pdo): void {
             INDEX idx_user_id (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
+
 }
 
 function mnPersistAlertRecipients(PDO $pdo, int $alertId, array $subscribers): int {
@@ -608,7 +710,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
 } elseif ($action === 'list') {
     try {
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-        $limit = isset($_GET['limit']) ? min(50, max(10, (int)$_GET['limit'])) : 25;
+        $limit = isset($_GET['limit']) ? min(50, max(10, (int)$_GET['limit'])) : 10;
         $offset = ($page - 1) * $limit;
         $fetchLimit = min(250, $offset + $limit + 1);
         $sourceSaturated = false;
@@ -652,6 +754,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
 
         $selectParts[] = in_array('status', $cols, true) ? 'status' : "'pending' as status";
         $selectParts[] = in_array('sent_by', $cols, true) ? 'sent_by' : "'' as sent_by";
+        $selectParts[] = in_array('sent_by_name', $cols, true) ? 'sent_by_name' : "'' as sent_by_name";
+        $selectParts[] = in_array('alert_id', $cols, true) ? 'alert_id' : "NULL as alert_id";
+        $selectParts[] = in_array('category_id', $cols, true) ? 'category_id' : "NULL as category_id";
+        $selectParts[] = in_array('category_name', $cols, true) ? 'category_name' : "'' as category_name";
 
         $hasSentAt = in_array('sent_at', $cols, true);
         $hasCreatedAt = in_array('created_at', $cols, true);
@@ -661,15 +767,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         elseif ($hasCreatedAt) $selectParts[] = 'created_at as sent_at';
         else $selectParts[] = "NULL as sent_at";
 
+        if ($hasCreatedAt) $selectParts[] = 'created_at as sort_created_at';
+        elseif ($hasSentAt) $selectParts[] = 'sent_at as sort_created_at';
+        else $selectParts[] = "NULL as sort_created_at";
+
         if ($hasResponse) $selectParts[] = 'response';
         else $selectParts[] = "NULL as response";
 
-        $orderBy = $hasSentAt ? 'sent_at' : ($hasCreatedAt ? 'created_at' : 'id');
+        if ($hasSentAt && $hasCreatedAt) {
+            $orderBy = 'COALESCE(sent_at, created_at)';
+        } elseif ($hasSentAt) {
+            $orderBy = 'sent_at';
+        } elseif ($hasCreatedAt) {
+            $orderBy = 'created_at';
+        } else {
+            $orderBy = 'id';
+        }
 
+        $whereDeleted = in_array('is_deleted', $cols, true) ? 'WHERE is_deleted = 0' : '';
+        $totalStmt = $pdo->query("SELECT COUNT(*) FROM {$logsTable} {$whereDeleted}");
+        $totalRows = $totalStmt ? (int)$totalStmt->fetchColumn() : 0;
         $stmt = $pdo->query("
             SELECT " . implode(', ', $selectParts) . "
             FROM {$logsTable}
-            ORDER BY $orderBy DESC
+            {$whereDeleted}
+            ORDER BY $orderBy DESC, id DESC
             LIMIT {$fetchLimit}
         ");
         $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -700,8 +822,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
                         'message' => trim(($row['bulletin_title'] ?? 'PAGASA Bulletin') . ' — ' . ($row['bulletin_summary'] ?? '')),
                         'recipients' => 'All Citizens · PAGASA Auto',
                         'sent_by' => 'pagasa_auto_bulletin',
+                        'sent_by_name' => 'PAGASA Auto Bulletin',
+                        'category_name' => 'Weather',
                         'status' => 'completed',
                         'sent_at' => $row['created_at'] ?? null,
+                        'sort_created_at' => $row['created_at'] ?? null,
                         'response' => json_encode(['sent' => $total, 'failed' => 0, 'total' => $total, 'progress' => 100]),
                     ];
                 }
@@ -729,8 +854,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
                         'message' => sprintf('PHIVOLCS Earthquake Bulletin — M%.1f · %s', (float)($row['magnitude'] ?? 0), $row['location'] ?? 'Philippines'),
                         'recipients' => 'All Citizens · PHIVOLCS Auto',
                         'sent_by' => 'phivolcs_auto_bulletin',
+                        'sent_by_name' => 'PHIVOLCS Auto Bulletin',
+                        'category_name' => 'Earthquake',
                         'status' => 'completed',
                         'sent_at' => $row['created_at'] ?? null,
+                        'sort_created_at' => $row['created_at'] ?? null,
                         'response' => json_encode(['sent' => $total, 'failed' => 0, 'total' => $total, 'progress' => 100]),
                     ];
                 }
@@ -740,8 +868,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         }
         if ($legacyAutomatic) {
             $notifications = array_merge($notifications, $legacyAutomatic);
-            usort($notifications, static fn(array $a, array $b): int => strcmp((string)($b['sent_at'] ?? ''), (string)($a['sent_at'] ?? '')));
         }
+        usort($notifications, static function (array $a, array $b): int {
+            $aTime = (string)($a['sent_at'] ?? $a['sort_created_at'] ?? '');
+            $bTime = (string)($b['sent_at'] ?? $b['sort_created_at'] ?? '');
+            $timeCompare = strcmp($bTime, $aTime);
+            if ($timeCompare !== 0) {
+                return $timeCompare;
+            }
+            $aId = (int)preg_replace('/\D+/', '', (string)($a['id'] ?? '0'));
+            $bId = (int)preg_replace('/\D+/', '', (string)($b['id'] ?? '0'));
+            return $bId <=> $aId;
+        });
 
         $combinedCount = count($notifications);
         $hasMore = $sourceSaturated || $combinedCount > ($offset + $limit);
@@ -797,8 +935,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             }
         }
         
-        // Ensure status and progress are calculated correctly for UI
+        // Ensure status, progress, category, and admin labels are calculated correctly for UI.
         foreach ($notifications as &$notif) {
+            $notif['sent_by_name'] = trim((string)($notif['sent_by_name'] ?? '')) !== ''
+                ? trim((string)$notif['sent_by_name'])
+                : mnResolveAdminDisplayName($pdo, (string)($notif['sent_by'] ?? ''));
+            if (trim((string)($notif['category_name'] ?? '')) === '') {
+                $categoryId = $notif['category_id'] ?? null;
+                if (!$categoryId && preg_match('/Cat\s+(\d+)/i', (string)($notif['recipients'] ?? ''), $m)) {
+                    $categoryId = (int)$m[1];
+                    $notif['category_id'] = $categoryId;
+                }
+                $notif['category_name'] = $categoryId ? mnCategoryNameById($pdo, $categoryId) : 'General';
+            }
             $stats = json_decode($notif['response'] ?? '', true);
             if ($stats) {
                 $notif['progress'] = $stats['progress'] ?? 0;
@@ -825,7 +974,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             'pagination' => [
                 'page' => $page,
                 'limit' => $limit,
-                'has_more' => $hasMore
+                'has_more' => $hasMore,
+                'total' => $totalRows ?? count($notifications),
+                'total_pages' => max(1, (int)ceil((($totalRows ?? count($notifications)) ?: 0) / max(1, $limit)))
             ],
             'meta' => ['table' => $logsTable]
         ]);
@@ -838,7 +989,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             'warning' => 'Dispatch history is temporarily unavailable due to database table health issues.'
         ]);
     }
-} elseif ($action === 'get_options') {
+} elseif ($action === 'save_template' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        mnEnsureNotificationTemplatesTable($pdo);
+        $adminId = (int)($_SESSION['admin_user_id'] ?? 0);
+        $categoryId = isset($_POST['category_id']) && $_POST['category_id'] !== '' ? (int)$_POST['category_id'] : null;
+        $title = trim((string)($_POST['title'] ?? ''));
+        $body = trim((string)($_POST['body'] ?? ''));
+        $whatHappened = trim((string)($_POST['what_happened'] ?? ''));
+        $whereHappening = trim((string)($_POST['where_happening'] ?? ''));
+        $actionToTake = trim((string)($_POST['action_to_take'] ?? ''));
+        $weatherSignal = isset($_POST['weather_signal']) && preg_match('/^[1-5]$/', (string)$_POST['weather_signal']) ? (int)$_POST['weather_signal'] : null;
+        $fireLevel = isset($_POST['fire_level']) && preg_match('/^[1-5]$/', (string)$_POST['fire_level']) ? (int)$_POST['fire_level'] : null;
+        $severity = trim((string)($_POST['severity'] ?? 'Medium'));
+        if (!in_array($severity, ['Low', 'Medium', 'High', 'Critical'], true)) $severity = 'Medium';
+        if ($title === '' || $body === '') {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'message' => 'Template title and message are required.']);
+            exit;
+        }
+        $stmt = $pdo->prepare("INSERT INTO notification_templates (category_id, title, body, what_happened, where_happening, action_to_take, weather_signal, fire_level, severity, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$categoryId, $title, $body, $whatHappened ?: null, $whereHappening ?: null, $actionToTake ?: null, $weatherSignal, $fireLevel, $severity, $adminId ?: null]);
+        echo json_encode(['success' => true, 'template_id' => (int)$pdo->lastInsertId()]);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        error_log('Mass Notification save_template error: ' . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Unable to save template.']);
+    }
+} elseif ($action === 'delete_log' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        $id = trim((string)($_POST['id'] ?? ''));
+        if ($id === '' || !ctype_digit($id)) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'message' => 'Valid dispatch ID is required.']);
+            exit;
+        }
+        $logsTable = mnResolveNotificationLogsTable($pdo);
+        mnEnsureNotificationLogsTable($pdo, $logsTable);
+        $stmt = $pdo->prepare("UPDATE {$logsTable} SET is_deleted = 1, deleted_at = NOW() WHERE id = ?");
+        $stmt->execute([(int)$id]);
+        echo json_encode(['success' => true]);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        error_log('Mass Notification delete_log error: ' . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Unable to delete dispatch record.']);
+    }} elseif ($action === 'get_options') {
     try {
         // Fetch Barangays (graceful fallback when users table is unavailable/corrupted)
         $barangays = [];
@@ -864,6 +1059,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             $categories = [];
             $categoriesTable = null;
         }
+
+        mnEnsureNotificationTemplatesTable($pdo);
 
         // Fetch Templates (optional table)
         $templates = [];
@@ -907,4 +1104,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
     echo json_encode(['success' => false, 'message' => 'Invalid action.']);
 }
 ?>
+
 

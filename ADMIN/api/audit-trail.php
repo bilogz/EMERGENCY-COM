@@ -45,6 +45,27 @@ function auditTableExists(PDO $pdo, string $tableName): bool
     return $cache[$tableName];
 }
 
+function auditTableColumns(PDO $pdo, string $tableName): array
+{
+    static $cache = [];
+    if (isset($cache[$tableName])) return $cache[$tableName];
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM `{$tableName}`");
+        $cache[$tableName] = $stmt ? $stmt->fetchAll(PDO::FETCH_COLUMN) : [];
+    } catch (Throwable $e) {
+        $cache[$tableName] = [];
+    }
+    return $cache[$tableName];
+}
+
+function auditFriendlyAdminName(array $row): string
+{
+    $name = trim((string)($row['sent_by_name'] ?? ''));
+    if ($name !== '') return $name;
+    $sentBy = trim((string)($row['sent_by'] ?? ''));
+    if (preg_match('/admin_(\d+)/', $sentBy, $m)) return 'Admin #' . $m[1];
+    return $sentBy !== '' ? ucwords(str_replace('_', ' ', $sentBy)) : 'System';
+}
 function auditNotificationTable(PDO $pdo): ?string
 {
     foreach (['notification_logs', 'notification_logs_runtime'] as $tableName) {
@@ -134,11 +155,13 @@ function auditBuildWhere(string $trailType, array $source): array
     ];
 }
 
-function auditSelectSql(string $trailType, string $tableName): string
+function auditSelectSql(PDO $pdo, string $trailType, string $tableName): string
 {
     if ($trailType === 'notifications') {
+        $cols = auditTableColumns($pdo, $tableName);
+        $sentByName = in_array('sent_by_name', $cols, true) ? 'sent_by_name' : "'' AS sent_by_name";
         return "SELECT id, sent_at AS timestamp, channel, recipient, message,
-                       status, sent_by, ip_address
+                       status, sent_by, {$sentByName}, ip_address
                 FROM `{$tableName}`";
     }
 
@@ -198,7 +221,7 @@ function auditNormalizeRow(string $trailType, array $row): array
             'subject' => $row['recipient'] ?: 'All recipients',
             'activity' => $row['message'] ?: 'Notification sent',
             'status' => strtolower((string) ($row['status'] ?: 'pending')),
-            'admin' => $row['sent_by'] ?: 'System',
+            'admin' => auditFriendlyAdminName($row),
             'ip_address' => $row['ip_address'] ?: 'N/A',
             'details' => $details,
         ];
@@ -310,7 +333,7 @@ function auditList(PDO $pdo, string $trailType): void
     auditBindAndExecute($countStmt, $filters['params']);
     $total = (int) $countStmt->fetchColumn();
 
-    $query = auditSelectSql($trailType, $source['table'])
+    $query = auditSelectSql($pdo, $trailType, $source['table'])
         . $filters['sql']
         . ' ORDER BY ' . $source['timestamp'] . ' DESC, id DESC LIMIT ? OFFSET ?';
     $stmt = $pdo->prepare($query);

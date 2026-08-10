@@ -6,6 +6,10 @@
 
 require_once 'db_connect.php';
 
+const FCM_EMERGENCY_CHANNEL_ID = 'alertara-emergency-default-v5';
+const FCM_EMERGENCY_SOUND = 'alertara_emergency';
+const FCM_SILENT_CHANNEL_ID = 'alertara-emergency-silent-v1';
+
 if (php_sapi_name() !== 'cli') {
     if (session_status() === PHP_SESSION_NONE) session_start();
     header('Content-Type: application/json; charset=utf-8');
@@ -104,8 +108,12 @@ try {
     $jobs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (empty($jobs)) {
-        if (php_sapi_name() === 'cli') echo "No pending jobs.\n";
-        else echo json_encode(['success' => true, 'processed' => 0]);
+        if (php_sapi_name() === 'cli') {
+            echo "No pending jobs.\n";
+            echo getNotificationWorkerQueueSnapshot($pdo);
+        } else {
+            echo json_encode(['success' => true, 'processed' => 0]);
+        }
         return;
     }
 
@@ -133,8 +141,12 @@ try {
                         'body' => $job['message'],
                         'alert_id' => (string)($job['alert_id'] ?? ''),
                         'severity' => $alertMeta['severity'],
-                        'category' => $alertMeta['category']
+                        'category' => $alertMeta['category'],
+                        'notification_channel' => workerNotificationChannelForToken($pdo, (string)$job['recipient_value'])
                     ], $error);
+                    if (!$success && isPermanentPushTokenError($error)) {
+                        disableInvalidPushToken($pdo, (string)$job['recipient_value'], $error);
+                    }
                     break;
                 case 'pa':
                     $success = broadcastPA($job['message']);
@@ -241,6 +253,62 @@ function updateLogProgress($pdo, $logId) {
 }
 
 /**
+ * CLI-only visibility for production checks. This keeps the worker behavior the
+ * same, but shows whether alerts were already processed, failed, or never queued.
+ */
+function getNotificationWorkerQueueSnapshot(PDO $pdo): string {
+    $lines = [];
+
+    try {
+        $stmt = $pdo->query("
+            SELECT status, COUNT(*) AS count
+            FROM notification_queue
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            GROUP BY status
+            ORDER BY status
+        ");
+        $stats = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        if (!empty($stats)) {
+            $parts = [];
+            foreach ($stats as $status => $count) {
+                $parts[] = $status . '=' . $count;
+            }
+            $lines[] = 'Queue last 24h: ' . implode(', ', $parts);
+        } else {
+            $lines[] = 'Queue last 24h: none';
+        }
+    } catch (PDOException $e) {
+        $lines[] = 'Queue snapshot unavailable: ' . $e->getMessage();
+    }
+
+    try {
+        $stmt = $pdo->query("
+            SELECT id, status, channel, LEFT(message, 70) AS preview, sent_at
+            FROM notification_logs
+            ORDER BY id DESC
+            LIMIT 3
+        ");
+        $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!empty($logs)) {
+            $lines[] = 'Recent notification logs:';
+            foreach ($logs as $log) {
+                $lines[] = sprintf(
+                    '  #%s %s [%s] %s %s',
+                    $log['id'] ?? '-',
+                    $log['status'] ?? '-',
+                    $log['channel'] ?? '-',
+                    $log['sent_at'] ?? '',
+                    trim((string)($log['preview'] ?? ''))
+                );
+            }
+        }
+    } catch (PDOException $e) {
+        $lines[] = 'Recent logs unavailable: ' . $e->getMessage();
+    }
+
+    return implode("\n", $lines) . "\n";
+}
+/**
  * PLACEHOLDER: SMS Dispatch
  */
 function sendSMS($phone, $message, &$error = null) {
@@ -265,37 +333,141 @@ function getWorkerAlertMetadata(PDO $pdo, int $alertId): array {
     if ($alertId <= 0) return ['severity' => 'high', 'category' => 'Emergency Alert'];
     if (isset($cache[$alertId])) return $cache[$alertId];
     try {
-        $stmt = $pdo->prepare("SELECT severity, category FROM alerts WHERE id = ? LIMIT 1");
+        $columns = [];
+        $colStmt = $pdo->query("SHOW COLUMNS FROM alerts");
+        foreach ($colStmt ? $colStmt->fetchAll(PDO::FETCH_ASSOC) : [] as $col) {
+            $columns[strtolower((string)$col['Field'])] = true;
+        }
+        $select = ['severity'];
+        foreach (['category', 'source', 'title', 'message', 'content'] as $column) {
+            if (isset($columns[$column])) $select[] = $column;
+        }
+        $stmt = $pdo->prepare("SELECT " . implode(', ', array_map(fn($c) => "`{$c}`", $select)) . " FROM alerts WHERE id = ? LIMIT 1");
         $stmt->execute([$alertId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $haystack = strtolower(trim(implode(' ', array_map('strval', $row))));
+        $category = (string)($row['category'] ?? '');
+        if ($category === '') {
+            if (preg_match('/weather|pagasa|rain|flood|typhoon|storm|wind|landslide/', $haystack)) $category = 'Weather';
+            elseif (preg_match('/earthquake|seismic|phivolcs|aftershock|tsunami/', $haystack)) $category = 'Earthquake';
+            else $category = 'Emergency Alert';
+        }
         return $cache[$alertId] = [
             'severity' => strtolower((string)($row['severity'] ?? 'high')),
-            'category' => (string)($row['category'] ?? 'Emergency Alert')
+            'category' => $category
         ];
     } catch (Throwable $e) {
         return $cache[$alertId] = ['severity' => 'high', 'category' => 'Emergency Alert'];
     }
 }
 
+function isPermanentPushTokenError(?string $error): bool {
+    $e = strtoupper((string)$error);
+    foreach (['UNREGISTERED', 'NOT_FOUND', 'INVALID_ARGUMENT', 'INVALID_REGISTRATION', 'DEVICE_NOT_REGISTERED'] as $needle) {
+        if (strpos($e, $needle) !== false) return true;
+    }
+    return false;
+}
+
+function disableInvalidPushToken(PDO $pdo, string $token, ?string $error = null): void {
+    $token = trim($token);
+    if ($token === '') return;
+
+    try {
+        $appTable = 'app_notification_devices';
+        $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($appTable));
+        if ($exists && $exists->fetch()) {
+            $colsStmt = $pdo->query("SHOW COLUMNS FROM {$appTable}");
+            $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+            $conditions = [];
+            $params = [];
+            if (in_array('push_token', $cols, true)) { $conditions[] = 'push_token = ?'; $params[] = $token; }
+            if (in_array('fcm_token', $cols, true)) { $conditions[] = 'fcm_token = ?'; $params[] = $token; }
+            if ($conditions) {
+                $sql = "UPDATE {$appTable} SET is_active = 0, notification_permission = 'denied' WHERE " . implode(' OR ', $conditions);
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('Unable to disable invalid app push token: ' . $e->getMessage());
+    }
+
+    try {
+        require_once dirname(__DIR__, 2) . '/PHP/api/device_registry.php';
+        $deviceTable = resolveDeviceRegistryTable($pdo);
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM {$deviceTable}");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        $conditions = [];
+        $params = [];
+        if (in_array('push_token', $cols, true)) { $conditions[] = 'push_token = ?'; $params[] = $token; }
+        if (in_array('fcm_token', $cols, true)) { $conditions[] = 'fcm_token = ?'; $params[] = $token; }
+        if ($conditions && in_array('is_active', $cols, true)) {
+            $sql = "UPDATE {$deviceTable} SET is_active = 0 WHERE " . implode(' OR ', $conditions);
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+        }
+    } catch (Throwable $e) {
+        error_log('Unable to disable invalid legacy push token: ' . $e->getMessage());
+    }
+
+    error_log('Disabled invalid push token after Firebase permanent error: ' . (string)$error);
+}
+function findExpoFallbackTokenForNativeToken(PDO $pdo, string $nativeToken): string {
+    $nativeToken = trim($nativeToken);
+    if ($nativeToken === '' || preg_match('/^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/', $nativeToken)) return '';
+    try {
+        $table = 'app_notification_devices';
+        $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+        if (!$exists || !$exists->fetch()) return '';
+        $stmt = $pdo->prepare("SELECT push_token FROM {$table} WHERE fcm_token = ? AND is_active = 1 AND notification_permission = 'granted' AND push_token IS NOT NULL AND push_token <> '' LIMIT 1");
+        $stmt->execute([$nativeToken]);
+        $token = trim((string)$stmt->fetchColumn());
+        return preg_match('/^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/', $token) ? $token : '';
+    } catch (Throwable $e) {
+        error_log('Unable to find Expo fallback token: ' . $e->getMessage());
+        return '';
+    }
+}
 /** Load Firebase service-account credentials without exposing them to logs. */
 function loadFirebaseServiceAccount(&$error = null): ?array {
     $error = null;
     $json = function_exists('getSecureConfig') ? getSecureConfig('FIREBASE_SERVICE_ACCOUNT_JSON', '') : getenv('FIREBASE_SERVICE_ACCOUNT_JSON');
     $path = function_exists('getSecureConfig') ? getSecureConfig('FIREBASE_SERVICE_ACCOUNT_PATH', '') : getenv('FIREBASE_SERVICE_ACCOUNT_PATH');
+
+    $decoded = null;
     if (is_string($json) && trim($json) !== '') {
         $decoded = json_decode($json, true);
-    } elseif (is_string($path) && trim($path) !== '' && is_readable($path)) {
+        if (!is_array($decoded)) {
+            $error = 'Firebase service-account JSON is not valid JSON.';
+            return null;
+        }
+    } elseif (is_string($path) && trim($path) !== '') {
+        $path = trim($path);
+        if (!file_exists($path)) {
+            $error = 'Firebase service-account file does not exist: ' . $path;
+            return null;
+        }
+        if (!is_readable($path)) {
+            $error = 'Firebase service-account file is not readable by PHP: ' . $path;
+            return null;
+        }
         $decoded = json_decode((string)file_get_contents($path), true);
+        if (!is_array($decoded)) {
+            $error = 'Firebase service-account file is not valid JSON: ' . $path;
+            return null;
+        }
     } else {
+        $error = 'Firebase service account is not configured. Set FIREBASE_SERVICE_ACCOUNT_PATH in ADMIN/api/config.local.php.';
         return null;
     }
-    if (!is_array($decoded) || empty($decoded['client_email']) || empty($decoded['private_key']) || empty($decoded['project_id'])) {
+
+    if (empty($decoded['client_email']) || empty($decoded['private_key']) || empty($decoded['project_id'])) {
         $error = 'Firebase service-account configuration is incomplete.';
         return null;
     }
     return $decoded;
 }
-
 function getFirebaseAccessToken(array $serviceAccount, &$error = null): ?string {
     static $cached = null;
     if (is_array($cached) && ($cached['expires_at'] ?? 0) > time() + 60) return $cached['token'];
@@ -340,6 +512,49 @@ function getFirebaseAccessToken(array $serviceAccount, &$error = null): ?string 
     return $cached['token'];
 }
 
+function workerAlertMoreInfoUrl(string $category): string {
+    $needle = strtolower($category);
+    if (preg_match('/weather|pagasa|rain|flood|typhoon|storm|wind|landslide/', $needle)) {
+        return 'https://emergency-comm.alertaraqc.com/USERS/weather-map.php';
+    }
+    if (preg_match('/earthquake|seismic|phivolcs|aftershock|tsunami/', $needle)) {
+        return 'https://emergency-comm.alertaraqc.com/USERS/earthquake-monitoring.php';
+    }
+    return '';
+}
+
+function workerValidNotificationChannel(?string $channel): string {
+    $channel = trim((string)$channel);
+    if ($channel === FCM_SILENT_CHANNEL_ID) return FCM_SILENT_CHANNEL_ID;
+    if (in_array($channel, ['emergency-alerts-v2', 'alertara_critical_alerts_v2', 'alertara-emergency-default-v3', 'alertara-emergency-default-v4'], true)) {
+        return FCM_EMERGENCY_CHANNEL_ID;
+    }
+    return preg_match('/^[A-Za-z0-9_.-]{1,120}$/', $channel) ? $channel : FCM_EMERGENCY_CHANNEL_ID;
+}
+
+function workerNotificationChannelForToken(PDO $pdo, string $token): string {
+    $token = trim($token);
+    if ($token === '') return FCM_EMERGENCY_CHANNEL_ID;
+    try {
+        $table = 'app_notification_devices';
+        $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+        if (!$exists || !$exists->fetch()) return FCM_EMERGENCY_CHANNEL_ID;
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM {$table}");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        if (!in_array('notification_channel', $cols, true)) return FCM_EMERGENCY_CHANNEL_ID;
+        $conditions = [];
+        $params = [];
+        if (in_array('fcm_token', $cols, true)) { $conditions[] = 'fcm_token = ?'; $params[] = $token; }
+        if (in_array('push_token', $cols, true)) { $conditions[] = 'push_token = ?'; $params[] = $token; }
+        if (!$conditions) return FCM_EMERGENCY_CHANNEL_ID;
+        $stmt = $pdo->prepare("SELECT notification_channel FROM {$table} WHERE is_active = 1 AND notification_permission = 'granted' AND (" . implode(' OR ', $conditions) . ") ORDER BY last_active DESC LIMIT 1");
+        $stmt->execute($params);
+        return workerValidNotificationChannel($stmt->fetchColumn() ?: '');
+    } catch (Throwable $e) {
+        error_log('Unable to resolve notification channel: ' . $e->getMessage());
+        return FCM_EMERGENCY_CHANNEL_ID;
+    }
+}
 /** Send an alert through the supported FCM HTTP v1 API. */
 function sendFCM($token, $payload, &$error = null) {
     if (preg_match('/^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/', (string)$token)) {
@@ -368,6 +583,28 @@ function sendFCM($token, $payload, &$error = null) {
         'body' => (string)($payload['body'] ?? ''),
         'click_action' => 'OPEN_EMERGENCY_ALERT'
     ];
+    foreach (['source', 'latitude', 'longitude', 'locationName'] as $key) {
+        if (isset($payload[$key]) && trim((string)$payload[$key]) !== '') $data[$key] = (string)$payload[$key];
+    }
+    $moreInfoUrl = workerAlertMoreInfoUrl($data['category']);
+    if ($moreInfoUrl !== '') $data['moreInfoUrl'] = $moreInfoUrl;
+    $channelId = workerValidNotificationChannel((string)($payload['notification_channel'] ?? FCM_EMERGENCY_CHANNEL_ID));
+    $isSilentChannel = $channelId === FCM_SILENT_CHANNEL_ID;
+    $androidNotification = [
+        'channel_id' => $channelId,
+        'visibility' => 'PUBLIC',
+        'notification_priority' => $isCritical ? 'PRIORITY_MAX' : 'PRIORITY_HIGH',
+        'click_action' => 'OPEN_EMERGENCY_ALERT'
+    ];
+    if ($isSilentChannel) {
+        $androidNotification['default_sound'] = false;
+        $androidNotification['default_vibrate_timings'] = false;
+    } else {
+        $androidNotification['sound'] = FCM_EMERGENCY_SOUND;
+        $androidNotification['default_sound'] = false;
+        $androidNotification['default_vibrate_timings'] = true;
+    }
+
     $message = ['message' => [
         'token' => (string)$token,
         'notification' => ['title' => $data['title'], 'body' => $data['body']],
@@ -375,18 +612,11 @@ function sendFCM($token, $payload, &$error = null) {
         'android' => [
             'priority' => 'HIGH',
             'ttl' => '86400s',
-            'notification' => [
-                'channel_id' => $isCritical ? 'alertara_critical_alerts_v2' : 'alertara_emergency_alerts_v2',
-                'sound' => 'default',
-                'default_vibrate_timings' => true,
-                'visibility' => 'PUBLIC',
-                'notification_priority' => $isCritical ? 'PRIORITY_MAX' : 'PRIORITY_HIGH',
-                'click_action' => 'OPEN_EMERGENCY_ALERT'
-            ]
+            'notification' => $androidNotification
         ],
         'apns' => [
             'headers' => ['apns-priority' => '10'],
-            'payload' => ['aps' => ['sound' => 'default', 'content-available' => 1, 'interruption-level' => $isCritical ? 'time-sensitive' : 'active']]
+            'payload' => ['aps' => ['sound' => $isSilentChannel ? null : 'default', 'content-available' => 1, 'interruption-level' => $isCritical ? 'time-sensitive' : 'active']]
         ]
     ]];
     $url = 'https://fcm.googleapis.com/v1/projects/' . rawurlencode($serviceAccount['project_id']) . '/messages:send';
@@ -405,7 +635,9 @@ function sendFCM($token, $payload, &$error = null) {
     curl_close($ch);
     $decoded = is_string($response) ? json_decode($response, true) : null;
     if ($httpCode >= 200 && $httpCode < 300 && !empty($decoded['name'])) return true;
-    $error = $error ?: (string)($decoded['error']['message'] ?? "FCM HTTP {$httpCode}");
+    $status = (string)($decoded['error']['status'] ?? '');
+    $messageText = (string)($decoded['error']['message'] ?? "FCM HTTP {$httpCode}");
+    $error = $error ?: trim($status . ': ' . $messageText, ': ');
     return false;
 }
 
@@ -418,9 +650,9 @@ function sendExpoPushNotification(string $token, array $payload, &$error = null)
     $severity = strtolower((string)($payload['severity'] ?? 'high'));
     $message = [
         'to' => $token,
-        'sound' => 'default',
+        'sound' => workerValidNotificationChannel((string)($payload['notification_channel'] ?? FCM_EMERGENCY_CHANNEL_ID)) === FCM_SILENT_CHANNEL_ID ? null : 'alertara_emergency.wav',
         'priority' => in_array($severity, ['critical', 'high'], true) ? 'high' : 'default',
-        'channelId' => in_array($severity, ['critical', 'high'], true) ? 'alertara_critical_alerts_v2' : 'alertara_emergency_alerts_v2',
+        'channelId' => workerValidNotificationChannel((string)($payload['notification_channel'] ?? FCM_EMERGENCY_CHANNEL_ID)),
         'title' => (string)($payload['title'] ?? 'Emergency Alert'),
         'body' => (string)($payload['body'] ?? ''),
         'data' => [
@@ -430,6 +662,11 @@ function sendExpoPushNotification(string $token, array $payload, &$error = null)
             'category' => (string)($payload['category'] ?? 'Emergency Alert')
         ]
     ];
+    foreach (['source', 'latitude', 'longitude', 'locationName'] as $key) {
+        if (isset($payload[$key]) && trim((string)$payload[$key]) !== '') $message['data'][$key] = (string)$payload[$key];
+    }
+    $moreInfoUrl = workerAlertMoreInfoUrl((string)($message['data']['category'] ?? ''));
+    if ($moreInfoUrl !== '') $message['data']['moreInfoUrl'] = $moreInfoUrl;
     $ch = curl_init('https://exp.host/--/api/v2/push/send');
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
@@ -460,3 +697,18 @@ function broadcastPA($message) {
     // error_log("PA Broadcast: $message");
     return true;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

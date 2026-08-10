@@ -68,6 +68,15 @@ $pageTitle = 'Mass Notification System';
                     <i class="fas fa-plus"></i> Send a New Alert
                 </button>
             </div>
+            <div class="mn-template-launcher" aria-label="Alert template tools">
+                <div>
+                    <strong><i class="fas fa-file-lines" aria-hidden="true"></i> Alert templates</strong>
+                    <span>Create reusable messages for common emergencies, then choose them while writing a new alert.</span>
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="mnOpenTemplateCreator()">
+                    <i class="fas fa-file-circle-plus"></i> Create Template
+                </button>
+            </div>
             
             <div class="sub-container">
                 <div class="page-content">
@@ -105,11 +114,11 @@ $pageTitle = 'Mass Notification System';
                         </div>
                         <div class="mn-stat mn-stat--rate">
                             <div class="mn-stat-top">
-                                <div class="mn-stat-label">Success Rate</div>
+                                <div class="mn-stat-label">Delivery</div>
                                 <div class="mn-stat-icon" aria-hidden="true"><i class="fas fa-chart-line"></i></div>
                             </div>
                             <div class="mn-stat-value"><span id="mnSuccessRate">-</span><span style="font-size:0.95rem; color: var(--text-secondary-1); font-weight:800;">%</span></div>
-                            <div class="mn-stat-sub" id="mnSuccessRateSub">Based on completed</div>
+                            <div class="mn-stat-sub" id="mnSuccessRateSub">Delivered / attempted</div>
                         </div>
                     </div>
 
@@ -188,9 +197,11 @@ $pageTitle = 'Mass Notification System';
                                         <div class="mn-quick-start">
                                             <div class="form-group">
                                                 <label for="template"><i class="fas fa-file-lines" aria-hidden="true"></i> Use a ready-made message</label>
-                                                <select id="template" name="template" onchange="applyTemplate(this.value)" class="form-control" style="width: 100%;">
-                                                    <option value="">Choose a template (optional)</option>
-                                                </select>
+                                                <div class="mn-template-tools">
+                                                    <select id="template" name="template" onchange="applyTemplate(this.value)" class="form-control" style="width: 100%;">
+                                                        <option value="">Choose a template (optional)</option>
+                                                    </select>
+                                                </div>
                                             </div>
                                             <div class="form-group mn-writing-help">
                                                 <label><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Let the system help</label>
@@ -276,6 +287,24 @@ $pageTitle = 'Mass Notification System';
                                             <div class="mn-dictation-status" id="mnDictationStatus" aria-live="polite"></div>
                                         </div>
 
+                                        <div class="form-group mn-alert-location-card">
+                                            <label>Optional alert location or evacuation point</label>
+                                            <input type="hidden" id="mnTargetLat" name="alert_latitude" data-draft-ignore>
+                                            <input type="hidden" id="mnTargetLng" name="alert_longitude" data-draft-ignore>
+                                            <input type="hidden" id="mnTargetAddress" name="alert_location_name">
+                                            <input type="hidden" id="mnRadiusM" name="radius_m" value="5000" data-draft-ignore>
+                                            <div class="mn-location-summary">
+                                                <strong id="mnTargetLabel">No location selected</strong>
+                                                <span id="mnTargetCoords">Pick a place only when the alert needs a map or evacuation point.</span>
+                                                <span id="mnTargetAddrText" class="mn-location-address"></span>
+                                            </div>
+                                            <div class="mn-location-actions">
+                                                <input type="text" id="mnTargetAddressText" class="form-control" placeholder="Search or type a location name (optional)">
+                                                <button type="button" class="btn btn-secondary" id="mnLookupAddressBtn" onclick="mnLookupAddressFromWizard()"><i class="fas fa-search-location"></i> Search</button>
+                                                <button type="button" class="btn btn-secondary" onclick="mnOpenMapPicker('wizard')"><i class="fas fa-map-marker-alt"></i> Select on Map</button>
+                                            </div>
+                                            <div class="mn-help">This does not target only nearby users. It adds a place to the alert details and mobile More Info flow.</div>
+                                        </div>
                                         <details class="mn-more-settings" id="mnAdvancedSettings">
                                             <summary><span><i class="fas fa-sliders"></i> Urgency and alert level</span><small id="mnUrgencySummary">Medium urgency</small></summary>
                                             <div class="mn-more-settings-body">
@@ -322,11 +351,13 @@ $pageTitle = 'Mass Notification System';
                                     <tr>
                                         <th>ID</th>
                                         <th>Target</th>
+                                        <th>Category</th>
                                         <th>Channels</th>
                                         <th>Message Preview</th>
                                         <th>Status</th>
                                         <th>Sent At</th>
-                                        <th>Success Rate</th>
+                                        <th>Delivered</th>
+                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody></tbody>
@@ -335,6 +366,7 @@ $pageTitle = 'Mass Notification System';
                         <div id="notificationsLazyLoadSentinel" style="text-align:center; padding:0.85rem; color:var(--text-secondary-1); font-weight:700;">
                             Loading dispatch history...
                         </div>
+                        <div id="notificationsPager" class="mn-history-pager" aria-label="Dispatch history pages"></div>
                     </div>
                 </div>
             </div>
@@ -432,6 +464,7 @@ $pageTitle = 'Mass Notification System';
                     <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">Audience:</td><td id="pvAudience" style="padding: 0.5rem 0; font-weight: 600; text-align: right;"></td></tr>
                     <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">Channels:</td><td id="pvChannels" style="padding: 0.5rem 0; font-weight: 600; text-align: right;"></td></tr>
                     <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">Severity:</td><td id="pvSeverity" style="padding: 0.5rem 0; font-weight: 600; text-align: right;"></td></tr>
+                    <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">Location:</td><td id="pvLocation" style="padding: 0.5rem 0; font-weight: 600; text-align: right;">None</td></tr>
                 </table>
                 <div style="background: var(--bg-color-1); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color-1);">
                     <div id="pvTitle" style="font-weight: 700; color: var(--text-color-1); margin-bottom: 0.5rem;"></div>
@@ -494,6 +527,261 @@ $pageTitle = 'Mass Notification System';
         </div>
     </div>
 
+    <!-- Dispatch Detail Modal -->
+    <div id="mnHistoryDetailModal" class="modal" aria-hidden="true">
+        <div class="modal-content mn-history-detail-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-receipt"></i> Dispatch Details</h2>
+                <button class="modal-close mn-bordered-close" type="button" onclick="mnCloseModal('mnHistoryDetailModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="mnHistoryDetailBody"></div>
+            <div class="modal-footer" style="padding:1rem 1.25rem; display:flex; justify-content:flex-end; gap:.75rem;">
+                <button class="btn btn-secondary" type="button" onclick="mnCloseModal('mnHistoryDetailModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Creator Modal -->
+    <div id="mnTemplateModal" class="modal" aria-hidden="true">
+        <div class="modal-content mn-template-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-file-circle-plus"></i> Create Alert Template</h2>
+                <button class="modal-close mn-bordered-close" type="button" onclick="mnCloseModal('mnTemplateModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="mn-template-form-grid">
+                    <div class="form-group">
+                        <label for="mnTemplateCategory">What kind of alert is this? <span class="mn-required">Required</span></label>
+                        <select id="mnTemplateCategory" class="form-control"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="mnTemplateSeverity">Default urgency <span class="mn-required">Required</span></label>
+                        <select id="mnTemplateSeverity" class="form-control">
+                            <option value="Low">Low</option>
+                            <option value="Medium" selected>Medium</option>
+                            <option value="High">High</option>
+                            <option value="Critical">Critical</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mn-template-form-grid" id="mnTemplateLevelGrid" style="display:none;">
+                    <div class="form-group" id="mnTemplateWeatherSignalWrap" style="display:none;">
+                        <label for="mnTemplateWeatherSignal">Weather Signal (1-5)</label>
+                        <select id="mnTemplateWeatherSignal" class="form-control"><option value="1">Signal 1</option><option value="2">Signal 2</option><option value="3">Signal 3</option><option value="4">Signal 4</option><option value="5">Signal 5</option></select>
+                    </div>
+                    <div class="form-group" id="mnTemplateFireLevelWrap" style="display:none;">
+                        <label for="mnTemplateFireLevel">Fire Alert Level (1-5)</label>
+                        <select id="mnTemplateFireLevel" class="form-control"><option value="1">Level 1</option><option value="2">Level 2</option><option value="3">Level 3</option><option value="4">Level 4</option><option value="5">Level 5</option></select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="mnTemplateTitle">1. Add a short title <span class="mn-required">Required</span></label>
+                    <input id="mnTemplateTitle" class="form-control" type="text" maxlength="100" placeholder="Example: FLASH FLOOD WARNING">
+                    <div class="mn-help">This fills the alert title when the template is selected.</div>
+                </div>
+                <div class="mn-guided-message mn-template-guided" id="mnTemplateGuidedMessage">
+                    <div class="mn-guided-heading">
+                        <div><strong>2. Tell people what happened and what to do</strong><span id="mnTemplateGuidedProgress">0 of 3 answered · The complete message will be written below.</span></div>
+                        <button type="button" class="btn ui-btn-ghost mn-clear-message-btn" onclick="mnClearTemplateBuilder()"><i class="fas fa-eraser"></i> Clear</button>
+                    </div>
+                    <div class="mn-guided-question">
+                        <span class="mn-question-number">1</span>
+                        <div class="mn-guided-control">
+                            <label for="mnTemplateWhatHappened">What happened?</label>
+                            <input type="text" id="mnTemplateWhatHappened" placeholder="Example: Flood water is rising">
+                        </div>
+                    </div>
+                    <div class="mn-guided-question">
+                        <span class="mn-question-number">2</span>
+                        <div class="mn-guided-control">
+                            <label for="mnTemplateWhere">Where is it happening?</label>
+                            <input type="text" id="mnTemplateWhere" placeholder="Example: Commonwealth Avenue">
+                        </div>
+                    </div>
+                    <div class="mn-guided-question">
+                        <span class="mn-question-number">3</span>
+                        <div class="mn-guided-control">
+                            <label for="mnTemplateActionToTake">What should people do?</label>
+                            <input type="text" id="mnTemplateActionToTake" placeholder="Example: Move to higher ground now">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="mnTemplateBody">Complete message <span class="mn-required">Required</span></label>
+                    <textarea id="mnTemplateBody" class="form-control" rows="5" placeholder="The complete reusable message will appear here. You can edit it directly."></textarea>
+                    <div class="mn-help">This is the final text that will be inserted into Write Alert Message.</div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding:1rem 1.25rem; display:flex; justify-content:flex-end; gap:.75rem;">
+                <button class="btn btn-secondary" type="button" onclick="mnCloseModal('mnTemplateModal')">Cancel</button>
+                <button class="btn btn-primary" type="button" onclick="mnSaveTemplate()"><i class="fas fa-save"></i> Save Template</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .mn-modal-close,
+        .modal-close,
+        .mn-confirm-close,
+        .mn-bordered-close {
+            width: 2.5rem;
+            height: 2.5rem;
+            border: 1px solid var(--border-color-1, #cfe1e1) !important;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            font-weight: 900;
+            background: color-mix(in srgb, var(--bg-color-1, #fff) 92%, transparent);
+            color: var(--text-color-1, #143333);
+        }
+        .mn-modal-close:hover,
+        .modal-close:hover,
+        .mn-confirm-close:hover,
+        .mn-bordered-close:hover {
+            border-color: var(--primary-color-1, #4f9593) !important;
+            color: var(--primary-color-1, #4f9593);
+        }
+        .mn-history-pager {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: .45rem;
+            padding: .85rem 0 1rem;
+            flex-wrap: wrap;
+        }
+        .mn-history-pager button {
+            min-width: 2.35rem;
+            height: 2.35rem;
+            border: 1px solid var(--border-color-1, #d8eaea);
+            border-radius: 8px;
+            background: var(--card-bg, #fff);
+            font-weight: 800;
+            color: var(--text-color-1, #143333);
+        }
+        .mn-history-pager button.is-active {
+            background: var(--primary-color-1, #4f9593);
+            color: #fff;
+            border-color: var(--primary-color-1, #4f9593);
+        }
+        .mn-history-action-row {
+            display: flex;
+            gap: .4rem;
+            align-items: center;
+            flex-wrap: nowrap;
+        }
+        .mn-icon-btn {
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color-1, #d8eaea);
+            background: color-mix(in srgb, var(--primary-color-1, #4f9593) 12%, transparent);
+            color: var(--primary-color-1, #4f9593);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .mn-icon-btn.danger {
+            background: color-mix(in srgb, #e74c3c 12%, transparent);
+            color: #d63b2f;
+        }
+        #mnDispatchWizardBackdrop button[onclick="mnOpenTemplateCreator()"] {
+            display: none !important;
+        }
+
+        .mn-template-modal .select2-container,
+        .mn-template-tools .select2-container {
+            width: 100% !important;
+        }
+
+        .mn-template-modal .select2-container--default .select2-selection--single,
+        .mn-template-tools .select2-container--default .select2-selection--single {
+            min-height: 46px;
+            border: 1px solid var(--border-color-1, #d8eaea);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            background: var(--bg-color-1, #fff);
+        }
+
+        .mn-template-modal .select2-container--default .select2-selection--single .select2-selection__rendered,
+        .mn-template-tools .select2-container--default .select2-selection--single .select2-selection__rendered {
+            color: var(--text-color-1, #143333);
+            line-height: 44px;
+            padding-left: 0.9rem;
+            padding-right: 2rem;
+        }
+
+        .mn-template-modal .select2-container--default .select2-selection--single .select2-selection__arrow,
+        .mn-template-tools .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 44px;
+            right: 0.55rem;
+        }
+        .mn-template-modal { max-width: 760px; }
+
+        .mn-template-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.85rem;
+        }
+
+        .mn-template-guided {
+            margin-bottom: 1rem;
+        }
+
+        .mn-template-guided .mn-guided-question {
+            margin-top: 0.8rem;
+        }
+
+        @media (max-width: 720px) {
+            .mn-template-form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .mn-history-detail-modal,
+        .mn-template-modal { max-width: 680px; }
+        .mn-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .75rem;
+            margin-bottom: 1rem;
+        }
+        .mn-detail-item {
+            border: 1px solid var(--border-color-1, #d8eaea);
+            border-radius: 8px;
+            padding: .75rem;
+            background: color-mix(in srgb, var(--bg-color-1, #fff) 92%, transparent);
+        }
+        .mn-detail-item span {
+            display: block;
+            color: var(--text-secondary-1, #587070);
+            font-size: .78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+            margin-bottom: .25rem;
+        }
+        .mn-detail-message {
+            white-space: pre-wrap;
+            line-height: 1.6;
+            border: 1px solid var(--border-color-1, #d8eaea);
+            border-radius: 8px;
+            padding: 1rem;
+            background: var(--bg-color-1, #fff);
+        }
+        .mn-template-tools {
+            display: flex;
+            gap: .65rem;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+        .mn-template-tools .form-group { flex: 1 1 240px; }
+        .mn-map-result { border: 1px solid var(--border-color-1, #d8eaea); border-radius: 8px; padding: .75rem; margin-bottom: .5rem; cursor: pointer; background: var(--card-bg, #fff); }
+        .mn-map-result:hover, .mn-map-result:focus { border-color: var(--primary-color-1, #4f9593); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color-1, #4f9593) 18%, transparent); }
+        @media (max-width: 760px) { .mn-detail-grid { grid-template-columns: 1fr; } }
+    </style>
     <script>
         let templatesData = [];
         let categoriesData = [];
@@ -511,8 +799,39 @@ $pageTitle = 'Mass Notification System';
         let mnQcBounds = null;
         let mnReverseGeocodeTimer = null;
         let mnReverseGeocodeSeq = 0;
+        let mnMapSearchTimer = null;
         let mnLastFocusedBeforeConfirm = null;
 
+        function mnEscapeHtml(value) {
+            return String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+        }
+
+        function mnParseDraftPayload(raw) {
+            if (!raw) return null;
+            if (typeof raw === 'object') {
+                if (raw.title || raw.body || raw.message) return { title: String(raw.title || ''), body: String(raw.body || raw.message || '') };
+                return null;
+            }
+            let text = String(raw).trim();
+            text = text.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+            try {
+                const parsed = JSON.parse(text);
+                if (parsed && (parsed.title || parsed.body || parsed.message)) {
+                    return { title: String(parsed.title || ''), body: String(parsed.body || parsed.message || '') };
+                }
+            } catch (e) {}
+            const titleMatch = text.match(/"?title"?\s*:\s*"([^"\n]+)"/i);
+            const bodyMatch = text.match(/"?(?:body|message)"?\s*:\s*"([\s\S]+?)"\s*}?$/i);
+            if (titleMatch || bodyMatch) {
+                return {
+                    title: titleMatch ? titleMatch[1] : 'Emergency Advisory',
+                    body: bodyMatch ? bodyMatch[1].replace(/\\n/g, '\n').replace(/"\s*,?\s*}$/,'') : text
+                };
+            }
+            const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+            if (!lines.length) return null;
+            return { title: lines[0].slice(0, 100), body: lines.slice(1).join('\n') || lines[0] };
+        }
         function mnApiPath(path) {
             const clean = String(path || '').replace(/^\/+/, '');
             const base = (typeof window.API_BASE_PATH === 'string' ? window.API_BASE_PATH : '').replace(/\/+$/, '');
@@ -839,15 +1158,16 @@ $pageTitle = 'Mass Notification System';
                     return { success: false, error: message };
                 }
 
-                if (!json.data.title || !json.data.body) {
+                const parsedDraft = mnParseDraftPayload(json.data?.draft || json.data?.text || json.data);
+                if (!parsedDraft || !parsedDraft.title || !parsedDraft.body) {
                     return { success: false, error: 'AI response missing title/body.' };
                 }
 
                 return {
                     success: true,
                     data: {
-                        title: String(json.data.title),
-                        body: String(json.data.body)
+                        title: String(parsedDraft.title),
+                        body: String(parsedDraft.body)
                     }
                 };
             } catch (err) {
@@ -1430,6 +1750,14 @@ $pageTitle = 'Mass Notification System';
                 body: (document.getElementById('message_body')?.value || '').trim()
             };
 
+            const alertLat = (document.getElementById('mnTargetLat')?.value || '').trim();
+            const alertLng = (document.getElementById('mnTargetLng')?.value || '').trim();
+            const alertLocation = (document.getElementById('mnTargetAddress')?.value || document.getElementById('mnTargetAddressText')?.value || '').trim();
+            if (alertLat && alertLng) {
+                data.alert_latitude = alertLat;
+                data.alert_longitude = alertLng;
+            }
+            if (alertLocation) data.alert_location_name = alertLocation;
             // Include optional level fields when relevant (backend may ignore if unsupported)
             try {
                 const cat = categoriesData.find(c => c.id == data.category_id);
@@ -1466,12 +1794,8 @@ $pageTitle = 'Mass Notification System';
                         }
 
                         // Populate Templates
-                        const tSel = document.getElementById('template');
                         templatesData = Array.isArray(data.templates) ? data.templates : [];
-                        if (tSel) {
-                            tSel.innerHTML = '<option value="">Choose a template (optional)</option>' +
-                                templatesData.map(t => `<option value="${t.id}">${t.title} (${t.severity})</option>`).join('');
-                        }
+                        mnRefreshTemplateSelects();
 
                         // Re-apply any saved draft now that options are loaded (cookie/localStorage)
                         try { window.DraftPersist?.restoreForm(document.getElementById('dispatchForm')); } catch {}
@@ -1945,6 +2269,18 @@ $pageTitle = 'Mass Notification System';
                 if (txt) txt.textContent = v ? `Address: ${v}` : '';
             });
 
+            const mapSearch = document.getElementById('mnMapSearch');
+            if (mapSearch) mapSearch.addEventListener('input', () => {
+                clearTimeout(mnMapSearchTimer);
+                const q = (mapSearch.value || '').trim();
+                const resultsHost = document.getElementById('mnMapResults');
+                if (q.length < 3) {
+                    if (resultsHost) resultsHost.innerHTML = '<div class="mn-map-result" style="opacity:.7; cursor:default;">Type at least 3 letters to search Quezon City.</div>';
+                    return;
+                }
+                mnMapSearchTimer = setTimeout(() => mnMapDoSearch(), 350);
+            });
+
             document.querySelectorAll('.mn-preview-mode').forEach(btn => {
                 btn.addEventListener('click', () => setPreviewMode(btn.dataset.mode));
             });
@@ -1959,6 +2295,209 @@ $pageTitle = 'Mass Notification System';
             updateDispatchCTAState();
         });
 
+        function mnRefreshTemplateSelects() {
+            const templateCategory = document.getElementById('mnTemplateCategory');
+            if (templateCategory) {
+                templateCategory.innerHTML = '<option value="">Choose category...</option>' +
+                    categoriesData.map(c => `<option value="${mnEscapeHtml(c.id)}">${mnEscapeHtml(c.name)}</option>`).join('');
+            }
+            const tSel = document.getElementById('template');
+            if (tSel) {
+                tSel.innerHTML = '<option value="">Choose a template (optional)</option>' +
+                    templatesData.map(t => `<option value="${mnEscapeHtml(t.id)}">${mnEscapeHtml(t.title)} (${mnEscapeHtml(t.severity || 'Medium')})</option>`).join('');
+            }
+            mnInitTemplateDropdowns();
+        }
+
+        function mnInitTemplateDropdowns() {
+            if (!window.jQuery || !$.fn.select2) return;
+            try {
+                const wizardParent = $('#mnDispatchWizardBackdrop .mn-modal');
+                const templateSelect = $('#template');
+                if (templateSelect.length) {
+                    if (templateSelect.hasClass('select2-hidden-accessible')) templateSelect.select2('destroy');
+                    templateSelect.select2({
+                        width: '100%',
+                        placeholder: 'Choose a template (optional)',
+                        allowClear: true,
+                        dropdownParent: wizardParent.length ? wizardParent : $(document.body)
+                    });
+                }
+
+                const templateModalParent = $('#mnTemplateModal .modal-content');
+                const categorySelect = $('#mnTemplateCategory');
+                if (categorySelect.length) {
+                    if (categorySelect.hasClass('select2-hidden-accessible')) categorySelect.select2('destroy');
+                    categorySelect.select2({
+                        width: '100%',
+                        placeholder: 'Choose category...',
+                        allowClear: true,
+                        dropdownParent: templateModalParent.length ? templateModalParent : $(document.body)
+                    });
+                }
+
+                const severitySelect = $('#mnTemplateSeverity');
+                if (severitySelect.length) {
+                    if (severitySelect.hasClass('select2-hidden-accessible')) severitySelect.select2('destroy');
+                    severitySelect.select2({
+                        width: '100%',
+                        minimumResultsForSearch: Infinity,
+                        dropdownParent: templateModalParent.length ? templateModalParent : $(document.body)
+                    });
+                }
+                ['mnTemplateWeatherSignal', 'mnTemplateFireLevel'].forEach(id => {
+                    const select = $('#' + id);
+                    if (select.length) {
+                        if (select.hasClass('select2-hidden-accessible')) select.select2('destroy');
+                        select.select2({
+                            width: '100%',
+                            minimumResultsForSearch: Infinity,
+                            dropdownParent: templateModalParent.length ? templateModalParent : $(document.body)
+                        });
+                    }
+                });
+            } catch (e) {}
+        }
+
+        function mnTemplateCategoryKind() {
+            const catId = $('#mnTemplateCategory').val();
+            const cat = categoriesData.find(c => String(c.id) === String(catId));
+            return mnCategoryKindFromName(cat?.name || '');
+        }
+
+        function mnUpdateTemplateLevelUI() {
+            const kind = mnTemplateCategoryKind();
+            const weatherWrap = document.getElementById('mnTemplateWeatherSignalWrap');
+            const fireWrap = document.getElementById('mnTemplateFireLevelWrap');
+            const levelGrid = document.getElementById('mnTemplateLevelGrid');
+            const showWeather = kind === 'weather';
+            const showFire = kind === 'fire';
+            if (weatherWrap) weatherWrap.style.display = showWeather ? 'block' : 'none';
+            if (fireWrap) fireWrap.style.display = showFire ? 'block' : 'none';
+            if (levelGrid) levelGrid.style.display = (showWeather || showFire) ? 'grid' : 'none';
+            const severity = document.getElementById('mnTemplateSeverity')?.value || 'Medium';
+            if (showWeather && document.getElementById('mnTemplateWeatherSignal')) {
+                const weatherSelect = document.getElementById('mnTemplateWeatherSignal');
+                if (!/^[1-5]$/.test(String(weatherSelect.value || ''))) {
+                    weatherSelect.value = String(mnDefaultWeatherSignalFromSeverity(severity));
+                }
+                $('#mnTemplateWeatherSignal').trigger('change.select2');
+            }
+            if (showFire && document.getElementById('mnTemplateFireLevel')) {
+                const fireSelect = document.getElementById('mnTemplateFireLevel');
+                if (!/^[1-5]$/.test(String(fireSelect.value || ''))) {
+                    fireSelect.value = String(mnDefaultFireLevelFromSeverity(severity));
+                }
+                $('#mnTemplateFireLevel').trigger('change.select2');
+                if (!['High', 'Critical'].includes(severity)) {
+                    document.getElementById('mnTemplateSeverity').value = Number(fireSelect.value || 0) >= 4 ? 'Critical' : 'High';
+                    $('#mnTemplateSeverity').trigger('change.select2');
+                }
+            }
+        }
+
+        function mnBuildTemplateGuidedMessage() {
+            const what = document.getElementById('mnTemplateWhatHappened')?.value || '';
+            const where = document.getElementById('mnTemplateWhere')?.value || '';
+            const action = document.getElementById('mnTemplateActionToTake')?.value || '';
+            const body = document.getElementById('mnTemplateBody');
+            const parts = [];
+            if (what.trim()) parts.push(mnSentence(what));
+            if (where.trim()) parts.push('Affected area: ' + mnSentence(where));
+            if (action.trim()) parts.push('Protective action: ' + mnSentence(action));
+            if (body) body.value = parts.join(' ');
+            mnUpdateTemplateGuidedProgress();
+        }
+
+        function mnUpdateTemplateGuidedProgress() {
+            const ids = ['mnTemplateWhatHappened', 'mnTemplateWhere', 'mnTemplateActionToTake'];
+            let completed = 0;
+            ids.forEach(id => {
+                const field = document.getElementById(id);
+                const done = !!field?.value.trim();
+                field?.closest('.mn-guided-question')?.classList.toggle('is-complete', done);
+                if (done) completed++;
+            });
+            const progress = document.getElementById('mnTemplateGuidedProgress');
+            if (progress) {
+                progress.textContent = completed === 3
+                    ? 'All 3 answered · The reusable message is ready below.'
+                    : `${completed} of 3 answered · Complete the remaining questions.`;
+            }
+        }
+
+        function mnClearTemplateBuilder() {
+            ['mnTemplateWhatHappened', 'mnTemplateWhere', 'mnTemplateActionToTake', 'mnTemplateBody'].forEach(id => {
+                const field = document.getElementById(id);
+                if (field) field.value = '';
+            });
+            mnUpdateTemplateGuidedProgress();
+        }
+
+        function mnBindTemplateBuilder() {
+            if (mnBindTemplateBuilder.bound) return;
+            mnBindTemplateBuilder.bound = true;
+            ['mnTemplateWhatHappened', 'mnTemplateWhere', 'mnTemplateActionToTake'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', mnBuildTemplateGuidedMessage);
+            });
+            document.getElementById('mnTemplateCategory')?.addEventListener('change', mnUpdateTemplateLevelUI);
+            document.getElementById('mnTemplateSeverity')?.addEventListener('change', mnUpdateTemplateLevelUI);
+        }
+
+        function mnOpenTemplateCreator() {
+            mnRefreshTemplateSelects();
+            const category = document.getElementById('category_id')?.value || '';
+            const title = document.getElementById('message_title')?.value || '';
+            const body = document.getElementById('message_body')?.value || '';
+            const severity = document.querySelector('input[name="severity"]:checked')?.value || 'Medium';
+            const catInput = document.getElementById('mnTemplateCategory');
+            if (catInput) catInput.value = category;
+            document.getElementById('mnTemplateTitle').value = title;
+            document.getElementById('mnTemplateBody').value = body;
+            document.getElementById('mnTemplateSeverity').value = severity;
+            document.getElementById('mnTemplateWhatHappened').value = document.getElementById('mnWhatHappened')?.value || '';
+            document.getElementById('mnTemplateWhere').value = document.getElementById('mnWhere')?.value || '';
+            document.getElementById('mnTemplateActionToTake').value = document.getElementById('mnActionToTake')?.value || '';
+            document.getElementById('mnTemplateWeatherSignal').value = document.getElementById('mnWeatherSignal')?.value || '2';
+            document.getElementById('mnTemplateFireLevel').value = document.getElementById('mnFireLevel')?.value || '3';
+            mnBindTemplateBuilder();
+            mnInitTemplateDropdowns();
+            $('#mnTemplateCategory').val(category || '').trigger('change.select2');
+            $('#mnTemplateSeverity').val(severity).trigger('change.select2');
+            $('#mnTemplateWeatherSignal').trigger('change.select2');
+            $('#mnTemplateFireLevel').trigger('change.select2');
+            mnUpdateTemplateLevelUI();
+            mnUpdateTemplateGuidedProgress();
+            mnOpenModal('mnTemplateModal');
+        }
+
+        function mnSaveTemplate() {
+            const payload = new URLSearchParams();
+            const kind = mnTemplateCategoryKind();
+            payload.set('category_id', document.getElementById('mnTemplateCategory')?.value || '');
+            payload.set('title', (document.getElementById('mnTemplateTitle')?.value || '').trim());
+            payload.set('body', (document.getElementById('mnTemplateBody')?.value || '').trim());
+            payload.set('what_happened', (document.getElementById('mnTemplateWhatHappened')?.value || '').trim());
+            payload.set('where_happening', (document.getElementById('mnTemplateWhere')?.value || '').trim());
+            payload.set('action_to_take', (document.getElementById('mnTemplateActionToTake')?.value || '').trim());
+            payload.set('weather_signal', kind === 'weather' ? (document.getElementById('mnTemplateWeatherSignal')?.value || '') : '');
+            payload.set('fire_level', kind === 'fire' ? (document.getElementById('mnTemplateFireLevel')?.value || '') : '');
+            payload.set('severity', document.getElementById('mnTemplateSeverity')?.value || 'Medium');
+            if (!payload.get('category_id') || !payload.get('title') || !payload.get('body')) {
+                mnShowNotice('Template category, title, and complete message are required.', 'Template incomplete');
+                return;
+            }
+            mnFetchJson('mass-notification.php?action=save_template', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: payload.toString()
+            }).then(data => {
+                if (!data.success) throw new Error(data.message || 'Unable to save template.');
+                mnCloseModal('mnTemplateModal');
+                mnShowNotice('Template saved. You can now choose it from ready-made messages.', 'Template created');
+                return loadOptions();
+            }).catch(err => mnShowNotice(err.message || 'Unable to save template.', 'Template failed'));
+        }
         function applyTemplate(id) {
             const t = templatesData.find(tpl => tpl.id == id);
             if (t) {
@@ -1967,7 +2506,9 @@ $pageTitle = 'Mass Notification System';
                 document.getElementById('message_body').dataset.manualEdit = '1';
                 document.getElementById('message_body').dataset.starterCopy = '';
                 document.getElementById('message_title').dataset.starterCopy = '';
-                mnClearGuidedInputsSilently();
+                document.getElementById('mnWhatHappened').value = t.what_happened || '';
+                document.getElementById('mnWhere').value = t.where_happening || '';
+                document.getElementById('mnActionToTake').value = t.action_to_take || '';
                 mnUpdateGuidedProgress();
                 
                 // Update Select2
@@ -1979,6 +2520,15 @@ $pageTitle = 'Mass Notification System';
                     sevRadio.checked = true;
                     updateSeverityUI(sevRadio);
                 }
+                if (t.weather_signal && document.getElementById('mnWeatherSignal')) {
+                    document.getElementById('mnWeatherSignal').value = String(t.weather_signal);
+                    document.getElementById('mnWeatherSignal').dataset.userSet = '1';
+                }
+                if (t.fire_level && document.getElementById('mnFireLevel')) {
+                    document.getElementById('mnFireLevel').value = String(t.fire_level);
+                    document.getElementById('mnFireLevel').dataset.userSet = '1';
+                }
+                mnUpdateWeatherSignalUI();
                 updateCharCount(document.getElementById('message_body'));
                 updateLivePreview();
             }
@@ -2010,6 +2560,11 @@ $pageTitle = 'Mass Notification System';
             document.getElementById('pvSeverity').textContent = data.severity || 'Medium';
             document.getElementById('pvTitle').textContent = data.title;
             document.getElementById('pvBody').textContent = mnFormatMessageForDisplay(data.body);
+            const locationPreview = document.getElementById('pvLocation');
+            if (locationPreview) {
+                const locationText = data.alert_location_name || (data.alert_latitude && data.alert_longitude ? `${data.alert_latitude}, ${data.alert_longitude}` : '');
+                locationPreview.textContent = locationText || 'None';
+            }
 
             // Use class-based modal show/hide (compatible with global modal helpers)
             mnOpenModal('previewModal');
@@ -2078,6 +2633,7 @@ $pageTitle = 'Mass Notification System';
                     $('#category_id').val(null).trigger('change');
                     try { window.DraftPersist?.clearDraft('admin-mn-dispatch'); } catch {}
                     mnPendingDispatchPayload = null;
+                    mnPlayDispatchQueueSound();
                     loadNotifications();
 
                     // Close wizard too to avoid trapping the user under overlays.
@@ -2620,20 +3176,108 @@ $pageTitle = 'Mass Notification System';
             }
         });
 
-        const NOTIFICATIONS_PAGE_SIZE = 25;
+        const NOTIFICATIONS_PAGE_SIZE = 10;
         let notificationPage = 1;
+        let notificationTotalPages = 1;
         let notificationLoading = false;
-        let notificationHasMore = true;
         let notificationRows = [];
+        let mnDispatchSoundCtx = null;
+        let mnDispatchSoundUnlocked = false;
+        let mnKnownDispatchIds = new Set();
+        let mnHistoryHasLoadedOnce = false;
 
-        function loadNotifications(reset = true) {
+        function mnUnlockDispatchSound() {
+            if (mnDispatchSoundUnlocked) return;
+            try {
+                mnDispatchSoundCtx = mnDispatchSoundCtx || new (window.AudioContext || window.webkitAudioContext)();
+                if (mnDispatchSoundCtx.state === 'suspended') mnDispatchSoundCtx.resume();
+                mnDispatchSoundUnlocked = true;
+            } catch (e) { mnDispatchSoundUnlocked = false; }
+        }
+
+        document.addEventListener('pointerdown', mnUnlockDispatchSound, { once: true });
+        document.addEventListener('keydown', mnUnlockDispatchSound, { once: true });
+
+        function mnPlayDispatchQueueSound() {
+            try {
+                mnUnlockDispatchSound();
+                const ctx = mnDispatchSoundCtx || new (window.AudioContext || window.webkitAudioContext)();
+                mnDispatchSoundCtx = ctx;
+                const now = ctx.currentTime;
+                [740, 988, 1320].forEach((freq, index) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, now + index * 0.1);
+                    gain.gain.setValueAtTime(0.0001, now + index * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.16, now + index * 0.1 + 0.015);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.1 + 0.11);
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.start(now + index * 0.1); osc.stop(now + index * 0.1 + 0.13);
+                });
+            } catch (e) {}
+        }
+
+        function mnTrackDispatchSound(rows, reset) {
+            const activeStatuses = new Set(['pending', 'queued', 'sending', 'processing', 'in_progress']);
+            const activeNewIds = [];
+            rows.forEach(row => {
+                const id = String(row.id || '');
+                if (!id) return;
+                const status = String(row.status || '').toLowerCase();
+                if (mnHistoryHasLoadedOnce && reset && !mnKnownDispatchIds.has(id) && activeStatuses.has(status)) activeNewIds.push(id);
+                mnKnownDispatchIds.add(id);
+            });
+            if (activeNewIds.length > 0) mnPlayDispatchQueueSound();
+            mnHistoryHasLoadedOnce = true;
+        }
+
+        function mnHistoryRowById(id) {
+            return notificationRows.find(row => String(row.id) === String(id));
+        }
+
+        function mnShowDispatchDetails(id) {
+            const row = mnHistoryRowById(id);
+            if (!row) return;
+            const stats = row.stats || {};
+            const body = document.getElementById('mnHistoryDetailBody');
+            if (!body) return;
+            body.innerHTML = `
+                <div class="mn-detail-grid">
+                    <div class="mn-detail-item"><span>ID</span>#${mnEscapeHtml(row.id)}</div>
+                    <div class="mn-detail-item"><span>Category</span>${mnEscapeHtml(row.category_name || 'General')}</div>
+                    <div class="mn-detail-item"><span>Target</span>${mnEscapeHtml(row.recipients || '-')}</div>
+                    <div class="mn-detail-item"><span>Channels</span>${mnEscapeHtml(row.channel || '-')}</div>
+                    <div class="mn-detail-item"><span>Status</span>${mnEscapeHtml(row.status || 'pending')}</div>
+                    <div class="mn-detail-item"><span>Sent at</span>${mnEscapeHtml(formatDispatchDateTime(row.sent_at))}</div>
+                    <div class="mn-detail-item"><span>Sent by</span>${mnEscapeHtml(row.sent_by_name || row.sent_by || 'System')}</div>
+                    <div class="mn-detail-item"><span>Delivery</span>${mnEscapeHtml(`${stats.sent || 0}/${stats.total || 0} sent, ${stats.failed || 0} failed`)}</div>
+                </div>
+                <div class="mn-detail-message">${mnEscapeHtml(row.message || '')}</div>
+            `;
+            mnOpenModal('mnHistoryDetailModal');
+        }
+
+        function mnDeleteDispatch(id) {
+            const row = mnHistoryRowById(id);
+            const label = row ? `#${row.id}` : `#${id}`;
+            mnShowConfirm(`Delete dispatch ${label} from the history table? This will hide the row, not cancel messages already sent.`, () => {
+                const payload = new URLSearchParams();
+                payload.set('id', id);
+                mnFetchJson('mass-notification.php?action=delete_log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: payload.toString()
+                }).then(data => {
+                    if (!data.success) throw new Error(data.message || 'Unable to delete dispatch record.');
+                    loadNotifications(notificationPage);
+                }).catch(err => mnShowNotice(err.message || 'Unable to delete dispatch record.', 'Delete failed'));
+            }, 'Delete dispatch');
+        }
+
+        function loadNotifications(page = 1) {
             if (notificationLoading) return;
-
-            if (reset) {
-                notificationPage = 1;
-                notificationHasMore = true;
-            }
-
+            notificationPage = Math.max(1, Number(page) || 1);
             notificationLoading = true;
             updateNotificationsLazyLoadStatus();
 
@@ -2642,83 +3286,56 @@ $pageTitle = 'Mass Notification System';
                     const tbody = document.querySelector('#notificationsTable tbody');
                     if (!tbody) return;
                     if (!data.success) {
-                        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary-1);">Failed to load dispatch history.</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color: var(--text-secondary-1);">Failed to load dispatch history.</td></tr>';
                         return;
                     }
-
                     const rows = Array.isArray(data.notifications) ? data.notifications : [];
+                    notificationRows = rows;
+                    notificationTotalPages = Number(data.pagination?.total_pages || 1) || 1;
                     if (rows.length === 0) {
-                        if (reset) {
-                            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary-1);">No dispatch history yet.</td></tr>';
-                            notificationRows = [];
-                            updateMnAnalytics([]);
-                        }
-                        notificationHasMore = false;
+                        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color: var(--text-secondary-1);">No dispatch history yet.</td></tr>';
+                        updateMnAnalytics([]);
+                        renderNotificationsPager();
                         return;
                     }
-
-                    const renderedRows = rows.map(n => {
-                        const channelsRaw = (n.channel || '').toString();
-                        const channels = channelsRaw
-                            .split(',')
-                            .map(c => c.trim())
-                            .filter(Boolean);
+                    mnTrackDispatchSound(rows, true);
+                    tbody.innerHTML = rows.map(n => {
+                        const channels = String(n.channel || '').split(',').map(c => c.trim()).filter(Boolean);
                         const channelIcons = channels.length > 0
-                            ? channels.map(c => `<i class="fas fa-${getIcon(c)}" title="${c}" style="color: var(--text-secondary-1); margin-right: 4px;"></i>`).join(' ')
+                            ? channels.map(c => `<i class="fas fa-${getIcon(c)}" title="${mnEscapeHtml(c)}" style="color: var(--text-secondary-1); margin-right: 4px;"></i>`).join(' ')
                             : '<small style="color: var(--text-secondary-1);">N/A</small>';
-                        const progress = n.progress || 0;
+                        const progress = Math.max(0, Math.min(100, Number(n.progress || 0)));
                         const stats = n.stats || {sent: 0, failed: 0, total: 0};
-                        const status = (n.status || 'pending').toString().toLowerCase();
-                        const sentAt = n.sent_at || '-';
-                        const target = n.recipients || '-';
-                        const sender = (n.sent_by || '').toString().toLowerCase();
-                        const automaticSource = sender.endsWith('_auto_bulletin')
-                            ? sender.replace('_auto_bulletin', '').toUpperCase()
+                        const status = String(n.status || 'pending').toLowerCase();
+                        const isActiveDispatch = ['pending', 'queued', 'sending', 'processing', 'in_progress'].includes(status);
+                        const progressText = Number(stats.total) > 0 ? `${Number(stats.sent || 0) + Number(stats.failed || 0)}/${Number(stats.total || 0)} processed` : `${progress}% processed`;
+                        const successRate = Number(stats.total) > 0
+                            ? `<strong>${Number(stats.sent || 0)}/${Number(stats.total || 0)}</strong><br><small style="color: var(--text-secondary-1);">${Math.round((Number(stats.sent || 0) / Number(stats.total || 1)) * 100)}% delivered</small>`
+                            : (isActiveDispatch ? '<small style="color: var(--text-secondary-1);">Waiting for worker</small>' : '--');
+                        const automaticSource = String(n.sent_by || '').toLowerCase().endsWith('_auto_bulletin')
+                            ? String(n.sent_by || '').replace('_auto_bulletin', '').toUpperCase()
                             : '';
-                        const message = (n.message || '').toString();
-                        const successRate = (status === 'completed' && Number(stats.total) > 0)
-                            ? `<strong>${Math.round((Number(stats.sent) / Number(stats.total)) * 100)}%</strong> <br><small style="color: var(--text-secondary-1);">${stats.sent}/${stats.total}</small>`
-                            : '--';
                         return `
                             <tr>
-                                <td>#${n.id}</td>
-                                <td>
-                                    <small style="color: var(--text-secondary-1); font-weight: 500;">${target}</small>
-                                    ${automaticSource ? `<br><small class="badge completed" style="display:inline-block;margin-top:5px;">${automaticSource} AUTO</small>` : ''}
-                                </td>
+                                <td>#${mnEscapeHtml(n.id)}</td>
+                                <td><small style="color: var(--text-secondary-1); font-weight: 500;">${mnEscapeHtml(n.recipients || '-')}</small>${automaticSource ? `<br><small class="badge completed" style="display:inline-block;margin-top:5px;">${mnEscapeHtml(automaticSource)} AUTO</small>` : ''}</td>
+                                <td><span class="badge completed">${mnEscapeHtml(n.category_name || 'General')}</span></td>
                                 <td>${channelIcons}</td>
-                                <td><div style="max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: 0.9rem;">${message}</div></td>
-                                <td>
-                                    <span class="badge ${status}">${status.toUpperCase()}</span>
-                                    <div class="progress-container" title="${progress}% sent"><div class="progress-bar" style="width: ${progress}%"></div></div>
-                                </td>
-                                <td><small style="color: var(--text-secondary-1);">${sentAt}</small></td>
-                                <td>
-                                    ${successRate}
-                                </td>
+                                <td><div style="max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: .9rem;">${mnEscapeHtml(n.message || '')}</div><small style="color:var(--text-secondary-1);">By ${mnEscapeHtml(n.sent_by_name || n.sent_by || 'System')}</small></td>
+                                <td><span class="badge ${mnEscapeHtml(status)}">${mnEscapeHtml(status.toUpperCase())}</span><div class="mn-dispatch-progress ${isActiveDispatch ? 'is-active' : ''}" title="${progress}% processed"><div class="mn-dispatch-progress-bar" style="width: ${progress}%"></div></div><small class="mn-dispatch-progress-text">${isActiveDispatch ? 'Sending: ' : 'Progress: '}${mnEscapeHtml(progressText)}</small></td>
+                                <td><small style="color: var(--text-secondary-1);">${mnEscapeHtml(formatDispatchDateTime(n.sent_at))}</small></td>
+                                <td>${successRate}</td>
+                                <td><div class="mn-history-action-row"><button type="button" class="mn-icon-btn" title="View message preview" onclick="mnShowDispatchDetails('${mnEscapeHtml(String(n.id))}')"><i class="fas fa-eye"></i></button>${/^\d+$/.test(String(n.id)) ? `<button type="button" class="mn-icon-btn danger" title="Delete from history" onclick="mnDeleteDispatch('${mnEscapeHtml(String(n.id))}')"><i class="fas fa-trash"></i></button>` : ''}</div></td>
                             </tr>
                         `;
                     }).join('');
-
-                    if (reset) {
-                        tbody.innerHTML = renderedRows;
-                        notificationRows = rows;
-                    } else {
-                        tbody.insertAdjacentHTML('beforeend', renderedRows);
-                        notificationRows = notificationRows.concat(rows);
-                    }
-
-                    const pagination = data.pagination || {};
-                    notificationHasMore = Boolean(pagination.has_more);
-                    updateMnAnalytics(notificationRows);
+                    updateMnAnalytics(rows);
+                    renderNotificationsPager();
                 })
-                .catch((error) => {
+                .catch(error => {
                     console.error('Dispatch history load error:', error);
                     const tbody = document.querySelector('#notificationsTable tbody');
-                    if (tbody && reset) {
-                        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-secondary-1);">Unable to load dispatch history.</td></tr>';
-                    }
-                    notificationHasMore = false;
+                    if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color: var(--text-secondary-1);">Unable to load dispatch history.</td></tr>';
                 })
                 .finally(() => {
                     notificationLoading = false;
@@ -2726,38 +3343,44 @@ $pageTitle = 'Mass Notification System';
                 });
         }
 
+        function renderNotificationsPager() {
+            const pager = document.getElementById('notificationsPager');
+            if (!pager) return;
+            if (notificationTotalPages <= 1) { pager.innerHTML = ''; return; }
+            const pages = new Set([1, notificationTotalPages, notificationPage - 1, notificationPage, notificationPage + 1]);
+            const valid = [...pages].filter(p => p >= 1 && p <= notificationTotalPages).sort((a, b) => a - b);
+            pager.innerHTML = `<button type="button" ${notificationPage <= 1 ? 'disabled' : ''} onclick="loadNotifications(${notificationPage - 1})"><i class="fas fa-chevron-left"></i></button>` +
+                valid.map(p => `<button type="button" class="${p === notificationPage ? 'is-active' : ''}" onclick="loadNotifications(${p})">${p}</button>`).join('') +
+                `<button type="button" ${notificationPage >= notificationTotalPages ? 'disabled' : ''} onclick="loadNotifications(${notificationPage + 1})"><i class="fas fa-chevron-right"></i></button>`;
+        }
+
         function loadMoreNotifications() {
-            if (notificationLoading || !notificationHasMore) return;
-            notificationPage += 1;
-            loadNotifications(false);
+            if (notificationPage < notificationTotalPages) loadNotifications(notificationPage + 1);
         }
 
         function setupNotificationsLazyLoader() {
-            const sentinel = document.getElementById('notificationsLazyLoadSentinel');
-            if (!sentinel || !('IntersectionObserver' in window)) return;
-
-            const observer = new IntersectionObserver(entries => {
-                if (entries.some(entry => entry.isIntersecting)) loadMoreNotifications();
-            }, { rootMargin: '260px 0px' });
-            observer.observe(sentinel);
+            renderNotificationsPager();
         }
 
         function updateNotificationsLazyLoadStatus() {
             const sentinel = document.getElementById('notificationsLazyLoadSentinel');
             if (!sentinel) return;
-
-            if (notificationLoading) {
-                sentinel.textContent = 'Loading dispatch history...';
-            } else if (notificationHasMore) {
-                sentinel.innerHTML = '<button type="button" class="btn btn-sm btn-secondary" onclick="loadMoreNotifications()">Load more</button>'
-                    + '<span style="margin-left:0.5rem;">' + notificationRows.length + ' loaded</span>';
-            } else {
-                sentinel.textContent = notificationRows.length > 0
-                    ? 'All dispatch records loaded'
-                    : 'No dispatch history yet';
-            }
+            sentinel.textContent = notificationLoading
+                ? 'Loading dispatch history...'
+                : `Showing page ${notificationPage} of ${notificationTotalPages}`;
         }
-
+        function formatDispatchDateTime(value) {
+            if (!value) return '-';
+            const raw = String(value).trim();
+            const isoLike = raw.includes('T') ? raw : raw.replace(' ', 'T');
+            const date = new Date(isoLike);
+            if (Number.isNaN(date.getTime())) return raw;
+            return date.toLocaleString('en-PH', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: true
+            });
+        }
         window.loadMoreNotifications = loadMoreNotifications;
         function updateMnAnalytics(notifications) {
             const total = notifications.length;
@@ -2779,7 +3402,7 @@ $pageTitle = 'Mass Notification System';
             document.getElementById('mnInProgressDispatches').textContent = inProgress;
             document.getElementById('mnSuccessRate').textContent = rate;
             const sub = document.getElementById('mnSuccessRateSub');
-            if (sub) sub.textContent = successTotal > 0 ? `${successSent}/${successTotal} delivered` : 'Based on completed';
+            if (sub) sub.textContent = successTotal > 0 ? `${successSent}/${successTotal} delivered` : 'No completed delivery yet';
         }
 
         function getIcon(channel) {
@@ -2823,6 +3446,12 @@ $pageTitle = 'Mass Notification System';
     </script>
 </body>
 </html>
+
+
+
+
+
+
 
 
 

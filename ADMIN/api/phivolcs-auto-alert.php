@@ -144,10 +144,8 @@ function normalizePhivolcsEvents(array $events): array
 
 function qualifyingPhivolcsEvent(array $event): bool
 {
-    // PHIVOLCS bulletin visibility covers the full severity scale. Freshness,
-    // deduplication, and the six-hour scheduler prevent stale/repeated popups;
-    // severity controls how strongly the citizen UI presents the event.
-    return (float)$event['magnitude'] > 0;
+    // Only citizen-broadcast earthquake alerts for meaningful activity.
+    return (float)($event['magnitude'] ?? 0) >= 4.5;
 }
 
 function phivolcsSeverity(array $event): string
@@ -175,6 +173,7 @@ function phivolcsMessage(array $event): array
         . "Safety actions:\n• If shaking is felt: DROP, COVER, and HOLD ON.\n"
         . "• Stay away from windows and damaged structures.\n"
         . "• Expect aftershocks and follow PHIVOLCS and Quezon City advisories.";
+    $message .= "\n\nSee more info: https://emergency-comm.alertaraqc.com/USERS/earthquake-monitoring.php";
     return [$title, $message];
 }
 
@@ -213,11 +212,58 @@ try {
         exit;
     }
 
-    $feedData = fetchPhivolcsAutoFeed();
-    $events = normalizePhivolcsEvents($feedData['earthquakes']);
-    $freshCutoff = time() - (PHIVOLCS_FRESHNESS_HOURS * 3600);
-    $fresh = array_values(array_filter($events, fn($event) => $event['event_timestamp'] >= $freshCutoff && $event['event_timestamp'] <= time() + 300));
-    $qualifying = array_values(array_filter($fresh, 'qualifyingPhivolcsEvent'));
+
+    $postedInput = (!$isCli && $_SERVER['REQUEST_METHOD'] === 'POST') ? (json_decode(file_get_contents('php://input'), true) ?: []) : [];
+    $postedEvent = is_array($postedInput['event'] ?? null) ? $postedInput['event'] : null;
+
+    if ($action === 'force' && $postedEvent) {
+        $events = normalizePhivolcsEvents([$postedEvent]);
+        $fresh = $events;
+        $qualifying = array_values(array_filter($events, 'qualifyingPhivolcsEvent'));
+        $feedData = ['earthquakes' => $events, 'is_cached' => false];
+    } else {
+        $feedData = fetchPhivolcsAutoFeed();
+        $events = normalizePhivolcsEvents($feedData['earthquakes']);
+        $freshCutoff = time() - (PHIVOLCS_FRESHNESS_HOURS * 3600);
+        $fresh = array_values(array_filter($events, fn($event) => $event['event_timestamp'] >= $freshCutoff && $event['event_timestamp'] <= time() + 300));
+        $qualifying = array_values(array_filter($fresh, 'qualifyingPhivolcsEvent'));
+    }
+    if ($action === 'force') {
+        if (!$qualifying) {
+            echo json_encode(['success' => true, 'alerted' => false, 'message' => 'No fresh PHIVOLCS event requires a citizen bulletin.', 'fresh_events' => count($fresh)]);
+            exit;
+        }
+
+        $event = $qualifying[0];
+        [$title, $message] = phivolcsMessage($event);
+        $severity = phivolcsSeverity($event);
+        $dispatch = queueBulletinBroadcast($pdo, [
+            'title' => $title, 'message' => $message, 'severity' => $severity,
+            'source' => 'phivolcs', 'category' => 'earthquake',
+            'channels' => phivolcsSetting($pdo, 'channels', 'push,email')
+        ]);
+        $stmt = $pdo->prepare("INSERT INTO phivolcs_auto_alert_log
+            (event_hash, event_time, magnitude, depth_km, latitude, longitude, location, severity, distance_from_qc_km,
+             recipients_count, queued_jobs, dispatch_log_id, alert_id, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent')");
+        $stmt->execute([
+            $event['event_hash'] . ':force:' . date('YmdHis'), date('Y-m-d H:i:s', $event['event_timestamp']), $event['magnitude'], $event['depth_km'] ?? null,
+            $event['latitude'], $event['longitude'], $event['location'] ?? '', $severity, $event['distance_from_qc_km'],
+            $dispatch['recipients'], $dispatch['queued_jobs'], $dispatch['log_id'], $dispatch['alert_id']
+        ]);
+        setPhivolcsSetting($pdo, 'last_check_at', date('Y-m-d H:i:s'));
+        setPhivolcsSetting($pdo, 'last_event_hash', $event['event_hash']);
+        try {
+            ob_start();
+            @include __DIR__ . '/notification-worker.php';
+            ob_end_clean();
+        } catch (Throwable $workerError) {
+            if (ob_get_level() > 0) ob_end_clean();
+            error_log('PHIVOLCS force worker trigger failed: ' . $workerError->getMessage());
+        }
+        echo json_encode(['success' => true, 'alerted' => true, 'message' => 'Latest PHIVOLCS earthquake alert queued.', 'event' => $event, 'severity' => $severity, 'dispatch' => $dispatch]);
+        exit;
+    }
 
     if ($action === 'dry-run') {
         echo json_encode([
@@ -228,9 +274,10 @@ try {
         exit;
     }
 
+    $isRealtimeCheck = in_array($action, ['realtime', 'check-now'], true);
     $lastCheck = phivolcsSetting($pdo, 'last_check_at', '');
     $lastCheckTs = $lastCheck !== '' ? strtotime($lastCheck) : false;
-    if ($lastCheckTs && $lastCheckTs + PHIVOLCS_INTERVAL_MINUTES * 60 > time()) {
+    if (!$isRealtimeCheck && $lastCheckTs && $lastCheckTs + PHIVOLCS_INTERVAL_MINUTES * 60 > time()) {
         echo json_encode([
             'success' => true, 'alerted' => false, 'message' => 'Automatic PHIVOLCS checks run every 6 hours.',
             'last_check_at' => $lastCheck,

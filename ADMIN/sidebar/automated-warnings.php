@@ -268,6 +268,63 @@ $pageTitle = 'Automated Warning Integration';
                         </div>
                     </div>
 
+                    <!-- PHIVOLCS Mobile Auto-Alert Module -->
+                    <div class="module-card" id="phivolcsAutoAlertCard">
+                        <div class="module-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                            <h2><i class="fas fa-mobile-screen-button"></i> PHIVOLCS Mobile Auto-Alert System</h2>
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <span id="phivolcsAutoAlertStatusDot" style="width:10px;height:10px;border-radius:50%;background:#95a5a6;display:inline-block;" title="Disabled"></span>
+                                <span id="phivolcsAutoAlertStatusLabel" style="font-size:0.82rem;font-weight:600;color:var(--text-secondary-1);">Disabled</span>
+                            </div>
+                        </div>
+                        <div style="padding: 1.5rem;">
+                            <div class="info-box" style="margin-bottom: 1.25rem;">
+                                <i class="fas fa-info-circle"></i>
+                                <div>
+                                    <strong>Mobile Earthquake Alerts:</strong> When enabled, PHIVOLCS bulletins are checked automatically. Fresh earthquake events are sent to mobile push notifications and email, with a see-more-info link to the earthquake monitoring page.
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+                                <div style="background: var(--bg-color-1); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border-color-1);">
+                                    <label style="font-weight:700; font-size:0.85rem; color:var(--text-secondary-1); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.75rem; display:block;">Mobile Auto-Alert</label>
+                                    <label class="switch" style="margin-top:0.25rem;">
+                                        <input type="checkbox" id="phivolcsAutoAlertToggle">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <div style="font-size:0.78rem; color:var(--text-secondary-1); margin-top:0.5rem;">Enable automatic mobile/email earthquake alerts</div>
+                                </div>
+                                <div style="background: var(--bg-color-1); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border-color-1);">
+                                    <label style="font-weight:700; font-size:0.85rem; color:var(--text-secondary-1); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.75rem; display:block;">Channels</label>
+                                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                                        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;"><input type="checkbox" id="eaaChPush" value="push" checked> <i class="fas fa-bell" style="color:#3498db;"></i> Mobile Push</label>
+                                        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;"><input type="checkbox" id="eaaChEmail" value="email" checked> <i class="fas fa-envelope" style="color:#e67e22;"></i> Email</label>
+                                        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;"><input type="checkbox" id="eaaChSms" value="sms"> <i class="fas fa-sms" style="color:#2ecc71;"></i> SMS</label>
+                                    </div>
+                                </div>
+                                <div style="background: var(--bg-color-1); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border-color-1);">
+                                    <label style="font-weight:700; font-size:0.85rem; color:var(--text-secondary-1); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.75rem; display:block;">Status</label>
+                                    <div style="font-size:0.88rem; color:var(--text-color-1);">
+                                        <div>Last Check: <strong id="eaaLastCheck" style="color:var(--primary-color-1);">Never</strong></div>
+                                        <div style="margin-top:0.25rem;">Last Alert: <strong id="eaaLastAlert" style="color:var(--primary-color-1);">None</strong></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                                <button type="button" class="btn btn-primary" id="eaaSaveSettingsBtn" onclick="savePhivolcsAutoAlertSettings()" style="padding:0.75rem 1.5rem;"><i class="fas fa-save"></i> Save Settings</button>
+                                <button type="button" class="btn btn-success" id="eaaCheckNowBtn" onclick="checkPhivolcsNow()" style="padding:0.75rem 1.5rem; background:#27ae60; border-color:#27ae60;"><i class="fas fa-sync-alt"></i> Check Now</button>
+                                <button type="button" class="btn btn-warning" id="eaaForceAlertBtn" onclick="forcePhivolcsAlert()" style="padding:0.75rem 1.5rem; background:#dc2626; border-color:#dc2626; color:#fff;"><i class="fas fa-bullhorn"></i> Force Send Alert</button>
+                            </div>
+                        </div>
+                        <div style="border-top: 1px solid var(--border-color-1); padding: 1.5rem;">
+                            <h3 style="margin:0 0 1rem 0; font-size:1rem;"><i class="fas fa-history" style="color:var(--primary-color-1);"></i> Recent Earthquake Auto-Alerts</h3>
+                            <div style="overflow-x: auto;">
+                                <table class="data-table" id="eaaHistoryTable">
+                                    <thead><tr><th>Time</th><th>Event</th><th>Magnitude</th><th>Severity</th><th>Recipients</th><th>Status</th></tr></thead>
+                                    <tbody id="eaaHistoryBody"><tr><td colspan="6" style="text-align:center; padding:1.5rem; color:var(--text-secondary-1);">Loading history...</td></tr></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                     <!-- AI Disaster Monitoring Analysis Card -->
                     <div class="module-card">
                         <div class="module-card-header">
@@ -1480,6 +1537,156 @@ $pageTitle = 'Automated Warning Integration';
             }
         }
 
+        // ============================================================
+        // PHIVOLCS Mobile Auto-Alert System
+        // ============================================================
+        let eaaPollingTimer = null;
+        const EAA_API = '../api/phivolcs-auto-alert.php';
+
+        function updatePhivolcsAutoStatus(enabled, data = {}) {
+            const toggle = document.getElementById('phivolcsAutoAlertToggle');
+            if (toggle) toggle.checked = !!enabled;
+            const dot = document.getElementById('phivolcsAutoAlertStatusDot');
+            const label = document.getElementById('phivolcsAutoAlertStatusLabel');
+            if (dot && label) {
+                dot.style.background = enabled ? '#2ecc71' : '#95a5a6';
+                dot.style.boxShadow = enabled ? '0 0 0 3px rgba(46,204,113,0.3)' : 'none';
+                dot.title = enabled ? 'Active' : 'Disabled';
+                label.textContent = enabled ? 'Active' : 'Disabled';
+                label.style.color = enabled ? '#2ecc71' : 'var(--text-secondary-1)';
+            }
+            const lastCheck = document.getElementById('eaaLastCheck');
+            if (lastCheck) lastCheck.textContent = data.last_check_at || 'Never';
+            const lastAlert = document.getElementById('eaaLastAlert');
+            if (lastAlert) lastAlert.textContent = data.last_alert?.event_time || data.last_alert?.created_at || 'None';
+        }
+
+        async function loadPhivolcsAutoAlertStatus() {
+            try {
+                const res = await fetch(EAA_API + '?action=status');
+                const data = await res.json();
+                if (!data.success) return;
+                updatePhivolcsAutoStatus(data.enabled, data);
+                const channelArr = String(data.channels || 'push,email').split(',').map(c => c.trim());
+                const pushCh = document.getElementById('eaaChPush');
+                const emailCh = document.getElementById('eaaChEmail');
+                const smsCh = document.getElementById('eaaChSms');
+                if (pushCh) pushCh.checked = channelArr.includes('push');
+                if (emailCh) emailCh.checked = channelArr.includes('email');
+                if (smsCh) smsCh.checked = channelArr.includes('sms');
+                setupPhivolcsAutoPolling(data.enabled);
+            } catch (e) {
+                console.error('Failed to load PHIVOLCS auto-alert status:', e);
+            }
+        }
+
+        function setupPhivolcsAutoPolling(enabled) {
+            if (eaaPollingTimer) {
+                clearInterval(eaaPollingTimer);
+                eaaPollingTimer = null;
+            }
+            if (!enabled) return;
+            eaaPollingTimer = setInterval(() => checkPhivolcsNow(false), 360 * 60 * 1000);
+        }
+
+        async function savePhivolcsAutoAlertSettings() {
+            const btn = document.getElementById('eaaSaveSettingsBtn');
+            const origHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            btn.disabled = true;
+            const channels = [];
+            if (document.getElementById('eaaChPush')?.checked) channels.push('push');
+            if (document.getElementById('eaaChEmail')?.checked) channels.push('email');
+            if (document.getElementById('eaaChSms')?.checked) channels.push('sms');
+            try {
+                const res = await fetch(EAA_API + '?action=toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: document.getElementById('phivolcsAutoAlertToggle')?.checked || false, channels: channels.join(',') })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message || 'Failed to save.');
+                btn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+                loadPhivolcsAutoAlertStatus();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                setTimeout(() => { btn.innerHTML = origHTML; btn.disabled = false; }, 1500);
+            }
+        }
+
+        async function checkPhivolcsNow(showAlert = true) {
+            const btn = document.getElementById('eaaCheckNowBtn');
+            const origHTML = btn ? btn.innerHTML : '';
+            if (btn && showAlert) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...'; btn.disabled = true; }
+            try {
+                const res = await fetch(EAA_API + '?action=check');
+                const data = await res.json();
+                if (data.alerted) {
+                    showPagasaAlertToast(data.event?.location || 'PHIVOLCS earthquake bulletin', data.dispatch?.recipients || 0);
+                    loadPhivolcsAutoAlertHistory();
+                    loadPhivolcsAutoAlertStatus();
+                }
+                if (showAlert) alert(data.message || (data.alerted ? 'Earthquake alert queued.' : 'No new earthquake bulletin.'));
+            } catch (e) {
+                if (showAlert) alert('Error: ' + e.message);
+                console.error('PHIVOLCS auto-check failed:', e);
+            } finally {
+                if (btn && showAlert) setTimeout(() => { btn.innerHTML = origHTML; btn.disabled = false; }, 1200);
+            }
+        }
+
+        async function forcePhivolcsAlert() {
+            if (!confirm('This will immediately send the latest PHIVOLCS earthquake bulletin as a mobile/email alert to subscribed citizens. Continue?')) return;
+            const btn = document.getElementById('eaaForceAlertBtn');
+            const origHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+            btn.disabled = true;
+            try {
+                const res = await fetch(EAA_API + '?action=force');
+                const data = await res.json();
+                if (data.success && data.alerted) {
+                    alert('Earthquake alert sent. Recipients: ' + (data.dispatch?.recipients || 0));
+                    showPagasaAlertToast(data.event?.location || 'PHIVOLCS earthquake bulletin', data.dispatch?.recipients || 0);
+                    loadPhivolcsAutoAlertHistory();
+                    loadPhivolcsAutoAlertStatus();
+                } else {
+                    alert(data.message || 'No qualifying earthquake event to send.');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                setTimeout(() => { btn.innerHTML = origHTML; btn.disabled = false; }, 1500);
+            }
+        }
+
+        async function loadPhivolcsAutoAlertHistory() {
+            try {
+                const res = await fetch(EAA_API + '?action=history&limit=10');
+                const data = await res.json();
+                const tbody = document.getElementById('eaaHistoryBody');
+                if (!tbody) return;
+                if (!data.success || !data.logs || data.logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1.5rem; color:var(--text-secondary-1);">No earthquake auto-alerts sent yet.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = '';
+                data.logs.forEach(log => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><small>${log.created_at || ''}</small></td>
+                        <td style="max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${String(log.location || '').replace(/"/g, '&quot;')}"><strong>${log.location || 'PHIVOLCS event'}</strong></td>
+                        <td><strong>${log.magnitude || 'N/A'}</strong></td>
+                        <td><span class="badge ${String(log.severity || 'medium').toLowerCase()}">${log.severity || 'medium'}</span></td>
+                        <td><strong>${log.recipients_count || 0}</strong></td>
+                        <td><span class="badge" style="background:rgba(46,204,113,0.15); color:#27ae60;">${log.status || 'sent'}</span></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (e) {
+                console.error('Failed to load PHIVOLCS auto-alert history:', e);
+            }
+        }
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadIntegrationStatus();
@@ -1490,6 +1697,10 @@ $pageTitle = 'Automated Warning Integration';
             // PAGASA Auto-Alert
             loadPagasaAutoAlertStatus();
             loadPagasaAutoAlertHistory();
+
+            // PHIVOLCS Mobile Auto-Alert
+            loadPhivolcsAutoAlertStatus();
+            loadPhivolcsAutoAlertHistory();
         });
 
     </script>
