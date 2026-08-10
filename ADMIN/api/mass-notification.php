@@ -449,11 +449,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
                 // sendSMS($subscriber['phone'], $translatedMessage);
                 
             } elseif ($channel === 'email' && !empty($subscriber['email'])) {
+                $emailStatus = 'sent';
+                $mailLibPath = dirname(__DIR__, 2) . '/USERS/lib/mail.php';
+                if (file_exists($mailLibPath)) {
+                    require_once $mailLibPath;
+                    $mailErr = null;
+                    $emailSubject = $translatedAlert['title'] ?? 'Emergency Alert';
+                    $emailBody = $translatedAlert['message'] ?? $translatedMessage;
+                    $mailSent = sendSMTPMail($subscriber['email'], $emailSubject, $emailBody, false, $mailErr);
+                    if (!$mailSent) {
+                        $emailStatus = 'failed';
+                        error_log("Mass notification direct email error for {$subscriber['email']}: " . ($mailErr ?? 'unknown'));
+                    }
+                }
+
                 // Log email notification
                 try {
                     $stmt = $pdo->prepare("
                         INSERT INTO notification_logs (channel, message, recipient, recipients, priority, status, sent_at, sent_by, ip_address, alert_id, user_language)
-                        VALUES (?, ?, ?, ?, ?, 'sent', NOW(), ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?)
                     ");
                     $stmt->execute([
                         $channel, 
@@ -461,6 +475,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
                         $subscriber['email'], 
                         $recipientsStr, 
                         $priority, 
+                        $emailStatus,
                         $adminId ? 'admin_' . $adminId : 'system',
                         $ipAddress,
                         $alertId,
@@ -470,7 +485,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
                     // Fallback if alert_id/user_language columns don't exist
                     $stmt = $pdo->prepare("
                         INSERT INTO notification_logs (channel, message, recipient, recipients, priority, status, sent_at, sent_by, ip_address)
-                        VALUES (?, ?, ?, ?, ?, 'sent', NOW(), ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?)
                     ");
                     $stmt->execute([
                         $channel, 
@@ -478,14 +493,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
                         $subscriber['email'], 
                         $recipientsStr, 
                         $priority, 
+                        $emailStatus,
                         $adminId ? 'admin_' . $adminId : 'system',
                         $ipAddress
                     ]);
                 }
                 $sentCount++;
-                
-                // In production, call actual email service here
-                // sendEmail($subscriber['email'], $subscriber['name'], $translatedAlert['title'], $translatedAlert['message']);
                 
             } elseif ($channel === 'push') {
                 // Send push notification to mobile app
