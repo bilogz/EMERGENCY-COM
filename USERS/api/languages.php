@@ -91,22 +91,10 @@ function defaultLanguageNameForCode(string $languageCode): string {
     $code = strtolower(trim($languageCode));
     $map = [
         'en' => 'English',
-        'es' => 'Spanish',
-        'zh' => 'Chinese',
-        'hi' => 'Hindi',
-        'ar' => 'Arabic',
-        'pt' => 'Portuguese',
-        'ru' => 'Russian',
-        'ja' => 'Japanese',
-        'de' => 'German',
-        'fr' => 'French',
-        'fil' => 'Filipino',
+        'fil' => 'Tagalog (Filipino)',
         'tl' => 'Tagalog',
-        'ceb' => 'Cebuano',
-        'ilo' => 'Ilocano',
-        'war' => 'Waray',
-        'id' => 'Indonesian',
-        'ko' => 'Korean',
+        'ceb' => 'Cebuano (Bisaya)',
+        'bis' => 'Bisaya (Cebuano)'
     ];
     return $map[$code] ?? strtoupper($code);
 }
@@ -167,13 +155,11 @@ try {
                 'success' => true,
                 'languages' => [
                     ['language_code' => 'en', 'language_name' => 'English', 'native_name' => 'English', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 100],
-                    ['language_code' => 'fil', 'language_name' => 'Filipino', 'native_name' => 'Filipino', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 98],
-                    ['language_code' => 'ceb', 'language_name' => 'Cebuano', 'native_name' => 'Cebuano', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 94],
-                    ['language_code' => 'ilo', 'language_name' => 'Ilocano', 'native_name' => 'Ilokano', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 92],
-                    ['language_code' => 'war', 'language_name' => 'Waray', 'native_name' => 'Winaray', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 88],
+                    ['language_code' => 'fil', 'language_name' => 'Tagalog (Filipino)', 'native_name' => 'Tagalog', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 98],
+                    ['language_code' => 'ceb', 'language_name' => 'Cebuano (Bisaya)', 'native_name' => 'Bisaya / Cebuano', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 94],
                 ],
                 'last_update' => null,
-                'count' => 5,
+                'count' => 3,
                 'updated' => true
             ]);
             if (ob_get_level()) {
@@ -203,8 +189,7 @@ try {
             exit;
         }
         
-        // Get all active languages from admin-managed database
-        // This ensures users/guests see languages that admins have added/configured
+        // Get active languages strictly limited to English, Tagalog/Filipino, and Cebuano/Bisaya
         $stmt = $pdo->query("
             SELECT 
                 language_code, 
@@ -216,12 +201,19 @@ try {
                 priority,
                 updated_at
             FROM {$languagesTable}
-            WHERE is_active = 1
+            WHERE is_active = 1 AND LOWER(language_code) IN ('en', 'fil', 'tl', 'ceb', 'bis')
             ORDER BY priority DESC, language_name ASC
         ");
         $languages = $stmt->fetchAll();
-        if (is_array($languages)) {
+        if (is_array($languages) && count($languages) > 0) {
             $languages = array_map('normalizeLanguageRow', $languages);
+        } else {
+            // Fallback if table doesn't have them active
+            $languages = [
+                ['language_code' => 'en', 'language_name' => 'English', 'native_name' => 'English', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 100],
+                ['language_code' => 'fil', 'language_name' => 'Tagalog (Filipino)', 'native_name' => 'Tagalog', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 98],
+                ['language_code' => 'ceb', 'language_name' => 'Cebuano (Bisaya)', 'native_name' => 'Bisaya / Cebuano', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 94],
+            ];
         }
         
         // Log for debugging (remove in production if needed)

@@ -103,12 +103,10 @@ try {
     
     // Send OTP via Email
     $emailSubject = 'Login Verification Code - Emergency Communication System';
-    $emailBody = "Hello {$user['name']},\n\n";
-    $emailBody .= "Your login verification code is: {$otp}\n\n";
-    $emailBody .= "This code is valid for 10 minutes.\n\n";
-    $emailBody .= "If you did not request this code, please ignore this email.\n\n";
-    $emailBody .= "Thank you,\n";
-    $emailBody .= "Emergency Communication System";
+    
+    $emailBodyHtml = function_exists('buildOTPEmailTemplate')
+        ? buildOTPEmailTemplate($user['name'], $otp, 'Citizen Login', 10)
+        : "<p>Hello {$user['name']},</p><p>Your login verification code is: <strong>{$otp}</strong></p>";
 
     // Try to send email
     $emailSent = false;
@@ -116,17 +114,18 @@ try {
     
     // Try PHPMailer if available
     if (function_exists('sendSMTPMail')) {
-        $emailSent = sendSMTPMail($email, $emailSubject, $emailBody, false, $error);
+        $emailSent = sendSMTPMail($email, $emailSubject, $emailBodyHtml, true, $error);
     }
     
     // Fallback to mail() if PHPMailer not available or failed
     if (!$emailSent && function_exists('mail')) {
-        $headers = "From: noreply@emergency-com.local\r\n";
-        $headers .= "Reply-To: support@emergency-com.local\r\n";
-        $headers .= "X-Mailer: PHP/" . phpversion();
-        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+        $headers = "From: AlertaraQC <alertaraqc.notification@gmail.com>\r\n";
+        $headers .= "Reply-To: alertaraqc.notification@gmail.com\r\n";
+        $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
+        $headers .= "MIME-Version: 1.0\r\n";
+        $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
         
-        $emailSent = @mail($email, $emailSubject, $emailBody, $headers);
+        $emailSent = @mail($email, $emailSubject, $emailBodyHtml, $headers);
     }
 
     if ($emailSent) {

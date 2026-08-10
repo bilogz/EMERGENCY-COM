@@ -557,8 +557,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
                     require_once $mailLibPath;
                     $mailErr = null;
                     $emailSubject = $translatedAlert['title'] ?? 'Emergency Alert';
-                    $emailBody = $translatedAlert['message'] ?? $translatedMessage;
-                    $mailSent = sendSMTPMail($subscriber['email'], $emailSubject, $emailBody, false, $mailErr);
+                    $rawMsg = $translatedAlert['message'] ?? $translatedMessage;
+                    
+                    $emailHtml = function_exists('buildEmergencyAlertEmailTemplate')
+                        ? buildEmergencyAlertEmailTemplate($emailSubject, $rawMsg, $priority, $category ?? 'Emergency Alert')
+                        : nl2br(htmlspecialchars($rawMsg));
+
+                    $mailSent = sendSMTPMail($subscriber['email'], $emailSubject, $emailHtml, true, $mailErr);
                     if (!$mailSent) {
                         $emailStatus = 'failed';
                         error_log("Mass notification direct email error for {$subscriber['email']}: " . ($mailErr ?? 'unknown'));

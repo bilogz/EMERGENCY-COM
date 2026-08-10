@@ -55,7 +55,7 @@ if (!empty($expectedApiKey)) {
 }
 
 // Custom function to send email with specific sender
-function sendAdminOTPEmail($to, $subject, $body, $fromEmail, $fromName, &$error = null) {
+function sendAdminOTPEmail($to, $subject, $bodyHtml, $fromEmail, $fromName, &$error = null, $plainText = '') {
     $error = null;
     
     // Try PHPMailer if available
@@ -89,73 +89,41 @@ function sendAdminOTPEmail($to, $subject, $body, $fromEmail, $fromName, &$error 
         try {
             $mail = new PHPMailer\PHPMailer\PHPMailer(true);
             
-            // Use alertaraqc.notification@gmail.com SMTP credentials for admin OTP emails
-            // This ensures the From address matches the authenticated account
             $adminOTPEmail = 'alertaraqc.notification@gmail.com';
-            
-            // Load admin OTP specific config
             $adminMailConfigPath = __DIR__ . '/admin_otp_mail_config.php';
             
+            $smtpHost = 'smtp.gmail.com';
+            $smtpPort = 587;
+            $smtpPass = 'gatbylpxrgmcolqm';
+            $smtpSecure = 'tls';
+
             if (file_exists($adminMailConfigPath)) {
                 $adminCfg = include $adminMailConfigPath;
-                
-                // Configure SMTP with alertaraqc.notification@gmail.com credentials
-                if (!empty($adminCfg['password'])) {
-                    $mail->isSMTP();
-                    $mail->Host = $adminCfg['host'] ?? 'smtp.gmail.com';
-                    $mail->Port = $adminCfg['port'] ?? 587;
-                    $mail->SMTPAuth = true;
-                    $mail->Username = $adminOTPEmail;
-                    $mail->Password = $adminCfg['password'];
-                    $mail->SMTPSecure = $adminCfg['secure'] ?? 'tls';
-                    
-                    // Set From address - must match authenticated SMTP account
-                    $mail->setFrom($fromEmail, $fromName);
-                    $mail->addAddress($to);
-                    $mail->Subject = $subject;
-                    $mail->Body = $body;
-                    $mail->isHTML(false);
-                    
-                    $mail->send();
-                    return true;
-                } else {
-                    // Password not set in admin config - try using existing mail config as fallback
-                    // but note: Gmail will send FROM the authenticated account, not from alertaraqc.notification@gmail.com
-                    $mailLibPath = __DIR__ . '/../../USERS/lib/mail.php';
-                    if (file_exists($mailLibPath)) {
-                        require_once $mailLibPath;
-                        $cfg = load_mail_config();
-                        
-                        if (!empty($cfg['host']) && !empty($cfg['password'])) {
-                            $mail->isSMTP();
-                            $mail->Host = $cfg['host'];
-                            $mail->Port = $cfg['port'] ?? 587;
-                            $mail->SMTPAuth = true;
-                            $mail->Username = $cfg['username'];
-                            $mail->Password = $cfg['password'];
-                            $mail->SMTPSecure = $cfg['secure'] ?? 'tls';
-                            
-                            // WARNING: From address will be overridden by Gmail to match authenticated account
-                            // To fix: Add password for alertaraqc.notification@gmail.com to admin_otp_mail_config.php
-                            $mail->setFrom($fromEmail, $fromName);
-                            $mail->addAddress($to);
-                            $mail->Subject = $subject;
-                            $mail->Body = $body;
-                            $mail->isHTML(false);
-                            
-                            $mail->send();
-                            error_log("WARNING: Admin OTP sent using fallback mail config. Email will be FROM: {$cfg['username']} instead of {$fromEmail}. Please configure admin_otp_mail_config.php");
-                            return true;
-                        }
-                    }
-                    
-                    $error = 'Admin OTP mail config password not set. Please add Gmail App Password for alertaraqc.notification@gmail.com to admin_otp_mail_config.php';
-                    error_log("Admin OTP email error: " . $error);
+                if (is_array($adminCfg) && !empty($adminCfg['password'])) {
+                    $smtpHost = $adminCfg['host'] ?? $smtpHost;
+                    $smtpPort = $adminCfg['port'] ?? $smtpPort;
+                    $smtpPass = $adminCfg['password'];
+                    $smtpSecure = $adminCfg['secure'] ?? $smtpSecure;
                 }
-            } else {
-                $error = 'Admin OTP mail config file not found. Please create admin_otp_mail_config.php';
-                error_log("Admin OTP email error: " . $error);
             }
+            
+            $mail->isSMTP();
+            $mail->Host = $smtpHost;
+            $mail->Port = $smtpPort;
+            $mail->SMTPAuth = true;
+            $mail->Username = $adminOTPEmail;
+            $mail->Password = $smtpPass;
+            $mail->SMTPSecure = $smtpSecure;
+            
+            $mail->setFrom($fromEmail, $fromName);
+            $mail->addAddress($to);
+            $mail->Subject = $subject;
+            $mail->isHTML(true);
+            $mail->Body = $bodyHtml;
+            $mail->AltBody = !empty($plainText) ? $plainText : strip_tags($bodyHtml);
+            
+            $mail->send();
+            return true;
         } catch (Exception $e) {
             $error = $e->getMessage();
             error_log("PHPMailer error: " . $error);
@@ -166,10 +134,11 @@ function sendAdminOTPEmail($to, $subject, $body, $fromEmail, $fromName, &$error 
     if (function_exists('mail')) {
         $headers = "From: {$fromName} <{$fromEmail}>\r\n";
         $headers .= "Reply-To: {$fromEmail}\r\n";
-        $headers .= "X-Mailer: PHP/" . phpversion();
-        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+        $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
+        $headers .= "MIME-Version: 1.0\r\n";
+        $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
         
-        $sent = @mail($to, $subject, $body, $headers);
+        $sent = @mail($to, $subject, $bodyHtml, $headers);
         if (!$sent) {
             $error = 'PHP mail() function failed';
         }
@@ -205,7 +174,6 @@ try {
     
     // For login, check if admin exists in admin_user table
     if ($purpose === 'login') {
-        // Prefer admin_user, but fall back to legacy users table if needed.
         $admin = null;
 
         try {
@@ -227,21 +195,19 @@ try {
         }
         
         if (!$admin) {
-            throw new Exception('No admin account found with this email address');
+            throw new Exception('Admin account not found with this email address');
         }
         
         if ($admin['status'] !== 'active') {
-            throw new Exception('Account is not active. Please contact administrator.');
+            throw new Exception('Admin account is not active. Please contact system administrator.');
         }
         
-        $name = $admin['name']; // Use name from database
+        $name = $admin['name'];
     }
     
     // Generate 6-digit OTP
     $otp_code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
     
-    // Store OTP in database (using existing otp_verifications table)
-    // Table structure already exists from USERS module
     $purpose_db = ($purpose === 'create') ? 'admin_create' : 'admin_login';
     
     // Delete old pending OTPs for this email and purpose
@@ -249,9 +215,9 @@ try {
     $deleteStmt = $pdo->prepare($deleteQuery);
     $deleteStmt->execute([$email, $purpose_db]);
     
-    // Insert new OTP
+    // Insert new OTP with 5 minute validity
     $query = "INSERT INTO otp_verifications (email, otp_code, purpose, expires_at, status, attempts, ip_address) 
-              VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 1 MINUTE), 'pending', 0, ?)";
+              VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 5 MINUTE), 'pending', 0, ?)";
     
     $stmt = $pdo->prepare($query);
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
@@ -259,42 +225,41 @@ try {
         throw new Exception('Failed to generate verification code');
     }
     
-    // Store in session for fallback
+    // Store in session for fallback (5 minutes)
     $sessionKey = $purpose === 'login' ? 'admin_login_otp' : 'admin_create_otp';
     $_SESSION[$sessionKey . '_code'] = $otp_code;
     $_SESSION[$sessionKey . '_email'] = $email;
-    $_SESSION[$sessionKey . '_expires'] = time() + 60; // 1 minute
+    $_SESSION[$sessionKey . '_expires'] = time() + 300; // 5 minutes
     $_SESSION[$sessionKey . '_purpose'] = $purpose;
     
     // Prepare email content
-    // OTP is sent TO the admin's email FROM alertaraqc.notification@gmail.com
     $senderEmail = 'alertaraqc.notification@gmail.com';
     $senderName = 'Emergency Communication System';
-    $purposeText = $purpose === 'login' ? 'login' : 'account creation';
-    $emailSubject = 'Admin ' . ucfirst($purposeText) . ' Verification Code - Emergency Communication System';
+    $purposeText = $purpose === 'login' ? 'Admin Login' : 'Admin Account Creation';
+    $emailSubject = 'Admin Verification Code - Emergency Communication System';
     
-    // Email body personalized for the admin
-    $emailBody = "Hello {$name},\n\n";
-    $emailBody .= "Your verification code for admin {$purposeText} is: {$otp_code}\n\n";
-    $emailBody .= "This code will expire in 1 minute.\n\n";
-    $emailBody .= "If you did not request this code, please ignore this email and contact your system administrator.\n\n";
-    $emailBody .= "Thank you,\n";
-    $emailBody .= "Emergency Communication System\n";
-    $emailBody .= "Administrative Panel";
-    
-    // Try to send email to admin's email from notification email
-    $otp_sent = false;
-    $error = null;
-    $errorDetails = [];
-    
-    $otp_sent = sendAdminOTPEmail($email, $emailSubject, $emailBody, $senderEmail, $senderName, $error);
-    if (!$otp_sent && $error) {
-        $errorDetails[] = "Email Error: " . $error;
+    // Require mail helper for HTML template
+    $mailLibPath = __DIR__ . '/../../USERS/lib/mail.php';
+    if (file_exists($mailLibPath)) {
+        require_once $mailLibPath;
     }
     
-    // Log detailed error information
-    if (!$otp_sent && !empty($errorDetails)) {
-        error_log("Email send failed for {$email} (from: {$senderEmail}): " . implode("; ", $errorDetails));
+    if (function_exists('buildOTPEmailTemplate')) {
+        $emailBodyHtml = buildOTPEmailTemplate($name, $otp_code, $purposeText, 5);
+    } else {
+        $emailBodyHtml = "<p>Hello {$name},</p><p>Your verification code is: <strong>{$otp_code}</strong></p><p>Valid for 5 minutes.</p>";
+    }
+
+    $plainText = "Hello {$name},\n\nYour verification code for {$purposeText} is: {$otp_code}\n\nThis code is valid for 5 minutes.\n\nThank you,\nEmergency Communication System";
+    
+    // Try to send email
+    $otp_sent = false;
+    $error = null;
+    
+    $otp_sent = sendAdminOTPEmail($email, $emailSubject, $emailBodyHtml, $senderEmail, $senderName, $error, $plainText);
+    
+    if (!$otp_sent && $error) {
+        error_log("Email send failed for {$email} (from: {$senderEmail}): " . $error);
     }
     
     $response['success'] = true;
