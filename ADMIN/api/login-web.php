@@ -104,136 +104,47 @@ if (empty($email) || empty($plainPassword)) {
     exit();
 }
 
-// Verify reCAPTCHA v3 (skip if OTP is already verified, as we've done additional verification)
-// TEMPORARY: Skip reCAPTCHA for testing if using test keys
-$recaptchaSecretKey = getSecureConfig('RECAPTCHA_SECRET_KEY', '');
-$isTestKey = ($recaptchaSecretKey === '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe'); // Google test key
-
-// Log reCAPTCHA status for debugging
-error_log("reCAPTCHA Debug - Response present: " . (!empty($recaptchaResponse) ? 'YES (' . strlen($recaptchaResponse) . ' chars)' : 'NO'));
-error_log("reCAPTCHA Debug - OTP verified: " . ($otpVerified ? 'YES' : 'NO'));
-error_log("reCAPTCHA Debug - Is test key: " . ($isTestKey ? 'YES' : 'NO'));
-
-if (!$otpVerified && empty($recaptchaResponse) && !$isTestKey) {
-    if ($requireOtp) {
-        error_log("reCAPTCHA warning: No response token provided, but OTP is required so login may continue");
-    } else {
-        error_log("reCAPTCHA error: No response token provided and not using test key");
-        echo json_encode(["success" => false, "message" => "Security verification failed. Please refresh the page and try again."]);
-        exit();
-    }
-}
-
-// Validate reCAPTCHA v3 with Google (skip if OTP already verified)
+// Validate reCAPTCHA v3
 $recaptchaValid = false;
 $recaptchaScore = 0;
-if ($otpVerified) {
-    // If OTP is verified, we can skip reCAPTCHA verification as additional security is already provided
+$recaptchaSecretKey = getSecureConfig('RECAPTCHA_SECRET_KEY', '');
+$isTestKey = ($recaptchaSecretKey === '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe');
+
+if ($otpVerified || $requireOtp || $isTestKey) {
+    // If OTP is required or verified, or using test key, security is enforced via email OTP
     $recaptchaValid = true;
-} else if (!empty($recaptchaResponse)) {
+} elseif (!empty($recaptchaResponse)) {
     // Load reCAPTCHA secret key from config
-    $recaptchaSecretKey = getSecureConfig('RECAPTCHA_SECRET_KEY', '');
-    $isTestKey = ($recaptchaSecretKey === '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe'); // Google test key
+    if (empty($recaptchaSecretKey)) {
+        echo json_encode(["success" => false, "message" => "Security verification is not configured. Please contact an administrator."]);
+        exit();
+    }
+
+    $recaptchaUrl = 'https://www.google.com/recaptcha/api/siteverify';
+    $recaptchaData = [
+        'secret' => $recaptchaSecretKey,
+        'response' => $recaptchaResponse,
+        'remoteip' => $_SERVER['REMOTE_ADDR'] ?? ''
+    ];
+
+    $recaptchaOptions = [
+        'http' => [
+            'method' => 'POST',
+            'header' => 'Content-Type: application/x-www-form-urlencoded',
+            'content' => http_build_query($recaptchaData),
+            'timeout' => 10
+        ]
+    ];
+
+    $recaptchaContext = stream_context_create($recaptchaOptions);
+    $recaptchaResult = @file_get_contents($recaptchaUrl, false, $recaptchaContext);
     
-    // Skip verification for test keys (they always pass)
-    if ($isTestKey) {
-        $recaptchaValid = true;
-        error_log("reCAPTCHA test key detected - skipping verification");
-    } else if (empty($recaptchaSecretKey)) {
-        if ($requireOtp) {
-            error_log("reCAPTCHA warning: secret key missing, but OTP is required so login may continue");
-            $recaptchaValid = true;
-        } else {
-            echo json_encode(["success" => false, "message" => "Security verification is not configured. Please contact an administrator."]);
-            exit();
-        }
-    } else {
-        $recaptchaUrl = 'https://www.google.com/recaptcha/api/siteverify';
-        $recaptchaData = [
-            'secret' => $recaptchaSecretKey,
-            'response' => $recaptchaResponse,
-            'remoteip' => $_SERVER['REMOTE_ADDR'] ?? ''
-        ];
-
-        $recaptchaOptions = [
-            'http' => [
-                'method' => 'POST',
-                'header' => 'Content-Type: application/x-www-form-urlencoded',
-                'content' => http_build_query($recaptchaData),
-                'timeout' => 10
-            ]
-        ];
-
-        $recaptchaContext = stream_context_create($recaptchaOptions);
-        $recaptchaResult = @file_get_contents($recaptchaUrl, false, $recaptchaContext);
-        
-        // Log the raw response for debugging
-        if ($recaptchaResult === false) {
-            error_log('reCAPTCHA API request failed - unable to reach Google servers');
-            if ($requireOtp) {
-                error_log("reCAPTCHA warning: service unavailable, but OTP is required so login may continue");
-                $recaptchaValid = true;
-            } else {
-                echo json_encode(["success" => false, "message" => "Security verification service unavailable. Please try again."]);
-                exit();
-            }
-        }
-        
+    if ($recaptchaResult !== false) {
         $recaptchaJson = json_decode($recaptchaResult, true);
-        
-        // Log response for debugging
-        error_log('reCAPTCHA API response: ' . json_encode($recaptchaJson));
-
-        // Validate reCAPTCHA v3 response
-        // v3 returns a score from 0.0 to 1.0 (1.0 = very likely human, 0.0 = very likely bot)
         if (isset($recaptchaJson['success']) && $recaptchaJson['success']) {
             $recaptchaScore = $recaptchaJson['score'] ?? 0;
-            $recaptchaAction = $recaptchaJson['action'] ?? '';
-            
-            // Minimum score threshold (0.5 is recommended, lower = more permissive)
-            // Temporarily lowered to 0.1 for testing - increase to 0.3-0.5 for production
-            $minScore = 0.1;
-            
-            if ($recaptchaScore >= $minScore) {
+            if ($recaptchaScore >= 0.1) {
                 $recaptchaValid = true;
-                error_log("reCAPTCHA v3 passed - Score: {$recaptchaScore}, Action: {$recaptchaAction}");
-            } else {
-                error_log("reCAPTCHA v3 score too low - Score: {$recaptchaScore}, Action: {$recaptchaAction}, Required: {$minScore}");
-                if ($requireOtp) {
-                    error_log("reCAPTCHA warning: low score, but OTP is required so login may continue");
-                    $recaptchaValid = true;
-                } else {
-                    echo json_encode([
-                        "success" => false,
-                        "message" => "Security verification failed. Please try again or contact support.",
-                        "debug_info" => "Score: {$recaptchaScore}, Required: {$minScore}"
-                    ]);
-                    exit();
-                }
-            }
-        } else {
-            $errorCodes = $recaptchaJson['error-codes'] ?? [];
-            $errorDetails = [
-                'success' => $recaptchaJson['success'] ?? false,
-                'error-codes' => $errorCodes,
-                'raw_response' => $recaptchaResult
-            ];
-            error_log('reCAPTCHA v3 verification failed. Details: ' . json_encode($errorDetails));
-            
-            // More helpful error message
-            $errorMessage = "Security verification failed. Please refresh and try again.";
-            if (in_array('invalid-input-secret', $errorCodes)) {
-                $errorMessage = "reCAPTCHA configuration error. Please contact administrator.";
-            } elseif (in_array('timeout-or-duplicate', $errorCodes)) {
-                $errorMessage = "Security verification expired. Please refresh the page and try again.";
-            }
-            
-            if ($requireOtp) {
-                error_log("reCAPTCHA warning: verification failed ({$errorMessage}), but OTP is required so login may continue");
-                $recaptchaValid = true;
-            } else {
-                echo json_encode(["success" => false, "message" => $errorMessage]);
-                exit();
             }
         }
     }
@@ -413,13 +324,3 @@ try {
         "message" => "Server error occurred. Please try again."
     ]);
 }
-?>
-
-
-
-
-
-
-
-
-
