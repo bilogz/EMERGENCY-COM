@@ -5,6 +5,29 @@ require_once '../shared/db_connect.php';
 
 /** @var PDO $pdo */
 
+function normalizeNotificationPreferenceLanguage($language): string {
+    $lang = strtolower(trim((string)$language));
+    if ($lang === 'fil' || $lang === 'filipino' || $lang === 'tagalog') return 'tl';
+    if (in_array($lang, ['en', 'tl', 'both'], true)) return $lang;
+    return 'en';
+}
+
+function ensureNotificationLanguagePreferenceColumn(PDO $pdo): void {
+    try {
+        $exists = $pdo->query("SHOW TABLES LIKE 'user_preferences'");
+        if (!$exists || !$exists->fetch()) return;
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM user_preferences");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        if (!in_array('notification_language', $cols, true)) {
+            $pdo->exec("ALTER TABLE user_preferences ADD COLUMN notification_language VARCHAR(10) NOT NULL DEFAULT 'en' AFTER preferred_language");
+        }
+    } catch (Throwable $e) {
+        error_log('Unable to ensure notification_language preference column: ' . $e->getMessage());
+    }
+}
+
+ensureNotificationLanguagePreferenceColumn($pdo);
+
 // Handle different HTTP methods
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -19,7 +42,11 @@ try {
         }
 
         $user_id = $data['user_id'] ?? null;
-        $preferred_language = $data['preferred_language'] ?? 'en';
+        $preferred_language = strtolower(trim((string)($data['preferred_language'] ?? 'en')));
+        if ($preferred_language === 'fil' || $preferred_language === 'filipino' || $preferred_language === 'tagalog') {
+            $preferred_language = 'tl';
+        }
+        $notification_language = normalizeNotificationPreferenceLanguage($data['notification_language'] ?? 'en');
         $sms_notifications = $data['sms_notifications'] ?? true;
         $email_notifications = $data['email_notifications'] ?? true;
         $push_notifications = $data['push_notifications'] ?? true;
@@ -39,7 +66,7 @@ try {
         }
 
         // Validate language
-        $validLanguages = ['en', 'tl', 'ceb', 'war', 'hil', 'es', 'fr'];
+        $validLanguages = ['en', 'tl'];
         if (!in_array($preferred_language, $validLanguages)) {
             apiResponse::error("Invalid preferred_language. Must be one of: " . implode(', ', $validLanguages), 400);
         }
@@ -51,10 +78,11 @@ try {
 
         $query = "
             INSERT INTO user_preferences
-            (user_id, preferred_language, sms_notifications, email_notifications, push_notifications, alert_categories, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, NOW())
+            (user_id, preferred_language, notification_language, sms_notifications, email_notifications, push_notifications, alert_categories, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE
                 preferred_language = VALUES(preferred_language),
+                notification_language = VALUES(notification_language),
                 sms_notifications = VALUES(sms_notifications),
                 email_notifications = VALUES(email_notifications),
                 push_notifications = VALUES(push_notifications),
@@ -66,6 +94,7 @@ try {
         $stmt->execute([
             $user_id,
             $preferred_language,
+            $notification_language,
             $sms_notifications ? 1 : 0,
             $email_notifications ? 1 : 0,
             $push_notifications ? 1 : 0,
@@ -75,6 +104,7 @@ try {
         apiResponse::success([
             'user_id' => $user_id,
             'preferred_language' => $preferred_language,
+            'notification_language' => $notification_language,
             'sms_notifications' => $sms_notifications,
             'email_notifications' => $email_notifications,
             'push_notifications' => $push_notifications,
@@ -93,6 +123,7 @@ try {
             SELECT
                 user_id,
                 preferred_language,
+                COALESCE(notification_language, 'en') AS notification_language,
                 sms_notifications,
                 email_notifications,
                 push_notifications,

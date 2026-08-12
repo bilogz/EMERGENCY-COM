@@ -8,6 +8,14 @@ session_start();
 header('Content-Type: application/json; charset=utf-8');
 require_once 'db_connect.php';
 
+function normalizeSupportedUserLanguage(string $language): string {
+    $language = strtolower(trim($language));
+    if ($language === 'fil' || $language === 'tl') {
+        return 'tl';
+    }
+    return $language === 'en' ? 'en' : 'en';
+}
+
 $action = $_GET['action'] ?? 'get';
 
 // Get user language preference
@@ -23,7 +31,7 @@ if ($action === 'get') {
             if (isset($_SESSION['guest_language'])) {
                 echo json_encode([
                     'success' => true,
-                    'language' => $_SESSION['guest_language'],
+                    'language' => normalizeSupportedUserLanguage((string)$_SESSION['guest_language']),
                     'user_type' => 'guest'
                 ]);
                 exit;
@@ -33,7 +41,8 @@ if ($action === 'get') {
             $acceptLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
             if ($acceptLanguage) {
                 $langCode = strtolower(explode('-', explode(',', $acceptLanguage)[0])[0]);
-                if (strlen($langCode) === 2) {
+                if ($langCode === 'fil' || $langCode === 'tl' || $langCode === 'en') {
+                    $langCode = normalizeSupportedUserLanguage($langCode);
                     // Store in session for future use
                     $_SESSION['guest_language'] = $langCode;
                     echo json_encode([
@@ -67,7 +76,7 @@ if ($action === 'get') {
                 if ($pref && !empty($pref['preferred_language'])) {
                     echo json_encode([
                         'success' => true,
-                        'language' => $pref['preferred_language'],
+                        'language' => normalizeSupportedUserLanguage((string)$pref['preferred_language']),
                         'user_type' => 'registered'
                     ]);
                     exit;
@@ -81,7 +90,7 @@ if ($action === 'get') {
                 if ($user && !empty($user['preferred_language'])) {
                     echo json_encode([
                         'success' => true,
-                        'language' => $user['preferred_language'],
+                        'language' => normalizeSupportedUserLanguage((string)$user['preferred_language']),
                         'user_type' => 'registered'
                     ]);
                     exit;
@@ -97,7 +106,8 @@ if ($action === 'get') {
     $acceptLanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
     if ($acceptLanguage) {
         $langCode = strtolower(explode('-', explode(',', $acceptLanguage)[0])[0]);
-        if (strlen($langCode) === 2) {
+        if ($langCode === 'fil' || $langCode === 'tl' || $langCode === 'en') {
+            $langCode = normalizeSupportedUserLanguage($langCode);
             echo json_encode([
                 'success' => true,
                 'language' => $langCode,
@@ -121,7 +131,7 @@ if ($action === 'get') {
 // Set user language preference
 if ($action === 'set' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
-    $language = $input['language'] ?? '';
+    $language = normalizeSupportedUserLanguage((string)($input['language'] ?? ''));
     
     if (empty($language)) {
         echo json_encode([
@@ -131,11 +141,10 @@ if ($action === 'set' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
-    // Validate language code format
-    if (strlen($language) < 2 || strlen($language) > 10) {
+    if (!in_array($language, ['en', 'tl'], true)) {
         echo json_encode([
             'success' => false,
-            'message' => 'Invalid language code format'
+            'message' => 'Language not supported'
         ]);
         exit;
     }

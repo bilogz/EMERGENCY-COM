@@ -769,6 +769,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         let conversationLoadSequence = 0;
         let newMessageNoticeCount = 0;
         let pendingDeleteConversation = null;
+        let chatSendInFlight = false;
 
         function isTwoWayRealtimeOpen() {
             return !!(twcRealtimeSource && twcRealtimeSource.readyState === 1);
@@ -2001,10 +2002,16 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 const messageId = Number(data.id || 0);
                 if (!currentConversationId || Number(data.conversationId || 0) !== Number(currentConversationId)) return;
                 if (!messageId || messageId <= lastMessageId) return;
+                const senderType = data.senderRole === 'staff' ? 'admin' : 'user';
+                if (senderType === 'admin' && finalizeMatchingPendingMessage(data.body || '', messageId)) {
+                    lastMessageId = messageId;
+                    scrollToBottom();
+                    return;
+                }
                 appendMessage({
                     id: messageId,
                     text: data.body || '',
-                    senderType: data.senderRole === 'staff' ? 'admin' : 'user',
+                    senderType,
                     senderName: data.senderName || '',
                     timestamp: Number(data.createdAt || Date.now())
                 });
@@ -2872,6 +2879,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         
                         data.messages.forEach(msg => {
                             if (msg.id > lastMessageId && !existingIds.has(msg.id)) {
+                                if ((msg.senderType === 'admin' || msg.senderType === 'sent') && finalizeMatchingPendingMessage(msg.text || '', msg.id)) {
+                                    lastMessageId = Math.max(lastMessageId, msg.id);
+                                    added = true;
+                                    return;
+                                }
                                 appendMessage(msg);
                                 lastMessageId = Math.max(lastMessageId, msg.id);
                                 added = true;
@@ -2890,6 +2902,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         
         function appendMessage(msg) {
             const container = document.getElementById('chatMessages');
+            if (!container || !msg) return null;
+            const numericMessageId = Number(msg.id || 0);
+            if (numericMessageId > 0) {
+                const existingMessage = container.querySelector(`.message[data-id="${numericMessageId}"]`);
+                if (existingMessage) return existingMessage;
+            }
             // Remove placeholders
             const p = container.querySelector('p');
             if (p) p.remove();
@@ -2922,6 +2940,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 const div = document.createElement('div');
                 div.className = 'message system-message';
                 div.dataset.id = msg.id;
+                if (msg.clientId) div.dataset.clientId = String(msg.clientId);
+                if (msg.pending) div.dataset.pending = '1';
                 
                 // Extract the actual message text (remove [CALL_ENDED] prefix)
                 let messageText = msg.text || '';
@@ -2963,13 +2983,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     </div>
                 `;
                 container.appendChild(div);
-                return;
+                return div;
             }
             
             const div = document.createElement('div');
             const type = (msg.senderType === 'admin' || msg.senderType === 'sent') ? 'admin' : 'user';
             div.className = `message ${type}`;
             div.dataset.id = msg.id;
+            if (msg.clientId) div.dataset.clientId = String(msg.clientId);
+            if (msg.pending) div.dataset.pending = '1';
             
             const name = type === 'admin' ? ADMIN_USERNAME : (msg.senderName || 'User');
             const avatar = type === 'admin' ? ADMIN_AVATAR : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6c757d&color=fff&size=64`;
@@ -3052,6 +3074,35 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 </div>
             `;
             container.appendChild(div);
+            return div;
+        }
+
+        function finalizeMatchingPendingMessage(text, serverMessageId) {
+            const container = document.getElementById('chatMessages');
+            const id = Number(serverMessageId || 0);
+            if (!container || !id) return false;
+            const existing = container.querySelector(`.message[data-id="${id}"]`);
+            if (existing) return true;
+            const normalized = String(text || '').trim();
+            const pending = Array.from(container.querySelectorAll('.message.admin[data-pending="1"]')).find(el => {
+                const pendingText = (el.querySelector('.message-text')?.textContent || '').trim();
+                return pendingText === normalized;
+            });
+            if (!pending) return false;
+            pending.dataset.id = String(id);
+            delete pending.dataset.pending;
+            return true;
+        }
+
+        function removePendingMessage(clientId) {
+            if (!clientId) return;
+            const container = document.getElementById('chatMessages');
+            if (!container) return;
+            const escapedClientId = window.CSS && typeof CSS.escape === 'function'
+                ? CSS.escape(String(clientId))
+                : String(clientId).replace(/[\\"]/g, '\\$&');
+            const pending = container.querySelector(`.message[data-client-id="${escapedClientId}"]`);
+            if (pending) pending.remove();
         }
         
         function escapeHtml(text) {
@@ -3059,7 +3110,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             div.textContent = text;
             return div.innerHTML;
         }
-
         function sanitizeAttachmentUrl(url) {
             if (!url) return null;
             const raw = String(url).trim();
@@ -3138,46 +3188,70 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         
         async function sendMessage() {
             const input = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
             const text = input.value.trim();
-            if (!text || !currentConversationId) return;
-            
+            if (!text || !currentConversationId || chatSendInFlight) return;
+
+            chatSendInFlight = true;
+            if (sendButton) sendButton.disabled = true;
             input.value = '';
             input.focus();
-            
-            // Optimistic UI
-            const tempId = Date.now(); // Temp ID
+
+            const clientId = `admin-${currentConversationId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
             appendMessage({
-                id: tempId,
+                id: 0,
+                clientId,
+                pending: true,
                 text: text,
                 senderType: 'admin',
                 timestamp: Date.now(),
                 senderName: ADMIN_USERNAME
             });
             scrollToBottom();
-            
+
             try {
                 const fd = new FormData();
                 fd.append('text', text);
                 fd.append('conversationId', currentConversationId);
-                
+
                 const res = await fetch(API_BASE + 'chat-send.php', { method: 'POST', body: fd });
-                const d = await res.json();
-                
+                const raw = await res.text();
+                let d = {};
+                try { d = raw ? JSON.parse(raw) : {}; } catch (parseError) {
+                    console.warn('Invalid chat-send response:', raw);
+                    await loadMessages(currentConversationId, false);
+                    return;
+                }
+
                 if (d.success) {
-                    // Update temp message with real ID if needed, or just let polling handle sync
-                    if (d.messageId) lastMessageId = Math.max(lastMessageId, d.messageId);
+                    if (d.messageId) {
+                        finalizeMatchingPendingMessage(text, d.messageId);
+                        lastMessageId = Math.max(lastMessageId, Number(d.messageId));
+                    }
+                    refreshConversationListRealtime();
                 } else {
+                    removePendingMessage(clientId);
+                    input.value = text;
                     if (d.locked) setConversationLocked(true, d.message || 'Locked by another admin');
                     alert(d.message || 'Failed to send');
                 }
             } catch (e) {
-                alert('Send error');
+                console.error('Send error', e);
+                await loadMessages(currentConversationId, false);
+            } finally {
+                chatSendInFlight = false;
+                if (sendButton) sendButton.disabled = false;
             }
         }
         
         // Listeners
         document.getElementById('sendButton').onclick = sendMessage;
-        document.getElementById('messageInput').onkeypress = e => { if(e.key === 'Enter') sendMessage(); };
+        document.getElementById('messageInput').onkeydown = e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        };
         
         // Init
         document.addEventListener('DOMContentLoaded', () => {

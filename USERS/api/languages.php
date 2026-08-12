@@ -91,22 +91,7 @@ function defaultLanguageNameForCode(string $languageCode): string {
     $code = strtolower(trim($languageCode));
     $map = [
         'en' => 'English',
-        'es' => 'Spanish',
-        'zh' => 'Chinese',
-        'hi' => 'Hindi',
-        'ar' => 'Arabic',
-        'pt' => 'Portuguese',
-        'ru' => 'Russian',
-        'ja' => 'Japanese',
-        'de' => 'German',
-        'fr' => 'French',
-        'fil' => 'Filipino',
         'tl' => 'Tagalog',
-        'ceb' => 'Cebuano',
-        'ilo' => 'Ilocano',
-        'war' => 'Waray',
-        'id' => 'Indonesian',
-        'ko' => 'Korean',
     ];
     return $map[$code] ?? strtoupper($code);
 }
@@ -167,13 +152,10 @@ try {
                 'success' => true,
                 'languages' => [
                     ['language_code' => 'en', 'language_name' => 'English', 'native_name' => 'English', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 100],
-                    ['language_code' => 'fil', 'language_name' => 'Filipino', 'native_name' => 'Filipino', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 98],
-                    ['language_code' => 'ceb', 'language_name' => 'Cebuano', 'native_name' => 'Cebuano', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 94],
-                    ['language_code' => 'ilo', 'language_name' => 'Ilocano', 'native_name' => 'Ilokano', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 92],
-                    ['language_code' => 'war', 'language_name' => 'Waray', 'native_name' => 'Winaray', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 88],
+                    ['language_code' => 'tl', 'language_name' => 'Tagalog', 'native_name' => 'Tagalog', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1, 'priority' => 90],
                 ],
                 'last_update' => null,
-                'count' => 5,
+                'count' => 2,
                 'updated' => true
             ]);
             if (ob_get_level()) {
@@ -217,6 +199,7 @@ try {
                 updated_at
             FROM {$languagesTable}
             WHERE is_active = 1
+              AND language_code IN ('en', 'tl')
             ORDER BY priority DESC, language_name ASC
         ");
         $languages = $stmt->fetchAll();
@@ -249,6 +232,12 @@ try {
                 $lang = trim(explode(';', $part)[0]);
                 $lang = strtolower($lang);
                 $langCode = explode('-', $lang)[0];
+                if ($langCode === 'fil') {
+                    $langCode = 'tl';
+                }
+                if (!in_array($langCode, ['en', 'tl'], true)) {
+                    continue;
+                }
                 if (!in_array($langCode, $languages)) {
                     $languages[] = $langCode;
                 }
@@ -281,7 +270,8 @@ try {
             $stmt = $pdo->prepare("
                 SELECT language_code, language_name, native_name, flag_emoji 
                 FROM {$languagesTable} 
-                WHERE language_code = ? AND is_active = 1 
+                WHERE language_code = ? AND is_active = 1
+                  AND language_code IN ('en', 'tl')
                 LIMIT 1
             ");
             $stmt->execute([$langCode]);
@@ -297,7 +287,8 @@ try {
             $stmt = $pdo->prepare("
                 SELECT language_code, language_name, native_name, flag_emoji 
                 FROM {$languagesTable} 
-                WHERE language_code LIKE ? AND is_active = 1 
+                WHERE language_code LIKE ? AND is_active = 1
+                  AND language_code IN ('en', 'tl')
                 LIMIT 1
             ");
             $stmt->execute([$langCode . '%']);

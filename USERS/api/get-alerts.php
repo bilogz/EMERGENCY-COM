@@ -16,8 +16,11 @@ if (session_status() === PHP_SESSION_NONE) {
  */
 function normalizeAlertLanguageCode($language): string {
     $lang = strtolower(trim((string)$language));
-    if ($lang === 'tl') {
+    if ($lang === 'tl' || $lang === 'filipino' || $lang === 'tagalog') {
         $lang = 'fil';
+    }
+    if ($lang === 'both') {
+        return 'both';
     }
     if ($lang !== '' && !preg_match('/^[a-z0-9_-]{2,15}$/', $lang)) {
         return '';
@@ -51,6 +54,16 @@ function getUserPreferredLanguage(PDO $pdo, int $userId): string {
     }
 
     $queries = [
+        [
+            "SELECT notification_language AS preferred_language
+             FROM user_preferences
+             WHERE user_id = ?
+               AND notification_language IS NOT NULL
+               AND notification_language <> ''
+             ORDER BY id DESC
+             LIMIT 1",
+            [$userId]
+        ],
         [
             "SELECT preferred_language
              FROM user_preferences
@@ -522,17 +535,25 @@ if ($translationHelper && $targetLanguage !== 'en' && !empty($alerts)) {
             continue;
         }
 
+        $translationLanguage = $targetLanguage === 'both' ? 'fil' : $targetLanguage;
         $translatedAlert = $translationHelper->getTranslatedAlert(
             (int)$alert['id'],
-            $targetLanguage,
+            $translationLanguage,
             $originalTitle,
             $originalMessage
         );
 
         if (is_array($translatedAlert) && !empty($translatedAlert['title']) && !empty($translatedAlert['message'])) {
-            $alert['title'] = $translatedAlert['title'];
-            $alert['message'] = $translatedAlert['message'];
-            $alert['content'] = $translatedAlert['message'];
+            $alert['translations'] = [
+                'en' => ['title' => $originalTitle, 'message' => $originalMessage],
+                'tl' => ['title' => $translatedAlert['title'], 'message' => $translatedAlert['message']],
+                'fil' => ['title' => $translatedAlert['title'], 'message' => $translatedAlert['message']],
+            ];
+            if ($targetLanguage !== 'both') {
+                $alert['title'] = $translatedAlert['title'];
+                $alert['message'] = $translatedAlert['message'];
+                $alert['content'] = $translatedAlert['message'];
+            }
             $translationSuccessCount++;
         }
     }

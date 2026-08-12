@@ -25,13 +25,45 @@ function normalizeDispatchLanguage($language): string {
     return $lang;
 }
 
+function normalizeNotificationDispatchLanguage($language): string {
+    $lang = strtolower(trim((string)$language));
+    if ($lang === 'tagalog' || $lang === 'filipino' || $lang === 'tl') {
+        return 'fil';
+    }
+    if ($lang === 'both') {
+        return 'both';
+    }
+    return $lang === 'en' ? 'en' : '';
+}
+
+function dispatchSystemNotificationLanguage(string $preference): string {
+    // Android/FCM must receive one user-visible notification. For Both, use
+    // English as the system banner and keep Filipino attached to the alert ID.
+    return $preference === 'fil' ? 'fil' : 'en';
+}
+
+function dispatchEnsureNotificationLanguageColumn(PDO $pdo): void {
+    try {
+        $exists = $pdo->query("SHOW TABLES LIKE 'user_preferences'");
+        if (!$exists || !$exists->fetch()) return;
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM user_preferences");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        if (!in_array('notification_language', $cols, true)) {
+            $pdo->exec("ALTER TABLE user_preferences ADD COLUMN notification_language VARCHAR(10) NOT NULL DEFAULT 'en' AFTER preferred_language");
+        }
+    } catch (Throwable $e) {
+        error_log('Unable to ensure notification_language preference column: ' . $e->getMessage());
+    }
+}
+
 /**
  * Resolve recipient language using stored preferences.
  * Priority:
- * 1) subscriptions.preferred_language
- * 2) user_preferences.preferred_language
- * 3) users.preferred_language
- * 4) fallback "en"
+ * 1) user_preferences.notification_language (en, fil/tl, both)
+ * 2) subscriptions.preferred_language
+ * 3) user_preferences.preferred_language
+ * 4) users.preferred_language
+ * 5) fallback "en"
  */
 function resolveRecipientLanguage(PDO $pdo, int $userId): string {
     static $cache = [];
@@ -44,6 +76,16 @@ function resolveRecipientLanguage(PDO $pdo, int $userId): string {
     }
 
     $queries = [
+        [
+            "SELECT notification_language AS preferred_language
+             FROM user_preferences
+             WHERE user_id = ?
+               AND notification_language IS NOT NULL
+               AND notification_language <> ''
+             ORDER BY id DESC
+             LIMIT 1",
+            [$userId]
+        ],
         [
             "SELECT preferred_language
              FROM subscriptions
@@ -81,7 +123,10 @@ function resolveRecipientLanguage(PDO $pdo, int $userId): string {
             $stmt->execute($params);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($row && isset($row['preferred_language'])) {
-                $lang = normalizeDispatchLanguage($row['preferred_language']);
+                $lang = normalizeNotificationDispatchLanguage($row['preferred_language']);
+                if ($lang === '') {
+                    $lang = normalizeDispatchLanguage($row['preferred_language']);
+                }
                 if ($lang !== '') {
                     $cache[$userId] = $lang;
                     return $lang;
@@ -564,8 +609,9 @@ try {
         throw new Exception('Required fields missing: ' . implode(', ', $missing));
     }
 
-    // Ensure queue schema exists before we insert dispatch jobs.
+    // Ensure queue and preference schema exists before we insert dispatch jobs.
     ensureNotificationQueueTable($pdo);
+    dispatchEnsureNotificationLanguageColumn($pdo);
 
     // 5. Build Recipient Query
     $baseSelect = "SELECT u.id, u.name, u.email, u.phone";
@@ -779,7 +825,9 @@ try {
         $recipientId = (int)($recipient['id'] ?? 0);
         $recipientLanguage = resolveRecipientLanguage($pdo, $recipientId);
         $recipientLanguages[$recipientId] = $recipientLanguage;
-        if ($recipientLanguage !== 'en') {
+        if ($recipientLanguage === 'both') {
+            $uniqueTargetLanguages['fil'] = true;
+        } elseif ($recipientLanguage !== 'en') {
             $uniqueTargetLanguages[$recipientLanguage] = true;
         }
     }
@@ -798,8 +846,9 @@ try {
         $localizedTitle = $title;
         $localizedBody = $body;
 
-        if ($translationHelper && $recipientLanguage !== 'en') {
-            $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $recipientLanguage, $title, $body);
+        $deliveryLanguage = dispatchSystemNotificationLanguage($recipientLanguage);
+        if ($translationHelper && $deliveryLanguage !== 'en') {
+            $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $deliveryLanguage, $title, $body);
             if (is_array($translatedAlert) && !empty($translatedAlert['title']) && !empty($translatedAlert['message'])) {
                 $localizedTitle = $translatedAlert['title'];
                 $localizedBody = $translatedAlert['message'];
@@ -839,7 +888,7 @@ try {
             $localizedTitle = $title;
             $localizedBody = $body;
             if ($pushUserId && $translationHelper) {
-                $language = $recipientLanguages[$pushUserId] ?? 'en';
+                $language = dispatchSystemNotificationLanguage($recipientLanguages[$pushUserId] ?? 'en');
                 if ($language !== 'en') {
                     $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $language, $title, $body);
                     if (is_array($translatedAlert) && !empty($translatedAlert['title']) && !empty($translatedAlert['message'])) {

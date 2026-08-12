@@ -157,6 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             SELECT language_code, language_name, native_name, flag_emoji, is_active, is_ai_supported, priority
             FROM {$languagesTable}
             WHERE is_active = 1
+              AND language_code IN ('en', 'tl')
             ORDER BY priority DESC, language_name ASC
         ");
         $languages = $stmt->fetchAll();
@@ -168,9 +169,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (PDOException $e) {
         // Fallback if table doesn't exist yet
         $languages = [
-            ['language_code' => 'en', 'language_name' => 'English', 'native_name' => 'English', 'flag_emoji' => '🇺🇸', 'is_active' => 1, 'is_ai_supported' => 1],
-            ['language_code' => 'fil', 'language_name' => 'Filipino', 'native_name' => 'Filipino', 'flag_emoji' => '🇵🇭', 'is_active' => 1, 'is_ai_supported' => 1],
-            ['language_code' => 'ceb', 'language_name' => 'Cebuano', 'native_name' => 'Cebuano', 'flag_emoji' => '🇵🇭', 'is_active' => 1, 'is_ai_supported' => 1]
+            ['language_code' => 'en', 'language_name' => 'English', 'native_name' => 'English', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1],
+            ['language_code' => 'tl', 'language_name' => 'Tagalog', 'native_name' => 'Tagalog', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1]
         ];
         echo json_encode([
             'success' => true,
