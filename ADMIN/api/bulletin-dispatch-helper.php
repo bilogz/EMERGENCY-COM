@@ -2,6 +2,8 @@
 
 require_once dirname(__DIR__, 2) . '/PHP/api/device_registry.php';
 
+if (!defined('BULLETIN_EMERGENCY_CHANNEL_ID')) define('BULLETIN_EMERGENCY_CHANNEL_ID', 'alertara-emergency-default-v5');
+
 function bulletinReadableColumns(PDO $pdo, string $table): array
 {
     if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) return [];
@@ -64,7 +66,8 @@ function bulletinEnsureDeliveryTables(PDO $pdo): void
         'delivery_status' => 'VARCHAR(20) NULL',
         'error_message' => 'TEXT NULL',
         'processed_at' => 'DATETIME NULL',
-        'delivered_at' => 'DATETIME NULL'
+        'delivered_at' => 'DATETIME NULL',
+        'notification_channel' => 'VARCHAR(120) NULL'
     ];
     foreach ($required as $column => $definition) {
         if (!isset($queueColumns[$column])) {
@@ -232,21 +235,21 @@ function queueBulletinBroadcast(PDO $pdo, array $payload): array
 
     $pushTokens = in_array('push', $channels, true) ? bulletinLoadPushTokens($pdo, array_column($recipients, 'id')) : [];
     $queueStmt = $pdo->prepare("INSERT INTO notification_queue
-        (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
+        (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, notification_channel, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
     $queued = 0;
     foreach ($recipients as $recipient) {
         $userId = (int)$recipient['id'];
         foreach ($channels as $channel) {
             if ($channel === 'email' && filter_var($recipient['email'] ?? '', FILTER_VALIDATE_EMAIL)) {
-                $queueStmt->execute([$logId, $alertId, $userId, 'email', $recipient['email'], 'email', $title, $message]);
+                $queueStmt->execute([$logId, $alertId, $userId, 'email', $recipient['email'], 'email', $title, $message, null]);
                 $queued++;
             } elseif ($channel === 'sms' && trim((string)($recipient['phone'] ?? '')) !== '') {
-                $queueStmt->execute([$logId, $alertId, $userId, 'phone', $recipient['phone'], 'sms', $title, $message]);
+                $queueStmt->execute([$logId, $alertId, $userId, 'phone', $recipient['phone'], 'sms', $title, $message, null]);
                 $queued++;
             } elseif ($channel === 'push') {
                 foreach ($pushTokens[$userId] ?? [] as $token) {
-                    $queueStmt->execute([$logId, $alertId, $userId, 'push_token', $token, 'push', $title, $message]);
+                    $queueStmt->execute([$logId, $alertId, $userId, 'push_token', $token, 'push', $title, $message, BULLETIN_EMERGENCY_CHANNEL_ID]);
                     $queued++;
                 }
             }

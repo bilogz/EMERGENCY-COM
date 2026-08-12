@@ -1,4 +1,5 @@
 <?php
+if (!defined('PAGASA_EMERGENCY_CHANNEL_ID')) define('PAGASA_EMERGENCY_CHANNEL_ID', 'alertara-emergency-default-v5');
 /**
  * PAGASA Auto-Alert System
  * 
@@ -448,9 +449,18 @@ function queuePagasaBroadcast(PDO $pdo, array $bulletin, string $channels): ?int
         }
     }
 
+    try {
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM notification_queue");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        if (!in_array('notification_channel', $cols, true)) {
+            $pdo->exec("ALTER TABLE notification_queue ADD COLUMN notification_channel VARCHAR(120) NULL AFTER message");
+        }
+    } catch (Throwable $e) {
+        // The notification worker also migrates this column before processing jobs.
+    }
     $queueStmt = $pdo->prepare("
-        INSERT INTO notification_queue (log_id, recipient_id, recipient_type, recipient_value, channel, title, message, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+        INSERT INTO notification_queue (log_id, recipient_id, recipient_type, recipient_value, channel, title, message, notification_channel, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
     ");
 
     foreach ($recipients as $recipient) {
@@ -471,7 +481,7 @@ function queuePagasaBroadcast(PDO $pdo, array $bulletin, string $channels): ?int
                 continue;
             }
             try {
-                $queueStmt->execute([$logId, $userId, $recipientType, $recipientValue, $ch, $title, $message, $alertTime]);
+                $queueStmt->execute([$logId, $userId, $recipientType, $recipientValue, $ch, $title, $message, $ch === 'push' ? PAGASA_EMERGENCY_CHANNEL_ID : null, $alertTime]);
                 $queued++;
             } catch (Throwable $e) {
                 // Skip duplicate or error

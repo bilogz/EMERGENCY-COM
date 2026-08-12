@@ -82,23 +82,44 @@ function mnEnsureCategoriesSchema(PDO $pdo, string $tableName): void {
         }
     }
 
-    $count = (int)$pdo->query("SELECT COUNT(*) FROM {$tableName}")->fetchColumn();
-    if ($count === 0) {
-        $seed = [
-            ['Weather', 'fa-cloud-sun-rain', 'Weather advisories and rainfall alerts', '#3498db', 'active'],
-            ['Earthquake', 'fa-mountain', 'Earthquake and aftershock notifications', '#e74c3c', 'active'],
-            ['Fire', 'fa-fire', 'Fire incidents and evacuation notices', '#e67e22', 'active'],
-            ['Flood', 'fa-water', 'Flood warnings and water level updates', '#1abc9c', 'active'],
-            ['Bomb Threat', 'fa-bomb', 'Bomb threat and security alerts', '#9b59b6', 'active'],
-            ['Health', 'fa-heartbeat', 'Health advisories and public health notices', '#2ecc71', 'active'],
-            ['General', 'fa-bell', 'General advisories and announcements', '#3a7675', 'active'],
-        ];
-        $stmt = $pdo->prepare("
-            INSERT INTO {$tableName} (name, icon, description, color, status, created_at)
-            VALUES (?, ?, ?, ?, ?, NOW())
-        ");
-        foreach ($seed as $row) {
-            $stmt->execute($row);
+    $seed = [
+        ['Weather', 'fa-cloud-sun-rain', 'Weather advisories and rainfall alerts', '#3498db', 'active'],
+        ['Earthquake', 'fa-mountain', 'Earthquake and aftershock notifications', '#e74c3c', 'active'],
+        ['Fire', 'fa-fire', 'Fire incidents and evacuation notices', '#e67e22', 'active'],
+        ['Flood', 'fa-water', 'Flood warnings, rising water levels, flooded roads, and evacuation updates', '#1abc9c', 'active'],
+        ['Bomb Threat', 'fa-bomb', 'Bomb threat and security alerts', '#9b59b6', 'active'],
+        ['Health', 'fa-heartbeat', 'Health advisories and public health notices', '#2ecc71', 'active'],
+        ['General', 'fa-bell', 'General advisories and announcements', '#3a7675', 'active'],
+    ];
+    $findStmt = $pdo->prepare("SELECT id FROM {$tableName} WHERE LOWER(name) = LOWER(?) LIMIT 1");
+    $insertStmt = $pdo->prepare("
+        INSERT INTO {$tableName} (name, icon, description, color, status, created_at)
+        VALUES (?, ?, ?, ?, ?, NOW())
+    ");
+    $updateParts = [];
+    if (in_array('icon', $cols, true)) $updateParts[] = 'icon = ?';
+    if (in_array('description', $cols, true)) $updateParts[] = 'description = ?';
+    if (in_array('color', $cols, true)) $updateParts[] = 'color = ?';
+    if (in_array('status', $cols, true)) $updateParts[] = "status = 'active'";
+    $updateStmt = null;
+    if (!empty($updateParts)) {
+        $updateStmt = $pdo->prepare("UPDATE {$tableName} SET " . implode(', ', $updateParts) . " WHERE id = ?");
+    }
+
+    foreach ($seed as $row) {
+        $findStmt->execute([$row[0]]);
+        $existingId = (int)($findStmt->fetchColumn() ?: 0);
+        if ($existingId <= 0) {
+            $insertStmt->execute($row);
+            continue;
+        }
+        if ($updateStmt) {
+            $params = [];
+            if (in_array('icon', $cols, true)) $params[] = $row[1];
+            if (in_array('description', $cols, true)) $params[] = $row[2];
+            if (in_array('color', $cols, true)) $params[] = $row[3];
+            $params[] = $existingId;
+            $updateStmt->execute($params);
         }
     }
 }

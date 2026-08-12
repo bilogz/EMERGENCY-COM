@@ -158,6 +158,7 @@ function ensureNotificationQueueTable(PDO $pdo): void {
                 channel VARCHAR(20) NOT NULL DEFAULT 'push',
                 title VARCHAR(255) NOT NULL DEFAULT '',
                 message TEXT NULL,
+                more_info_url VARCHAR(700) NULL,
                 status VARCHAR(20) NOT NULL DEFAULT 'pending',
                 delivery_status VARCHAR(20) NULL,
                 error_message TEXT NULL,
@@ -182,6 +183,7 @@ function ensureNotificationQueueTable(PDO $pdo): void {
         'channel' => "VARCHAR(20) NOT NULL DEFAULT 'push'",
         'title' => "VARCHAR(255) NOT NULL DEFAULT ''",
         'message' => "TEXT NULL",
+        'more_info_url' => "VARCHAR(700) NULL",
         'status' => "VARCHAR(20) NOT NULL DEFAULT 'pending'",
         'delivery_status' => "VARCHAR(20) NULL",
         'error_message' => "TEXT NULL",
@@ -520,6 +522,10 @@ try {
     $alertLatRaw = $_POST['alert_latitude'] ?? null;
     $alertLngRaw = $_POST['alert_longitude'] ?? null;
     $alertLocationName = trim((string)($_POST['alert_location_name'] ?? $_POST['alert_location'] ?? ''));
+    $moreInfoUrl = trim((string)($_POST['more_info_url'] ?? $_POST['more_information_url'] ?? ''));
+    if ($moreInfoUrl !== '' && !filter_var($moreInfoUrl, FILTER_VALIDATE_URL)) {
+        throw new Exception('Invalid more information link. Please paste a full URL starting with http:// or https://.');
+    }
     
     $channels = $_POST['channels'] ?? []; 
     if (is_string($channels)) {
@@ -726,6 +732,7 @@ try {
     $hasWeatherSignalCol = false;
     $hasFireLevelCol = false;
     $hasSourceCol = false;
+    $hasMoreInfoUrlCol = false;
     $hasLocationCol = false;
     $hasLatitudeCol = false;
     $hasLongitudeCol = false;
@@ -734,6 +741,15 @@ try {
         $hasWeatherSignalCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'weather_signal'")->rowCount() > 0;
         $hasFireLevelCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'fire_level'")->rowCount() > 0;
         $hasSourceCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'source'")->rowCount() > 0;
+        $hasMoreInfoUrlCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'more_info_url'")->rowCount() > 0;
+        if (!$hasMoreInfoUrlCol) {
+            try {
+                $pdo->exec("ALTER TABLE alerts ADD COLUMN more_info_url VARCHAR(700) NULL");
+                $hasMoreInfoUrlCol = true;
+            } catch (PDOException $e) {
+                $hasMoreInfoUrlCol = false;
+            }
+        }
         $hasLocationCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'location'")->rowCount() > 0;
         $hasLatitudeCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'latitude'")->rowCount() > 0;
         $hasLongitudeCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'longitude'")->rowCount() > 0;
@@ -742,6 +758,7 @@ try {
         $hasWeatherSignalCol = false;
         $hasFireLevelCol = false;
         $hasSourceCol = false;
+        $hasMoreInfoUrlCol = false;
         $hasLocationCol = false;
         $hasLatitudeCol = false;
         $hasLongitudeCol = false;
@@ -771,6 +788,11 @@ try {
     if ($hasSourceCol) {
         $alertCols[] = 'source';
         $alertVals[] = 'mass_notification';
+        $alertPlaceholders[] = '?';
+    }
+    if ($moreInfoUrl !== '' && $hasMoreInfoUrlCol) {
+        $alertCols[] = 'more_info_url';
+        $alertVals[] = $moreInfoUrl;
         $alertPlaceholders[] = '?';
     }
     $storedAlertLat = $alertLat ?? $targetLat;
@@ -873,10 +895,10 @@ try {
 
             if (!empty($value)) {
                 $qStmt = $pdo->prepare("
-                    INSERT INTO notification_queue (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                    INSERT INTO notification_queue (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, more_info_url, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
                 ");
-                $qStmt->execute([$logId, $alertId, $recipientId, $type, $value, $channel, $localizedTitle, $localizedBody]);
+                $qStmt->execute([$logId, $alertId, $recipientId, $type, $value, $channel, $localizedTitle, $localizedBody, $moreInfoUrl]);
                 $queueCount++;
             }
         }
@@ -898,9 +920,9 @@ try {
                 }
             }
             $qStmt = $pdo->prepare("INSERT INTO notification_queue
-                (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
-                VALUES (?, ?, ?, 'push_token', ?, 'push', ?, ?, 'pending')");
-            $qStmt->execute([$logId, $alertId, $pushUserId, $device['token'], $localizedTitle, $localizedBody]);
+                (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, more_info_url, status)
+                VALUES (?, ?, ?, 'push_token', ?, 'push', ?, ?, ?, 'pending')");
+            $qStmt->execute([$logId, $alertId, $pushUserId, $device['token'], $localizedTitle, $localizedBody, $moreInfoUrl]);
             $queueCount++;
         }
     }
@@ -908,10 +930,10 @@ try {
     // Handle Public Address System (single message, no per-user language)
     if (in_array('pa', $channels, true)) {
         $qStmt = $pdo->prepare("
-            INSERT INTO notification_queue (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
-            VALUES (?, ?, NULL, 'system', 'pa_system', 'pa', ?, ?, 'pending')
+            INSERT INTO notification_queue (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, more_info_url, status)
+            VALUES (?, ?, NULL, 'system', 'pa_system', 'pa', ?, ?, ?, 'pending')
         ");
-        $qStmt->execute([$logId, $alertId, $title, $body]);
+        $qStmt->execute([$logId, $alertId, $title, $body, $moreInfoUrl]);
         $queueCount++;
     }
 
