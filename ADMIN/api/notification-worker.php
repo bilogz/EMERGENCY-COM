@@ -512,8 +512,11 @@ function getFirebaseAccessToken(array $serviceAccount, &$error = null): ?string 
     return $cached['token'];
 }
 
-function workerAlertMoreInfoUrl(string $category): string {
-    $needle = strtolower($category);
+function workerAlertMoreInfoUrl(string $category, string $body = ''): string {
+    $needle = strtolower($category . ' ' . $body);
+    if (strpos($needle, 'pagasa.dost.gov.ph/flood') !== false || strpos($needle, 'flood-information') !== false) {
+        return 'https://pagasa.dost.gov.ph/flood#flood-information';
+    }
     if (preg_match('/weather|pagasa|rain|flood|typhoon|storm|wind|landslide/', $needle)) {
         return 'https://emergency-comm.alertaraqc.com/USERS/weather-map.php';
     }
@@ -586,7 +589,7 @@ function sendFCM($token, $payload, &$error = null) {
     foreach (['source', 'latitude', 'longitude', 'locationName'] as $key) {
         if (isset($payload[$key]) && trim((string)$payload[$key]) !== '') $data[$key] = (string)$payload[$key];
     }
-    $moreInfoUrl = workerAlertMoreInfoUrl($data['category']);
+    $moreInfoUrl = workerAlertMoreInfoUrl($data['category'], $data['body'] ?? '');
     if ($moreInfoUrl !== '') $data['moreInfoUrl'] = $moreInfoUrl;
     $channelId = workerValidNotificationChannel((string)($payload['notification_channel'] ?? FCM_EMERGENCY_CHANNEL_ID));
     $isSilentChannel = $channelId === FCM_SILENT_CHANNEL_ID;
@@ -665,7 +668,7 @@ function sendExpoPushNotification(string $token, array $payload, &$error = null)
     foreach (['source', 'latitude', 'longitude', 'locationName'] as $key) {
         if (isset($payload[$key]) && trim((string)$payload[$key]) !== '') $message['data'][$key] = (string)$payload[$key];
     }
-    $moreInfoUrl = workerAlertMoreInfoUrl((string)($message['data']['category'] ?? ''));
+    $moreInfoUrl = workerAlertMoreInfoUrl((string)($message['data']['category'] ?? ''), (string)($payload['body'] ?? ''));
     if ($moreInfoUrl !== '') $message['data']['moreInfoUrl'] = $moreInfoUrl;
     $ch = curl_init('https://exp.host/--/api/v2/push/send');
     curl_setopt_array($ch, [
@@ -697,6 +700,7 @@ function broadcastPA($message) {
     // error_log("PA Broadcast: $message");
     return true;
 }
+
 
 
 

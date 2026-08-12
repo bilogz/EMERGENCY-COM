@@ -10,7 +10,10 @@ require_once 'secure-api-config.php';
 
 try {
     // Get Gemini API key securely (checks config file first, then database)
-    $apiKey = getGeminiApiKey();
+    $apiKey = getGeminiApiKey('analysis');
+    if (empty($apiKey)) {
+        $apiKey = getGeminiApiKey('default');
+    }
     
     // Debug: show both common config locations
     $adminConfigPath = __DIR__ . '/config.local.php';

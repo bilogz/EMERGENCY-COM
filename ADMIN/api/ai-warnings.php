@@ -1551,7 +1551,7 @@ Keep concise and actionable for public communication.";
 
         // Create alert title and content
         $alertTitle = "AI Weather Analysis - {$locationName}";
-        $alertContent = "Current Weather Status:\n" . $analysis;
+        $alertContent = cleanWeatherAnalysisForNotification($analysis, $weather);
 
         // Get or create Weather category
         $stmt = $pdo->prepare("SELECT id FROM alert_categories WHERE name = 'Weather' LIMIT 1");

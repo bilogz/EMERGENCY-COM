@@ -176,7 +176,7 @@ $pageTitle = 'Automated Warning Integration';
                     <!-- PAGASA Auto-Alert Module -->
                     <div class="module-card" id="pagasaAutoAlertCard">
                         <div class="module-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2><i class="fas fa-satellite-dish"></i> PAGASA Auto-Alert System</h2>
+                            <h2><i class="fas fa-satellite-dish"></i> Weather Risk Auto-Alert System</h2>
                             <div style="display: flex; align-items: center; gap: 0.75rem;">
                                 <span id="pagasaAutoAlertStatusDot" style="width:10px;height:10px;border-radius:50%;background:#95a5a6;display:inline-block;" title="Disabled"></span>
                                 <span id="pagasaAutoAlertStatusLabel" style="font-size:0.82rem;font-weight:600;color:var(--text-secondary-1);">Disabled</span>
@@ -186,7 +186,7 @@ $pageTitle = 'Automated Warning Integration';
                             <div class="info-box" style="margin-bottom: 1.25rem;">
                                 <i class="fas fa-info-circle"></i>
                                 <div>
-                                    <strong>Automatic Bulletin Alerts:</strong> When enabled, the system polls PAGASA's RSS feed at a set interval. If a new or updated weather bulletin is detected, a mass notification is automatically sent to all subscribed citizens via the selected channels.
+                                    <strong>Automatic Weather Risk Alerts:</strong> When enabled, the system checks weather risk signals such as flood risk, heavy rain, wind, visibility, thunderstorm, and heat. Qualifying risks are automatically sent to subscribed citizens via the selected channels.
                                 </div>
                             </div>
 
@@ -196,10 +196,10 @@ $pageTitle = 'Automated Warning Integration';
                                 <div style="background: var(--bg-color-1); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border-color-1);">
                                     <label style="font-weight:700; font-size:0.85rem; color:var(--text-secondary-1); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.75rem; display:block;">Auto-Alert</label>
                                     <label class="switch" style="margin-top:0.25rem;">
-                                        <input type="checkbox" id="pagasaAutoAlertToggle">
+                                        <input type="checkbox" id="pagasaAutoAlertToggle" onchange="savePagasaAutoAlertSettings()">
                                         <span class="slider"></span>
                                     </label>
-                                    <div style="font-size:0.78rem; color:var(--text-secondary-1); margin-top:0.5rem;">Enable automatic mass notifications</div>
+                                    <div style="font-size:0.78rem; color:var(--text-secondary-1); margin-top:0.5rem;">Enable automatic weather-risk notifications</div>
                                 </div>
 
                                 <!-- Channels -->
@@ -216,9 +216,9 @@ $pageTitle = 'Automated Warning Integration';
                                 <div style="background: var(--bg-color-1); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border-color-1);">
                                     <label for="paaInterval" style="font-weight:700; font-size:0.85rem; color:var(--text-secondary-1); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.75rem; display:block;">Check Interval</label>
                                     <select id="paaInterval" disabled style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid var(--border-color-1); background:var(--card-bg-1); color:var(--text-color-1); font-size:0.88rem;">
-                                        <option value="360" selected>Every 6 hours</option>
+                                        <option value="15" selected>Every 15 minutes</option>
                                     </select>
-                                    <div style="font-size:0.78rem; color:var(--text-secondary-1); margin-top:0.5rem;">Fixed safety interval for automatic PAGASA checks</div>
+                                    <div style="font-size:0.78rem; color:var(--text-secondary-1); margin-top:0.5rem;">Checks Open-Meteo weather risk every 15 minutes</div>
                                 </div>
 
                                 <!-- Last Check Info -->
@@ -237,23 +237,23 @@ $pageTitle = 'Automated Warning Integration';
                                     <i class="fas fa-save"></i> Save Settings
                                 </button>
                                 <button type="button" class="btn btn-success" id="paaCheckNowBtn" onclick="checkPagasaNow()" style="padding:0.75rem 1.5rem; background:#27ae60; border-color:#27ae60;">
-                                    <i class="fas fa-sync-alt"></i> Check Now
+                                    <i class="fas fa-sync-alt"></i> Check Weather Risk Now
                                 </button>
                                 <button type="button" class="btn btn-warning" id="paaForceAlertBtn" onclick="forcePagasaAlert()" style="padding:0.75rem 1.5rem; background:#f59e0b; border-color:#f59e0b; color:#fff;">
-                                    <i class="fas fa-bullhorn"></i> Force Send Alert
+                                    <i class="fas fa-bullhorn"></i> Force Latest Weather Alert
                                 </button>
                             </div>
                         </div>
 
                         <!-- Recent Auto-Alert History -->
                         <div style="border-top: 1px solid var(--border-color-1); padding: 1.5rem;">
-                            <h3 style="margin:0 0 1rem 0; font-size:1rem;"><i class="fas fa-history" style="color:var(--primary-color-1);"></i> Recent Auto-Alerts</h3>
+                            <h3 style="margin:0 0 1rem 0; font-size:1rem;"><i class="fas fa-history" style="color:var(--primary-color-1);"></i> Recent Weather Auto-Alerts</h3>
                             <div style="overflow-x: auto;">
                                 <table class="data-table" id="paaHistoryTable">
                                     <thead>
                                         <tr>
                                             <th>Time</th>
-                                            <th>Bulletin</th>
+                                            <th>Weather Alert</th>
                                             <th>Severity</th>
                                             <th>Recipients</th>
                                             <th>Channels</th>
@@ -311,8 +311,8 @@ $pageTitle = 'Automated Warning Integration';
                             </div>
                             <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                                 <button type="button" class="btn btn-primary" id="eaaSaveSettingsBtn" onclick="savePhivolcsAutoAlertSettings()" style="padding:0.75rem 1.5rem;"><i class="fas fa-save"></i> Save Settings</button>
-                                <button type="button" class="btn btn-success" id="eaaCheckNowBtn" onclick="checkPhivolcsNow()" style="padding:0.75rem 1.5rem; background:#27ae60; border-color:#27ae60;"><i class="fas fa-sync-alt"></i> Check Now</button>
-                                <button type="button" class="btn btn-warning" id="eaaForceAlertBtn" onclick="forcePhivolcsAlert()" style="padding:0.75rem 1.5rem; background:#dc2626; border-color:#dc2626; color:#fff;"><i class="fas fa-bullhorn"></i> Force Send Alert</button>
+                                <button type="button" class="btn btn-success" id="eaaCheckNowBtn" onclick="checkPhivolcsNow()" style="padding:0.75rem 1.5rem; background:#27ae60; border-color:#27ae60;"><i class="fas fa-sync-alt"></i> Check Weather Risk Now</button>
+                                <button type="button" class="btn btn-warning" id="eaaForceAlertBtn" onclick="forcePhivolcsAlert()" style="padding:0.75rem 1.5rem; background:#dc2626; border-color:#dc2626; color:#fff;"><i class="fas fa-bullhorn"></i> Force Latest Weather Alert</button>
                             </div>
                         </div>
                         <div style="border-top: 1px solid var(--border-color-1); padding: 1.5rem;">
@@ -497,7 +497,7 @@ $pageTitle = 'Automated Warning Integration';
                     <div class="form-actions" style="margin-top: 2rem; display: flex; gap: 1rem;">
                         <button type="button" class="btn btn-secondary" onclick="closeAISettingsModal()" style="flex: 1;">Cancel</button>
                         <button type="submit" class="btn btn-primary" style="flex: 2;">Save AI Settings</button>
-                        <button type="button" class="btn btn-info" onclick="checkAIWarnings(event)" style="flex: 1;">Check Now</button>
+                        <button type="button" class="btn btn-info" onclick="checkAIWarnings(event)" style="flex: 1;">Check Weather Risk Now</button>
                     </div>
                 </form>
             </div>
@@ -1231,21 +1231,21 @@ $pageTitle = 'Automated Warning Integration';
                 }
 
                 if (data.success) {
-                    alert('✅ Success: Monitoring status successfully pushed to the Emergency Response Team!');
+                    alert('ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ Success: Monitoring status successfully pushed to the Emergency Response Team!');
                 } else {
-                    alert('❌ Error: ' + (data.message || 'Failed to push status.'));
+                    alert('ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Error: ' + (data.message || 'Failed to push status.'));
                 }
             } catch (error) {
                 if (btn) {
                     btn.innerHTML = originalHTML;
                     btn.disabled = false;
                 }
-                alert('❌ Error pushing status: ' + error.message);
+                alert('ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Error pushing status: ' + error.message);
             }
         }
 
         // ============================================================
-        // PAGASA Auto-Alert System
+        // Weather Risk Auto-Alert System
         // ============================================================
         
         let paaPollingTimer = null;
@@ -1309,10 +1309,10 @@ $pageTitle = 'Automated Warning Integration';
                 }
 
                 // Start/stop background polling based on enabled status
-                setupPagasaAutoPolling(data.enabled, 360);
+                setupPagasaAutoPolling(data.enabled, 15);
 
             } catch (e) {
-                console.error('Failed to load PAGASA auto-alert status:', e);
+                console.error('Failed to load weather-risk auto-alert status:', e);
             }
         }
 
@@ -1325,14 +1325,14 @@ $pageTitle = 'Automated Warning Integration';
 
             if (!enabled) return;
 
-            const intervalMs = 360 * 60 * 1000;
+            const intervalMs = 15 * 60 * 1000;
             paaPollingTimer = setInterval(async () => {
                 try {
-                    const res = await fetch(PAA_API + '?action=check');
+                    const res = await fetch('../api/weather-monitoring.php?action=auto-risk-check');
                     const data = await res.json();
                     if (data.alerted) {
                         // Show notification toast
-                        showPagasaAlertToast(data.bulletin_title, data.recipients);
+                        showPagasaAlertToast(data.analysis?.overall?.label || 'Weather Risk Alert', data.queued?.queued_jobs || 0);
                         loadPagasaAutoAlertHistory();
                         loadPagasaAutoAlertStatus();
                     }
@@ -1342,7 +1342,7 @@ $pageTitle = 'Automated Warning Integration';
                         lastCheckEl.textContent = data.checked_at;
                     }
                 } catch (e) {
-                    console.error('PAGASA auto-check failed:', e);
+                    console.error('Weather risk auto-check failed:', e);
                 }
             }, intervalMs);
         }
@@ -1361,7 +1361,7 @@ $pageTitle = 'Automated Warning Integration';
                 <div style="display:flex;align-items:center;gap:0.75rem;">
                     <i class="fas fa-check-circle" style="font-size:1.5rem;"></i>
                     <div>
-                        <div style="font-size:0.78rem;opacity:0.85;text-transform:uppercase;letter-spacing:0.5px;">PAGASA Auto-Alert Sent</div>
+                        <div style="font-size:0.78rem;opacity:0.85;text-transform:uppercase;letter-spacing:0.5px;">Weather Auto-Alert Sent</div>
                         <div style="margin-top:0.25rem;">${title || 'New Bulletin'}</div>
                         <div style="font-size:0.78rem;opacity:0.85;margin-top:0.15rem;">${recipients || 0} citizens notified</div>
                     </div>
@@ -1389,7 +1389,7 @@ $pageTitle = 'Automated Warning Integration';
             if (document.getElementById('paaChSms')?.checked) channels.push('sms');
 
             const enabled = document.getElementById('pagasaAutoAlertToggle')?.checked || false;
-            const interval = 360;
+            const interval = 15;
 
             try {
                 const res = await fetch(PAA_API + '?action=toggle', {
@@ -1430,21 +1430,18 @@ $pageTitle = 'Automated Warning Integration';
             btn.disabled = true;
 
             try {
-                const res = await fetch(PAA_API + '?action=check');
+                const res = await fetch('../api/weather-monitoring.php?action=auto-risk-check');
                 const data = await res.json();
 
                 if (data.alerted) {
-                    alert('✅ New PAGASA bulletin detected!\n\n' + (data.bulletin_title || '') + '\n\nSeverity: ' + (data.severity || 'N/A') + '\nRecipients: ' + (data.recipients || 0));
-                    showPagasaAlertToast(data.bulletin_title, data.recipients);
+                    const title = data.analysis?.overall?.label || 'Weather Risk Alert';
+                    const recipients = data.queued?.queued_jobs || 0;
+                    alert('Weather risk alert queued.\n\n' + title + '\n\nQueued jobs: ' + recipients);
+                    showPagasaAlertToast(title, recipients);
                     loadPagasaAutoAlertHistory();
+                    loadPagasaAutoAlertStatus();
                 } else {
-                    alert('ℹ️ ' + (data.message || 'No new bulletins.'));
-                }
-
-                // Update last check
-                const lastCheckEl = document.getElementById('paaLastCheck');
-                if (lastCheckEl && data.checked_at) {
-                    lastCheckEl.textContent = data.checked_at;
+                    alert(data.message || 'No qualifying weather risk alert.');
                 }
             } catch (e) {
                 alert('Error: ' + e.message);
@@ -1457,7 +1454,7 @@ $pageTitle = 'Automated Warning Integration';
         }
 
         async function forcePagasaAlert() {
-            if (!confirm('⚠️ This will immediately send the latest PAGASA bulletin as a mass notification to ALL subscribed citizens.\n\nContinue?')) return;
+            if (!confirm('This will check the latest weather-risk data and send a qualifying mobile/email/SMS alert using the selected channels. Continue?')) return;
 
             const btn = document.getElementById('paaForceAlertBtn');
             const origHTML = btn.innerHTML;
@@ -1465,20 +1462,22 @@ $pageTitle = 'Automated Warning Integration';
             btn.disabled = true;
 
             try {
-                const res = await fetch(PAA_API + '?action=force', {
+                const res = await fetch('../api/weather-monitoring.php?action=auto-risk-check&force=1', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'force' })
+                    body: JSON.stringify({ action: 'auto-risk-check' })
                 });
                 const data = await res.json();
 
                 if (data.success && data.alerted) {
-                    alert('✅ Force alert sent!\n\n' + (data.bulletin_title || '') + '\n\nRecipients: ' + (data.recipients || 0));
-                    showPagasaAlertToast(data.bulletin_title, data.recipients);
+                    const title = data.analysis?.overall?.label || 'Weather Risk Alert';
+                    const recipients = data.queued?.queued_jobs || 0;
+                    alert('Weather risk alert queued.\n\n' + title + '\n\nQueued jobs: ' + recipients);
+                    showPagasaAlertToast(title, recipients);
                     loadPagasaAutoAlertHistory();
                     loadPagasaAutoAlertStatus();
                 } else {
-                    alert('❌ ' + (data.message || 'Failed to send.'));
+                    alert(data.message || 'No qualifying weather risk alert.');
                 }
             } catch (e) {
                 alert('Error: ' + e.message);
@@ -1492,13 +1491,13 @@ $pageTitle = 'Automated Warning Integration';
 
         async function loadPagasaAutoAlertHistory() {
             try {
-                const res = await fetch(PAA_API + '?action=history&limit=10');
+                const res = await fetch('../api/weather-monitoring.php?action=weather-risk-history&limit=10');
                 const data = await res.json();
                 const tbody = document.getElementById('paaHistoryBody');
                 if (!tbody) return;
 
                 if (!data.success || !data.logs || data.logs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1.5rem; color:var(--text-secondary-1);">No auto-alerts sent yet.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1.5rem; color:var(--text-secondary-1);">No weather auto-alerts sent yet.</td></tr>';
                     return;
                 }
 
@@ -1506,14 +1505,19 @@ $pageTitle = 'Automated Warning Integration';
                 data.logs.forEach(log => {
                     const severityColors = {
                         critical: '#e74c3c',
+                        warning: '#e74c3c',
                         high: '#e67e22',
+                        advisory: '#f59e0b',
                         medium: '#f1c40f',
-                        low: '#2ecc71'
+                        watch: '#0ea5e9',
+                        low: '#2ecc71',
+                        normal: '#2ecc71'
                     };
-                    const sColor = severityColors[log.severity] || '#95a5a6';
+                    const severity = String(log.severity || 'normal').toLowerCase();
+                    const sColor = severityColors[severity] || '#95a5a6';
                     const channelIcons = (log.channels || '').split(',').map(ch => {
                         ch = ch.trim();
-                        if (ch === 'push') return '<i class="fas fa-bell" title="Push" style="color:#3498db;"></i>';
+                        if (ch === 'push') return '<i class="fas fa-mobile-screen-button" title="Mobile Push" style="color:#3498db;"></i>';
                         if (ch === 'email') return '<i class="fas fa-envelope" title="Email" style="color:#e67e22;"></i>';
                         if (ch === 'sms') return '<i class="fas fa-sms" title="SMS" style="color:#2ecc71;"></i>';
                         return ch;
@@ -1523,20 +1527,19 @@ $pageTitle = 'Automated Warning Integration';
                     row.innerHTML = `
                         <td><small>${log.created_at || ''}</small></td>
                         <td style="max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${(log.bulletin_title || '').replace(/"/g, '&quot;')}">
-                            <strong>${log.bulletin_title || 'Unknown'}</strong>
+                            <strong>${log.bulletin_title || 'Weather Risk Alert'}</strong>
                         </td>
                         <td><span class="badge" style="background:${sColor}; color:#fff; padding:0.2rem 0.6rem; border-radius:4px; font-size:0.75rem; text-transform:uppercase;">${log.severity || 'N/A'}</span></td>
                         <td><strong>${log.recipients_count || 0}</strong></td>
                         <td>${channelIcons}</td>
-                        <td><span class="badge" style="background:rgba(46,204,113,0.15); color:#27ae60; padding:0.2rem 0.6rem; border-radius:4px; font-size:0.75rem;">${log.status || 'sent'}</span></td>
+                        <td><span class="badge" style="background:rgba(46,204,113,0.15); color:#27ae60; padding:0.2rem 0.6rem; border-radius:4px; font-size:0.75rem;">${log.status || 'queued'}</span></td>
                     `;
                     tbody.appendChild(row);
                 });
             } catch (e) {
-                console.error('Failed to load PAGASA auto-alert history:', e);
+                console.error('Failed to load weather-risk auto-alert history:', e);
             }
         }
-
         // ============================================================
         // PHIVOLCS Mobile Auto-Alert System
         // ============================================================
@@ -1694,7 +1697,7 @@ $pageTitle = 'Automated Warning Integration';
             loadAISettings();
             loadWeatherAnalysis();
             
-            // PAGASA Auto-Alert
+            // Weather Risk Auto-Alert
             loadPagasaAutoAlertStatus();
             loadPagasaAutoAlertHistory();
 
