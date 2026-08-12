@@ -3427,7 +3427,7 @@ $pageTitle = 'Mass Notification System';
                     notificationTotalPages = Number(data.pagination?.total_pages || 1) || 1;
                     if (rows.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color: var(--text-secondary-1);">No dispatch history yet.</td></tr>';
-                        updateMnAnalytics([]);
+                        updateMnAnalytics([], data.analytics || null);
                         renderNotificationsPager();
                         return;
                     }
@@ -3462,7 +3462,7 @@ $pageTitle = 'Mass Notification System';
                             </tr>
                         `;
                     }).join('');
-                    updateMnAnalytics(rows);
+                    updateMnAnalytics(rows, data.analytics || null);
                     renderNotificationsPager();
                 })
                 .catch(error => {
@@ -3520,25 +3520,32 @@ $pageTitle = 'Mass Notification System';
         }
         window.loadMoreNotifications = loadMoreNotifications;
         window.mnRefreshDispatchHistory = mnRefreshDispatchHistory;
-        function updateMnAnalytics(notifications) {
-            const total = notifications.length;
-            const completed = notifications.filter(n => n.status === 'completed').length;
-            const inProgress = notifications.filter(n => n.status === 'sending' || n.status === 'queued').length;
+        function updateMnAnalytics(notifications, analytics = null) {
+            const source = analytics && typeof analytics === 'object' ? analytics : null;
+            let total = Number(source?.total_dispatches ?? 0);
+            let completed = Number(source?.completed_dispatches ?? 0);
+            let inProgress = Number(source?.in_progress_dispatches ?? 0);
+            let successSent = Number(source?.delivered ?? 0);
+            let successTotal = Number(source?.attempted ?? 0);
+            let rate = Number(source?.delivery_rate ?? 0);
 
-            let successSent = 0;
-            let successTotal = 0;
-            notifications.forEach(n => {
-                if (n.status === 'completed' && n.stats && n.stats.total) {
-                    successSent += Number(n.stats.sent || 0);
-                    successTotal += Number(n.stats.total || 0);
-                }
-            });
-            const rate = successTotal > 0 ? Math.round((successSent / successTotal) * 100) : 0;
+            if (!source) {
+                total = notifications.length;
+                completed = notifications.filter(n => ['completed', 'success', 'sent'].includes(String(n.status || '').toLowerCase())).length;
+                inProgress = notifications.filter(n => ['pending', 'queued', 'sending', 'processing', 'in_progress'].includes(String(n.status || '').toLowerCase())).length;
+                notifications.forEach(n => {
+                    if (n.stats && n.stats.total) {
+                        successSent += Number(n.stats.sent || 0);
+                        successTotal += Number(n.stats.total || 0);
+                    }
+                });
+                rate = successTotal > 0 ? Math.round((successSent / successTotal) * 100) : 0;
+            }
 
             document.getElementById('mnTotalDispatches').textContent = total;
             document.getElementById('mnCompletedDispatches').textContent = completed;
             document.getElementById('mnInProgressDispatches').textContent = inProgress;
-            document.getElementById('mnSuccessRate').textContent = rate;
+            document.getElementById('mnSuccessRate').textContent = Math.max(0, Math.min(100, rate));
             const sub = document.getElementById('mnSuccessRateSub');
             if (sub) sub.textContent = successTotal > 0 ? `${successSent}/${successTotal} delivered` : 'No completed delivery yet';
         }
@@ -3558,13 +3565,13 @@ $pageTitle = 'Mass Notification System';
             loadNotifications();
             setupNotificationsLazyLoader();
 
-            // Refresh the first page quietly; pause while hidden or while older pages are open.
+            // Refresh dispatch history and analytics quietly while the page is visible.
             setInterval(() => {
-                if (!document.hidden && notificationPage === 1) mnRefreshDispatchHistory(true);
-            }, 30000);
+                if (!document.hidden) mnRefreshDispatchHistory(false);
+            }, 10000);
 
             document.addEventListener('visibilitychange', () => {
-                if (!document.hidden && notificationPage === 1) mnRefreshDispatchHistory(true);
+                if (!document.hidden) mnRefreshDispatchHistory(false);
             });
 
             // Close wizard on backdrop click / escape

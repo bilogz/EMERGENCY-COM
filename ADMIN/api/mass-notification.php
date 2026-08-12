@@ -252,6 +252,57 @@ function mnResolveNotificationLogsTable(PDO $pdo): string {
     return 'Admin #' . $adminId;
 }
 
+function mnGetDispatchAnalytics(PDO $pdo, string $logsTable, bool $hasDeletedColumn): array {
+    $analytics = [
+        'total_dispatches' => 0,
+        'completed_dispatches' => 0,
+        'in_progress_dispatches' => 0,
+        'delivered' => 0,
+        'attempted' => 0,
+        'failed' => 0,
+        'delivery_rate' => 0,
+    ];
+
+    try {
+        $where = $hasDeletedColumn ? 'WHERE is_deleted = 0' : '';
+        $stmt = $pdo->query("SELECT
+            COUNT(*) AS total_dispatches,
+            SUM(CASE WHEN LOWER(COALESCE(status, '')) IN ('completed', 'success', 'sent') THEN 1 ELSE 0 END) AS completed_dispatches,
+            SUM(CASE WHEN LOWER(COALESCE(status, '')) IN ('pending', 'queued', 'sending', 'processing', 'in_progress') THEN 1 ELSE 0 END) AS in_progress_dispatches
+            FROM {$logsTable} {$where}");
+        $row = $stmt ? ($stmt->fetch(PDO::FETCH_ASSOC) ?: []) : [];
+        foreach (['total_dispatches', 'completed_dispatches', 'in_progress_dispatches'] as $key) {
+            $analytics[$key] = (int)($row[$key] ?? 0);
+        }
+    } catch (Throwable $e) {
+        error_log('Mass Notification analytics log aggregate failed: ' . $e->getMessage());
+    }
+
+    try {
+        $exists = $pdo->query("SHOW TABLES LIKE 'notification_queue'");
+        if ($exists && $exists->fetch()) {
+            $joinFilter = $hasDeletedColumn ? 'WHERE nl.is_deleted = 0' : '';
+            $stmt = $pdo->query("SELECT
+                COUNT(q.id) AS attempted,
+                SUM(CASE WHEN q.status = 'sent' THEN 1 ELSE 0 END) AS delivered,
+                SUM(CASE WHEN q.status = 'failed' THEN 1 ELSE 0 END) AS failed
+                FROM notification_queue q
+                INNER JOIN {$logsTable} nl ON nl.id = q.log_id
+                {$joinFilter}");
+            $row = $stmt ? ($stmt->fetch(PDO::FETCH_ASSOC) ?: []) : [];
+            $analytics['attempted'] = (int)($row['attempted'] ?? 0);
+            $analytics['delivered'] = (int)($row['delivered'] ?? 0);
+            $analytics['failed'] = (int)($row['failed'] ?? 0);
+            $analytics['delivery_rate'] = $analytics['attempted'] > 0
+                ? (int)round(($analytics['delivered'] / max(1, $analytics['attempted'])) * 100)
+                : 0;
+        }
+    } catch (Throwable $e) {
+        error_log('Mass Notification analytics queue aggregate failed: ' . $e->getMessage());
+    }
+
+    return $analytics;
+}
 function mnCategoryNameById(PDO $pdo, $categoryId): string {
     $id = (int)$categoryId;
     if ($id <= 0) return 'General';
@@ -810,7 +861,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             $orderBy = 'id';
         }
 
-        $whereDeleted = in_array('is_deleted', $cols, true) ? 'WHERE is_deleted = 0' : '';
+        $hasDeletedColumn = in_array('is_deleted', $cols, true);
+        $whereDeleted = $hasDeletedColumn ? 'WHERE is_deleted = 0' : '';
+        $analytics = mnGetDispatchAnalytics($pdo, $logsTable, $hasDeletedColumn);
         $totalStmt = $pdo->query("SELECT COUNT(*) FROM {$logsTable} {$whereDeleted}");
         $totalRows = $totalStmt ? (int)$totalStmt->fetchColumn() : 0;
         $stmt = $pdo->query("
@@ -997,6 +1050,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         echo json_encode([
             'success' => true,
             'notifications' => $notifications,
+            'analytics' => $analytics,
             'pagination' => [
                 'page' => $page,
                 'limit' => $limit,
