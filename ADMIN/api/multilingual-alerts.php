@@ -150,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['success' => false, 'message' => 'Database error occurred.']);
     }
 } elseif ($action === 'languages') {
-    // Get supported languages
+    // Get supported languages (strictly English, Tagalog/Filipino, and Cebuano/Bisaya)
     try {
         $languagesTable = resolveLanguagesTableForMultilingual($pdo);
         $stmt = $pdo->query("
@@ -161,13 +161,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ORDER BY priority DESC, language_name ASC
         ");
         $languages = $stmt->fetchAll();
+        if (!$languages || count($languages) === 0) {
+            $languages = [
+                ['language_code' => 'en', 'language_name' => 'English', 'native_name' => 'English', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1],
+                ['language_code' => 'fil', 'language_name' => 'Tagalog (Filipino)', 'native_name' => 'Tagalog', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1],
+                ['language_code' => 'ceb', 'language_name' => 'Cebuano (Bisaya)', 'native_name' => 'Bisaya / Cebuano', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1]
+            ];
+        }
         
         echo json_encode([
             'success' => true,
             'languages' => $languages
         ]);
     } catch (PDOException $e) {
-        // Fallback if table doesn't exist yet
         $languages = [
             ['language_code' => 'en', 'language_name' => 'English', 'native_name' => 'English', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1],
             ['language_code' => 'tl', 'language_name' => 'Tagalog', 'native_name' => 'Tagalog', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1]
@@ -245,7 +251,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
     } catch (PDOException $e) {
         error_log("List Translations Error: " . $e->getMessage());
-        // Fallback query without supported_languages join
         try {
             $stmt = $pdo->query("
                 SELECT t.*, a.title as original_title, a.message as original_content, 'en' as original_language
@@ -266,4 +271,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     echo json_encode(['success' => false, 'message' => 'Invalid action.']);
 }
 ?>
-

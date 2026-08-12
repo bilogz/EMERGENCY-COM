@@ -309,8 +309,8 @@ window.LanguageManager = class LanguageManager {
     getFallbackLanguages() {
         return [
             {language_code: 'en', language_name: 'English', native_name: 'English', flag_emoji: '', is_active: 1, is_ai_supported: 1},
-            {language_code: 'fil', language_name: 'Filipino', native_name: 'Filipino', flag_emoji: '', is_active: 1, is_ai_supported: 1},
-            {language_code: 'es', language_name: 'Spanish', native_name: 'Spanish', flag_emoji: '', is_active: 1, is_ai_supported: 1}
+            {language_code: 'fil', language_name: 'Tagalog (Filipino)', native_name: 'Tagalog', flag_emoji: '', is_active: 1, is_ai_supported: 1},
+            {language_code: 'ceb', language_name: 'Cebuano (Bisaya)', native_name: 'Bisaya / Cebuano', flag_emoji: '', is_active: 1, is_ai_supported: 1}
         ];
     }
     
@@ -324,22 +324,10 @@ window.LanguageManager = class LanguageManager {
         const code = String(normalized.language_code || 'en').toLowerCase().trim();
         const fallbackNames = {
             en: 'English',
-            es: 'Spanish',
-            zh: 'Chinese',
-            hi: 'Hindi',
-            ar: 'Arabic',
-            pt: 'Portuguese',
-            ru: 'Russian',
-            ja: 'Japanese',
-            de: 'German',
-            fr: 'French',
-            fil: 'Filipino',
+            fil: 'Tagalog (Filipino)',
             tl: 'Tagalog',
-            ceb: 'Cebuano',
-            ilo: 'Ilocano',
-            war: 'Waray',
-            id: 'Indonesian',
-            ko: 'Korean'
+            ceb: 'Cebuano (Bisaya)',
+            bis: 'Bisaya (Cebuano)'
         };
         let languageName = String(normalized.language_name || fallbackNames[code] || code.toUpperCase()).trim();
         let nativeName = String(normalized.native_name || '').trim();
