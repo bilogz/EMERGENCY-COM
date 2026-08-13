@@ -175,14 +175,10 @@ try {
         $stmt = $pdo->prepare($query);
         $stmt->execute([$user_id, $device_id]);
 
-        if ($stmt->rowCount() > 0) {
-            apiResponse::success([
-                'device_id' => $device_id,
-                'action' => 'deactivated'
-            ], "Device deactivated successfully");
-        } else {
-            apiResponse::error("Device not found", 404);
-        }
+        apiResponse::success([
+            'device_id' => $device_id,
+            'action' => 'deactivated'
+        ], $stmt->rowCount() > 0 ? "Device deactivated successfully" : "Device was already inactive or not registered");
 
     } else {
         apiResponse::error("Invalid request method. Use GET, POST, or DELETE.", 405);

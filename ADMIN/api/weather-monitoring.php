@@ -958,7 +958,7 @@ function tomorrowWeatherForecastMessage(array $analysis): string {
     foreach (weatherRiskPrecautions($analysis) as $step) $lines[] = '- ' . $step;
     $lines[] = '';
     $lines[] = 'View Full Forecast: https://emergency-comm.alertaraqc.com/USERS/weather-map.php';
-    return implode("`n", $lines);
+    return implode("\n", $lines);
 }
 
 function tomorrowWeatherForecastPushPreview(array $analysis): string {
