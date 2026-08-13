@@ -574,8 +574,9 @@ function analyzeWeatherRisks(array $forecastData) {
     $endedAt = end($window)['dt_txt'] ?? $startedAt;
 
     $maxRain = 0.0; $rain24 = 0.0; $rain48 = 0.0; $maxPop = 0; $minVisibility = null;
-    $maxWind = 0.0; $maxGust = 0.0; $maxTemp = 0.0; $maxFeels = 0.0; $maxHumidity = 0;
+    $maxWind = 0.0; $maxGust = 0.0; $maxTemp = 0.0; $minTemp = null; $maxFeels = 0.0; $maxHumidity = 0;
     $hasThunderCode = false;
+    $peakRainPeriod = null; $peakRainScore = -1;
 
     foreach ($window as $idx => $forecast) {
         $precip = (float)getForecastMetric($forecast, 'precipitation_mm', 0);
@@ -597,6 +598,12 @@ function analyzeWeatherRisks(array $forecastData) {
         $maxWind = max($maxWind, $wind);
         $maxGust = max($maxGust, $gust);
         $maxTemp = max($maxTemp, $temp);
+        $minTemp = $minTemp === null ? $temp : min($minTemp, $temp);
+        $rainScore = ($rain * 10) + $pop;
+        if ($rainScore > $peakRainScore) {
+            $peakRainScore = $rainScore;
+            $peakRainPeriod = $forecast['dt_txt'] ?? null;
+        }
         $maxFeels = max($maxFeels, $feels);
         $maxHumidity = max($maxHumidity, $humidity);
         if (in_array($code, [95, 96, 99], true)) $hasThunderCode = true;
@@ -653,7 +660,7 @@ function analyzeWeatherRisks(array $forecastData) {
         'metrics' => [
             'max_rain_3h_mm' => round($maxRain, 1), 'rain_24h_mm' => round($rain24, 1), 'rain_48h_mm' => round($rain48, 1),
             'max_precipitation_probability' => $maxPop, 'min_visibility_m' => $minVisibility, 'max_wind_kmh' => round($maxWind, 1),
-            'max_gust_kmh' => round($maxGust, 1), 'max_temp_c' => round($maxTemp, 1), 'max_feels_like_c' => round($maxFeels, 1), 'max_humidity' => $maxHumidity
+            'max_gust_kmh' => round($maxGust, 1), 'min_temp_c' => $minTemp === null ? null : round($minTemp, 1), 'max_temp_c' => round($maxTemp, 1), 'max_feels_like_c' => round($maxFeels, 1), 'max_humidity' => $maxHumidity, 'peak_period' => $peakRainPeriod
         ],
         'risks' => $risks
     ];
@@ -706,16 +713,118 @@ function getWeatherRiskAutoAlertChannels(PDO $pdo): string {
         return 'push,email';
     }
 }
-function weatherRiskNotificationMessage(array $analysis) {
-    $overall = $analysis['overall'];
-    $metrics = $analysis['metrics'];
-    $title = $overall['label'] . ' ' . weatherRiskLabel($overall['level']);
-    $message = $title . ' for Quezon City based on Open-Meteo forecast. ';
-    $message .= 'Rain probability up to ' . ($metrics['max_precipitation_probability'] ?? 0) . '%, forecast rain ' . ($metrics['rain_24h_mm'] ?? 0) . ' mm in 24h, wind gusts up to ' . ($metrics['max_gust_kmh'] ?? 0) . ' km/h.';
-    if (($overall['key'] ?? '') === 'flood_risk') {
-        $message .= ' Flood Risk Watch is forecast-based only and does not confirm flooding is occurring. More Flood Information: https://pagasa.dost.gov.ph/flood#flood-information';
+function weatherRiskFormatPeakPeriod(?string $dt): string {
+    if (!$dt) return 'Next 24 hours';
+    $start = strtotime($dt);
+    if (!$start) return 'Next 24 hours';
+    $end = $start + (3 * 3600);
+    return date('g A', $start) . '-' . date('g A', $end);
+}
+
+function weatherRiskPrecautions(array $analysis): array {
+    $metrics = $analysis['metrics'] ?? [];
+    $risks = [];
+    foreach (($analysis['risks'] ?? []) as $risk) {
+        $risks[$risk['key'] ?? ''] = $risk['level'] ?? 'normal';
     }
-    return $message;
+
+    $steps = [];
+    $add = function (string $step) use (&$steps): void {
+        if (!in_array($step, $steps, true)) $steps[] = $step;
+    };
+
+    $rainLevel = $risks['rainfall'] ?? 'normal';
+    $floodLevel = $risks['flood_risk'] ?? 'normal';
+    $stormLevel = $risks['thunderstorm'] ?? 'normal';
+    $windLevel = $risks['wind'] ?? 'normal';
+    $visibilityLevel = $risks['visibility'] ?? 'normal';
+    $heatLevel = $risks['heat'] ?? 'normal';
+
+    if (weatherRiskLevelRank($rainLevel) >= weatherRiskLevelRank('advisory')) {
+        $add('Bring an umbrella or raincoat when going outside.');
+        $add('Expect wet or slippery roads and allow extra travel time.');
+    } elseif ((int)($metrics['max_precipitation_probability'] ?? 0) >= 40) {
+        $add('Consider bringing an umbrella if you will be outside.');
+    }
+
+    if (weatherRiskLevelRank($rainLevel) >= weatherRiskLevelRank('warning') || weatherRiskLevelRank($floodLevel) >= weatherRiskLevelRank('advisory')) {
+        $add('Avoid unnecessary travel during periods of heavy rainfall.');
+        $add('Stay away from flood-prone and low-lying areas.');
+        $add('Never walk or drive through deep floodwater.');
+        $add('Monitor official flood advisories and Alertara updates.');
+    }
+
+    if (weatherRiskLevelRank($stormLevel) >= weatherRiskLevelRank('advisory')) {
+        $add('Stay indoors when thunderstorms are nearby.');
+        $add('Avoid open areas and isolated tall objects.');
+        $add('Avoid using exposed electrical equipment during severe lightning.');
+    }
+
+    if (weatherRiskLevelRank($windLevel) >= weatherRiskLevelRank('advisory')) {
+        $add('Secure loose outdoor items before winds strengthen.');
+        $add('Stay away from trees, power lines, billboards, and unsecured objects.');
+    }
+    if (weatherRiskLevelRank($windLevel) >= weatherRiskLevelRank('warning')) {
+        $add('Avoid unnecessary outdoor activity while dangerous winds are occurring.');
+    }
+
+    if (weatherRiskLevelRank($visibilityLevel) >= weatherRiskLevelRank('advisory')) {
+        $add('Reduce driving speed and use appropriate vehicle lights.');
+        $add('Keep a safe distance from other vehicles.');
+    }
+
+    if (weatherRiskLevelRank($heatLevel) >= weatherRiskLevelRank('advisory')) {
+        $add('Drink enough water and stay in shaded or cooler areas when possible.');
+        $add('Limit strenuous outdoor activity during the hottest hours.');
+    }
+
+    if (!$steps) $add('Check the latest forecast before traveling.');
+    return array_slice($steps, 0, 5);
+}
+
+function weatherRiskNotificationMessage(array $analysis) {
+    $overall = $analysis['overall'] ?? [];
+    $metrics = $analysis['metrics'] ?? [];
+    $forecastLabel = ($overall['label'] ?? 'Weather') . ' ' . weatherRiskLabel($overall['level'] ?? 'normal');
+    $peakPeriod = weatherRiskFormatPeakPeriod($metrics['peak_period'] ?? null);
+    $tempMin = $metrics['min_temp_c'] ?? null;
+    $tempMax = $metrics['max_temp_c'] ?? null;
+    $tempRange = ($tempMin !== null ? $tempMin : '--') . '-' . ($tempMax !== null ? $tempMax : '--') . ' C';
+    $wind = ($metrics['max_wind_kmh'] ?? 0) . ' km/h';
+    $gust = (float)($metrics['max_gust_kmh'] ?? 0);
+    if ($gust > 0) $wind .= ', gusts up to ' . $gust . ' km/h';
+
+    $summary = $forecastLabel . ' is expected in Quezon City based on Open-Meteo forecast.';
+    if (($overall['key'] ?? '') === 'flood_risk') {
+        $summary .= ' Flood Risk Watch is forecast-based only and does not confirm flooding is occurring.';
+    }
+
+    $lines = [
+        'WEATHER FORECAST - QUEZON CITY',
+        '',
+        $summary,
+        '',
+        'Rain chance: ' . ($metrics['max_precipitation_probability'] ?? 0) . '%',
+        'Expected rainfall: ' . ($metrics['rain_24h_mm'] ?? 0) . ' mm in 24h',
+        'Temperature: ' . $tempRange,
+        'Wind: ' . $wind,
+        'Peak period: ' . $peakPeriod,
+        '',
+        'PRECAUTIONS'
+    ];
+    foreach (weatherRiskPrecautions($analysis) as $step) {
+        $lines[] = '- ' . $step;
+    }
+    $lines[] = '';
+    $lines[] = 'View Full Forecast: https://emergency-comm.alertaraqc.com/USERS/weather-map.php';
+    return implode("\n", $lines);
+}
+
+function weatherRiskPushPreview(array $analysis): string {
+    $overall = $analysis['overall'] ?? [];
+    $metrics = $analysis['metrics'] ?? [];
+    $label = ($overall['label'] ?? 'Weather') . ' ' . weatherRiskLabel($overall['level'] ?? 'normal');
+    return $label . ': rain chance ' . ($metrics['max_precipitation_probability'] ?? 0) . '%, rain ' . ($metrics['rain_24h_mm'] ?? 0) . ' mm in 24h, gusts up to ' . ($metrics['max_gust_kmh'] ?? 0) . ' km/h. Open Alertara for precautions.';
 }
 
 function weatherRiskEventHash(array $analysis) {
@@ -795,7 +904,8 @@ if ($action === 'risk') {
         'severity' => $analysis['overall']['severity'],
         'source' => 'open_meteo_weather_risk',
         'category' => 'weather',
-        'channels' => getWeatherRiskAutoAlertChannels($pdo)
+        'channels' => getWeatherRiskAutoAlertChannels($pdo),
+        'push_preview' => weatherRiskPushPreview($analysis)
     ]);
     $stmt = $pdo->prepare('INSERT INTO weather_risk_auto_alert_log (event_hash, risk_key, risk_level, title, message, metrics_json, alert_id, log_id, queued_jobs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     $stmt->execute([$hash, $analysis['overall']['key'], $analysis['overall']['level'], $title, $message, json_encode($analysis['metrics'], JSON_UNESCAPED_SLASHES), $queued['alert_id'] ?? null, $queued['log_id'] ?? null, (int)($queued['queued_jobs'] ?? 0)]);

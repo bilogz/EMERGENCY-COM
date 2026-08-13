@@ -222,6 +222,11 @@ function queueBulletinBroadcast(PDO $pdo, array $payload): array
     ));
     if (!$channels) $channels = ['push', 'email'];
 
+    $pushPreview = trim((string)($payload['push_preview'] ?? ''));
+    if ($pushPreview === '') {
+        $pushPreview = strlen($message) > 180 ? substr($message, 0, 177) . '...' : $message;
+    }
+
     $recipients = bulletinLoadCitizens($pdo);
     $categoryId = bulletinFindCategoryId($pdo, $category);
     $alertId = bulletinInsertAlert($pdo, $title, $message, $severity, $source, $category, $categoryId);
@@ -249,7 +254,7 @@ function queueBulletinBroadcast(PDO $pdo, array $payload): array
                 $queued++;
             } elseif ($channel === 'push') {
                 foreach ($pushTokens[$userId] ?? [] as $token) {
-                    $queueStmt->execute([$logId, $alertId, $userId, 'push_token', $token, 'push', $title, $message, BULLETIN_EMERGENCY_CHANNEL_ID]);
+                    $queueStmt->execute([$logId, $alertId, $userId, 'push_token', $token, 'push', $title, $pushPreview, BULLETIN_EMERGENCY_CHANNEL_ID]);
                     $queued++;
                 }
             }
