@@ -540,7 +540,8 @@ function getHotWeatherPreparation($temp, $feelsLike, $humidity) {
         ];
     }
 }
-function weatherRiskLevelRank($level) {
+
+function weatherRiskLevelRank($level) {
     $map = ['normal' => 0, 'watch' => 1, 'advisory' => 2, 'warning' => 3];
     return $map[strtolower((string)$level)] ?? 0;
 }
@@ -941,7 +942,11 @@ if ($action === 'risk') {
                     'pop' => isset($forecast['pop']) ? (int)round(floatval($forecast['pop']) * 100) : 0,
                     'humidity' => $humidity,
                     'wind_speed' => $forecast['wind']['speed'] ?? 0,
-                    'wind_deg' => $forecast['wind']['deg'] ?? 0
+                    'wind_deg' => $forecast['wind']['deg'] ?? 0,
+                    'wind_gust' => $forecast['wind']['gust'] ?? null,
+                    'visibility' => $forecast['open_meteo']['visibility_m'] ?? null,
+                    'weather_code' => $forecast['open_meteo']['weather_code'] ?? ($forecast['weather'][0]['id'] ?? null),
+                    'source' => 'Open-Meteo'
                 ];
                 
                 $predictions[] = $prediction;

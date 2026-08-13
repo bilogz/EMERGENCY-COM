@@ -258,6 +258,12 @@ if (!function_exists('twc_status_filter_clause')) {
             return " AND {$alias}.status IN (" . twc_placeholders($closed) . ") ";
         }
 
+        if ($statusFilter === 'completed') {
+            $completed = ['resolved', 'completed'];
+            $params = array_merge($params, $completed);
+            return " AND {$alias}.status IN (" . twc_placeholders($completed) . ") ";
+        }
+
         if ($statusFilter === 'pending') {
             $params[] = 'waiting_user';
             return " AND {$alias}.status = ? AND COALESCE({$alias}.assigned_to, 0) = 0 ";

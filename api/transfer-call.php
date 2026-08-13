@@ -96,6 +96,55 @@ function responseTeamActionFromUrl(string $targetUrl): string {
     return trim((string)($params['action'] ?? ''));
 }
 
+function transferCleanConversationText($value): string {
+    $text = preg_replace('/\[(CALL_ENDED|CALL_DECLINED|CALL_TRANSFERRED|TRANSFERRED_PENDING|AUTO_TRANSFERRED_TO_ERS|ERS_STATUS)\]/i', '', (string)$value);
+    $text = strip_tags((string)$text);
+    $text = preg_replace('/\s+/', ' ', (string)$text);
+    return trim((string)$text);
+}
+
+function transferBuildConversationSummary(array $messages, array $context): string {
+    $lines = ['Emergency report conversation summary'];
+    $caller = is_array($context['caller'] ?? null) ? $context['caller'] : [];
+    $location = is_array($context['location'] ?? null) ? $context['location'] : [];
+    $priority = is_array($context['priority'] ?? null) ? $context['priority'] : [];
+    $callerName = transferCleanConversationText($caller['name'] ?? 'Guest User');
+    $callerPhone = transferCleanConversationText($caller['phone'] ?? 'Not provided');
+    $type = transferCleanConversationText($context['emergencyType'] ?? 'Emergency report');
+    $locationText = transferCleanConversationText($caller['address'] ?? ($location['address'] ?? ''));
+    if ($locationText === '' && isset($location['lat'], $location['lng'])) {
+        $locationText = transferCleanConversationText($location['lat'] . ', ' . $location['lng']);
+    }
+    if ($locationText === '') {
+        $locationText = 'Not specified';
+    }
+    $priorityLabel = transferCleanConversationText($priority['label'] ?? $priority['priority'] ?? $priority['level'] ?? 'Not scored');
+    $priorityScore = isset($priority['score']) ? (string)(int)$priority['score'] : '';
+    $lines[] = 'Citizen: ' . ($callerName !== '' ? $callerName : 'Guest User');
+    $lines[] = 'Phone: ' . ($callerPhone !== '' ? $callerPhone : 'Not provided');
+    $lines[] = 'Emergency type: ' . ($type !== '' ? $type : 'Emergency report');
+    $lines[] = 'Location: ' . $locationText;
+    $lines[] = 'Priority: ' . trim($priorityLabel . ' ' . $priorityScore);
+    $history = [];
+    foreach ($messages as $message) {
+        if (!is_array($message)) {
+            continue;
+        }
+        $body = transferCleanConversationText($message['message_text'] ?? $message['text'] ?? '');
+        if ($body === '') {
+            continue;
+        }
+        $speaker = transferCleanConversationText($message['sender_name'] ?? $message['sender_type'] ?? 'Unknown');
+        $createdAt = transferCleanConversationText($message['created_at'] ?? '');
+        $history[] = '- ' . ($speaker !== '' ? $speaker : 'Unknown') . ($createdAt !== '' ? ' (' . $createdAt . ')' : '') . ': ' . $body;
+    }
+    if ($history) {
+        $lines[] = '';
+        $lines[] = 'Conversation history:';
+        $lines = array_merge($lines, array_slice($history, -20));
+    }
+    return trim(implode("\n", array_filter($lines, static fn($line) => $line !== null)));
+}
 function responseTeamAcceptedResponse($body): bool {
     $decoded = json_decode((string)$body, true);
     if (!is_array($decoded)) {
@@ -507,8 +556,19 @@ if (!empty($messages)) {
 }
 
 $providedIncidentPriority = is_array($input['incidentPriority'] ?? null) ? $input['incidentPriority'] : [];
-$descriptionInput = trim((string)($input['description'] ?? ($input['details'] ?? $latestMessage)));
 $emergencyTypeInput = trim((string)($input['emergencyType'] ?? ''));
+$adminDescriptionInput = trim((string)($input['description'] ?? ($input['details'] ?? '')));
+$summaryContext = [
+    'caller' => is_array($input['caller'] ?? null) ? $input['caller'] : [],
+    'location' => is_array($input['location'] ?? null) ? $input['location'] : [],
+    'emergencyType' => $emergencyTypeInput,
+    'priority' => $providedIncidentPriority,
+];
+$conversationSummary = !empty($messages) ? transferBuildConversationSummary($messages, $summaryContext) : '';
+$descriptionInput = $conversationSummary !== '' ? $conversationSummary : trim((string)($adminDescriptionInput !== '' ? $adminDescriptionInput : $latestMessage));
+if ($conversationSummary !== '' && $adminDescriptionInput !== '' && transferCleanConversationText($adminDescriptionInput) !== transferCleanConversationText($latestMessage)) {
+    $descriptionInput .= "\n\nAdmin transfer note:\n" . $adminDescriptionInput;
+}
 $requestedTransferType = strtolower(trim((string)($input['transfer_type'] ?? $input['transferType'] ?? '')));
 $hasLiveTransferRoom = $callId !== '' && trim((string)($input['room'] ?? '')) !== '';
 if ($requestedTransferType === '') {

@@ -48,6 +48,63 @@ $pageTitle = 'Weather Bulletins and Map';
                 <div class="bulletin-metric"><span>Condition</span><strong id="weatherCondition" style="font-size:1rem">Loading...</strong></div>
             </section>
 
+            <section class="forecast-panel" aria-labelledby="forecastTitle">
+                <div class="forecast-card">
+                    <div class="forecast-current">
+                        <div>
+                            <div class="bulletin-eyebrow"><i class="fas fa-cloud-sun-rain"></i> Forecast source: Open-Meteo</div>
+                            <h2 id="forecastTitle">Quezon City Weather</h2>
+                            <div class="forecast-temp-line"><i id="forecastCurrentIcon" class="fas fa-cloud"></i><strong id="forecastCurrentTemp">--&deg;C</strong></div>
+                            <p id="forecastCurrentCondition">Loading forecast...</p>
+                        </div>
+                        <dl class="forecast-current-stats">
+                            <div><dt>Feels like</dt><dd id="forecastFeelsLike">--&deg;C</dd></div>
+                            <div><dt>Rain chance</dt><dd id="forecastRainChance">--%</dd></div>
+                            <div><dt>Rainfall</dt><dd id="forecastRainfall">-- mm</dd></div>
+                            <div><dt>Wind gust</dt><dd id="forecastWindGust">-- km/h</dd></div>
+                            <div><dt>Visibility</dt><dd id="forecastVisibility">-- km</dd></div>
+                        </dl>
+                    </div>
+                    <div class="forecast-tabs" role="tablist" aria-label="Forecast chart metric">
+                        <button class="forecast-tab active" type="button" data-forecast-tab="temperature">Temperature</button>
+                        <button class="forecast-tab" type="button" data-forecast-tab="rain">Rain</button>
+                        <button class="forecast-tab" type="button" data-forecast-tab="wind">Wind</button>
+                    </div>
+                    <div class="forecast-chart-wrap">
+                        <svg id="forecastChart" class="forecast-chart" viewBox="0 0 720 140" role="img" aria-label="Hourly forecast chart"></svg>
+                    </div>
+                    <div id="hourlyForecastStrip" class="hourly-forecast-strip" aria-label="Hourly forecast"></div>
+                    <div class="daily-forecast-block">
+                        <h3>7-Day Forecast</h3>
+                        <div id="dailyForecastList" class="daily-forecast-list"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="flood-watch-panel" aria-labelledby="floodWatchTitle">
+                <div class="bulletin-toolbar">
+                    <div class="bulletin-toolbar-title">
+                        <i class="fas fa-water"></i>
+                        <div>
+                            <h2 id="floodWatchTitle">Flood Watch - Quezon City</h2>
+                            <small>Official flood advisories are separated from forecast-based risk.</small>
+                        </div>
+                    </div>
+                    <a class="bulletin-button primary" href="https://www.pagasa.dost.gov.ph/flood#flood-information" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> PAGASA Flood Information</a>
+                </div>
+                <div class="flood-watch-grid">
+                    <article class="flood-watch-card official">
+                        <span class="flood-watch-kicker">Official source: DOST-PAGASA</span>
+                        <h3 id="officialFloodStatus">Checking official flood information...</h3>
+                        <p id="officialFloodDetails">If the official source is unavailable, Alertara will not fabricate a flood warning.</p>
+                    </article>
+                    <article class="flood-watch-card forecast">
+                        <span class="flood-watch-kicker">Forecast source: Open-Meteo</span>
+                        <h3 id="forecastFloodStatus">Forecast risk loading...</h3>
+                        <p id="forecastFloodDetails">Rainfall totals and probability are calculated from forecast data only.</p>
+                    </article>
+                </div>
+            </section>
             <section class="bulletin-board" aria-labelledby="weatherBoardTitle">
                 <div class="bulletin-toolbar">
                     <div class="bulletin-toolbar-title">
@@ -202,13 +259,166 @@ $pageTitle = 'Weather Bulletins and Map';
                 }
             }
 
+            const forecastTabs = [...document.querySelectorAll('[data-forecast-tab]')];
+            let forecastMetric = 'temperature';
+            let currentForecast = [];
+
+            function formatNumber(value, digits = 0) {
+                const number = Number(value);
+                return Number.isFinite(number) ? number.toFixed(digits) : '--';
+            }
+
+            function iconForCondition(condition) {
+                const text = String(condition || '').toLowerCase();
+                if (text.includes('thunder')) return 'fa-cloud-bolt';
+                if (text.includes('rain') || text.includes('drizzle')) return 'fa-cloud-showers-heavy';
+                if (text.includes('clear')) return 'fa-sun';
+                if (text.includes('mist') || text.includes('fog')) return 'fa-smog';
+                if (text.includes('cloud')) return 'fa-cloud';
+                return 'fa-cloud-sun';
+            }
+
+            function aggregateDailyForecast(forecast) {
+                const grouped = new Map();
+                forecast.forEach(item => {
+                    const date = new Date((item.timestamp || 0) * 1000);
+                    const key = date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+                    if (!grouped.has(key)) {
+                        grouped.set(key, { date, temps: [], feels: [], pops: [], rain: 0, wind: [], conditions: new Map(), peakRain: null });
+                    }
+                    const day = grouped.get(key);
+                    day.temps.push(Number(item.temp || 0));
+                    day.feels.push(Number(item.feels_like || item.temp || 0));
+                    day.pops.push(Number(item.pop || 0));
+                    day.rain += Number(item.rain || 0);
+                    day.wind.push(Number(item.wind_speed || 0) * 3.6);
+                    const condition = item.description || item.condition || 'Current conditions';
+                    day.conditions.set(condition, (day.conditions.get(condition) || 0) + 1);
+                    if (!day.peakRain || Number(item.rain || 0) > day.peakRain.rain) {
+                        day.peakRain = { rain: Number(item.rain || 0), time: item.time || '' };
+                    }
+                });
+                return [...grouped.values()].slice(0, 7).map(day => {
+                    const condition = [...day.conditions.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'Current conditions';
+                    return {
+                        date: day.date,
+                        min: Math.min(...day.temps),
+                        max: Math.max(...day.temps),
+                        pop: Math.max(...day.pops),
+                        rain: day.rain,
+                        wind: Math.max(...day.wind),
+                        condition,
+                        peakRain: day.peakRain
+                    };
+                });
+            }
+
+            function renderForecastChart(forecast) {
+                const chart = document.getElementById('forecastChart');
+                const points = forecast.slice(0, 8).map((item, index) => {
+                    const value = forecastMetric === 'rain'
+                        ? Number(item.pop || 0)
+                        : forecastMetric === 'wind'
+                            ? Number(item.wind_speed || 0) * 3.6
+                            : Number(item.temp || 0);
+                    const suffix = forecastMetric === 'rain' ? '%' : (forecastMetric === 'wind' ? ' km/h' : ' C');
+                    return { index, value, label: `${Math.round(value)}${suffix}` };
+                });
+                if (!points.length) {
+                    chart.innerHTML = '<text x="360" y="76" text-anchor="middle" class="forecast-empty-text">Forecast chart unavailable</text>';
+                    return;
+                }
+                const values = points.map(point => point.value);
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                const range = Math.max(1, max - min);
+                const path = points.map((point, index) => {
+                    const x = 36 + (index * (648 / Math.max(1, points.length - 1)));
+                    const y = 108 - (((point.value - min) / range) * 72);
+                    return { ...point, x, y };
+                });
+                const d = path.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ');
+                chart.innerHTML = `
+                    <path d="M 36 120 H 684" class="forecast-axis"></path>
+                    <path d="${d}" class="forecast-line"></path>
+                    ${path.map(point => `<circle cx="${point.x}" cy="${point.y}" r="4" class="forecast-dot"></circle><text x="${point.x}" y="${Math.max(18, point.y - 12)}" text-anchor="middle" class="forecast-point-label">${escapeHtml(point.label)}</text>`).join('')}
+                `;
+            }
+
+            function renderForecast(forecast) {
+                currentForecast = Array.isArray(forecast) ? forecast : [];
+                const first = currentForecast[0] || {};
+                const daily = aggregateDailyForecast(currentForecast);
+                document.getElementById('forecastCurrentTemp').innerHTML = `${Math.round(first.temp ?? 0)}&deg;C`;
+                document.getElementById('forecastCurrentCondition').textContent = first.description || first.condition || 'Current conditions';
+                document.getElementById('forecastCurrentIcon').className = `fas ${iconForCondition(first.description || first.condition)}`;
+                document.getElementById('forecastFeelsLike').innerHTML = `${formatNumber(first.feels_like)}&deg;C`;
+                document.getElementById('forecastRainChance').textContent = `${formatNumber(first.pop)}%`;
+                document.getElementById('forecastRainfall').textContent = `${formatNumber(first.rain, 1)} mm`;
+                document.getElementById('forecastWindGust').textContent = first.wind_gust ? `${formatNumber(Number(first.wind_gust) * 3.6, 0)} km/h` : `${formatNumber(Number(first.wind_speed || 0) * 3.6, 0)} km/h`;
+                document.getElementById('forecastVisibility').textContent = first.visibility ? `${formatNumber(Number(first.visibility) / 1000, 1)} km` : '-- km';
+
+                document.getElementById('hourlyForecastStrip').innerHTML = currentForecast.slice(0, 8).map(item => `
+                    <article class="hourly-forecast-card">
+                        <span>${escapeHtml(item.time || '')}</span>
+                        <i class="fas ${iconForCondition(item.description || item.condition)}"></i>
+                        <strong>${Math.round(item.temp ?? 0)}&deg;</strong>
+                        <small><i class="fas fa-droplet"></i> ${formatNumber(item.pop)}%</small>
+                    </article>
+                `).join('');
+
+                document.getElementById('dailyForecastList').innerHTML = daily.map((day, index) => {
+                    const name = index === 0 ? 'Today' : day.date.toLocaleDateString([], { weekday: 'short' });
+                    const peak = day.peakRain?.time ? `Peak rain: ${day.peakRain.time}` : 'Peak rain unavailable';
+                    return `<article class="daily-forecast-row">
+                        <span class="daily-name">${escapeHtml(name)}</span>
+                        <i class="fas ${iconForCondition(day.condition)}"></i>
+                        <span class="daily-condition">${escapeHtml(day.condition)}</span>
+                        <span class="daily-temp">${Math.round(day.max)}&deg; / ${Math.round(day.min)}&deg;</span>
+                        <span class="daily-rain"><i class="fas fa-droplet"></i> ${Math.round(day.pop)}%</span>
+                        <small>${escapeHtml(formatNumber(day.rain, 1))} mm &middot; ${escapeHtml(peak)}</small>
+                    </article>`;
+                }).join('');
+                renderForecastChart(currentForecast);
+            }
+
+            function renderFloodWatch(risk) {
+                document.getElementById('officialFloodStatus').textContent = 'Official PAGASA flood status unavailable in this page feed';
+                document.getElementById('officialFloodDetails').textContent = 'Use the PAGASA Flood Information link for official advisories. Alertara will not mark Quezon City as under an official flood warning unless a verified PAGASA source says so.';
+                const flood = (risk?.risks || []).find(item => item.key === 'flood_risk');
+                const metrics = risk?.metrics || {};
+                const level = flood?.level || 'normal';
+                document.getElementById('forecastFloodStatus').textContent = `${flood?.label || 'Forecast Flood Risk'}: ${level.charAt(0).toUpperCase() + level.slice(1)}`;
+                document.getElementById('forecastFloodDetails').textContent = `${flood?.summary || 'Forecast-based flood risk is currently unavailable.'} Rain chance up to ${metrics.max_precipitation_probability ?? '--'}%, wind gusts up to ${metrics.max_gust_kmh ?? '--'} km/h.`;
+            }
+
+            async function loadForecastWeather() {
+                try {
+                    const [forecastResponse, riskResponse] = await Promise.all([
+                        fetch('../ADMIN/api/weather-monitoring.php?action=forecast&lat=14.6760&lon=121.0437', { cache: 'no-store' }),
+                        fetch('../ADMIN/api/weather-monitoring.php?action=risk&lat=14.6760&lon=121.0437', { cache: 'no-store' })
+                    ]);
+                    const forecastData = await forecastResponse.json();
+                    const riskData = await riskResponse.json();
+                    if (!forecastData.success || !Array.isArray(forecastData.forecast)) throw new Error(forecastData.message || 'Forecast unavailable');
+                    renderForecast(forecastData.forecast);
+                    renderFloodWatch(riskData.success ? riskData.data : null);
+                } catch (error) {
+                    document.getElementById('forecastCurrentCondition').textContent = error.message || 'Forecast unavailable';
+                    document.getElementById('hourlyForecastStrip').innerHTML = '<div class="bulletin-error">Forecast data could not be loaded.</div>';
+                    document.getElementById('dailyForecastList').innerHTML = '';
+                    document.getElementById('forecastFloodStatus').textContent = 'Forecast flood risk unavailable';
+                    document.getElementById('forecastFloodDetails').textContent = 'Alertara could not retrieve structured Open-Meteo risk data right now.';
+                }
+            }
+
             async function loadCurrentWeather() {
                 try {
-                    const response = await fetch('../ADMIN/api/weather-monitoring.php?action=current&lat=14.6760&lon=121.0437');
+                    const response = await fetch('../ADMIN/api/weather-monitoring.php?action=current&lat=14.6760&lon=121.0437', { cache: 'no-store' });
                     const result = await response.json();
                     if (!result.success || !result.data) throw new Error('Current weather unavailable');
                     const weather = result.data;
-                    document.getElementById('weatherTemperature').textContent = `${Math.round(weather.main?.temp ?? 0)}°C`;
+                    document.getElementById('weatherTemperature').innerHTML = `${Math.round(weather.main?.temp ?? 0)}&deg;C`;
                     document.getElementById('weatherHumidity').textContent = `${Math.round(weather.main?.humidity ?? 0)}%`;
                     document.getElementById('weatherWind').textContent = `${Math.round((weather.wind?.speed ?? 0) * 3.6)} km/h`;
                     const condition = weather.weather?.[0]?.description || 'Current conditions';
@@ -217,7 +427,6 @@ $pageTitle = 'Weather Bulletins and Map';
                     document.getElementById('weatherCondition').textContent = 'Unavailable';
                 }
             }
-
             async function initializeLayers() {
                 try {
                     const response = await fetch('../ADMIN/api/weather-monitoring.php?action=getApiKey');
@@ -239,12 +448,21 @@ $pageTitle = 'Weather Bulletins and Map';
                 }
             }
 
-            refreshButton.addEventListener('click', () => { loadBulletins(); loadCurrentWeather(); });
+            forecastTabs.forEach(button => {
+                button.addEventListener('click', () => {
+                    forecastMetric = button.dataset.forecastTab || 'temperature';
+                    forecastTabs.forEach(tab => tab.classList.toggle('active', tab === button));
+                    renderForecastChart(currentForecast);
+                });
+            });
+            refreshButton.addEventListener('click', () => { loadBulletins(); loadCurrentWeather(); loadForecastWeather(); });
             loadBulletins();
             loadCurrentWeather();
+            loadForecastWeather();
             initializeLayers();
             window.setInterval(loadBulletins, 60000);
             window.setInterval(loadCurrentWeather, 300000);
+            window.setInterval(loadForecastWeather, 900000);
         })();
     </script>
 </body>

@@ -313,6 +313,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 <div class="chat-tab" onclick="switchTab('pending')">
                                     <i class="fas fa-hourglass-half"></i> Pending Status
                                 </div>
+                                <div class="chat-tab" onclick="switchTab('completed')">
+                                    <i class="fas fa-circle-check"></i> Completed
+                                </div>
                                 <?php else: ?>
                                 <div class="chat-tab" onclick="switchTab('closed')">
                                     <i class="fas fa-circle-check"></i> Closed
@@ -1956,7 +1959,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         async function refreshConversationListRealtime() {
             if (currentMainView !== 'conversations') return;
-            if (currentPage === 1 && ['open', 'active', 'assigned', 'pending', 'closed'].includes(currentStatus)) {
+            if (currentPage === 1 && ['open', 'active', 'assigned', 'pending', 'completed', 'closed'].includes(currentStatus)) {
                 await loadConversations(false, false, true);
             }
         }
@@ -2062,7 +2065,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (PAGE_MODE === 'citizen_reports') {
                 item.classList.add(`incident-row-priority-${incidentPriorityMeta(conv).level}`);
             }
-            if (currentStatus === 'closed') item.classList.add('closed');
+            if (currentStatus === 'closed' || currentStatus === 'completed') item.classList.add('closed');
             if (String(conv.id) === String(currentConversationId)) item.classList.add('active');
             
             item.setAttribute('data-conversation-id', conv.id);
@@ -2111,14 +2114,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 : '';
             const workflowRaw = (conv.workflowStatus || '').toLowerCase();
             const workflowLabelMap = {
-                open: 'Open', active: 'Open', in_progress: 'In Progress', waiting_user: 'Waiting User',
-                pending: 'Pending ERS Status', resolved: 'Resolved', closed: 'Closed'
+                open: 'In Queue', active: 'In Queue', in_progress: 'Assigned', waiting_user: 'Pending Status',
+                pending: 'Pending Status', resolved: 'Completed', completed: 'Completed', closed: 'Closed'
             };
             const workflowClassMap = {
                 open: 'workflow-open', active: 'workflow-open', in_progress: 'workflow-progress',
-                waiting_user: 'workflow-waiting', resolved: 'workflow-resolved', closed: 'workflow-closed'
+                waiting_user: 'workflow-waiting', pending: 'workflow-waiting',
+                resolved: 'workflow-resolved', completed: 'workflow-resolved', closed: 'workflow-closed'
             };
-            const workflowLabel = workflowLabelMap[workflowRaw] || 'Open';
+            const workflowLabel = workflowLabelMap[workflowRaw] || 'In Queue';
             const workflowClass = workflowClassMap[workflowRaw] || 'workflow-open';
             const statusBadge = `<span class="workflow-pill ${workflowClass}">${workflowLabel}</span>`;
             const assignedAdmin = conv.assignedAdminName
@@ -2137,7 +2141,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const priorityCell = PAGE_MODE === 'citizen_reports'
                 ? `<td style="padding:0.85rem 0.75rem;vertical-align:middle;">${incidentPriorityBadgeHtml(conv)}</td>`
                 : '';
-            const transferAction = PAGE_MODE === 'citizen_reports'
+            const canTransferReport = PAGE_MODE === 'citizen_reports'
+                && !['waiting_user', 'pending', 'resolved', 'completed', 'closed'].includes(workflowRaw);
+            const transferAction = canTransferReport
                 ? `<button class="btn btn-secondary transfer-report-btn" data-conversation-id="${conv.id}" style="padding:0.35rem 0.65rem;font-size:0.75rem;border-radius:4px;cursor:pointer;margin-right:0.35rem;">
                        <i class="fas fa-share-from-square"></i> Transfer
                    </button>`
@@ -2221,6 +2227,57 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             el.className = `twc-transfer-modal__message ${state}`.trim();
         }
 
+        async function fetchTransferConversationMessages(conversationId) {
+            try {
+                const res = await fetch(`${API_BASE}chat-get-messages.php?conversationId=${encodeURIComponent(conversationId)}&lastMessageId=0`, {
+                    cache: 'no-store'
+                });
+                const result = await res.json();
+                return result && result.success && Array.isArray(result.messages) ? result.messages : [];
+            } catch (error) {
+                console.warn('Unable to load messages for transfer summary:', error);
+                return [];
+            }
+        }
+
+        function cleanTransferSummaryText(value) {
+            return String(value || '')
+                .replace(/\[(CALL_ENDED|CALL_DECLINED|CALL_TRANSFERRED|TRANSFERRED_PENDING|AUTO_TRANSFERRED_TO_ERS|ERS_STATUS)\]/gi, '')
+                .replace(/<[^>]*>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function buildTransferConversationSummary(data = {}) {
+            const priorityMeta = incidentPriorityMeta(data);
+            const lines = [
+                'Emergency report conversation summary',
+                `Citizen: ${cleanTransferSummaryText(data.userName || data.caller?.name || 'Guest User')}`,
+                `Phone: ${cleanTransferSummaryText(data.userPhone || data.caller?.phone || 'Not provided')}`,
+                `Emergency type: ${cleanTransferSummaryText(data.category || data.department || data.userConcern || 'Emergency report')}`,
+                `Location: ${cleanTransferSummaryText(data.userLocation || data.caller?.address || 'Not specified')}`,
+                `Priority: ${priorityMeta.label} ${priorityMeta.score}`
+            ];
+            const messages = Array.isArray(data.transferMessages) ? data.transferMessages : [];
+            const usefulMessages = messages
+                .map(msg => ({
+                    speaker: cleanTransferSummaryText(msg.senderName || msg.senderType || 'Unknown'),
+                    text: cleanTransferSummaryText(msg.text || msg.message_text || msg.message || ''),
+                    time: Number(msg.timestamp || 0) > 0 ? new Date(Number(msg.timestamp)).toLocaleString() : ''
+                }))
+                .filter(msg => msg.text !== '')
+                .slice(-14);
+            if (usefulMessages.length) {
+                lines.push('', 'Conversation history:');
+                usefulMessages.forEach(msg => {
+                    const stamp = msg.time ? ` (${msg.time})` : '';
+                    lines.push(`- ${msg.speaker}${stamp}: ${msg.text}`);
+                });
+            } else if (data.lastMessage) {
+                lines.push('', `Latest message: ${cleanTransferSummaryText(data.lastMessage)}`);
+            }
+            return lines.filter(line => line !== null && line !== undefined).join('\n').trim();
+        }
         function closeTransferModal() {
             const modal = document.getElementById('twcTransferModal');
             if (!modal) return;
@@ -2249,7 +2306,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
             if (descriptionGroup) descriptionGroup.hidden = false;
             if (descriptionEl) {
-                descriptionEl.value = String(data?.description || data?.lastMessage || '').trim();
+                descriptionEl.value = buildTransferConversationSummary(data) || String(data?.description || data?.lastMessage || '').trim();
                 descriptionEl.setAttribute('aria-invalid', 'false');
             }
 
@@ -2321,7 +2378,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 showToast('Transfer unavailable', 'Select a report before transferring.');
                 return;
             }
-            const transferForm = await openTransferModal(data);
+            const transferData = { ...data, transferMessages: await fetchTransferConversationMessages(conversationId) };
+            const transferForm = await openTransferModal(transferData);
             if (!transferForm) return;
             const priorityMeta = incidentPriorityMeta(data);
             const reportTransferId = `conversation-${conversationId}-${Date.now()}`;
