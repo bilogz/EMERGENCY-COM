@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Mass Notification System Page
  * Manage SMS, Email, and PA (Public Address) Systems for broad communication
@@ -280,7 +280,7 @@ $pageTitle = 'Mass Notification System';
                                             <textarea id="message_body" name="body" rows="6" required onkeyup="updateCharCount(this)" placeholder="Your complete alert message will appear here as you answer the questions above. You can also type or edit it directly."></textarea>
                                             <div class="mn-field-note"><i class="fas fa-pen"></i> Read this message once. You can click inside it and change any word.</div>
                                             <div class="mn-sms-counter" id="mnSmsCounter" aria-live="polite">
-                                                <span><i class="fas fa-comment-sms" aria-hidden="true"></i> <strong id="mnSmsMetrics">0 / 160 characters â€¢ 1 SMS Segment</strong></span>
+                                                <span><i class="fas fa-comment-sms" aria-hidden="true"></i> <strong id="mnSmsMetrics">0 / 160 characters - 1 SMS Segment</strong></span>
                                                 <span class="mn-sms-encoding" id="mnSmsEncoding">Standard SMS</span>
                                             </div>
                                             <div class="mn-sms-warning" id="mnSmsWarning" role="status"></div>
@@ -289,7 +289,10 @@ $pageTitle = 'Mass Notification System';
 
                                         <div class="form-group mn-primary-writing-field">
                                             <label for="message_more_info_url">3. Link for more information <span class="mn-optional">Optional</span></label>
-                                            <input type="url" id="message_more_info_url" name="more_info_url" maxlength="700" placeholder="https://example.com/full-advisory">
+                                            <div class="mn-url-field">
+                                                <span class="mn-url-field-icon" aria-hidden="true"><i class="fas fa-link"></i></span>
+                                                <input type="url" id="message_more_info_url" name="more_info_url" maxlength="700" placeholder="Paste a full advisory link, e.g. https://example.com/full-advisory" inputmode="url" autocomplete="url">
+                                            </div>
                                             <div class="mn-help">This link is saved for the notification details page. It will not be shown in the phone banner.</div>
                                         </div>
 

@@ -827,6 +827,180 @@ function weatherRiskPushPreview(array $analysis): string {
     return $label . ': rain chance ' . ($metrics['max_precipitation_probability'] ?? 0) . '%, rain ' . ($metrics['rain_24h_mm'] ?? 0) . ' mm in 24h, gusts up to ' . ($metrics['max_gust_kmh'] ?? 0) . ' km/h. Open Alertara for precautions.';
 }
 
+function analyzeTomorrowWeatherForecast(array $forecastData): array {
+    $items = array_values(array_filter($forecastData['list'] ?? [], 'is_array'));
+    $tomorrowKey = date('Y-m-d', strtotime('+1 day'));
+    $tomorrow = [];
+    foreach ($items as $forecast) {
+        $dt = (int)($forecast['dt'] ?? strtotime($forecast['dt_txt'] ?? ''));
+        if ($dt > 0 && date('Y-m-d', $dt) === $tomorrowKey) $tomorrow[] = $forecast;
+    }
+
+    if (!$tomorrow) {
+        return ['success' => false, 'message' => 'No tomorrow forecast window is available yet.', 'forecast_date' => $tomorrowKey];
+    }
+
+    $rainTotal = 0.0; $maxPop = 0; $maxRain = 0.0; $maxWind = 0.0; $maxGust = 0.0;
+    $minTemp = null; $maxTemp = null; $minVisibility = null; $hasThunder = false; $peak = null; $peakScore = -1;
+    foreach ($tomorrow as $forecast) {
+        $precip = (float)getForecastMetric($forecast, 'precipitation_mm', 0);
+        $rain = max($precip, (float)getForecastMetric($forecast, 'rain_mm', 0), (float)getForecastMetric($forecast, 'showers_mm', 0));
+        $pop = (int)getForecastMetric($forecast, 'precipitation_probability', 0);
+        $wind = (float)getForecastMetric($forecast, 'wind_speed_kmh', 0);
+        $gust = (float)getForecastMetric($forecast, 'wind_gust_kmh', 0);
+        $visibility = getForecastMetric($forecast, 'visibility_m', null);
+        $code = (int)getForecastMetric($forecast, 'weather_code', 0);
+        $main = strtolower((string)($forecast['weather'][0]['main'] ?? ''));
+        $temp = isset($forecast['main']['temp']) ? (float)$forecast['main']['temp'] : null;
+        $tempMin = isset($forecast['main']['temp_min']) ? (float)$forecast['main']['temp_min'] : $temp;
+        $tempMax = isset($forecast['main']['temp_max']) ? (float)$forecast['main']['temp_max'] : $temp;
+
+        $rainTotal += $rain;
+        $maxRain = max($maxRain, $rain);
+        $maxPop = max($maxPop, $pop);
+        $maxWind = max($maxWind, $wind);
+        $maxGust = max($maxGust, $gust);
+        if ($tempMin !== null) $minTemp = $minTemp === null ? $tempMin : min($minTemp, $tempMin);
+        if ($tempMax !== null) $maxTemp = $maxTemp === null ? $tempMax : max($maxTemp, $tempMax);
+        if ($visibility !== null) $minVisibility = $minVisibility === null ? (int)$visibility : min($minVisibility, (int)$visibility);
+        if (in_array($code, [95, 96, 99], true) || $main === 'thunderstorm') $hasThunder = true;
+
+        $score = ($rain * 10) + $pop + ($hasThunder ? 25 : 0) + max(0, $gust - 30);
+        if ($score > $peakScore) {
+            $peakScore = $score;
+            $peak = $forecast['dt_txt'] ?? (isset($forecast['dt']) ? date('Y-m-d H:i:s', (int)$forecast['dt']) : null);
+        }
+    }
+
+    $level = 'normal';
+    if ($rainTotal >= 50 || $maxRain >= 20 || ($hasThunder && $maxGust >= 55) || $maxGust >= 75) $level = 'warning';
+    elseif ($rainTotal >= 25 || $maxRain >= 10 || $maxPop >= 80 || $hasThunder || $maxGust >= 55) $level = 'advisory';
+    elseif ($rainTotal >= 5 || $maxPop >= 40 || $maxWind >= 25 || $maxGust >= 40 || ($maxTemp !== null && $maxTemp >= 33)) $level = 'watch';
+
+    $key = 'fair_weather';
+    $label = 'Daily Forecast';
+    if ($rainTotal >= 25 || $maxRain >= 10) { $key = 'heavy_rain'; $label = 'Heavy Rain Forecast'; }
+    elseif ($hasThunder) { $key = 'thunderstorm'; $label = 'Thunderstorm Forecast'; }
+    elseif ($maxGust >= 40 || $maxWind >= 30) { $key = 'wind'; $label = 'Wind Forecast'; }
+    elseif ($rainTotal >= 5 || $maxPop >= 40) { $key = 'rain'; $label = 'Rain Forecast'; }
+    elseif ($maxTemp !== null && $maxTemp >= 33) { $key = 'heat'; $label = 'Hot Weather Forecast'; }
+
+    $summary = 'Quezon City forecast for tomorrow.';
+    if ($key === 'heavy_rain') $summary = 'Rainy conditions may affect Quezon City tomorrow.';
+    elseif ($key === 'thunderstorm') $summary = 'Thunderstorms are possible in Quezon City tomorrow.';
+    elseif ($key === 'wind') $summary = 'Breezy to windy conditions are possible in Quezon City tomorrow.';
+    elseif ($key === 'rain') $summary = 'Rain is possible in Quezon City tomorrow.';
+    elseif ($key === 'heat') $summary = 'Hot weather is expected in Quezon City tomorrow.';
+
+    return [
+        'success' => true,
+        'location' => 'Quezon City',
+        'source' => 'Open-Meteo tomorrow forecast',
+        'generated_at' => date('Y-m-d H:i:s'),
+        'forecast_date' => $tomorrowKey,
+        'forecast_day' => date('D, M j', strtotime($tomorrowKey)),
+        'summary' => $summary,
+        'overall' => ['key' => 'tomorrow_' . $key, 'label' => $label, 'level' => $level, 'severity' => weatherRiskSeverity($level)],
+        'metrics' => [
+            'rain_24h_mm' => round($rainTotal, 1),
+            'max_rain_3h_mm' => round($maxRain, 1),
+            'max_precipitation_probability' => $maxPop,
+            'min_temp_c' => $minTemp === null ? null : round($minTemp, 1),
+            'max_temp_c' => $maxTemp === null ? null : round($maxTemp, 1),
+            'max_wind_kmh' => round($maxWind, 1),
+            'max_gust_kmh' => round($maxGust, 1),
+            'min_visibility_m' => $minVisibility,
+            'peak_period' => $peak
+        ],
+        'risks' => [
+            ['key' => 'rainfall', 'level' => $rainTotal >= 25 ? 'advisory' : ($rainTotal >= 5 || $maxPop >= 40 ? 'watch' : 'normal')],
+            ['key' => 'flood_risk', 'level' => $rainTotal >= 50 ? 'warning' : ($rainTotal >= 25 ? 'advisory' : ($rainTotal >= 15 ? 'watch' : 'normal'))],
+            ['key' => 'thunderstorm', 'level' => $hasThunder ? 'advisory' : 'normal'],
+            ['key' => 'wind', 'level' => $maxGust >= 75 ? 'warning' : ($maxGust >= 55 ? 'advisory' : ($maxGust >= 40 ? 'watch' : 'normal'))],
+            ['key' => 'visibility', 'level' => ($minVisibility !== null && $minVisibility <= 3000) ? 'advisory' : (($minVisibility !== null && $minVisibility <= 5000) ? 'watch' : 'normal')],
+            ['key' => 'heat', 'level' => ($maxTemp !== null && $maxTemp >= 35) ? 'advisory' : (($maxTemp !== null && $maxTemp >= 33) ? 'watch' : 'normal')]
+        ]
+    ];
+}
+
+function tomorrowWeatherForecastEventHash(array $analysis): string {
+    return hash('sha256', implode('|', [
+        'tomorrow_forecast',
+        $analysis['forecast_date'] ?? date('Y-m-d', strtotime('+1 day')),
+        $analysis['overall']['key'] ?? 'normal',
+        $analysis['overall']['level'] ?? 'normal'
+    ]));
+}
+
+function tomorrowWeatherForecastMessage(array $analysis): string {
+    $metrics = $analysis['metrics'] ?? [];
+    $peakPeriod = weatherRiskFormatPeakPeriod($metrics['peak_period'] ?? null);
+    $tempMin = $metrics['min_temp_c'] ?? null;
+    $tempMax = $metrics['max_temp_c'] ?? null;
+    $tempRange = ($tempMin !== null ? $tempMin : '--') . '-' . ($tempMax !== null ? $tempMax : '--') . ' C';
+    $wind = ($metrics['max_wind_kmh'] ?? 0) . ' km/h';
+    $gust = (float)($metrics['max_gust_kmh'] ?? 0);
+    if ($gust > 0) $wind .= ', gusts up to ' . $gust . ' km/h';
+
+    $lines = [
+        'WEATHER FORECAST - QUEZON CITY',
+        '',
+        ($analysis['summary'] ?? 'Quezon City weather forecast for tomorrow.') . ' Forecast day: ' . ($analysis['forecast_day'] ?? 'Tomorrow') . '.',
+        '',
+        'Rain chance: ' . ($metrics['max_precipitation_probability'] ?? 0) . '%',
+        'Expected rainfall: ' . ($metrics['rain_24h_mm'] ?? 0) . ' mm',
+        'Temperature: ' . $tempRange,
+        'Wind: ' . $wind,
+        'Peak period: ' . $peakPeriod,
+        '',
+        'PRECAUTIONS'
+    ];
+    foreach (weatherRiskPrecautions($analysis) as $step) $lines[] = '- ' . $step;
+    $lines[] = '';
+    $lines[] = 'View Full Forecast: https://emergency-comm.alertaraqc.com/USERS/weather-map.php';
+    return implode("`n", $lines);
+}
+
+function tomorrowWeatherForecastPushPreview(array $analysis): string {
+    $metrics = $analysis['metrics'] ?? [];
+    return 'Tomorrow in Quezon City: rain chance ' . ($metrics['max_precipitation_probability'] ?? 0) . '%, rainfall ' . ($metrics['rain_24h_mm'] ?? 0) . ' mm, wind up to ' . ($metrics['max_wind_kmh'] ?? 0) . ' km/h. Tap for forecast.';
+}
+
+function queueTomorrowWeatherForecastAlert(PDO $pdo, array $forecastData): array {
+    require_once __DIR__ . '/bulletin-dispatch-helper.php';
+    ensureWeatherRiskTables($pdo);
+    $analysis = analyzeTomorrowWeatherForecast($forecastData);
+    if (empty($analysis['success'])) {
+        return ['success' => true, 'alerted' => false, 'message' => $analysis['message'] ?? 'Tomorrow forecast unavailable.', 'analysis' => $analysis];
+    }
+
+    $hash = tomorrowWeatherForecastEventHash($analysis);
+    $check = $pdo->prepare('SELECT id, created_at FROM weather_risk_auto_alert_log WHERE event_hash = ? LIMIT 1');
+    $check->execute([$hash]);
+    if ($check->fetch(PDO::FETCH_ASSOC)) {
+        return ['success' => true, 'alerted' => false, 'deduped' => true, 'message' => 'Tomorrow weather forecast alert already queued for this forecast state.', 'analysis' => $analysis];
+    }
+
+    $title = 'Tomorrow Weather Forecast - Quezon City';
+    if (weatherRiskLevelRank($analysis['overall']['level'] ?? 'normal') >= weatherRiskLevelRank('advisory')) {
+        $title = 'Tomorrow ' . ($analysis['overall']['label'] ?? 'Weather Forecast') . ' - Quezon City';
+    }
+    $message = tomorrowWeatherForecastMessage($analysis);
+    $queued = queueBulletinBroadcast($pdo, [
+        'title' => $title,
+        'message' => $message,
+        'severity' => $analysis['overall']['severity'] ?? 'low',
+        'source' => 'open_meteo_tomorrow_forecast',
+        'category' => 'weather',
+        'channels' => getWeatherRiskAutoAlertChannels($pdo),
+        'push_preview' => tomorrowWeatherForecastPushPreview($analysis),
+        'more_info_url' => 'https://emergency-comm.alertaraqc.com/USERS/weather-map.php'
+    ]);
+
+    $stmt = $pdo->prepare('INSERT INTO weather_risk_auto_alert_log (event_hash, risk_key, risk_level, title, message, metrics_json, alert_id, log_id, queued_jobs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$hash, $analysis['overall']['key'], $analysis['overall']['level'], $title, $message, json_encode($analysis['metrics'], JSON_UNESCAPED_SLASHES), $queued['alert_id'] ?? null, $queued['log_id'] ?? null, (int)($queued['queued_jobs'] ?? 0)]);
+    return ['success' => true, 'alerted' => true, 'message' => 'Tomorrow weather forecast alert queued.', 'queued' => $queued, 'analysis' => $analysis];
+}
 function weatherRiskEventHash(array $analysis) {
     $metrics = $analysis['metrics'];
     $bucket = date('YmdH', time() - (time() % (3 * 3600)));
@@ -881,35 +1055,45 @@ if ($action === 'risk') {
         echo json_encode(['success' => false, 'message' => 'Failed to fetch weather risk forecast: ' . $forecastData['error']]);
         exit;
     }
-    $analysis = analyzeWeatherRisks($forecastData);
-    if (weatherRiskLevelRank($analysis['overall']['level'] ?? 'normal') < weatherRiskLevelRank('advisory')) {
-        echo json_encode(['success' => true, 'alerted' => false, 'message' => 'No qualifying weather risk alert.', 'analysis' => $analysis]);
-        exit;
-    }
     require_once __DIR__ . '/bulletin-dispatch-helper.php';
     ensureWeatherRiskTables($pdo);
-    $hash = weatherRiskEventHash($analysis);
-    $check = $pdo->prepare('SELECT id, created_at FROM weather_risk_auto_alert_log WHERE event_hash = ? LIMIT 1');
-    $check->execute([$hash]);
-    $existing = $check->fetch(PDO::FETCH_ASSOC);
-    if ($existing) {
-        echo json_encode(['success' => true, 'alerted' => false, 'deduped' => true, 'message' => 'Weather risk alert already queued for this forecast state.', 'analysis' => $analysis]);
-        exit;
+    $analysis = analyzeWeatherRisks($forecastData);
+    $weatherRiskResult = ['success' => true, 'alerted' => false, 'message' => 'No qualifying weather risk alert.', 'analysis' => $analysis];
+
+    if (weatherRiskLevelRank($analysis['overall']['level'] ?? 'normal') >= weatherRiskLevelRank('advisory')) {
+        $hash = weatherRiskEventHash($analysis);
+        $check = $pdo->prepare('SELECT id, created_at FROM weather_risk_auto_alert_log WHERE event_hash = ? LIMIT 1');
+        $check->execute([$hash]);
+        $existing = $check->fetch(PDO::FETCH_ASSOC);
+        if ($existing) {
+            $weatherRiskResult = ['success' => true, 'alerted' => false, 'deduped' => true, 'message' => 'Weather risk alert already queued for this forecast state.', 'analysis' => $analysis];
+        } else {
+            $title = 'Quezon City ' . $analysis['overall']['label'] . ' ' . weatherRiskLabel($analysis['overall']['level']);
+            $message = weatherRiskNotificationMessage($analysis);
+            $queued = queueBulletinBroadcast($pdo, [
+                'title' => $title,
+                'message' => $message,
+                'severity' => $analysis['overall']['severity'],
+                'source' => 'open_meteo_weather_risk',
+                'category' => 'weather',
+                'channels' => getWeatherRiskAutoAlertChannels($pdo),
+                'push_preview' => weatherRiskPushPreview($analysis),
+                'more_info_url' => 'https://emergency-comm.alertaraqc.com/USERS/weather-map.php'
+            ]);
+            $stmt = $pdo->prepare('INSERT INTO weather_risk_auto_alert_log (event_hash, risk_key, risk_level, title, message, metrics_json, alert_id, log_id, queued_jobs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmt->execute([$hash, $analysis['overall']['key'], $analysis['overall']['level'], $title, $message, json_encode($analysis['metrics'], JSON_UNESCAPED_SLASHES), $queued['alert_id'] ?? null, $queued['log_id'] ?? null, (int)($queued['queued_jobs'] ?? 0)]);
+            $weatherRiskResult = ['success' => true, 'alerted' => true, 'message' => 'Weather risk alert queued.', 'queued' => $queued, 'analysis' => $analysis];
+        }
     }
-    $title = 'Quezon City ' . $analysis['overall']['label'] . ' ' . weatherRiskLabel($analysis['overall']['level']);
-    $message = weatherRiskNotificationMessage($analysis);
-    $queued = queueBulletinBroadcast($pdo, [
-        'title' => $title,
-        'message' => $message,
-        'severity' => $analysis['overall']['severity'],
-        'source' => 'open_meteo_weather_risk',
-        'category' => 'weather',
-        'channels' => getWeatherRiskAutoAlertChannels($pdo),
-        'push_preview' => weatherRiskPushPreview($analysis)
+
+    $tomorrowForecastResult = queueTomorrowWeatherForecastAlert($pdo, $forecastData);
+    echo json_encode([
+        'success' => true,
+        'alerted' => !empty($weatherRiskResult['alerted']) || !empty($tomorrowForecastResult['alerted']),
+        'message' => trim(($weatherRiskResult['message'] ?? '') . ' ' . ($tomorrowForecastResult['message'] ?? '')),
+        'weather_risk' => $weatherRiskResult,
+        'tomorrow_forecast' => $tomorrowForecastResult
     ]);
-    $stmt = $pdo->prepare('INSERT INTO weather_risk_auto_alert_log (event_hash, risk_key, risk_level, title, message, metrics_json, alert_id, log_id, queued_jobs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$hash, $analysis['overall']['key'], $analysis['overall']['level'], $title, $message, json_encode($analysis['metrics'], JSON_UNESCAPED_SLASHES), $queued['alert_id'] ?? null, $queued['log_id'] ?? null, (int)($queued['queued_jobs'] ?? 0)]);
-    echo json_encode(['success' => true, 'alerted' => true, 'message' => 'Weather risk alert queued.', 'queued' => $queued, 'analysis' => $analysis]);
 } elseif ($action === 'weather-risk-history') {
     ensureWeatherRiskTables($pdo);
     $limit = isset($_GET['limit']) ? max(1, min(50, (int)$_GET['limit'])) : 10;

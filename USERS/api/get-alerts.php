@@ -409,6 +409,7 @@ $hasSeverityCol = usersTableHasColumn($pdo, $alertsTable, 'severity');
 $hasSourceCol = usersTableHasColumn($pdo, $alertsTable, 'source');
 $hasTypeCol = usersTableHasColumn($pdo, $alertsTable, 'type');
 $hasCategoryCol = usersTableHasColumn($pdo, $alertsTable, 'category');
+$hasMoreInfoUrl = usersTableHasColumn($pdo, $alertsTable, 'more_info_url');
 
 // Base query
 $query = "
@@ -421,6 +422,7 @@ $query = "
         " . ($hasSourceCol ? "a.source" : "'' AS source") . ",
         " . ($hasTypeCol ? "a.type" : "'' AS type") . ",
         " . ($hasCategoryCol ? "a.category" : "'' AS category") . ",
+        " . ($hasMoreInfoUrl ? "a.more_info_url" : "'' AS more_info_url") . ",
         a.status,
         a.created_at,
         a.updated_at,

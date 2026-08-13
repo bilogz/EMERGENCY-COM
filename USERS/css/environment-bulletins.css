@@ -803,3 +803,15 @@ body .main-content .bulletin-badge {
         grid-column: 1 / -1;
     }
 }
+#earthquakeBulletinFeed {
+    max-height: min(68vh, 760px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+#earthquakeBulletinFeed .bulletin-loading,
+#earthquakeBulletinFeed .bulletin-empty,
+#earthquakeBulletinFeed .bulletin-error {
+    min-height: 260px;
+}
