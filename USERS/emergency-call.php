@@ -1835,6 +1835,33 @@ $assetBase = '../ADMIN/header/';
             };
         }
 
+        async function persistOpenEmergencyCall(offerPayload) {
+            if (!offerPayload || !offerPayload.callId) return false;
+            try {
+                const response = await fetch('../ADMIN/api/call-session.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        action: 'upsert_open',
+                        callId: offerPayload.callId,
+                        room: offerPayload.room || getCallRoom(offerPayload.callId),
+                        caller: offerPayload.caller || currentCallCallerPayload(),
+                        location: offerPayload.location || currentCallLocationPayload(),
+                        conversationId: offerPayload.conversationId || offerPayload.conversation_id || null,
+                        offerPayload
+                    })
+                });
+                const data = await response.json().catch(() => null);
+                if (!response.ok || !data || data.success === false) {
+                    throw new Error(data?.error || data?.message || 'Unable to save open emergency call.');
+                }
+                return true;
+            } catch (error) {
+                console.error('[call][user] failed to persist open call', error);
+                return false;
+            }
+        }
         function emergencyComCallReference(callIdValue = callId) {
             const normalizedCallId = String(callIdValue || '').trim();
             return normalizedCallId ? `call-${normalizedCallId}` : '';
@@ -2138,6 +2165,7 @@ $assetBase = '../ADMIN/header/';
                     location: locationData || null
                 };
 
+                await persistOpenEmergencyCall(offerPayload);
                 s.emit("offer", offerPayload, CALL_LOBBY_ROOM);
                 setStatus('Waiting for Emergency Communication admin to answer...');
             } catch (e) {

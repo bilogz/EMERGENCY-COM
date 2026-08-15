@@ -4580,6 +4580,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (!response.ok || !data || data.success === false) return;
             const s = ensureSocket();
             const openSessions = (Array.isArray(data.open) ? data.open : []).filter(isCallSessionFresh);
+            const openSessionIds = new Set(openSessions.map(session => String(session.call_id || session.callId || '')).filter(Boolean));
+            if (force) {
+                incomingCallQueue.forEach((call, id) => {
+                    if (!openSessionIds.has(String(id)) && String(id) !== String(callId || '')) {
+                        incomingCallQueue.delete(id);
+                    }
+                });
+            }
             openSessions.forEach(session => {
                 const source = callSessionToQueuedOffer(session);
                 if (!source || incomingCallQueue.has(source.callId)) return;
@@ -5634,6 +5642,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
     });
 
+    if (EMERGENCY_COM_CALL_INTAKE_ENABLED) {
+        setInterval(() => {
+            restoreCallSessionsFromDatabase(true);
+        }, 2500);
+    }
     // Keep trying quietly so page can recover if socket server starts later.
     setInterval(() => {
         if (socket && socket.connected) return;
