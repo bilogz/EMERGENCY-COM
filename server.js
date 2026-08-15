@@ -67,8 +67,41 @@ function callSummary(call) {
     caller: call.offer?.caller || null,
     location: call.offer?.location || null,
     conversationId: call.offer?.conversationId || null,
+    offer: call.offer || null,
     updatedAt: call.updatedAt,
   };
+}
+
+function callQueueSummary(call) {
+  return {
+    callId: call.callId,
+    room: call.room,
+    status: call.status,
+    adminKey: call.adminKey || null,
+    caller: call.offer?.caller || null,
+    location: call.offer?.location || null,
+    conversationId: call.offer?.conversationId || null,
+    offer: call.offer || null,
+    createdAt: call.createdAt || call.updatedAt,
+    updatedAt: call.updatedAt,
+  };
+}
+
+function emitCallQueue() {
+  const calls = Array.from(activeCallsById.values()).map(callQueueSummary);
+  io.to(CALL_LOBBY_ROOM).emit('call-queue', {
+    open: calls.filter((call) => call.status === 'ringing'),
+    assigned: calls.filter((call) => call.status === 'accepted'),
+    pending: calls.filter((call) => call.status === 'pending'),
+    updatedAt: Date.now(),
+  });
+}
+
+function emitCallUpdate(event, call) {
+  if (!call) return;
+  const payload = { event, call: callQueueSummary(call), updatedAt: Date.now() };
+  io.to(CALL_LOBBY_ROOM).emit('call-updated', payload);
+  emitCallQueue();
 }
 
 function liveCallIdentity(call) {
@@ -121,7 +154,12 @@ function relayHangup(socket, payload = {}, room) {
     socket.to(signalRoom).emit('call-ended', notice);
     socket.to(signalRoom).emit('call_ended', notice);
   }
-  if (callId) activeCallsById.delete(callId);
+  if (callId) {
+    const endedCall = activeCallsById.get(callId);
+    if (endedCall) emitCallUpdate('ended', { ...endedCall, status: 'ended', updatedAt: Date.now() });
+    activeCallsById.delete(callId);
+    emitCallQueue();
+  }
 }
 
 const io = new Server(server, {
@@ -154,9 +192,7 @@ io.on('connection', (socket) => {
         debugLog(`[socket] replayed cached offer room=${room} callId=${cached.payload?.callId || ''}`);
       }
       if (room === CALL_LOBBY_ROOM) {
-        for (const call of activeCallsById.values()) {
-          if (call.status === 'ringing' && call.offer) socket.emit('offer', call.offer);
-        }
+        emitCallQueue();
       }
       const roomCall = Array.from(activeCallsById.values()).find((call) => call.room === room) || null;
       if (roomCall && roomCall.callerSocketId && roomCall.callerSocketId !== socket.id) {
@@ -239,8 +275,14 @@ io.on('connection', (socket) => {
         adminSocketId: current?.adminSocketId || null,
         adminKey: current?.adminKey || null,
         status: current?.status === 'accepted' ? 'accepted' : 'ringing',
+        createdAt: current?.createdAt || Date.now(),
         updatedAt: Date.now(),
       });
+      const storedCall = activeCallsById.get(callId);
+      if (!current || current.status !== storedCall.status) {
+        socket.to(CALL_LOBBY_ROOM).emit('call-created', { call: callQueueSummary(storedCall), updatedAt: Date.now() });
+      }
+      emitCallUpdate('offered', storedCall);
     }
     // The caller and accepted admin exchange media in the private signalRoom.
     // A new incoming call is first announced to the shared admin lobby so an
@@ -273,12 +315,19 @@ io.on('connection', (socket) => {
       if (typeof acknowledge === 'function') acknowledge({ ok: false, reason: 'This call was answered by another admin.' });
       return;
     }
+    for (const item of activeCallsById.values()) {
+      if (item.callId !== callId && item.adminKey === adminKey && item.status === 'accepted') {
+        if (typeof acknowledge === 'function') acknowledge({ ok: false, reason: 'You already have an active call.' });
+        return;
+      }
+    }
     call.status = 'accepted';
     call.adminKey = adminKey;
     call.adminSocketId = socket.id;
     call.updatedAt = Date.now();
     socket.join(call.room);
-    socket.to(CALL_LOBBY_ROOM).emit('call-claimed', { callId, adminKey });
+    socket.to(CALL_LOBBY_ROOM).emit('call-claimed', { callId, adminKey, call: callQueueSummary(call) });
+    emitCallUpdate('claimed', call);
     if (typeof acknowledge === 'function') acknowledge({ ok: true, call: callSummary(call) });
   });
 
