@@ -247,6 +247,10 @@ io.on('connection', (socket) => {
     // admin can discover it, claim it, and then join the private room.
     const targetRoom = announcementRoom || signalRoom;
     socket.to(targetRoom).emit('offer', payload);
+    const isTransferredOffer = payload?.transferred === true || cleanText(payload?.target, 40) === 'ers';
+    if (!isTransferredOffer && targetRoom !== CALL_LOBBY_ROOM) {
+      socket.to(CALL_LOBBY_ROOM).emit('offer', payload);
+    }
     const activeCall = callId ? activeCallsById.get(callId) : null;
     const peerSocketId = activeCall
       ? (activeCall.callerSocketId === socket.id ? activeCall.adminSocketId : activeCall.callerSocketId)
@@ -490,9 +494,8 @@ io.on('connection', (socket) => {
     if (transferRoom) socket.to(transferRoom).emit('call-transfer', transferNotice);
   });
 
-  // Production call route: Emergency-Com relays a live call's private room
-  // to ERS. Live calls are deliberately not persisted as Two-Way
-  // Communication conversations and are never emitted to the admin lobby.
+  // Manual admin route only. Incoming callers must first be answered by
+  // Emergency Communication, then an admin can transfer the live call to ERS.
   socket.on('route-call-to-ers', (payload, acknowledge) => {
     const callId = getSignalCallId(payload);
     const room = cleanText(payload?.room, 180);
@@ -503,9 +506,21 @@ io.on('connection', (socket) => {
       }
       return;
     }
-    if (!existing || existing.callerSocketId !== socket.id) {
+    if (!existing) {
       if (typeof acknowledge === 'function') {
-        acknowledge({ ok: false, reason: 'The caller must register its private room before routing to ERS.' });
+        acknowledge({ ok: false, reason: 'The call is no longer available.' });
+      }
+      return;
+    }
+    if (existing.callerSocketId === socket.id) {
+      if (typeof acknowledge === 'function') {
+        acknowledge({ ok: false, reason: 'Emergency Communication admin must answer and transfer this call.' });
+      }
+      return;
+    }
+    if (!existing.adminSocketId || existing.adminSocketId !== socket.id) {
+      if (typeof acknowledge === 'function') {
+        acknowledge({ ok: false, reason: 'Only the assigned Emergency Communication admin can transfer this call.' });
       }
       return;
     }

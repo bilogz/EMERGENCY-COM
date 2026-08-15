@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Two-Way Communication Interface Page
  * Manage interactive communication between administrators and citizens
@@ -17,6 +17,7 @@ $pageTitle = $pageTitle ?? 'Two-Way Communication Interface';
 $pageHeading = $pageHeading ?? 'Two-Way Communication Interface';
 $pageDescription = $pageDescription ?? 'Interactive communication platform allowing administrators and citizens to exchange messages in real-time.';
 $pageMode = $pageMode ?? 'citizen_reports';
+$isReportTableMode = in_array($pageMode, ['citizen_reports', 'emergency_calls'], true);
 $assetBaseUrl = $assetBaseUrl ?? '';
 $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 ?>
@@ -309,7 +310,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 <div class="chat-tab" onclick="switchTab('assigned')">
                                     <i class="fas fa-user-check"></i> Assigned
                                 </div>
-                                <?php if ($pageMode === 'citizen_reports'): ?>
+                                <?php if ($isReportTableMode): ?>
                                 <div class="chat-tab" onclick="switchTab('pending')">
                                     <i class="fas fa-hourglass-half"></i> Pending Status
                                 </div>
@@ -322,12 +323,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 </div>
                                 <?php endif; ?>
                             </div>
-                            <?php if ($pageMode === 'citizen_reports'): ?><div class="chat-filters">
+                            <?php if ($isReportTableMode): ?><div class="chat-filters">
 
                                 <label for="priorityFilter">Priority</label>
                                 <select id="priorityFilter">
                                     <option value="all">All Priorities</option>
-                                    <?php if ($pageMode === 'citizen_reports'): ?>
+                                    <?php if ($isReportTableMode): ?>
                                     <option value="critical">Critical</option>
                                     <option value="high">High</option>
                                     <option value="urgent">Urgent</option>
@@ -347,7 +348,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                             <th>Citizen</th>
                                             <th>Location</th>
                                             <th>Last Message</th>
-                                            <?php if ($pageMode === 'citizen_reports'): ?><th>Priority</th><?php endif; ?>
+                                            <?php if ($isReportTableMode): ?><th>Priority</th><?php endif; ?>
                                             <th>Admin Assigned</th>
                                             <th>Status</th>
                                             <th style="text-align: right;">Action</th>
@@ -377,7 +378,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                     </div>
                                 </div>
                                 <div class="chat-actions">
-                                    <?php if ($pageMode === 'citizen_reports'): ?>
+                                    <?php if ($isReportTableMode): ?>
                                     <div class="incident-priority-control" id="incidentPriorityControl" style="display:none;">
                                         <button type="button" class="incident-priority-button" id="incidentPriorityButton" aria-haspopup="menu" aria-expanded="false">
                                             <span id="incidentPriorityBadge" class="incident-priority-badge incident-priority-low">LOW 0</span>
@@ -407,7 +408,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                         </div>
                                     </div>
                                     <?php endif; ?>
-                                     <?php if ($pageMode === 'citizen_reports'): ?>
+                                     <?php if ($isReportTableMode): ?>
                                      <button class="btn btn-sm btn-secondary" id="transferConversationBtn" style="display: none;">
                                          <i class="fas fa-share-from-square"></i> Transfer
                                      </button>
@@ -702,6 +703,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const ADMIN_ID = <?php echo json_encode($_SESSION['admin_user_id'] ?? null); ?>;
         const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=4c8a89&color=fff&size=128`;
         const PAGE_MODE = <?php echo json_encode($pageMode); ?>;
+        const REPORT_TABLE_MODE = <?php echo json_encode($isReportTableMode); ?>;
         
         // State Management
         let currentStatus = 'open';
@@ -1666,7 +1668,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         function incidentPriorityBadgeHtml(conv) {
-            if (PAGE_MODE !== 'citizen_reports') return '';
+            if (!REPORT_TABLE_MODE) return '';
             const meta = incidentPriorityMeta(conv);
             return `<span class="incident-priority-badge incident-priority-${meta.level}">${meta.label} ${meta.score}</span>`;
         }
@@ -1717,7 +1719,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             );
 
             // Sort conversations (by priority if citizen reports, or by recency)
-            const sorted = PAGE_MODE === 'citizen_reports' ? sortCitizenReports(conversations) : sortConversationsNewest(conversations);
+            const sorted = REPORT_TABLE_MODE ? sortCitizenReports(conversations) : sortConversationsNewest(conversations);
 
             sorted.forEach(conv => {
                 const convId = String(conv.id);
@@ -1754,6 +1756,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 }
                 if (PAGE_MODE === 'citizen_reports') {
                     params.set('scope', 'citizen_reports');
+                } else if (PAGE_MODE === 'emergency_calls') {
+                    params.set('scope', 'emergency_calls');
                 } else if (PAGE_MODE === 'general_enquiries') {
                     params.set('scope', 'general_enquiries');
                 }
@@ -2062,7 +2066,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         function createConversationElement(conv) {
             const item = document.createElement('tr');
             item.className = 'conversation-item conversation-row-item';
-            if (PAGE_MODE === 'citizen_reports') {
+            if (REPORT_TABLE_MODE) {
                 item.classList.add(`incident-row-priority-${incidentPriorityMeta(conv).level}`);
             }
             if (currentStatus === 'closed' || currentStatus === 'completed') item.classList.add('closed');
@@ -2138,10 +2142,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const lastMsg = conv.lastMessage
                 ? escapeHtml(conv.lastMessage)
                 : '<span style="opacity:0.5;font-style:italic;">No messages</span>';
-            const priorityCell = PAGE_MODE === 'citizen_reports'
+            const priorityCell = REPORT_TABLE_MODE
                 ? `<td style="padding:0.85rem 0.75rem;vertical-align:middle;">${incidentPriorityBadgeHtml(conv)}</td>`
                 : '';
-            const canTransferReport = PAGE_MODE === 'citizen_reports'
+            const canTransferReport = REPORT_TABLE_MODE
                 && !['waiting_user', 'pending', 'resolved', 'completed', 'closed'].includes(workflowRaw);
             const transferAction = canTransferReport
                 ? `<button class="btn btn-secondary transfer-report-btn" data-conversation-id="${conv.id}" style="padding:0.35rem 0.65rem;font-size:0.75rem;border-radius:4px;cursor:pointer;margin-right:0.35rem;">
@@ -2186,12 +2190,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const menu = document.getElementById('incidentPriorityMenu');
             const transferBtn = document.getElementById('transferConversationBtn');
             if (transferBtn) {
-                transferBtn.style.display = PAGE_MODE === 'citizen_reports' && data ? 'inline-flex' : 'none';
+                transferBtn.style.display = REPORT_TABLE_MODE && data ? 'inline-flex' : 'none';
                 transferBtn.disabled = !data;
             }
             if (!control || !badge || !button || !menu) return;
 
-            if (PAGE_MODE !== 'citizen_reports' || !data) {
+            if (!REPORT_TABLE_MODE || !data) {
                 control.style.display = 'none';
                 menu.hidden = true;
                 button.setAttribute('aria-expanded', 'false');
@@ -2671,7 +2675,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
         }
         async function updateIncidentPriorityManual(level) {
-            if (!currentConversationId || PAGE_MODE !== 'citizen_reports') return;
+            if (!currentConversationId || !REPORT_TABLE_MODE) return;
             const button = document.getElementById('incidentPriorityButton');
             const menu = document.getElementById('incidentPriorityMenu');
             if (button) button.disabled = true;
@@ -2825,7 +2829,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         function setupCloseButton(isClosed) {
             const btn = document.getElementById('toggleStatusBtn');
             if (!btn) return;
-            if (PAGE_MODE === 'citizen_reports') {
+            if (REPORT_TABLE_MODE) {
                 btn.style.display = 'none';
                 return;
             }
@@ -3575,6 +3579,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         <input id="callerNameInput" type="text" placeholder="Admin edit: caller name" autocomplete="off" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
                         <input id="callerPhoneInput" type="tel" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" placeholder="09XXXXXXXXX" autocomplete="off" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
                         <input id="callerAddressInput" type="text" placeholder="Type location or address" style="grid-column:1 / -1; min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:600;">
+                        <div id="callBarangaySelector" style="grid-column:1 / -1; display:flex; flex-direction:column; gap:6px; position:relative;">
+                            <label for="callBarangaySearch" style="font-size:12px; opacity:0.82;">Incident Barangay</label>
+                            <input id="callBarangaySearch" type="text" placeholder="Search Quezon City barangay..." autocomplete="off" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
+                            <div id="callBarangaySelected" style="font-size:12px; opacity:0.76;">No barangay selected</div>
+                            <div id="callBarangayResults" style="display:none; position:absolute; left:0; right:0; top:72px; max-height:180px; overflow:auto; border:1px solid rgba(255,255,255,0.16); border-radius:10px; background:#111827; box-shadow:0 16px 34px rgba(0,0,0,.35); z-index:20;"></div>
+                        </div>
                     </div>
 
                     <div style="border-top:1px solid rgba(255,255,255,0.10); padding-top:12px; display:flex; flex-direction:column; gap:10px;">
@@ -3656,7 +3666,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     const SOCKET_HEALTH_URL = `${SIGNALING_URL}${SOCKET_IO_PATH}/?EIO=4&transport=polling`;
     console.log('[call][admin] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
     const CALL_LOBBY_ROOM = "emergency-lobby";
-    const EMERGENCY_COM_CALL_INTAKE_ENABLED = false;
+    const EMERGENCY_COM_CALL_INTAKE_ENABLED = <?php echo ($pageMode === 'emergency_calls') ? 'true' : 'false'; ?>;
     let activeCallRoom = null;
     let pendingCallRoom = null;
 
@@ -4148,6 +4158,73 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         return priority;
     }
 
+    const QC_CALL_BARANGAYS = [
+        'Alicia','Amihan','Apolonio Samson','Bagbag','Bagong Lipunan ng Crame','Bagong Pag-asa','Bagong Silangan','Bagumbayan','Bagumbuhay','Bahay Toro','Balingasa','Balong Bato','Batasan Hills','Bayanihan','Blue Ridge A','Blue Ridge B','Botocan','Bungad','Camp Aguinaldo','Capri','Central','Claro','Commonwealth','Culiat','Damayan','Damayang Lagi','Damar','Del Monte','Dioquino Zobel','Do�a Aurora','Do�a Imelda','Do�a Josefa','Duyan-Duyan','E. Rodriguez','East Kamias','Escopa I','Escopa II','Escopa III','Escopa IV','Fairview','Greater Lagro','Gulod','Holy Spirit','Horseshoe','Immaculate Concepcion','Kaligayahan','Kalusugan','Kamuning','Katipunan','Kaunlaran','Krus na Ligas','Laging Handa','Libis','Lourdes','Loyola Heights','Maharlika','Malaya','Mangga','Manresa','Mariana','Mariblo','Marilag','Masagana','Masambong','Matandang Balara','Milagrosa','Nagkaisang Nayon','Nayong Kanluran','New Era','North Fairview','Novaliches Proper','Obrero','Old Capitol Site','Paang Bundok','Pag-ibig sa Nayon','Paligsahan','Paltok','Paraiso','Pasong Putik Proper','Pasong Tamo','Payatas','Phil-Am','Pinagkaisahan','Pinyahan','Project 6','Quirino 2-A','Quirino 2-B','Quirino 2-C','Quirino 3-A','Ramon Magsaysay','Roxas','Sacred Heart','Saint Ignatius','San Agustin','San Antonio','San Bartolome','San Isidro','San Isidro Labrador','San Jose','San Martin de Porres','San Roque','Santa Cruz','Santa Lucia','Santa Monica','Santa Teresita','Santo Cristo','Santo Domingo','Santo Ni�o','Sauyo','Sienna','Sikatuna Village','Silangan','Socorro','South Triangle','Tagumpay','Talayan','Talipapa','Tandang Sora','Tatalon','Teachers Village East','Teachers Village West','Ugong Norte','Unang Sigaw','UP Campus','UP Village','Valencia','Vasra','Veterans Village','Villa Maria Clara','West Kamias','West Triangle','White Plains'
+    ];
+    let selectedCallBarangay = '';
+
+    function getSelectedCallBarangay() {
+        return String(selectedCallBarangay || '').trim();
+    }
+
+    function isSanAgustinBarangay(value) {
+        return String(value || '').trim().toLowerCase() === 'san agustin';
+    }
+
+    function setCallBarangaySelection(value) {
+        selectedCallBarangay = String(value || '').trim();
+        const input = document.getElementById('callBarangaySearch');
+        const selected = document.getElementById('callBarangaySelected');
+        const results = document.getElementById('callBarangayResults');
+        if (input) input.value = selectedCallBarangay;
+        if (selected) selected.textContent = selectedCallBarangay ? `Selected: ${selectedCallBarangay}` : 'No barangay selected';
+        if (results) results.style.display = 'none';
+    }
+
+    function renderCallBarangayResults(query = '') {
+        const results = document.getElementById('callBarangayResults');
+        if (!results) return;
+        const needle = String(query || '').trim().toLowerCase();
+        const matches = QC_CALL_BARANGAYS
+            .filter(name => !needle || name.toLowerCase().includes(needle))
+            .slice(0, 12);
+        if (!matches.length) {
+            results.innerHTML = '<div style="padding:10px 12px; font-size:12px; opacity:.75;">No Quezon City barangay found.</div>';
+            results.style.display = 'block';
+            return;
+        }
+        results.innerHTML = matches.map(name => `
+            <button type="button" class="call-barangay-option" data-barangay="${String(name).replace(/"/g, '&quot;')}" style="width:100%; border:0; border-bottom:1px solid rgba(255,255,255,.08); padding:9px 12px; background:transparent; color:#fff; text-align:left; font-weight:700; cursor:pointer;">
+                ${name}
+            </button>
+        `).join('');
+        results.style.display = 'block';
+        results.querySelectorAll('.call-barangay-option').forEach(btn => {
+            btn.addEventListener('click', () => setCallBarangaySelection(btn.dataset.barangay || ''));
+        });
+    }
+
+    function bindCallBarangaySelector() {
+        const input = document.getElementById('callBarangaySearch');
+        if (!input || input.dataset.bound === '1') return;
+        input.dataset.bound = '1';
+        input.addEventListener('focus', () => renderCallBarangayResults(input.value));
+        input.addEventListener('input', () => {
+            selectedCallBarangay = '';
+            const selected = document.getElementById('callBarangaySelected');
+            if (selected) selected.textContent = 'Choose a barangay from the search results.';
+            renderCallBarangayResults(input.value);
+        });
+        document.addEventListener('click', (event) => {
+            const wrapper = document.getElementById('callBarangaySelector');
+            const results = document.getElementById('callBarangayResults');
+            if (wrapper && results && !wrapper.contains(event.target)) results.style.display = 'none';
+        });
+    }
+
+    function clearCallBarangaySelection() {
+        setCallBarangaySelection('');
+    }
     function getManualCallerInfo() {
         const phoneInput = document.getElementById('callerPhoneInput');
         if (phoneInput) phoneInput.value = normalizePhPhone(phoneInput.value);
@@ -4168,7 +4245,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const caller = getManualCallerInfo();
         return {
             ...(callerLocation || {}),
-            ...(caller.address ? { address: caller.address } : {})
+            ...(caller.address ? { address: caller.address } : {}),
+            ...(getSelectedCallBarangay() ? { barangay: getSelectedCallBarangay(), incidentBarangay: getSelectedCallBarangay() } : {})
         };
     }
 
@@ -4556,6 +4634,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
+        clearCallBarangaySelection();
         updateCallPriorityBadge();
         renderCallerDetails();
         renderIncomingEmergencyCallRow();
@@ -4593,6 +4672,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     });
     document.getElementById('emergencyTypeSelect')?.addEventListener('change', updateCallPriorityBadge);
     document.getElementById('callIncidentDescription')?.addEventListener('input', updateCallPriorityBadge);
+    bindCallBarangaySelector();
 
     document.getElementById('transferCallBtn').onclick = async () => {
         const statusEl = document.getElementById('dispatchStatus');
@@ -4609,6 +4689,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         const incidentDescription = getCallIncidentDescription();
         const priorityMetric = currentCallPriority();
+        const incidentBarangay = getSelectedCallBarangay();
+        if (!incidentBarangay) {
+            if (statusEl) statusEl.textContent = 'Select the incident barangay before transferring.';
+            return;
+        }
+        if (!isSanAgustinBarangay(incidentBarangay)) {
+            if (statusEl) statusEl.textContent = 'Emergency Response System integration is not yet available for this barangay.';
+            return;
+        }
         try {
             if (statusEl) statusEl.textContent = 'Preparing pending transfer report...';
             const transferConversationId = await ensureCallConversationForTransfer(callerPayload, incidentDescription, priorityMetric);
@@ -4622,6 +4711,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     socketUrl: SIGNALING_URL,
                     socketPath: SOCKET_IO_PATH,
                     emergencyType: document.getElementById('emergencyTypeSelect')?.value || '',
+                    incidentBarangay,
+                    barangay: incidentBarangay,
                     priority: priorityMetric.level,
                     incidentPriority: {
                         score: priorityMetric.score,
@@ -4661,6 +4752,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 socketPath: SOCKET_IO_PATH,
                 transfer: transferPayload || null,
                 transferredBy: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : 'Admin'),
+                incidentBarangay: getSelectedCallBarangay(),
+                barangay: getSelectedCallBarangay(),
                 transferredAt: new Date().toISOString()
             }, activeCallRoom || getCallRoom(activeCallId));
         }
@@ -4674,6 +4767,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 conversationId: callConversationId || null,
                 description: getCallIncidentDescription(),
                 emergencyType: document.getElementById('emergencyTypeSelect')?.value || '',
+                incidentBarangay: getSelectedCallBarangay(),
                 incidentPriority: transferPriority
             });
         } catch (e) {}

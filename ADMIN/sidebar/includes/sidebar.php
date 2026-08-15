@@ -119,7 +119,7 @@ if (!function_exists('sidebarRouteContains')) {
                         </a>
                     </li>
                     
-                    <!-- Reports -->
+                    <!-- Emergency Reports -->
                     <?php
                     $isReportsPage = (
                         basename($_SERVER['PHP_SELF']) == 'two-way-communication.php'
@@ -127,26 +127,41 @@ if (!function_exists('sidebarRouteContains')) {
                         || sidebarRouteContains('/sidebar/two-way-comm/citizen')
                     );
                     $isGeneralEnquiriesPage = sidebarRouteContains('/sidebar/two-way-comm/general');
+                    $isEmergencyCallPage = sidebarRouteContains('/sidebar/two-way-comm/call');
+                    $isEmergencyReportsActive = $isReportsPage || $isGeneralEnquiriesPage || $isEmergencyCallPage;
                     ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>two-way-comm/citizen/" class="sidebar-link sidebar-accent-2way <?php echo $isReportsPage ? 'active' : ''; ?>">
-                            <i class="fas fa-clipboard-list sidebar-icon" aria-hidden="true"></i>
-                            <span class="sidebar-link-label">Reports</span>
-                            <span class="sidebar-realtime-badge" id="sidebarReportsUnreadBadge"
-                                data-label-singular="new report" data-label-plural="new reports"
-                                data-active-module="<?php echo $isReportsPage ? '1' : '0'; ?>" hidden></span>
+                        <a href="javascript:void(0)" class="sidebar-link sidebar-submenu-toggle sidebar-accent-2way <?php echo $isEmergencyReportsActive ? 'active' : ''; ?>">
+                            <i class="fas fa-file-medical-alt sidebar-icon" aria-hidden="true"></i>
+                            <span>Emergency Reports</span>
+                            <i class="fas fa-chevron-down submenu-icon" aria-hidden="true"></i>
                         </a>
-                    </li>
-
-                    <!-- General Enquiries -->
-                    <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>two-way-comm/general/" class="sidebar-link sidebar-accent-2way <?php echo $isGeneralEnquiriesPage ? 'active' : ''; ?>">
-                            <i class="fas fa-comments sidebar-icon" aria-hidden="true"></i>
-                            <span class="sidebar-link-label">General Enquiries</span>
-                            <span class="sidebar-realtime-badge" id="sidebarGeneralUnreadBadge"
-                                data-label-singular="new enquiry" data-label-plural="new enquiries"
-                                data-active-module="<?php echo $isGeneralEnquiriesPage ? '1' : '0'; ?>" hidden></span>
-                        </a>
+                        <ul class="sidebar-submenu <?php echo $isEmergencyReportsActive ? 'sidebar-submenu-open' : ''; ?>">
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-comm/citizen/" class="sidebar-link sidebar-accent-2way <?php echo $isReportsPage ? 'active' : ''; ?>">
+                                    <i class="fas fa-clipboard-list sidebar-icon" aria-hidden="true"></i>
+                                    <span class="sidebar-link-label">Reports</span>
+                                    <span class="sidebar-realtime-badge" id="sidebarReportsUnreadBadge"
+                                        data-label-singular="new report" data-label-plural="new reports"
+                                        data-active-module="<?php echo $isReportsPage ? '1' : '0'; ?>" hidden></span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-comm/general/" class="sidebar-link sidebar-accent-2way <?php echo $isGeneralEnquiriesPage ? 'active' : ''; ?>">
+                                    <i class="fas fa-comments sidebar-icon" aria-hidden="true"></i>
+                                    <span class="sidebar-link-label">General Enquiries</span>
+                                    <span class="sidebar-realtime-badge" id="sidebarGeneralUnreadBadge"
+                                        data-label-singular="new enquiry" data-label-plural="new enquiries"
+                                        data-active-module="<?php echo $isGeneralEnquiriesPage ? '1' : '0'; ?>" hidden></span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-comm/call/" class="sidebar-link sidebar-accent-2way <?php echo $isEmergencyCallPage ? 'active' : ''; ?>">
+                                    <i class="fas fa-phone-volume sidebar-icon" aria-hidden="true"></i>
+                                    <span>Emergency Call</span>
+                                </a>
+                            </li>
+                        </ul>
                     </li>
                     <!-- Automated Warnings -->
                     <?php 
@@ -389,3 +404,4 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <script src="<?php echo $sidebarBase; ?>../assets/shared/js/draft-persist.js?v=<?php echo filemtime(__DIR__ . '/../../assets/shared/js/draft-persist.js'); ?>"></script>
+

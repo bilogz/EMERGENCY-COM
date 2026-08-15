@@ -93,7 +93,7 @@ try {
         $params[] = $requestedConversationId;
     }
 
-    if (in_array($scope, ['citizen_reports', 'general_enquiries'], true)) {
+    if (in_array($scope, ['citizen_reports', 'general_enquiries', 'emergency_calls'], true)) {
         $whereSql .= " AND EXISTS (
             SELECT 1
             FROM chat_messages citizen_msg
@@ -108,7 +108,7 @@ try {
     }
 
     if (isset($_GET['priority']) && trim((string)$_GET['priority']) !== '' && $_GET['priority'] !== 'all') {
-        if ($scope === 'citizen_reports' && $hasIncidentPriority) {
+        if (in_array($scope, ['citizen_reports', 'emergency_calls'], true) && $hasIncidentPriority) {
             $incidentPriorityFilter = strtolower(trim((string)$_GET['priority']));
             if (in_array($incidentPriorityFilter, ['critical', 'high', 'urgent', 'moderate', 'low'], true)) {
                 $whereSql .= " AND LOWER(COALESCE(c.incident_priority_level, 'low')) = ? ";
@@ -179,7 +179,7 @@ try {
                     SELECT 1
                     FROM chat_messages cm
                     WHERE cm.conversation_id = c.conversation_id
-                      AND cm.message_text LIKE '[CALL_ENDED]%'
+                      AND cm.message_text LIKE '[CALL_%'
                 ) THEN 1 ELSE 0
             END AS has_call,
             $categorySqlExpr AS category_value,
@@ -216,7 +216,7 @@ try {
         " . ($hasAdminUserTable ? "LEFT JOIN admin_user au ON au.id = c.assigned_to" : "") . "
         $whereSql
         ORDER BY
-            " . ($scope === 'citizen_reports' && $hasIncidentPriority ? "COALESCE(c.incident_priority_score, 0) DESC," : "") . "
+            " . (in_array($scope, ['citizen_reports', 'emergency_calls'], true) && $hasIncidentPriority ? "COALESCE(c.incident_priority_score, 0) DESC," : "") . "
             COALESCE(lm.created_at, c.last_message_time, c.updated_at, c.created_at) DESC,
             c.conversation_id DESC
         LIMIT ? OFFSET ?
@@ -339,3 +339,4 @@ try {
         'error' => $e->getMessage(),
     ]);
 }
+

@@ -298,16 +298,39 @@ if (!function_exists('twc_scope_filter_clause')) {
      */
     function twc_scope_filter_clause(string $scope, array &$params, string $alias = 'c'): string {
         $scope = strtolower(trim($scope));
-        if (!in_array($scope, ['citizen_reports', 'general_enquiries'], true)) {
+        if (!in_array($scope, ['citizen_reports', 'general_enquiries', 'emergency_calls'], true)) {
             return '';
+        }
+
+        if ($scope === 'emergency_calls') {
+            return " AND (
+                COALESCE({$alias}.last_message, '') LIKE '[CALL_%'
+                OR LOWER(COALESCE({$alias}.user_name, '')) LIKE '%emergency call%'
+                OR EXISTS (
+                    SELECT 1 FROM chat_messages scope_call_msg
+                    WHERE scope_call_msg.conversation_id = {$alias}.conversation_id
+                      AND scope_call_msg.message_text LIKE '[CALL_%'
+                )
+            ) ";
         }
 
         $concerns = twc_general_enquiry_concerns();
         $params = array_merge($params, $concerns);
         $operator = $scope === 'general_enquiries' ? 'IN' : 'NOT IN';
+        $callExclusion = $scope === 'citizen_reports'
+            ? " AND NOT (
+                COALESCE({$alias}.last_message, '') LIKE '[CALL_%'
+                OR LOWER(COALESCE({$alias}.user_name, '')) LIKE '%emergency call%'
+                OR EXISTS (
+                    SELECT 1 FROM chat_messages scope_call_msg
+                    WHERE scope_call_msg.conversation_id = {$alias}.conversation_id
+                      AND scope_call_msg.message_text LIKE '[CALL_%'
+                )
+            ) "
+            : '';
 
         return " AND LOWER(TRIM(COALESCE({$alias}.user_concern, ''))) {$operator} ("
-            . twc_placeholders($concerns) . ') ';
+            . twc_placeholders($concerns) . ') ' . $callExclusion;
     }
 }
 
@@ -1777,3 +1800,4 @@ if (!function_exists('twc_emit_chat_risk_notification')) {
         return $result;
     }
 }
+
