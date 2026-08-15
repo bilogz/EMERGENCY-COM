@@ -12,6 +12,7 @@ const CALL_LOBBY_ROOM = 'emergency-lobby';
 const TRANSFER_INBOX_ROOM = 'ers-transfer-inbox';
 const SIGNALING_PROTOCOL_VERSION = '2026-08-01.8';
 const OFFER_TTL_MS = 60 * 60 * 1000;
+const RINGING_CALL_TTL_MS = 10 * 60 * 1000;
 const MESSAGE_TTL_MS = 60 * 60 * 1000;
 const MAX_MESSAGES_PER_ROOM = 50;
 const MAX_ACTIVE_OFFERS = Number(process.env.MAX_ACTIVE_OFFERS || 500);
@@ -31,12 +32,17 @@ function signalText(value, max = 200) {
 }
 
 function pruneExpiredCalls() {
-  const cutoff = Date.now() - OFFER_TTL_MS;
+  const now = Date.now();
+  const cutoff = now - OFFER_TTL_MS;
+  const ringingCutoff = now - RINGING_CALL_TTL_MS;
   for (const [room, offer] of activeOffersByRoom.entries()) {
     if (!offer || offer.ts < cutoff) activeOffersByRoom.delete(room);
   }
   for (const [callId, call] of activeCallsById.entries()) {
-    if (!call || call.updatedAt < cutoff) activeCallsById.delete(callId);
+    if (!call || call.updatedAt < cutoff || (call.status === 'ringing' && call.updatedAt < ringingCutoff)) {
+      if (call?.room) activeOffersByRoom.delete(call.room);
+      activeCallsById.delete(callId);
+    }
   }
   for (const [room, messages] of recentMessagesByRoom.entries()) {
     const current = Array.isArray(messages)
@@ -88,6 +94,7 @@ function callQueueSummary(call) {
 }
 
 function emitCallQueue() {
+  pruneExpiredCalls();
   const calls = Array.from(activeCallsById.values()).map(callQueueSummary);
   io.to(CALL_LOBBY_ROOM).emit('call-queue', {
     open: calls.filter((call) => call.status === 'ringing'),
@@ -656,10 +663,20 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', (reason) => {
-    for (const call of activeCallsById.values()) {
-      if (call.callerSocketId === socket.id) call.callerSocketId = null;
+    let queueChanged = false;
+    for (const [callId, call] of activeCallsById.entries()) {
+      if (call.callerSocketId === socket.id) {
+        if (call.status === 'ringing') {
+          if (call.room) activeOffersByRoom.delete(call.room);
+          activeCallsById.delete(callId);
+          queueChanged = true;
+          continue;
+        }
+        call.callerSocketId = null;
+      }
       if (call.adminSocketId === socket.id) call.adminSocketId = null;
     }
+    if (queueChanged) emitCallQueue();
     debugLog(`[socket] disconnected ${socket.id} reason=${reason}`);
   });
 });

@@ -3969,6 +3969,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let queueIncomingOfferFromSocket = null;
     let restoringCallSessionsFromDb = false;
     let lastCallSessionRestoreAt = 0;
+    const CALL_OPEN_MAX_AGE_MS = 10 * 60 * 1000;
 
     function readAdminCallLock() {
         try {
@@ -4485,6 +4486,30 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         el.style.display = visible ? 'block' : 'none';
     }
 
+    function callTimestampMs(value) {
+        if (!value) return 0;
+        const parsed = Date.parse(String(value).replace(' ', 'T'));
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function isFreshIncomingCallTimestamp(timestamp) {
+        if (!timestamp) return true;
+        return Date.now() - Number(timestamp) <= CALL_OPEN_MAX_AGE_MS;
+    }
+
+    function isQueuedCallFresh(call = {}) {
+        return isFreshIncomingCallTimestamp(Number(call.updatedAt || call.createdAt || 0));
+    }
+
+    function isCallSessionFresh(session = {}) {
+        return isFreshIncomingCallTimestamp(callTimestampMs(session.updated_at || session.created_at));
+    }
+    function pruneStaleIncomingCalls() {
+        incomingCallQueue.forEach((call, id) => {
+            if (!isQueuedCallFresh(call)) incomingCallQueue.delete(id);
+        });
+        if (!incomingCallQueue.size) _stopAlertSound();
+    }
     function normalizeQueuedCall(payload = {}, sdp = null) {
         const incomingCallId = payload && payload.callId ? String(payload.callId) : null;
         if (!incomingCallId) return null;
@@ -4496,7 +4521,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             location: payload && payload.location ? payload.location : null,
             conversationId: payload && payload.conversationId ? payload.conversationId : null,
             pendingCandidates: [],
-            createdAt: Date.now(),
+            createdAt: Number(payload.createdAt || payload.created_at || Date.now()),
+            updatedAt: Number(payload.updatedAt || payload.updated_at || Date.now()),
             status: 'open'
         };
     }
@@ -4516,6 +4542,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const persistedOffer = session.offer_payload && typeof session.offer_payload === 'object' ? session.offer_payload : {};
         const sessionCallId = String(session.call_id || session.callId || persistedOffer.callId || persistedOffer.call_id || '');
         if (!sessionCallId) return null;
+        const sessionCreatedAt = callTimestampMs(session.created_at) || Number(persistedOffer.createdAt || persistedOffer.created_at || 0) || Date.now();
+        const sessionUpdatedAt = callTimestampMs(session.updated_at) || Number(persistedOffer.updatedAt || persistedOffer.updated_at || 0) || sessionCreatedAt;
         const sessionRoom = session.room || persistedOffer.room || getCallRoom(sessionCallId);
         const sessionCaller = persistedOffer.caller || {
             id: session.caller_user_id || null,
@@ -4535,6 +4563,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             conversationId: session.conversation_id || persistedOffer.conversationId || persistedOffer.conversation_id || null,
             conversation_id: session.conversation_id || persistedOffer.conversation_id || persistedOffer.conversationId || null,
             sdp: persistedOffer.sdp || session.sdp || null,
+            createdAt: sessionCreatedAt,
+            updatedAt: sessionUpdatedAt,
             restored: true
         };
     }
@@ -4549,7 +4579,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const data = await response.json().catch(() => null);
             if (!response.ok || !data || data.success === false) return;
             const s = ensureSocket();
-            const openSessions = Array.isArray(data.open) ? data.open : [];
+            const openSessions = (Array.isArray(data.open) ? data.open : []).filter(isCallSessionFresh);
             openSessions.forEach(session => {
                 const source = callSessionToQueuedOffer(session);
                 if (!source || incomingCallQueue.has(source.callId)) return;
@@ -4693,29 +4723,45 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
     function renderIncomingCallTableRows() {
         if (!EMERGENCY_COM_CALL_INTAKE_ENABLED || currentStatus !== 'open') return;
+        pruneStaleIncomingCalls();
         const list = document.getElementById('conversationsList');
         if (!list) return;
         list.querySelectorAll('.emergency-call-table-row').forEach(row => row.remove());
-        const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned');
-        if (!queuedCalls.length) return;
+        const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned' && isQueuedCallFresh(item));
+        const openBadge = document.getElementById('openCount');
+        if (!queuedCalls.length) {
+            if (openBadge) {
+                const existingRows = list.querySelectorAll('tr.conversation-item:not(.emergency-call-table-row)').length;
+                openBadge.textContent = String(existingRows);
+                openBadge.style.display = 'inline-block';
+            }
+            return;
+        }
         const onlyEmptyMessage = list.children.length === 1 && !list.children[0].matches('tr');
         if (onlyEmptyMessage) list.innerHTML = '';
         const html = queuedCalls.map((queued, index) => queuedCallTableRowHtml(queued, index, queuedCalls.length)).join('');
         list.insertAdjacentHTML('afterbegin', html);
         bindEmergencyCallTableButtons(list);
-        const openBadge = document.getElementById('openCount');
         if (openBadge) {
-            const currentCount = Number(openBadge.textContent || 0) || 0;
-            const total = Math.max(currentCount, queuedCalls.length);
+            const existingRows = list.querySelectorAll('tr.conversation-item:not(.emergency-call-table-row)').length;
+            const total = existingRows + queuedCalls.length;
             openBadge.textContent = String(total);
             openBadge.style.display = 'inline-block';
         }
     }
+
     function renderIncomingEmergencyCallRow() {
         const host = document.getElementById('incomingEmergencyCallRow');
         if (!host) return;
 
-        const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned');
+        if (EMERGENCY_COM_CALL_INTAKE_ENABLED) {
+            host.innerHTML = '';
+            setIncomingEmergencyCallRowVisible(false);
+            renderIncomingCallTableRows();
+            return;
+        }
+
+        const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned' && isQueuedCallFresh(item));
         if (!queuedCalls.length) {
             host.innerHTML = '';
             setIncomingEmergencyCallRowVisible(false);

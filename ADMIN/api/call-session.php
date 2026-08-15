@@ -153,6 +153,7 @@ try {
     callSessionAdminRequired();
 
     if ($action === 'list') {
+        $pdo->exec("UPDATE emergency_call_sessions SET status='ended', ended_at=COALESCE(ended_at, NOW()), updated_at=NOW() WHERE status='open' AND updated_at < (NOW() - INTERVAL 10 MINUTE)");
         $stmt = $pdo->query("SELECT * FROM emergency_call_sessions WHERE status IN ('open','assigned','pending','completed','ended','declined') ORDER BY updated_at DESC LIMIT 200");
         $rows = array_map('normalizeCallSessionRow', $stmt->fetchAll(PDO::FETCH_ASSOC));
         callSessionJson([
