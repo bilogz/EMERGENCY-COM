@@ -101,6 +101,7 @@ function emitCallUpdate(event, call) {
   if (!call) return;
   const payload = { event, call: callQueueSummary(call), updatedAt: Date.now() };
   io.to(CALL_LOBBY_ROOM).emit('call-updated', payload);
+  if (call.room) io.to(call.room).emit('call-updated', payload);
   emitCallQueue();
 }
 
@@ -365,6 +366,7 @@ io.on('connection', (socket) => {
       return;
     }
     let call = activeCallsById.get(callId);
+    const wasMissing = !call;
     if (!call) {
       call = { callId, room, offer: null, adminSocketId: null, adminKey: null, status: payload?.accepted ? 'accepted' : 'ringing' };
       activeCallsById.set(callId, call);
@@ -373,6 +375,12 @@ io.on('connection', (socket) => {
     call.callerSocketId = socket.id;
     call.updatedAt = Date.now();
     socket.join(room);
+    if (!call.offer) {
+      socket.emit('request-offer', { callId, room, reason: 'user-resume' });
+    }
+    if (wasMissing || call.status === 'ringing') {
+      emitCallUpdate('user-resumed', call);
+    }
     if (typeof acknowledge === 'function') acknowledge({ ok: true, call: callSummary(call) });
   });
 

@@ -41,6 +41,7 @@ function ensureCallSessionTable(PDO $pdo) {
         id INT AUTO_INCREMENT PRIMARY KEY,
         call_id VARCHAR(128) NOT NULL UNIQUE,
         room VARCHAR(180) DEFAULT NULL,
+        offer_payload LONGTEXT DEFAULT NULL,
         caller_user_id VARCHAR(100) DEFAULT NULL,
         caller_name VARCHAR(180) DEFAULT NULL,
         caller_phone VARCHAR(80) DEFAULT NULL,
@@ -60,6 +61,15 @@ function ensureCallSessionTable(PDO $pdo) {
         INDEX idx_admin_status (assigned_admin_id, status),
         INDEX idx_conversation (conversation_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $columns = [];
+    $stmt = $pdo->query("SHOW COLUMNS FROM emergency_call_sessions");
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $column) {
+        $columns[strtolower($column['Field'] ?? '')] = true;
+    }
+    if (empty($columns['offer_payload'])) {
+        $pdo->exec("ALTER TABLE emergency_call_sessions ADD COLUMN offer_payload LONGTEXT DEFAULT NULL AFTER room");
+    }
 }
 
 function callSessionPayloadFields(array $data) {
@@ -72,6 +82,9 @@ function callSessionPayloadFields(array $data) {
     return [
         'call_id' => callSessionClean($data['callId'] ?? $data['call_id'] ?? '', 128),
         'room' => callSessionClean($data['room'] ?? '', 180),
+        'offer_payload' => isset($data['offerPayload']) && is_array($data['offerPayload'])
+            ? json_encode($data['offerPayload'])
+            : (isset($data['offer_payload']) && is_array($data['offer_payload']) ? json_encode($data['offer_payload']) : null),
         'caller_user_id' => callSessionClean($caller['user_id'] ?? $caller['id'] ?? $data['callerUserId'] ?? '', 100),
         'caller_name' => callSessionClean($caller['name'] ?? $data['callerName'] ?? 'Emergency Call User', 180),
         'caller_phone' => callSessionClean($caller['phone'] ?? $data['callerPhone'] ?? '', 80),
@@ -90,6 +103,12 @@ function fetchCallSession(PDO $pdo, $callId) {
 
 function normalizeCallSessionRow($row) {
     if (!$row) return null;
+    if (!empty($row['offer_payload'])) {
+        $decoded = json_decode($row['offer_payload'], true);
+        $row['offer_payload'] = is_array($decoded) ? $decoded : null;
+    } else {
+        $row['offer_payload'] = null;
+    }
     if (!empty($row['location_data'])) {
         $decoded = json_decode($row['location_data'], true);
         $row['location_data'] = is_array($decoded) ? $decoded : null;
@@ -113,10 +132,11 @@ try {
         $fields = callSessionPayloadFields($input);
         if ($fields['call_id'] === '') callSessionJson(['success' => false, 'error' => 'callId is required.'], 422);
         $stmt = $pdo->prepare("INSERT INTO emergency_call_sessions
-            (call_id, room, caller_user_id, caller_name, caller_phone, caller_type, location_text, location_data, conversation_id, status)
-            VALUES (:call_id, :room, :caller_user_id, :caller_name, :caller_phone, :caller_type, :location_text, :location_data, :conversation_id, 'open')
+            (call_id, room, offer_payload, caller_user_id, caller_name, caller_phone, caller_type, location_text, location_data, conversation_id, status)
+            VALUES (:call_id, :room, :offer_payload, :caller_user_id, :caller_name, :caller_phone, :caller_type, :location_text, :location_data, :conversation_id, 'open')
             ON DUPLICATE KEY UPDATE
                 room = COALESCE(NULLIF(VALUES(room), ''), room),
+                offer_payload = COALESCE(VALUES(offer_payload), offer_payload),
                 caller_user_id = COALESCE(NULLIF(VALUES(caller_user_id), ''), caller_user_id),
                 caller_name = COALESCE(NULLIF(VALUES(caller_name), ''), caller_name),
                 caller_phone = COALESCE(NULLIF(VALUES(caller_phone), ''), caller_phone),
@@ -160,8 +180,8 @@ try {
         $row = fetchCallSession($pdo, $fields['call_id']);
         if (!$row) {
             $insert = $pdo->prepare("INSERT INTO emergency_call_sessions
-                (call_id, room, caller_user_id, caller_name, caller_phone, caller_type, location_text, location_data, conversation_id, status)
-                VALUES (:call_id, :room, :caller_user_id, :caller_name, :caller_phone, :caller_type, :location_text, :location_data, :conversation_id, 'open')");
+                (call_id, room, offer_payload, caller_user_id, caller_name, caller_phone, caller_type, location_text, location_data, conversation_id, status)
+                VALUES (:call_id, :room, :offer_payload, :caller_user_id, :caller_name, :caller_phone, :caller_type, :location_text, :location_data, :conversation_id, 'open')");
             $insert->execute($fields);
             $row = fetchCallSession($pdo, $fields['call_id']);
         }

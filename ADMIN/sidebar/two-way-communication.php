@@ -1806,6 +1806,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         const suffix = currentDept === 'all' ? '' : ' for this department';
                         const topicSuffix = currentTopic === 'all' ? '' : ' for this topic';
                         listContainer.innerHTML = `<p style="text-align: center; color: var(--text-secondary-1); padding: 2rem;">No ${currentStatus} conversations${suffix}${topicSuffix}</p>`;
+                        renderIncomingCallTableRows();
                     }
                     renderConversationPagination(0);
                     return;
@@ -1815,6 +1816,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 hasMore = currentPage < totalPages;
                 renderConversationPagination(totalPages);
                 renderGroupedConversations(conversations, false);
+                renderIncomingCallTableRows();
                 tryOpenConversationFromQuery(conversations);
             } catch (error) {
                 if (error && error.name === 'AbortError') return;
@@ -3811,6 +3813,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (activeCallRoom) socket.emit('join', activeCallRoom);
             if (pendingCallRoom) socket.emit('join', pendingCallRoom);
             if (restoringAdminCall && callId) requestAdminCallResume(socket);
+            if (EMERGENCY_COM_CALL_INTAKE_ENABLED && typeof restoreCallSessionsFromDatabase === 'function') restoreCallSessionsFromDatabase(true);
+
             socketRetryCount = 0; // Reset retry count on successful connection
         });
 
@@ -3962,6 +3966,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     const ADMIN_CALL_RESUME_TIMEOUT_MS = 25000;
     let restoringAdminCall = false;
     let adminCallResumeTimer = null;
+    let queueIncomingOfferFromSocket = null;
+    let restoringCallSessionsFromDb = false;
+    let lastCallSessionRestoreAt = 0;
 
     function readAdminCallLock() {
         try {
@@ -4505,6 +4512,92 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         };
     }
 
+    function callSessionToQueuedOffer(session = {}) {
+        const persistedOffer = session.offer_payload && typeof session.offer_payload === 'object' ? session.offer_payload : {};
+        const sessionCallId = String(session.call_id || session.callId || persistedOffer.callId || persistedOffer.call_id || '');
+        if (!sessionCallId) return null;
+        const sessionRoom = session.room || persistedOffer.room || getCallRoom(sessionCallId);
+        const sessionCaller = persistedOffer.caller || {
+            id: session.caller_user_id || null,
+            user_id: session.caller_user_id || null,
+            name: session.caller_name || 'Emergency Call User',
+            phone: session.caller_phone || '',
+            type: session.caller_type || 'guest'
+        };
+        const sessionLocation = persistedOffer.location || session.location_data || (session.location_text ? { address: session.location_text } : null);
+        return {
+            ...persistedOffer,
+            callId: sessionCallId,
+            call_id: sessionCallId,
+            room: sessionRoom,
+            caller: sessionCaller,
+            location: sessionLocation,
+            conversationId: session.conversation_id || persistedOffer.conversationId || persistedOffer.conversation_id || null,
+            conversation_id: session.conversation_id || persistedOffer.conversation_id || persistedOffer.conversationId || null,
+            sdp: persistedOffer.sdp || session.sdp || null,
+            restored: true
+        };
+    }
+
+    async function restoreCallSessionsFromDatabase(force = false) {
+        if (!EMERGENCY_COM_CALL_INTAKE_ENABLED || restoringCallSessionsFromDb) return;
+        if (!force && Date.now() - lastCallSessionRestoreAt < 3000) return;
+        restoringCallSessionsFromDb = true;
+        lastCallSessionRestoreAt = Date.now();
+        try {
+            const response = await fetch('../api/call-session.php?action=list', { credentials: 'same-origin' });
+            const data = await response.json().catch(() => null);
+            if (!response.ok || !data || data.success === false) return;
+            const s = ensureSocket();
+            const openSessions = Array.isArray(data.open) ? data.open : [];
+            openSessions.forEach(session => {
+                const source = callSessionToQueuedOffer(session);
+                if (!source || incomingCallQueue.has(source.callId)) return;
+                if (typeof queueIncomingOfferFromSocket === 'function') {
+                    queueIncomingOfferFromSocket(source, source.sdp || null, false);
+                }
+                if (!source.sdp && s?.connected) {
+                    s.emit('request-offer', { callId: source.callId, room: source.room, reason: 'admin-db-restore-open' }, source.room);
+                }
+            });
+
+            const assignedSessions = Array.isArray(data.assigned) ? data.assigned : [];
+            const ownedSession = assignedSessions.find(session => String(session.assigned_admin_id || '') === String(ADMIN_ID || ''));
+            if (ownedSession && !callId) {
+                const source = callSessionToQueuedOffer(ownedSession);
+                if (source) {
+                    callId = source.callId;
+                    activeCallRoom = source.room || getCallRoom(callId);
+                    callerInfo = source.caller || null;
+                    callerLocation = source.location || null;
+                    callConversationId = source.conversationId || null;
+                    callConnectedAt = Date.parse(ownedSession.answered_at || ownedSession.updated_at || '') || Date.now();
+                    restoringAdminCall = true;
+                    setAdminCallLock(callId, {
+                        room: activeCallRoom,
+                        callerInfo,
+                        callerLocation,
+                        conversationId: callConversationId,
+                        connectedAt: callConnectedAt
+                    });
+                    setOverlayVisible(true);
+                    setCallActiveBannerVisible(true);
+                    setStatus('Restoring call connection...');
+                    setEndEnabled(true);
+                    renderCallerDetails();
+                    startTimer();
+                    if (s?.connected) {
+                        s.emit('join', activeCallRoom);
+                        requestAdminCallResume(s);
+                    }
+                }
+            }
+        } finally {
+            restoringCallSessionsFromDb = false;
+            renderIncomingEmergencyCallRow();
+        }
+    }
+
     async function syncCallSession(action, payload = {}) {
         try {
             const response = await fetch('../api/call-session.php', {
@@ -4544,6 +4637,79 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             pendingCandidates = [];
         }
         renderIncomingEmergencyCallRow();
+        renderIncomingCallTableRows();
+    }
+    function queuedCallTableRowHtml(queued, index = 0, totalCalls = 1) {
+        const callerName = queued.caller?.name || 'Emergency Call User';
+        const callerPhone = queued.caller?.phone || '';
+        const locationText = queued.location?.address || queued.location?.formatted || queued.location?.text || 'Location pending';
+        const lastMessage = queued.sdp ? 'Incoming live emergency call' : 'Incoming call - waiting for caller connection';
+        const busy = adminHasActiveCall() && queued.callId !== callId;
+        const statusText = totalCalls > 1 && index > 0 ? 'Queued' : 'Incoming';
+        const actionLabel = busy ? 'Finish active call' : 'Answer Call';
+        const actionDisabled = busy ? 'disabled' : '';
+        const priorityCell = REPORT_TABLE_MODE
+            ? '<td style="padding:0.85rem 0.75rem;vertical-align:middle;"><span class="incident-priority-badge incident-priority-critical">LIVE 100</span></td>'
+            : '';
+        return `
+            <tr class="conversation-item emergency-call-table-row incident-row-priority-critical" data-call-id="${escapeHtml(queued.callId)}">
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;">
+                    <div style="display:flex;align-items:center;gap:0.35rem;">
+                        <span class="status-dot" style="background:#ef4444;box-shadow:0 0 0 4px rgba(239,68,68,.12);"></span>
+                        <strong>${escapeHtml(callerName)}</strong>
+                        <span class="list-chip list-chip-call" style="background:#ef4444;color:white;padding:2px 6px;border-radius:4px;font-size:0.7rem;font-weight:800;margin-left:0.25rem;"><i class="fas fa-phone-volume"></i> Live Call</span>
+                        ${index > 0 ? `<span class="list-chip" style="background:#f59e0b;color:white;padding:2px 6px;border-radius:4px;font-size:0.7rem;font-weight:800;margin-left:0.25rem;">Queue ${index + 1}</span>` : ''}
+                    </div>
+                    ${callerPhone ? `<div style="font-size:0.75rem;opacity:0.65;margin-top:0.15rem;"><i class="fas fa-phone" style="font-size:0.7rem;"></i> ${escapeHtml(callerPhone)}</div>` : ''}
+                </td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="fas fa-map-marker-alt" style="color:var(--primary-color-1);font-size:0.8rem;"></i> ${escapeHtml(locationText)}</td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(lastMessage)}<div style="font-size:0.7rem;opacity:0.5;margin-top:0.15rem;">Live now</div></td>
+                ${priorityCell}
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;"><span class="assigned-admin-empty">Unassigned</span></td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;"><span class="workflow-pill workflow-open">${statusText}</span></td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;text-align:right;">
+                    <button class="btn btn-secondary emergency-call-decline-btn" data-call-id="${escapeHtml(queued.callId)}" style="padding:0.35rem 0.55rem;font-size:0.75rem;border-radius:4px;cursor:pointer;margin-right:0.35rem;"><i class="fas fa-phone-slash"></i> Decline</button>
+                    <button class="btn btn-primary emergency-call-accept-btn" data-call-id="${escapeHtml(queued.callId)}" ${actionDisabled} style="padding:0.35rem 0.65rem;font-size:0.75rem;border-radius:4px;cursor:pointer;background:var(--primary-color-1);color:white;border:none;opacity:${busy ? '.55' : '1'};"><i class="fas fa-phone"></i> ${actionLabel}</button>
+                </td>
+            </tr>
+        `;
+    }
+
+    function bindEmergencyCallTableButtons(container) {
+        if (!container) return;
+        container.querySelectorAll('.emergency-call-accept-btn').forEach(btn => {
+            btn.onclick = (event) => {
+                event.stopPropagation();
+                if (typeof window.acceptIncomingEmergencyCall === 'function') window.acceptIncomingEmergencyCall(btn.dataset.callId);
+            };
+        });
+        container.querySelectorAll('.emergency-call-decline-btn').forEach(btn => {
+            btn.onclick = (event) => {
+                event.stopPropagation();
+                if (typeof window.declineIncomingEmergencyCall === 'function') window.declineIncomingEmergencyCall(btn.dataset.callId);
+            };
+        });
+    }
+
+    function renderIncomingCallTableRows() {
+        if (!EMERGENCY_COM_CALL_INTAKE_ENABLED || currentStatus !== 'open') return;
+        const list = document.getElementById('conversationsList');
+        if (!list) return;
+        list.querySelectorAll('.emergency-call-table-row').forEach(row => row.remove());
+        const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned');
+        if (!queuedCalls.length) return;
+        const onlyEmptyMessage = list.children.length === 1 && !list.children[0].matches('tr');
+        if (onlyEmptyMessage) list.innerHTML = '';
+        const html = queuedCalls.map((queued, index) => queuedCallTableRowHtml(queued, index, queuedCalls.length)).join('');
+        list.insertAdjacentHTML('afterbegin', html);
+        bindEmergencyCallTableButtons(list);
+        const openBadge = document.getElementById('openCount');
+        if (openBadge) {
+            const currentCount = Number(openBadge.textContent || 0) || 0;
+            const total = Math.max(currentCount, queuedCalls.length);
+            openBadge.textContent = String(total);
+            openBadge.style.display = 'inline-block';
+        }
     }
     function renderIncomingEmergencyCallRow() {
         const host = document.getElementById('incomingEmergencyCallRow');
@@ -4553,6 +4719,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         if (!queuedCalls.length) {
             host.innerHTML = '';
             setIncomingEmergencyCallRowVisible(false);
+            renderIncomingCallTableRows();
             return;
         }
 
@@ -4566,8 +4733,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const callerName = queued.caller?.name || 'Emergency Call User';
             const callerPhone = queued.caller?.phone ? `<span style="opacity:.78;">${queued.caller.phone}</span>` : '';
             const locationText = queued.location?.address || queued.location?.formatted || queued.location?.text || 'Location pending';
-            const acceptDisabled = (busy && queued.callId !== callId) || !queued.sdp;
-            const acceptLabel = !queued.sdp ? 'Waiting for caller' : (acceptDisabled ? 'Finish active call' : 'Answer');
+            const acceptDisabled = (busy && queued.callId !== callId);
+            const acceptLabel = acceptDisabled ? 'Finish active call' : 'Answer';
             return `
                 <div class="emergency-call-card" data-call-id="${queued.callId}" style="display:flex; align-items:center; gap:12px; padding:14px; border:1px solid rgba(220,38,38,0.28); background:rgba(255,255,255,0.82); border-radius:12px; box-shadow:0 8px 24px rgba(15,23,42,.06);">
                     <div style="width:44px; height:44px; border-radius:12px; background:rgba(220,38,38,0.12); border:1px solid rgba(220,38,38,0.28); display:flex; align-items:center; justify-content:center; flex:0 0 auto;">
@@ -4600,6 +4767,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         `;
 
         setIncomingEmergencyCallRowVisible(true);
+        renderIncomingCallTableRows();
 
         host.querySelectorAll('.emergency-call-accept-btn').forEach(btn => {
             btn.onclick = () => {
@@ -5059,7 +5227,23 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         if (selectedCallId && incomingCallQueue.has(selectedCallId)) {
             applyQueuedCallToPending(incomingCallQueue.get(selectedCallId));
         }
-        if (!pendingOffer || !pendingCallId) return;
+        if (!pendingCallId) return;
+        if (!pendingOffer) {
+            const signalingSocket = ensureSocket();
+            const requestRoom = pendingCallRoom || getCallRoom(pendingCallId);
+            if (signalingSocket?.connected) {
+                signalingSocket.emit('join', requestRoom);
+                signalingSocket.emit('request-offer', {
+                    callId: pendingCallId,
+                    room: requestRoom,
+                    reason: 'admin-answer-needs-offer'
+                }, requestRoom);
+            }
+            setIncomingCallModalText('Waiting for caller connection. Keep this call in Open and try Answer again in a moment.');
+            renderIncomingEmergencyCallRow();
+            renderIncomingCallTableRows();
+            return;
+        }
         if (callId && pendingCallId !== callId) return;
         acceptingCallId = String(pendingCallId || '');
         if (adminHasActiveCall(pendingCallId)) {
@@ -5079,7 +5263,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         const signalingSocket = ensureSocket();
         if (!signalingSocket?.connected) {
-            setIncomingCallModalText('Call service is reconnecting. Please try again.');
+            setIncomingCallModalText('Call service is reconnecting. The call is still in Open. Please try again.');
+            await syncCallSession('mark', { callId: pendingCallId, status: 'open' });
+            acceptingCallId = null;
+            renderIncomingEmergencyCallRow();
+            renderIncomingCallTableRows();
             return;
         }
         const claimResult = await new Promise(resolve => {
@@ -5094,11 +5282,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             });
         });
         if (!claimResult?.ok) {
-            setIncomingCallModalText(claimResult?.reason || 'This call is no longer available.');
+            setIncomingCallModalText(claimResult?.reason || 'Call claim timed out. The call is still in Open. Try Answer again.');
             await syncCallSession('mark', { callId: pendingCallId, status: 'open' });
-            removeQueuedCall(pendingCallId);
             acceptingCallId = null;
-            _stopAlertSound();
+            renderIncomingEmergencyCallRow();
+            renderIncomingCallTableRows();
             if (wasRestoring) cleanupCall();
             return;
         }
@@ -5237,12 +5425,24 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (!pendingCallId && !adminHasActiveCall(queued.callId)) applyQueuedCallToPending(merged);
             const signalingSocket = ensureSocket();
             if (signalingSocket) signalingSocket.emit('join', merged.room || getCallRoom(merged.callId));
+            const persistedOfferPayload = {
+                ...(payload && typeof payload === 'object' ? payload : {}),
+                sdp: merged.sdp,
+                callId: merged.callId,
+                call_id: merged.callId,
+                room: merged.room || getCallRoom(merged.callId),
+                caller: merged.caller || null,
+                location: merged.location || null,
+                conversationId: merged.conversationId || null,
+                conversation_id: merged.conversationId || null
+            };
             syncCallSession('upsert_open', callSessionPayload({
                 callId: merged.callId,
                 room: merged.room,
                 caller: merged.caller,
                 location: merged.location,
-                conversationId: merged.conversationId
+                conversationId: merged.conversationId,
+                offerPayload: persistedOfferPayload
             }));
             if (notify && !adminHasActiveCall(merged.callId) && !notifiedIncomingCallIds.has(merged.callId)) {
                 notifiedIncomingCallIds.add(merged.callId);
@@ -5255,8 +5455,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 }
             }
             renderIncomingEmergencyCallRow();
+            renderIncomingCallTableRows();
             return merged;
         }
+        queueIncomingOfferFromSocket = queueIncomingOffer;
 
         s.on('call-queue', payload => {
             const openCalls = Array.isArray(payload?.open) ? payload.open : [];
@@ -5267,11 +5469,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             // Do not prune local offers from a queue refresh. A transient empty socket snapshot can arrive
             // before the user's offer replay, which made the answer button disappear on the intake page.
             renderIncomingEmergencyCallRow();
+            renderIncomingCallTableRows();
         });
 
         s.on('call-created', payload => {
             const source = payload?.call?.offer || payload?.call || null;
             queueIncomingOffer(source, source?.sdp || null, true);
+            restoreCallSessionsFromDatabase(false);
         });
 
         s.on('call-updated', payload => {
@@ -5280,9 +5484,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (!updatedCallId) return;
             if (status === 'accepted' && String(payload?.call?.adminKey || '') === ADMIN_CALL_OWNER_KEY) return;
             if (String(updatedCallId) === String(acceptingCallId || '')) return;
-            if (['accepted', 'pending', 'ended', 'completed', 'declined'].includes(status)) {
+            const claimedByOtherAdmin = status === 'accepted' && String(payload?.call?.adminKey || '') !== ADMIN_CALL_OWNER_KEY;
+            const terminalCallStatus = ['ended', 'completed', 'declined'].includes(status);
+            if (claimedByOtherAdmin || terminalCallStatus) {
                 removeQueuedCall(updatedCallId);
                 if (!incomingCallQueue.size) _stopAlertSound();
+            } else {
+                renderIncomingCallTableRows();
             }
         });
 
@@ -5374,6 +5582,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     checkSocketServerAvailability(true).then((available) => {
         if (available) {
             bindCallSocketListeners();
+            restoreCallSessionsFromDatabase(true);
         } else {
             setStatus('Call signaling unavailable (socket server offline).');
         }
@@ -5385,6 +5594,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         checkSocketServerAvailability().then((available) => {
             if (available) {
                 bindCallSocketListeners();
+                restoreCallSessionsFromDatabase(true);
             }
         });
     }, 15000);
@@ -5392,4 +5602,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
 </body>
 </html>
+
+
+
 
