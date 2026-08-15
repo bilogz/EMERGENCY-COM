@@ -2778,7 +2778,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                if (typeof d === 'string') try { d = JSON.parse(d); } catch(e){}
                if (d && typeof d === 'object') {
                    const parts = [d.device_type, d.os, d.browser].filter(Boolean);
-                   if (parts.length) devStr = parts.join(' • ');
+                   if (parts.length) devStr = parts.join(' - ');
                }
             }
             if (devStr) details.push(devStr);
@@ -3019,7 +3019,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     // Extract duration if present
                     const durationMatch = messageText.match(/Duration:\s*([^\s]+)/);
                     if (durationMatch) {
-                        displayText = `Call ended • ${durationMatch[1]}`;
+                        displayText = `Call ended - ${durationMatch[1]}`;
                     } else {
                         displayText = 'Call ended';
                     }
@@ -3063,7 +3063,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 minute: '2-digit', 
                 hour12: true 
             });
-            const fullStamp = `${msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} • ${timeStr}`;
+            const fullStamp = `${msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${timeStr}`;
             const attachmentUrl = sanitizeAttachmentUrl(msg.imageUrl || msg.attachmentUrl || null);
             const normalizedText = (msg.text || '').toString().trim();
             const attachmentMimeRaw = (msg.attachmentMime || msg.attachment_mime || '').toString().trim().toLowerCase();
@@ -3563,16 +3563,16 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
                     <div style="display:grid; grid-template-columns:110px 1fr; gap:8px 10px; font-size:13px;">
                         <div style="opacity:0.7;">Name</div>
-                        <div id="callerName" style="font-weight:700;">—</div>
+                        <div id="callerName" style="font-weight:700;">-</div>
 
                         <div style="opacity:0.7;">Phone</div>
-                        <div id="callerPhone" style="font-weight:700;">—</div>
+                        <div id="callerPhone" style="font-weight:700;">-</div>
 
                         <div style="opacity:0.7;">Address</div>
-                        <div id="callerAddress" style="font-weight:600; opacity:0.95;">—</div>
+                        <div id="callerAddress" style="font-weight:600; opacity:0.95;">-</div>
 
                         <div style="opacity:0.7;">Location</div>
-                        <div id="callerCoords" style="font-weight:600; opacity:0.95;">—</div>
+                        <div id="callerCoords" style="font-weight:600; opacity:0.95;">-</div>
                     </div>
 
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px; border:1px solid rgba(255,255,255,0.10); border-radius:12px; background:rgba(255,255,255,0.04);">
@@ -3590,7 +3590,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     <div style="border-top:1px solid rgba(255,255,255,0.10); padding-top:12px; display:flex; flex-direction:column; gap:10px;">
                         <label style="font-size:12px; opacity:0.8; margin:0;">Emergency Type</label>
                         <select id="emergencyTypeSelect" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.08); color:#fff; outline:none;">
-                            <option value="" selected>Choose type…</option>
+                            <option value="" selected>Choose type...</option>
                             <option value="fire">Fire</option>
                             <option value="flood">Flood</option>
                             <option value="rescue">Rescue Assistance</option>
@@ -3624,7 +3624,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         </div>
                         <div style="flex:1;">
                             <div style="font-weight:700; font-size:16px;">Emergency Call</div>
-                            <div id="callStatus" style="opacity:0.85; font-size:13px;">Connecting…</div>
+                            <div id="callStatus" style="opacity:0.85; font-size:13px;">Connecting...</div>
                         </div>
                         <div id="callTimer" style="font-variant-numeric:tabular-nums; font-weight:700;">00:00</div>
                     </div>
@@ -3817,7 +3817,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         socket.on('disconnect', (reason) => {
             console.warn('[socket] Disconnected:', reason);
             if (callId) {
-                setStatus('Connection lost. Attempting to reconnect…');
+                setStatus('Connection lost. Attempting to reconnect...');
             }
         });
 
@@ -4329,7 +4329,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         
         messageDiv.innerHTML = `
             <div style="font-weight: 600; margin-bottom: 2px; font-size: 11px; opacity: 0.8;">
-                ${senderName} • ${time}
+                ${senderName} - ${time}
             </div>
             <div>${text}</div>
         `;
@@ -4402,8 +4402,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const phoneInput = document.getElementById('callerPhoneInput');
         const addressInput = document.getElementById('callerAddressInput');
 
-        if (nameEl) nameEl.textContent = callerInfo?.name || '—';
-        if (phoneEl) phoneEl.textContent = callerInfo?.phone || '—';
+        if (nameEl) nameEl.textContent = callerInfo?.name || '-';
+        if (phoneEl) phoneEl.textContent = callerInfo?.phone || '-';
 
         if (nameInput && !nameInput.value) nameInput.value = callerInfo?.name || '';
         if (phoneInput && !phoneInput.value) phoneInput.value = normalizePhPhone(callerInfo?.phone || '');
@@ -4445,13 +4445,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (fallback) address = fallback;
         }
         
-        if (addrEl) addrEl.textContent = address || '—';
+        if (addrEl) addrEl.textContent = address || '-';
 
         if (addressInput && !addressInput.value) addressInput.value = address || '';
 
         const lat = callerLocation?.lat;
         const lng = callerLocation?.lng;
-        if (coordsEl) coordsEl.textContent = (lat != null && lng != null) ? `${lat}, ${lng}` : '—';
+        if (coordsEl) coordsEl.textContent = (lat != null && lng != null) ? `${lat}, ${lng}` : '-';
         updateCallPriorityBadge();
     }
 
@@ -4557,31 +4557,47 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         const busy = adminHasActiveCall();
-        host.innerHTML = queuedCalls.map((queued, index) => {
+        const title = queuedCalls.length > 1 ? `Emergency Call Queue (${queuedCalls.length})` : 'Incoming Emergency Call';
+        const subtitle = queuedCalls.length > 1
+            ? 'Multiple callers are waiting. Answer one call at a time.'
+            : 'A caller is waiting. Answer from this call intake panel.';
+
+        const cards = queuedCalls.map((queued, index) => {
             const callerName = queued.caller?.name || 'Emergency Call User';
             const callerPhone = queued.caller?.phone ? `<span style="opacity:.78;">${queued.caller.phone}</span>` : '';
             const locationText = queued.location?.address || queued.location?.formatted || queued.location?.text || 'Location pending';
             const acceptDisabled = (busy && queued.callId !== callId) || !queued.sdp;
-            const acceptLabel = !queued.sdp ? 'Waiting for caller' : (acceptDisabled ? 'Finish active call' : 'Accept');
+            const acceptLabel = !queued.sdp ? 'Waiting for caller' : (acceptDisabled ? 'Finish active call' : 'Answer');
             return `
-                <div class="conversation-item" data-call-id="${queued.callId}" style="border:1px solid rgba(220,38,38,0.45); background: rgba(220,38,38,0.06); margin-bottom:10px;">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <div style="width:36px; height:36px; border-radius:10px; background:rgba(220,38,38,0.18); border:1px solid rgba(220,38,38,0.35); display:flex; align-items:center; justify-content:center; flex:0 0 auto;">
-                            <i class="fas fa-phone-alt" style="color:#dc2626;"></i>
-                        </div>
-                        <div style="flex:1; min-width:0;">
-                            <div style="font-weight:900; letter-spacing:0.4px;">Emergency Call ${queuedCalls.length > 1 ? `#${index + 1}` : ''}</div>
-                            <div style="font-size:12px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${callerName} ${callerPhone}</div>
-                            <div style="font-size:11px; opacity:0.72; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${locationText}</div>
-                        </div>
-                        <div style="display:flex; gap:8px; flex:0 0 auto;">
-                            <button class="btn btn-sm btn-secondary emergency-call-decline-btn" data-call-id="${queued.callId}" style="padding:0.4rem 0.65rem;">Decline</button>
-                            <button class="btn btn-sm btn-primary emergency-call-accept-btn" data-call-id="${queued.callId}" ${acceptDisabled ? 'disabled' : ''} style="padding:0.4rem 0.65rem; opacity:${acceptDisabled ? '.55' : '1'};">${acceptLabel}</button>
-                        </div>
+                <div class="emergency-call-card" data-call-id="${queued.callId}" style="display:flex; align-items:center; gap:12px; padding:14px; border:1px solid rgba(220,38,38,0.28); background:rgba(255,255,255,0.82); border-radius:12px; box-shadow:0 8px 24px rgba(15,23,42,.06);">
+                    <div style="width:44px; height:44px; border-radius:12px; background:rgba(220,38,38,0.12); border:1px solid rgba(220,38,38,0.28); display:flex; align-items:center; justify-content:center; flex:0 0 auto;">
+                        <i class="fas fa-phone-alt" style="color:#dc2626;"></i>
+                    </div>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:900; letter-spacing:0.2px; color:#111827;">${queuedCalls.length > 1 ? `Caller ${index + 1}` : 'Live Caller'}</div>
+                        <div style="font-size:13px; color:#1f2937; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${callerName} ${callerPhone}</div>
+                        <div style="font-size:12px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${locationText}</div>
+                    </div>
+                    <div style="display:flex; gap:8px; flex:0 0 auto;">
+                        <button class="btn btn-sm btn-secondary emergency-call-decline-btn" data-call-id="${queued.callId}" style="padding:0.55rem 0.8rem;">Decline</button>
+                        <button class="btn btn-sm btn-primary emergency-call-accept-btn" data-call-id="${queued.callId}" ${acceptDisabled ? 'disabled' : ''} style="padding:0.55rem 0.9rem; opacity:${acceptDisabled ? '.55' : '1'}; pointer-events:${acceptDisabled ? 'none' : 'auto'};">${acceptLabel}</button>
                     </div>
                 </div>
             `;
         }).join('');
+
+        host.innerHTML = `
+            <section style="margin:0 0 14px; border:1px solid rgba(79,149,146,0.35); border-radius:14px; background:#f8fffe; overflow:hidden;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border-bottom:1px solid rgba(79,149,146,0.2); background:linear-gradient(135deg, rgba(79,149,146,.14), rgba(220,38,38,.08));">
+                    <div>
+                        <div style="font-weight:900; color:#0f172a; display:flex; align-items:center; gap:8px;"><i class="fas fa-phone-volume" style="color:#dc2626;"></i>${title}</div>
+                        <div style="font-size:12px; color:#475569; margin-top:2px;">${subtitle}</div>
+                    </div>
+                    <span style="font-size:12px; font-weight:900; color:#dc2626; background:#fee2e2; border:1px solid #fecaca; border-radius:999px; padding:5px 9px;">LIVE</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:10px; padding:12px;">${cards}</div>
+            </section>
+        `;
 
         setIncomingEmergencyCallRowVisible(true);
 
@@ -4783,7 +4799,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         try {
             if (statusEl) statusEl.textContent = 'Preparing pending transfer report...';
             const transferConversationId = await ensureCallConversationForTransfer(callerPayload, incidentDescription, priorityMetric);
-            if (statusEl) statusEl.textContent = 'Starting transfer…';
+            if (statusEl) statusEl.textContent = 'Starting transfer...';
             const res = await fetch(transferApiUrl(), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -5112,7 +5128,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         setIncomingEmergencyCallRowVisible(false);
         setOverlayVisible(true);
         setCallActiveBannerVisible(true);
-        setStatus('Connecting…');
+        setStatus('Connecting...');
         setTimer(0);
         setEndEnabled(false);
 
@@ -5231,8 +5247,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (notify && !adminHasActiveCall(merged.callId) && !notifiedIncomingCallIds.has(merged.callId)) {
                 notifiedIncomingCallIds.add(merged.callId);
                 _startAlertSound(notificationSound);
-                setIncomingCallModalText('Incoming emergency call. Open the queue to answer.');
-                setIncomingCallModalVisible(true);
+                if (!EMERGENCY_COM_CALL_INTAKE_ENABLED) {
+                    setIncomingCallModalText('Incoming emergency call. Open the queue to answer.');
+                    setIncomingCallModalVisible(true);
+                } else {
+                    setIncomingCallModalVisible(false);
+                }
             }
             renderIncomingEmergencyCallRow();
             return merged;
@@ -5240,21 +5260,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
         s.on('call-queue', payload => {
             const openCalls = Array.isArray(payload?.open) ? payload.open : [];
-            const liveOpenIds = new Set();
             openCalls.forEach(call => {
                 const source = call?.offer || call || null;
-                const queued = queueIncomingOffer(source, source?.sdp || null, false);
-                if (queued) liveOpenIds.add(queued.callId);
+                queueIncomingOffer(source, source?.sdp || null, false);
             });
-            Array.from(incomingCallQueue.keys()).forEach(existingId => {
-                if (!liveOpenIds.has(existingId) && existingId !== callId && existingId !== acceptingCallId) incomingCallQueue.delete(existingId);
-            });
-            if (pendingCallId && !incomingCallQueue.has(pendingCallId) && !callId) {
-                pendingOffer = null;
-                pendingCallId = null;
-                pendingCallRoom = null;
-                pendingCandidates = [];
-            }
+            // Do not prune local offers from a queue refresh. A transient empty socket snapshot can arrive
+            // before the user's offer replay, which made the answer button disappear on the intake page.
             renderIncomingEmergencyCallRow();
         });
 
@@ -5381,3 +5392,4 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
 </body>
 </html>
+
