@@ -5393,8 +5393,17 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 }
             }
         } catch (e) {
+            console.error('[call][admin] accept call failed', e);
             acceptingCallId = null;
-            setStatus('Call failed');
+            let userFriendlyError = 'Call failed';
+            if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+                userFriendlyError = 'Microphone access blocked. Please enable microphone permissions in your browser.';
+            } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
+                userFriendlyError = 'No microphone device found on this system.';
+            } else if (e.message) {
+                userFriendlyError = `Call error: ${e.message}`;
+            }
+            setStatus(userFriendlyError);
             setEndEnabled(true);
             endCall(true);
         } finally {

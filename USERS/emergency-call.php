@@ -2096,30 +2096,32 @@ $assetBase = '../ADMIN/header/';
             pendingRemoteIceCandidates = [];
 
             setOverlayVisible(true);
-            setStatus('Connecting…');
+            setStatus('Initializing call…');
             setTimer(0);
             setEndEnabled(false);
             setCancelVisible(true);
             setCallActiveBannerVisible(false);
 
-            const s = ensureSocket();
-            if (!s) {
-                setStatus('Call service unavailable. Please try again.');
-                setEndEnabled(true);
-                setCancelVisible(false);
-                return;
-            }
-
-            if (s && s.connected === false) setStatus('Connecting to call service…');
-
             try {
-                await waitForSocketConnected(s);
                 callId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `call_${Date.now()}_${Math.random().toString(16).slice(2)}`;
                 activeCallRoom = getCallRoom(callId);
                 callStartedAt = Date.now();
                 setStartButtonsDisabled(true);
-                s.emit("join", activeCallRoom);
-                logCall('started');
+
+                // 1. Request microphone access with clear status feedback
+                setStatus('Requesting microphone access…');
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                localStream.getAudioTracks().forEach(track => { track.enabled = true; });
+
+                // 2. Initialize WebRTC Peer Connection
+                initPeer();
+                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                monitorAudioActivity(localStream, 'userSpeakingLabel', 'userLocalMicIndicator');
+
+                // 3. Create SDP Offer
+                setStatus('Creating secure call connection…');
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
 
                 const activeCallId = callId;
                 tryGetLocation().then((location) => {
@@ -2131,22 +2133,8 @@ $assetBase = '../ADMIN/header/';
                     }
                 }).catch(() => {});
 
-                // Emergency-Com answers this call first. The private room is announced
-                // to the admin call lobby and can be manually transferred later.
-
-                initPeer();
-
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                localStream.getAudioTracks().forEach(track => { track.enabled = true; });
-                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-                monitorAudioActivity(localStream, 'userSpeakingLabel', 'userLocalMicIndicator');
-
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                console.log('[call][user] emitting offer', { callId, room: activeCallRoom });
                 const guestCaller = getGuestCallerInfo();
                 const caller = currentCallCallerPayload();
-
                 if (!userProfile && guestCaller.address && locationData) {
                     locationData.address = guestCaller.address;
                 }
@@ -2165,12 +2153,49 @@ $assetBase = '../ADMIN/header/';
                     location: locationData || null
                 };
 
+                // 4. Save call in database immediately so Admin dashboard sees it
                 await persistOpenEmergencyCall(offerPayload);
-                s.emit("offer", offerPayload, CALL_LOBBY_ROOM);
+                logCall('started');
+
+                // 5. Connect and emit via Socket.IO
+                setStatus('Connecting to emergency dispatcher…');
+                const s = ensureSocket();
+                if (s) {
+                    try {
+                        await waitForSocketConnected(s, 10000);
+                        s.emit("join", activeCallRoom);
+                        s.emit("offer", offerPayload, CALL_LOBBY_ROOM);
+                    } catch (sockErr) {
+                        console.warn('[call][user] Socket.io connect delay/notice:', sockErr);
+                        // If socket connection is still attempting, join and emit on connect
+                        if (s) {
+                            s.once('connect', () => {
+                                if (callId === activeCallId) {
+                                    s.emit("join", activeCallRoom);
+                                    s.emit("offer", offerPayload, CALL_LOBBY_ROOM);
+                                }
+                            });
+                        }
+                    }
+                }
+
                 setStatus('Waiting for Emergency Communication admin to answer...');
             } catch (e) {
                 console.error('[call][user] call failed', e);
-                setStatus('Call failed');
+                let userFriendlyError = 'Call failed';
+                if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+                    userFriendlyError = 'Microphone access blocked. Please allow microphone permissions in your browser to call.';
+                } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
+                    userFriendlyError = 'No microphone device found on this system.';
+                } else if (e.name === 'NotReadableError' || e.name === 'TrackStartError') {
+                    userFriendlyError = 'Microphone is currently in use by another application.';
+                } else if (e.message && e.message.includes('Socket connect timeout')) {
+                    userFriendlyError = 'Signaling network unreachable. Please check connection or call Hotline 122.';
+                } else if (e.message) {
+                    userFriendlyError = `Call error: ${e.message}`;
+                }
+
+                setStatus(userFriendlyError);
                 setEndEnabled(true);
                 setCancelVisible(false);
                 cleanupCall();
