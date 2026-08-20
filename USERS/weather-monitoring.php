@@ -1118,7 +1118,7 @@ $pageTitle = 'Weather Monitoring';
                         <div class="gw-main-temp">
                             <img src="https://openweathermap.org/img/wn/${icon}@4x.png" alt="${condition}" class="gw-icon">
                             <span class="gw-temp-value">${temp}</span>
-                            <span class="gw-temp-unit">°C</span>
+                            <span class="gw-temp-unit">&deg;C</span>
                         </div>
                         <div class="gw-details">
                             <div class="gw-detail-item">
@@ -1281,7 +1281,7 @@ $pageTitle = 'Weather Monitoring';
                             bodyColor: textColor,
                             borderColor: borderColor,
                             borderWidth: 1,
-                            callbacks: { label: (ctx) => ctx.raw + '°C' } 
+                            callbacks: { label: (ctx) => ctx.raw + '\u00B0C' } 
                         }
                     },
                     scales: {
@@ -1304,7 +1304,7 @@ $pageTitle = 'Weather Monitoring';
                             ticks: { 
                                 color: textColor,
                                 font: { size: 11 },
-                                callback: (val) => val + '°' 
+                                callback: (val) => val + '\u00B0' 
                             }
                         }
                     }
@@ -1363,11 +1363,11 @@ $pageTitle = 'Weather Monitoring';
                         <div class="forecast-day-name ${day === today ? 'today' : ''}">${dayName}</div>
                         <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="" class="forecast-day-icon">
                         <div class="forecast-temp-bar">
-                            <span class="forecast-temp-min">${minTemp}°</span>
+                            <span class="forecast-temp-min">${minTemp}&deg;</span>
                             <div class="forecast-bar-container">
                                 <div class="forecast-bar" style="margin-left: ${barStart}%; width: ${Math.max(barWidth, 10)}%;"></div>
                             </div>
-                            <span class="forecast-temp-max">${maxTemp}°</span>
+                            <span class="forecast-temp-max">${maxTemp}&deg;</span>
                         </div>
                         <div class="forecast-precip"${precipTitle}>${precipText ? `<i class="fas fa-tint"></i> ${precipText}` : ''}</div>
                     </div>
@@ -1415,7 +1415,7 @@ $pageTitle = 'Weather Monitoring';
             const iconHtml = `
                 <div class="weather-marker-icon">
                     <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="${condition}">
-                    <div class="weather-marker-temp">${temp}°C</div>
+                    <div class="weather-marker-temp">${temp}&deg;C</div>
                     <div class="weather-marker-city">${name}</div>
                 </div>
             `;
@@ -1619,12 +1619,12 @@ $pageTitle = 'Weather Monitoring';
                 const next24h = forecast.slice(0, 8);
                 const maxTemp = Math.max(...next24h.map(f => f.temp));
                 const minTemp = Math.min(...next24h.map(f => f.temp));
-                forecastSummary = `Next 24 hours: ${Math.round(minTemp)}°C - ${Math.round(maxTemp)}°C.`;
+                forecastSummary = `Next 24 hours: ${Math.round(minTemp)}\u00B0C - ${Math.round(maxTemp)}\u00B0C.`;
             }
             
             return `You are an emergency weather analyst for ${locationName}, Philippines. Analyze:
 
-CURRENT: Temp ${temp}°C, Humidity ${humidity}%, ${condition}, Wind ${windSpeed} km/h
+CURRENT: Temp ${temp}\u00B0C, Humidity ${humidity}%, ${condition}, Wind ${windSpeed} km/h
 ${forecastSummary}
 
 Provide analysis in this format:
@@ -1849,14 +1849,14 @@ Keep concise and actionable.`;
                     warnings.push({
                         type: 'extreme_heat',
                         severity: 'high',
-                        message: `Extreme Heat Alert: ${weather.main.temp.toFixed(1)}°C in Quezon City. Stay hydrated and avoid outdoor activities.`,
+                        message: `Extreme Heat Alert: ${weather.main.temp.toFixed(1)}\u00B0C in Quezon City. Stay hydrated and avoid outdoor activities.`,
                         temp: weather.main.temp
                     });
                 } else if (weather.main.temp >= 32) {
                     warnings.push({
                         type: 'heat',
                         severity: 'warning',
-                        message: `High Temperature: ${weather.main.temp.toFixed(1)}°C in Quezon City. Take precautions.`,
+                        message: `High Temperature: ${weather.main.temp.toFixed(1)}\u00B0C in Quezon City. Take precautions.`,
                         temp: weather.main.temp
                     });
                 }
@@ -1913,7 +1913,7 @@ Keep concise and actionable.`;
                         warnings.push({
                             type: 'heat_index',
                             severity: 'high',
-                            message: `Dangerous Heat Index: ${heatIndex.toFixed(1)}°C in Quezon City. Extreme caution advised.`,
+                            message: `Dangerous Heat Index: ${heatIndex.toFixed(1)}\u00B0C in Quezon City. Extreme caution advised.`,
                             heatIndex: heatIndex
                         });
                     }
@@ -2122,7 +2122,7 @@ Keep concise and actionable.`;
                     data = hourlyData.map(item => Math.round(item.temp));
                     borderColor = isDarkMode ? '#3a7675' : '#3a7675';
                     backgroundColor = isDarkMode ? 'rgba(58, 118, 117, 0.3)' : 'rgba(58, 118, 117, 0.1)';
-                    label = '°C';
+                    label = '\u00B0C';
             }
             
             if (window.hourlyChart) {

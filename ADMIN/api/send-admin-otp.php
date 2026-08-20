@@ -215,9 +215,9 @@ try {
     $deleteStmt = $pdo->prepare($deleteQuery);
     $deleteStmt->execute([$email, $purpose_db]);
     
-    // Insert new OTP with 5 minute validity
+    // Insert new OTP with 1 minute validity
     $query = "INSERT INTO otp_verifications (email, otp_code, purpose, expires_at, status, attempts, ip_address) 
-              VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 5 MINUTE), 'pending', 0, ?)";
+              VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 1 MINUTE), 'pending', 0, ?)";
     
     $stmt = $pdo->prepare($query);
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
@@ -225,11 +225,11 @@ try {
         throw new Exception('Failed to generate verification code');
     }
     
-    // Store in session for fallback (5 minutes)
+    // Store in session for fallback (1 minute)
     $sessionKey = $purpose === 'login' ? 'admin_login_otp' : 'admin_create_otp';
     $_SESSION[$sessionKey . '_code'] = $otp_code;
     $_SESSION[$sessionKey . '_email'] = $email;
-    $_SESSION[$sessionKey . '_expires'] = time() + 300; // 5 minutes
+    $_SESSION[$sessionKey . '_expires'] = time() + 60; // 1 minute
     $_SESSION[$sessionKey . '_purpose'] = $purpose;
     
     // Prepare email content
@@ -245,12 +245,12 @@ try {
     }
     
     if (function_exists('buildOTPEmailTemplate')) {
-        $emailBodyHtml = buildOTPEmailTemplate($name, $otp_code, $purposeText, 5);
+        $emailBodyHtml = buildOTPEmailTemplate($name, $otp_code, $purposeText, 1);
     } else {
-        $emailBodyHtml = "<p>Hello {$name},</p><p>Your verification code is: <strong>{$otp_code}</strong></p><p>Valid for 5 minutes.</p>";
+        $emailBodyHtml = "<p>Hello {$name},</p><p>Your verification code is: <strong>{$otp_code}</strong></p><p>Valid for 1 minute.</p>";
     }
 
-    $plainText = "Hello {$name},\n\nYour verification code for {$purposeText} is: {$otp_code}\n\nThis code is valid for 5 minutes.\n\nThank you,\nEmergency Communication System";
+    $plainText = "Hello {$name},\n\nYour verification code for {$purposeText} is: {$otp_code}\n\nThis code is valid for 1 minute.\n\nThank you,\nEmergency Communication System";
     
     // Try to send email
     $otp_sent = false;

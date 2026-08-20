@@ -38,7 +38,7 @@ try {
     
     // Store OTP in database with email
     $query = "INSERT INTO otp_verifications (email, otp_code, expires_at, status, attempts) 
-              VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE), 'pending', 0)
+              VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 1 MINUTE), 'pending', 0)
               ON DUPLICATE KEY UPDATE 
               otp_code = VALUES(otp_code), 
               expires_at = VALUES(expires_at), 
@@ -54,7 +54,7 @@ try {
     session_start();
     $_SESSION['signup_otp_code'] = $otp_code;
     $_SESSION['signup_otp_email'] = $email;
-    $_SESSION['signup_otp_expires'] = time() + 600; // 10 minutes
+    $_SESSION['signup_otp_expires'] = time() + 60; // 1 minute
     
     // Try to send email
     $otp_sent = false;
@@ -64,7 +64,7 @@ try {
     $emailSubject = 'Email Verification Code - Emergency Communication System';
     $emailBody = "Hello {$name},\n\n";
     $emailBody .= "Your email verification code is: {$otp_code}\n\n";
-    $emailBody .= "This code will expire in 10 minutes.\n\n";
+    $emailBody .= "This code will expire in 1 minute.\n\n";
     $emailBody .= "If you did not request this code, please ignore this email.\n\n";
     $emailBody .= "Thank you,\n";
     $emailBody .= "Emergency Communication System";

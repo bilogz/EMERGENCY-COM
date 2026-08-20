@@ -134,10 +134,11 @@ function sendSMTPMail($to, $subject, $body, $isHtml = false, &$error = null) {
 /**
  * Generate a modern, beautiful, responsive HTML email template for OTP codes
  */
-function buildOTPEmailTemplate($name, $otpCode, $purpose = 'Admin Login', $expiryMinutes = 5) {
+function buildOTPEmailTemplate($name, $otpCode, $purpose = 'Admin Login', $expiryMinutes = 1) {
     $safeName = htmlspecialchars($name ?: 'User', ENT_QUOTES, 'UTF-8');
     $safeCode = htmlspecialchars($otpCode, ENT_QUOTES, 'UTF-8');
     $safePurpose = htmlspecialchars($purpose, ENT_QUOTES, 'UTF-8');
+    $expiryText = $expiryMinutes == 1 ? '1 minute' : "{$expiryMinutes} minutes";
 
     return <<<HTML
 <!DOCTYPE html>
@@ -182,7 +183,7 @@ function buildOTPEmailTemplate($name, $otpCode, $purpose = 'Admin Login', $expir
                     {$safeCode}
                   </div>
                   <div style="display:inline-block; margin-top:12px; background:#ecfdf5; border:1px solid #a7f3d0; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; color:#065f46;">
-                    ⏱️ Valid for {$expiryMinutes} minutes
+                    ⏱️ Valid for {$expiryText}
                   </div>
                 </td>
               </tr>

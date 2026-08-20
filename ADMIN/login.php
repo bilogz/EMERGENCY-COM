@@ -617,10 +617,6 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 <i class="fas fa-exclamation-triangle"></i> Security verification failed. Please refresh the page.
             </div>
 
-            <div class="form-options">
-                <a href="#" class="forgot-password" id="forgotPassword">Forgot Password?</a>
-            </div>
-
             <button type="submit" class="btn-login" id="loginButton">
                 <div class="spinner"></div>
                 <span class="btn-text">
@@ -670,7 +666,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                         <input type="text" id="otp" name="otp" class="form-control otp-styled-input" placeholder="000000" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" required autocomplete="one-time-code">
                     </div>
                     <small class="form-text" style="margin-top: 0.5rem; font-size: 12px; color: var(--text-secondary-1, #6c757d); text-align: center; display: block;">
-                        <i class="fas fa-stopwatch"></i> Code is valid for 5 minutes
+                        <i class="fas fa-stopwatch"></i> Code is valid for 1 minute
                     </small>
                 </div>
 
@@ -1517,16 +1513,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                 }
             }, 100);
         });
-        document.getElementById('forgotPassword').addEventListener('click', function(e) {
-            e.preventDefault();
-            Swal.fire({
-                icon: 'info',
-                title: 'Password Recovery',
-                html: 'For security reasons, password recovery must be handled by your system administrator.<br><br>Please contact your administrator with your registered email address to reset your password.',
-                confirmButtonText: 'OK',
-                confirmButtonColor: '#3a7675'
-            });
-        });
+                });
 
         // Security: Clear sensitive data on page unload
         window.addEventListener('beforeunload', function() {
