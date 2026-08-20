@@ -95,50 +95,9 @@ $pageTitle = 'Language Management';
         </div>
     </div>
 
-    <!-- Floating Add Button -->
-    <button class="fab" onclick="openModal()" title="Add New Language">
-        <i class="fas fa-plus"></i>
-    </button>
-
-    <!-- Simple Add Modal -->
-    <div class="modal-backdrop" id="addModal">
-        <div class="modal-card">
-            <h3 style="margin-top:0; margin-bottom: 1.5rem; color: #1a1a1a;">Add Language</h3>
-            <form id="addForm">
-                <div style="margin-bottom: 1rem;">
-                    <label style="display:block; margin-bottom: 0.5rem; font-weight:600; color: #333; font-size: 0.9rem;">Code (ISO 639-1)</label>
-                    <input type="text" id="code" class="form-control" placeholder="e.g. fr" required style="width:100%; padding: 0.7rem; border-radius: 8px; border:1px solid #e0e0e0;">
-                </div>
-                <div style="margin-bottom: 1rem;">
-                    <label style="display:block; margin-bottom: 0.5rem; font-weight:600; color: #333; font-size: 0.9rem;">Name</label>
-                    <input type="text" id="name" class="form-control" placeholder="e.g. French" required style="width:100%; padding: 0.7rem; border-radius: 8px; border:1px solid #e0e0e0;">
-                </div>
-                <div style="margin-bottom: 1rem;">
-                    <label style="display:block; margin-bottom: 0.5rem; font-weight:600; color: #333; font-size: 0.9rem;">Native Name</label>
-                    <input type="text" id="native" class="form-control" placeholder="e.g. Français" style="width:100%; padding: 0.7rem; border-radius: 8px; border:1px solid #e0e0e0;">
-                </div>
-                <div style="margin-bottom: 1rem;">
-                    <label style="display:block; margin-bottom: 0.5rem; font-weight:600; color: #333; font-size: 0.9rem;">Flag Emoji</label>
-                    <input type="text" id="flag" class="form-control" placeholder="🇫🇷" style="width:100%; padding: 0.7rem; border-radius: 8px; border:1px solid #e0e0e0;">
-                </div>
-                <div style="margin-bottom: 1.5rem;">
-                    <label style="display:block; margin-bottom: 0.5rem; font-weight:600; color: #333; font-size: 0.9rem;">Priority</label>
-                    <input type="number" id="priority" class="form-control" value="0" style="width:100%; padding: 0.7rem; border-radius: 8px; border:1px solid #e0e0e0;">
-                </div>
-                <div style="text-align: right; display: flex; gap: 1rem; justify-content: flex-end;">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal()" style="padding: 0.7rem 1.5rem; border-radius: 8px;">Cancel</button>
-                    <button type="submit" class="btn btn-primary" style="padding: 0.7rem 1.5rem; border-radius: 8px;">Save Language</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <script>
         const APP_BASE = window.location.pathname.split('/ADMIN/')[0] || '';
         const API_BASE = APP_BASE + '/ADMIN/api';
-
-        function openModal() { document.getElementById('addModal').classList.add('show'); }
-        function closeModal() { document.getElementById('addModal').classList.remove('show'); document.getElementById('addForm').reset(); }
 
         let languagesData = [];
         let filteredData = [];
@@ -307,28 +266,6 @@ $pageTitle = 'Language Management';
                 }
             });
         }
-
-        document.getElementById('addForm').addEventListener('submit', function(e){
-            e.preventDefault();
-            const data = {
-                language_code: document.getElementById('code').value,
-                language_name: document.getElementById('name').value,
-                native_name: document.getElementById('native').value,
-                flag_emoji: document.getElementById('flag').value,
-                priority: document.getElementById('priority').value,
-                is_active: 1,
-                is_ai_supported: 1
-            };
-            fetch(`${API_BASE}/language-management.php?action=add`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
-            }).then(r => r.json()).then(res => {
-                if(res.success) { closeModal(); loadData(); }
-                else alert(res.message);
-            });
-        });
-
         document.addEventListener('DOMContentLoaded', loadData);
     </script>
 </body>

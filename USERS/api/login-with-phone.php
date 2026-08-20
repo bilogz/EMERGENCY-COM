@@ -9,55 +9,52 @@ require_once 'db_connect.php';
 $response = ['success' => false, 'message' => ''];
 
 try {
-    // Get JSON input
     $input = json_decode(file_get_contents('php://input'), true);
-    $phone = $input['phone'] ?? '';
-    $name = $input['name'] ?? '';
-    
-    // Validate inputs
-    if (empty($phone)) {
-        throw new Exception('Phone number is required');
+    if (!is_array($input)) {
+        $input = $_POST;
     }
-    
-    if (empty($name)) {
-        throw new Exception('Full name is required');
+
+    $email = strtolower(trim($input['email'] ?? ''));
+    $password = (string)($input['password'] ?? '');
+
+    if ($email === '') {
+        throw new Exception('Email is required');
     }
-    
-    // Normalize phone number (remove spaces, dashes, etc.)
-    $phone = preg_replace('/[^0-9+]/', '', $phone);
-    
-    // Check if user exists with this phone number
-    $query = "SELECT id as user_id, name as full_name, email FROM users WHERE phone = ? LIMIT 1";
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        throw new Exception('Please enter a valid email address');
+    }
+
+    if ($password === '') {
+        throw new Exception('Password is required');
+    }
+
+    $query = "SELECT id as user_id, name as full_name, email, phone, password, status FROM users WHERE email = ? LIMIT 1";
     $stmt = $pdo->prepare($query);
-    
-    if (!$stmt->execute([$phone])) {
+
+    if (!$stmt->execute([$email])) {
         throw new Exception('Database query failed');
     }
-    
+
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$user) {
-        throw new Exception('No user found with this contact number. Please sign up first.');
+
+    if (!$user || empty($user['password']) || !password_verify($password, $user['password'])) {
+        throw new Exception('Invalid email or password.');
     }
-    
-    // Verify name matches (case-insensitive, partial match allowed for flexibility)
-    $dbName = strtolower(trim($user['full_name']));
-    $inputName = strtolower(trim($name));
-    
-    // Check if names match (allowing for partial matches or common variations)
-    if ($dbName !== $inputName && strpos($dbName, $inputName) === false && strpos($inputName, $dbName) === false) {
-        // Names don't match - but allow login anyway for user convenience
-        // Just log a warning
-        error_log("Name mismatch for phone $phone: DB='{$user['full_name']}' vs Input='$name'");
+
+    if (isset($user['status']) && $user['status'] !== null && strtolower((string)$user['status']) !== 'active') {
+        throw new Exception('Your account is not active. Please contact support.');
     }
-    
+
     // Login successful - session already started by session-config.php
     $_SESSION['user_id'] = $user['user_id'];
     $_SESSION['user_name'] = $user['full_name'] ?? 'User';
-    $_SESSION['phone'] = $phone;
+    $_SESSION['user_email'] = $user['email'] ?? $email;
+    $_SESSION['user_phone'] = $user['phone'] ?? null;
+    $_SESSION['phone'] = $user['phone'] ?? null; // Legacy session key used by older pages.
     $_SESSION['user_logged_in'] = true;
     $_SESSION['user_type'] = 'registered';
-    
+
     // Optional: Log login activity
     try {
         $logQuery = "INSERT INTO login_history (user_id, login_time, ip_address) VALUES (?, NOW(), ?)";
@@ -66,12 +63,14 @@ try {
     } catch (Exception $e) {
         // Silently ignore if table doesn't exist
     }
-    
+
     $response['success'] = true;
     $response['message'] = 'Login successful';
     $response['user_name'] = $user['full_name'] ?? 'User';
     $response['user_id'] = $user['user_id'];
-    
+    $response['email'] = $user['email'] ?? $email;
+    $response['phone'] = $user['phone'] ?? null;
+
 } catch (Exception $e) {
     $response['success'] = false;
     $response['message'] = $e->getMessage();

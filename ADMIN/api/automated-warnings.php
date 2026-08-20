@@ -446,19 +446,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $warningsTable = resolveAutomatedWarningsTable($pdo);
-        
-        $stmt = $pdo->query("
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 8;
+        $limit = max(1, min(50, $limit));
+        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+        $page = max(1, $page);
+        $offset = ($page - 1) * $limit;
+
+        $countStmt = $pdo->query("SELECT COUNT(*) FROM {$warningsTable}");
+        $total = (int)$countStmt->fetchColumn();
+
+        $stmt = $pdo->prepare("
             SELECT id, source, type, title, content, severity, status, received_at
             FROM {$warningsTable}
-            ORDER BY received_at DESC
-            LIMIT 100
+            ORDER BY received_at DESC, id DESC
+            LIMIT :limit OFFSET :offset
         ");
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
         $warnings = $stmt->fetchAll();
+        $totalPages = max(1, (int)ceil($total / $limit));
         
         ob_clean();
         echo json_encode([
             'success' => true,
             'warnings' => $warnings,
+            'pagination' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $total,
+                'total_pages' => $totalPages,
+                'has_more' => $page < $totalPages
+            ],
             'meta' => ['table' => $warningsTable]
         ]);
     } catch (PDOException $e) {
@@ -1804,4 +1823,3 @@ function resolveAlertsTable(PDO $pdo): string {
     throw new RuntimeException('No healthy alerts table available for write operations.');
 }
 ?>
-

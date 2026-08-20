@@ -182,6 +182,7 @@ try {
     $hasSourceCol = usersAlertsTableHasColumn($pdo, $alertsTable, 'source');
     $hasTypeCol = usersAlertsTableHasColumn($pdo, $alertsTable, 'type');
     $hasCategoryCol = usersAlertsTableHasColumn($pdo, $alertsTable, 'category');
+    $hasMoreInfoUrl = usersAlertsTableHasColumn($pdo, $alertsTable, 'more_info_url');
     
     // Build base query - get alerts from admin database
     $query = "
@@ -194,6 +195,7 @@ try {
             " . ($hasSourceCol ? "a.source" : "'' AS source") . ",
             " . ($hasTypeCol ? "a.type" : "'' AS type") . ",
             " . ($hasCategoryCol ? "a.category" : "'' AS category") . ",
+            " . ($hasMoreInfoUrl ? "a.more_info_url" : "'' AS more_info_url") . ",
             a.status,
             a.created_at,
             a.updated_at,

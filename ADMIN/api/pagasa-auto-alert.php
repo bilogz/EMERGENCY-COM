@@ -1,4 +1,5 @@
 <?php
+if (!defined('PAGASA_EMERGENCY_CHANNEL_ID')) define('PAGASA_EMERGENCY_CHANNEL_ID', 'alertara-emergency-default-v5');
 /**
  * PAGASA Auto-Alert System
  * 
@@ -84,24 +85,21 @@ function ensurePagasaAutoAlertTables(PDO $pdo): void {
         $pdo->exec("ALTER TABLE pagasa_auto_alert_log ADD COLUMN IF NOT EXISTS bulletin_link VARCHAR(500) NULL AFTER bulletin_summary");
     } catch (Throwable $e) {}
 
-    // Seed default settings if empty
-    $count = (int)$pdo->query("SELECT COUNT(*) FROM pagasa_auto_alert_settings")->fetchColumn();
-    if ($count === 0) {
-        $defaults = [
-            ['enabled', '0'],
-            ['check_interval_minutes', '360'],
-            ['channels', 'push,email'],
-            ['last_check_at', ''],
-            ['last_bulletin_hash', ''],
-        ];
-        $stmt = $pdo->prepare("INSERT IGNORE INTO pagasa_auto_alert_settings (setting_key, setting_value) VALUES (?, ?)");
-        foreach ($defaults as $row) {
-            $stmt->execute($row);
-        }
+    // Seed missing default settings one-by-one so partial tables do not fall back to disabled.
+    $defaults = [
+        ['enabled', '0'],
+        ['check_interval_minutes', '15'],
+        ['channels', 'push,email'],
+        ['last_check_at', ''],
+        ['last_bulletin_hash', ''],
+    ];
+    $stmt = $pdo->prepare("INSERT IGNORE INTO pagasa_auto_alert_settings (setting_key, setting_value) VALUES (?, ?)");
+    foreach ($defaults as $row) {
+        $stmt->execute($row);
     }
-    // Automatic PAGASA checks use one fixed six-hour interval.
+    // Automatic weather-risk checks use one fixed 15-minute interval.
     try {
-        $pdo->exec("UPDATE pagasa_auto_alert_settings SET setting_value = '360' WHERE setting_key = 'check_interval_minutes' AND setting_value <> '360'");
+        $pdo->exec("UPDATE pagasa_auto_alert_settings SET setting_value = '15' WHERE setting_key = 'check_interval_minutes' AND setting_value <> '15'");
     } catch (Throwable $e) {}
 }
 
@@ -305,7 +303,7 @@ function countActiveCitizens(PDO $pdo): int {
  * Re-uses the existing send-broadcast infrastructure.
  */
 function queuePagasaBroadcast(PDO $pdo, array $bulletin, string $channels): ?int {
-    $title = '⚠️ PAGASA Weather Alert: ' . ($bulletin['title'] ?? 'New Bulletin');
+    $title = 'âš ï¸ PAGASA Weather Alert: ' . ($bulletin['title'] ?? 'New Bulletin');
     $message = $bulletin['description'] ?? 'A new weather bulletin has been issued by PAGASA. Please check official channels for details.';
     $severity = $bulletin['severity'] ?? 'medium';
 
@@ -451,9 +449,18 @@ function queuePagasaBroadcast(PDO $pdo, array $bulletin, string $channels): ?int
         }
     }
 
+    try {
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM notification_queue");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        if (!in_array('notification_channel', $cols, true)) {
+            $pdo->exec("ALTER TABLE notification_queue ADD COLUMN notification_channel VARCHAR(120) NULL AFTER message");
+        }
+    } catch (Throwable $e) {
+        // The notification worker also migrates this column before processing jobs.
+    }
     $queueStmt = $pdo->prepare("
-        INSERT INTO notification_queue (log_id, recipient_id, recipient_type, recipient_value, channel, title, message, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+        INSERT INTO notification_queue (log_id, recipient_id, recipient_type, recipient_value, channel, title, message, notification_channel, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
     ");
 
     foreach ($recipients as $recipient) {
@@ -474,7 +481,7 @@ function queuePagasaBroadcast(PDO $pdo, array $bulletin, string $channels): ?int
                 continue;
             }
             try {
-                $queueStmt->execute([$logId, $userId, $recipientType, $recipientValue, $ch, $title, $message, $alertTime]);
+                $queueStmt->execute([$logId, $userId, $recipientType, $recipientValue, $ch, $title, $message, $ch === 'push' ? PAGASA_EMERGENCY_CHANNEL_ID : null, $alertTime]);
                 $queued++;
             } catch (Throwable $e) {
                 // Skip duplicate or error
@@ -502,16 +509,21 @@ switch ($action) {
     // ----------------------------------------------------------
     case 'status':
         $enabled = getSetting($pdo, 'enabled', '0') === '1';
-        $interval = 360;
+        $interval = 15;
         setSetting($pdo, 'check_interval_minutes', '360');
         $channels = getSetting($pdo, 'channels', 'push,email');
         $lastCheck = getSetting($pdo, 'last_check_at', '');
         $lastHash = getSetting($pdo, 'last_bulletin_hash', '');
 
-        // Get recent alert count
+        // Get recent weather-risk alert count. Keep the old PAGASA table fallback
+        // so existing installs without the newer risk log still render correctly.
         $recentCount = 0;
         try {
-            $recentCount = (int)$pdo->query("SELECT COUNT(*) FROM pagasa_auto_alert_log WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)")->fetchColumn();
+            $riskLogTable = $pdo->query("SHOW TABLES LIKE 'weather_risk_auto_alert_log'")->fetchColumn();
+            $recentCountSql = $riskLogTable
+                ? "SELECT COUNT(*) FROM weather_risk_auto_alert_log WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)"
+                : "SELECT COUNT(*) FROM pagasa_auto_alert_log WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+            $recentCount = (int)$pdo->query($recentCountSql)->fetchColumn();
         } catch (Throwable $e) {}
 
         echo json_encode([
@@ -532,7 +544,7 @@ switch ($action) {
         $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
         $enabled = !empty($input['enabled']) ? '1' : '0';
         $channels = isset($input['channels']) ? (string)$input['channels'] : null;
-        $interval = 360;
+        $interval = 15;
 
         setSetting($pdo, 'enabled', $enabled);
         if ($channels !== null) {
@@ -542,7 +554,7 @@ switch ($action) {
 
         echo json_encode([
             'success' => true,
-            'message' => $enabled === '1' ? 'PAGASA auto-alerts enabled.' : 'PAGASA auto-alerts disabled.',
+            'message' => $enabled === '1' ? 'Weather risk auto-alerts enabled.' : 'Weather risk auto-alerts disabled.',
             'enabled' => $enabled === '1'
         ]);
         break;
@@ -555,15 +567,15 @@ switch ($action) {
     case 'check':
         $lastCheck = getSetting($pdo, 'last_check_at', '');
         $lastCheckTs = $lastCheck !== '' ? strtotime($lastCheck) : false;
-        $nextCheckTs = $lastCheckTs !== false ? $lastCheckTs + (6 * 3600) : 0;
+        $nextCheckTs = $lastCheckTs !== false ? $lastCheckTs + (15 * 60) : 0;
         if ($action === 'check' && $nextCheckTs > time()) {
             echo json_encode([
                 'success' => true,
-                'message' => 'Automatic PAGASA checks run every 6 hours.',
+                'message' => 'Automatic weather-risk checks run every 15 minutes.',
                 'alerted' => false,
                 'checked_at' => $lastCheck,
                 'next_check_at' => date('Y-m-d H:i:s', $nextCheckTs),
-                'check_interval_minutes' => 360
+                'check_interval_minutes' => 15
             ]);
             break;
         }
@@ -593,7 +605,7 @@ switch ($action) {
                 'fresh' => isPagasaBulletinFresh($latestBulletin, 6),
                 'candidate' => $latestBulletin,
                 'enabled' => getSetting($pdo, 'enabled', '0') === '1',
-                'check_interval_minutes' => 360
+                'check_interval_minutes' => 15
             ]);
             break;
         }
@@ -654,7 +666,7 @@ switch ($action) {
             break;
         }
 
-        // NEW BULLETIN DETECTED — Send mass notification
+        // NEW BULLETIN DETECTED â€” Send mass notification
         $channels = getSetting($pdo, 'channels', 'push,email');
         $dispatch = queueBulletinBroadcast($pdo, [
             'title' => 'PAGASA Weather Alert: ' . ($latestBulletin['title'] ?? 'New Bulletin'),

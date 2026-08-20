@@ -248,7 +248,9 @@ class AITranslationService {
         $prompt = "Translate the following text from {$sourceLangName} to {$targetLangName}. " .
                   "Provide ONLY the translated text without any explanations, notes, or additional text. " .
                   "Maintain the same tone, formality level, and meaning. " .
-                  "If the text contains emergency or safety information, ensure accuracy and clarity.\n\n" .
+                  "If the text contains emergency or safety information, ensure accuracy and clarity. " .
+                  "Do not change factual values: magnitude, intensity, coordinates, measurements, timestamps, bulletin numbers, addresses, event IDs, URLs, phone numbers, evacuation coordinates, and named agencies must remain exact. " .
+                  "If a phrase cannot be translated safely, keep the original wording for that phrase.\n\n" .
                   "Text to translate:\n{$text}";
         
         try {

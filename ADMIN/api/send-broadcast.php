@@ -25,13 +25,45 @@ function normalizeDispatchLanguage($language): string {
     return $lang;
 }
 
+function normalizeNotificationDispatchLanguage($language): string {
+    $lang = strtolower(trim((string)$language));
+    if ($lang === 'tagalog' || $lang === 'filipino' || $lang === 'tl') {
+        return 'fil';
+    }
+    if ($lang === 'both') {
+        return 'both';
+    }
+    return $lang === 'en' ? 'en' : '';
+}
+
+function dispatchSystemNotificationLanguage(string $preference): string {
+    // Android/FCM must receive one user-visible notification. For Both, use
+    // English as the system banner and keep Filipino attached to the alert ID.
+    return $preference === 'fil' ? 'fil' : 'en';
+}
+
+function dispatchEnsureNotificationLanguageColumn(PDO $pdo): void {
+    try {
+        $exists = $pdo->query("SHOW TABLES LIKE 'user_preferences'");
+        if (!$exists || !$exists->fetch()) return;
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM user_preferences");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        if (!in_array('notification_language', $cols, true)) {
+            $pdo->exec("ALTER TABLE user_preferences ADD COLUMN notification_language VARCHAR(10) NOT NULL DEFAULT 'en' AFTER preferred_language");
+        }
+    } catch (Throwable $e) {
+        error_log('Unable to ensure notification_language preference column: ' . $e->getMessage());
+    }
+}
+
 /**
  * Resolve recipient language using stored preferences.
  * Priority:
- * 1) subscriptions.preferred_language
- * 2) user_preferences.preferred_language
- * 3) users.preferred_language
- * 4) fallback "en"
+ * 1) user_preferences.notification_language (en, fil/tl, both)
+ * 2) subscriptions.preferred_language
+ * 3) user_preferences.preferred_language
+ * 4) users.preferred_language
+ * 5) fallback "en"
  */
 function resolveRecipientLanguage(PDO $pdo, int $userId): string {
     static $cache = [];
@@ -44,6 +76,16 @@ function resolveRecipientLanguage(PDO $pdo, int $userId): string {
     }
 
     $queries = [
+        [
+            "SELECT notification_language AS preferred_language
+             FROM user_preferences
+             WHERE user_id = ?
+               AND notification_language IS NOT NULL
+               AND notification_language <> ''
+             ORDER BY id DESC
+             LIMIT 1",
+            [$userId]
+        ],
         [
             "SELECT preferred_language
              FROM subscriptions
@@ -81,7 +123,10 @@ function resolveRecipientLanguage(PDO $pdo, int $userId): string {
             $stmt->execute($params);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($row && isset($row['preferred_language'])) {
-                $lang = normalizeDispatchLanguage($row['preferred_language']);
+                $lang = normalizeNotificationDispatchLanguage($row['preferred_language']);
+                if ($lang === '') {
+                    $lang = normalizeDispatchLanguage($row['preferred_language']);
+                }
                 if ($lang !== '') {
                     $cache[$userId] = $lang;
                     return $lang;
@@ -113,6 +158,7 @@ function ensureNotificationQueueTable(PDO $pdo): void {
                 channel VARCHAR(20) NOT NULL DEFAULT 'push',
                 title VARCHAR(255) NOT NULL DEFAULT '',
                 message TEXT NULL,
+                more_info_url VARCHAR(700) NULL,
                 status VARCHAR(20) NOT NULL DEFAULT 'pending',
                 delivery_status VARCHAR(20) NULL,
                 error_message TEXT NULL,
@@ -137,6 +183,7 @@ function ensureNotificationQueueTable(PDO $pdo): void {
         'channel' => "VARCHAR(20) NOT NULL DEFAULT 'push'",
         'title' => "VARCHAR(255) NOT NULL DEFAULT ''",
         'message' => "TEXT NULL",
+        'more_info_url' => "VARCHAR(700) NULL",
         'status' => "VARCHAR(20) NOT NULL DEFAULT 'pending'",
         'delivery_status' => "VARCHAR(20) NULL",
         'error_message' => "TEXT NULL",
@@ -475,6 +522,10 @@ try {
     $alertLatRaw = $_POST['alert_latitude'] ?? null;
     $alertLngRaw = $_POST['alert_longitude'] ?? null;
     $alertLocationName = trim((string)($_POST['alert_location_name'] ?? $_POST['alert_location'] ?? ''));
+    $moreInfoUrl = trim((string)($_POST['more_info_url'] ?? $_POST['more_information_url'] ?? ''));
+    if ($moreInfoUrl !== '' && !filter_var($moreInfoUrl, FILTER_VALIDATE_URL)) {
+        throw new Exception('Invalid more information link. Please paste a full URL starting with http:// or https://.');
+    }
     
     $channels = $_POST['channels'] ?? []; 
     if (is_string($channels)) {
@@ -564,8 +615,9 @@ try {
         throw new Exception('Required fields missing: ' . implode(', ', $missing));
     }
 
-    // Ensure queue schema exists before we insert dispatch jobs.
+    // Ensure queue and preference schema exists before we insert dispatch jobs.
     ensureNotificationQueueTable($pdo);
+    dispatchEnsureNotificationLanguageColumn($pdo);
 
     // 5. Build Recipient Query
     $baseSelect = "SELECT u.id, u.name, u.email, u.phone";
@@ -680,6 +732,7 @@ try {
     $hasWeatherSignalCol = false;
     $hasFireLevelCol = false;
     $hasSourceCol = false;
+    $hasMoreInfoUrlCol = false;
     $hasLocationCol = false;
     $hasLatitudeCol = false;
     $hasLongitudeCol = false;
@@ -688,6 +741,15 @@ try {
         $hasWeatherSignalCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'weather_signal'")->rowCount() > 0;
         $hasFireLevelCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'fire_level'")->rowCount() > 0;
         $hasSourceCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'source'")->rowCount() > 0;
+        $hasMoreInfoUrlCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'more_info_url'")->rowCount() > 0;
+        if (!$hasMoreInfoUrlCol) {
+            try {
+                $pdo->exec("ALTER TABLE alerts ADD COLUMN more_info_url VARCHAR(700) NULL");
+                $hasMoreInfoUrlCol = true;
+            } catch (PDOException $e) {
+                $hasMoreInfoUrlCol = false;
+            }
+        }
         $hasLocationCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'location'")->rowCount() > 0;
         $hasLatitudeCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'latitude'")->rowCount() > 0;
         $hasLongitudeCol = $pdo->query("SHOW COLUMNS FROM alerts LIKE 'longitude'")->rowCount() > 0;
@@ -696,6 +758,7 @@ try {
         $hasWeatherSignalCol = false;
         $hasFireLevelCol = false;
         $hasSourceCol = false;
+        $hasMoreInfoUrlCol = false;
         $hasLocationCol = false;
         $hasLatitudeCol = false;
         $hasLongitudeCol = false;
@@ -725,6 +788,11 @@ try {
     if ($hasSourceCol) {
         $alertCols[] = 'source';
         $alertVals[] = 'mass_notification';
+        $alertPlaceholders[] = '?';
+    }
+    if ($moreInfoUrl !== '' && $hasMoreInfoUrlCol) {
+        $alertCols[] = 'more_info_url';
+        $alertVals[] = $moreInfoUrl;
         $alertPlaceholders[] = '?';
     }
     $storedAlertLat = $alertLat ?? $targetLat;
@@ -779,7 +847,9 @@ try {
         $recipientId = (int)($recipient['id'] ?? 0);
         $recipientLanguage = resolveRecipientLanguage($pdo, $recipientId);
         $recipientLanguages[$recipientId] = $recipientLanguage;
-        if ($recipientLanguage !== 'en') {
+        if ($recipientLanguage === 'both') {
+            $uniqueTargetLanguages['fil'] = true;
+        } elseif ($recipientLanguage !== 'en') {
             $uniqueTargetLanguages[$recipientLanguage] = true;
         }
     }
@@ -798,8 +868,9 @@ try {
         $localizedTitle = $title;
         $localizedBody = $body;
 
-        if ($translationHelper && $recipientLanguage !== 'en') {
-            $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $recipientLanguage, $title, $body);
+        $deliveryLanguage = dispatchSystemNotificationLanguage($recipientLanguage);
+        if ($translationHelper && $deliveryLanguage !== 'en') {
+            $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $deliveryLanguage, $title, $body);
             if (is_array($translatedAlert) && !empty($translatedAlert['title']) && !empty($translatedAlert['message'])) {
                 $localizedTitle = $translatedAlert['title'];
                 $localizedBody = $translatedAlert['message'];
@@ -824,10 +895,10 @@ try {
 
             if (!empty($value)) {
                 $qStmt = $pdo->prepare("
-                    INSERT INTO notification_queue (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                    INSERT INTO notification_queue (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, more_info_url, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
                 ");
-                $qStmt->execute([$logId, $alertId, $recipientId, $type, $value, $channel, $localizedTitle, $localizedBody]);
+                $qStmt->execute([$logId, $alertId, $recipientId, $type, $value, $channel, $localizedTitle, $localizedBody, $moreInfoUrl]);
                 $queueCount++;
             }
         }
@@ -839,7 +910,7 @@ try {
             $localizedTitle = $title;
             $localizedBody = $body;
             if ($pushUserId && $translationHelper) {
-                $language = $recipientLanguages[$pushUserId] ?? 'en';
+                $language = dispatchSystemNotificationLanguage($recipientLanguages[$pushUserId] ?? 'en');
                 if ($language !== 'en') {
                     $translatedAlert = $translationHelper->getTranslatedAlert($alertId, $language, $title, $body);
                     if (is_array($translatedAlert) && !empty($translatedAlert['title']) && !empty($translatedAlert['message'])) {
@@ -849,9 +920,9 @@ try {
                 }
             }
             $qStmt = $pdo->prepare("INSERT INTO notification_queue
-                (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
-                VALUES (?, ?, ?, 'push_token', ?, 'push', ?, ?, 'pending')");
-            $qStmt->execute([$logId, $alertId, $pushUserId, $device['token'], $localizedTitle, $localizedBody]);
+                (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, more_info_url, status)
+                VALUES (?, ?, ?, 'push_token', ?, 'push', ?, ?, ?, 'pending')");
+            $qStmt->execute([$logId, $alertId, $pushUserId, $device['token'], $localizedTitle, $localizedBody, $moreInfoUrl]);
             $queueCount++;
         }
     }
@@ -859,10 +930,10 @@ try {
     // Handle Public Address System (single message, no per-user language)
     if (in_array('pa', $channels, true)) {
         $qStmt = $pdo->prepare("
-            INSERT INTO notification_queue (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, status)
-            VALUES (?, ?, NULL, 'system', 'pa_system', 'pa', ?, ?, 'pending')
+            INSERT INTO notification_queue (log_id, alert_id, recipient_id, recipient_type, recipient_value, channel, title, message, more_info_url, status)
+            VALUES (?, ?, NULL, 'system', 'pa_system', 'pa', ?, ?, ?, 'pending')
         ");
-        $qStmt->execute([$logId, $alertId, $title, $body]);
+        $qStmt->execute([$logId, $alertId, $title, $body, $moreInfoUrl]);
         $queueCount++;
     }
 

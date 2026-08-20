@@ -796,7 +796,7 @@ $assetBase = '../ADMIN/header/';
                     <i class="fas fa-microphone"></i><span>You</span>
                 </div>
                 <div id="adminSpeakingLabel" style="display:flex; align-items:center; gap:6px; padding:6px 9px; border-radius:999px; background:rgba(255,255,255,0.06); transition:background .18s ease, color .18s ease;">
-                    <i class="fas fa-headset"></i><span>Response Team</span>
+                    <i class="fas fa-headset"></i><span>Emergency Admin</span>
                 </div>
             </div>
             
@@ -1686,7 +1686,7 @@ $assetBase = '../ADMIN/header/';
                         transferPc = null;
                         transferInProgress = false;
                         callConnectedAt = Date.now();
-                        setStatus('Connected to response team');
+                        setStatus('Connected to Emergency Communication admin');
                         setEndEnabled(true);
                         setCallActiveBannerVisible(true);
                         startTimer();
@@ -1810,15 +1810,13 @@ $assetBase = '../ADMIN/header/';
         }
 
         function currentCallLocationPayload() {
-            const caller = currentCallCallerPayload();
             const payload = {
-                ...(locationData || {}),
-                ...(caller?.address ? { address: caller.address } : {})
+                ...(locationData || {})
             };
             const hasCoordinates = payload.lat !== undefined && payload.lat !== null
                 && payload.lng !== undefined && payload.lng !== null;
             if (!payload.address && !hasCoordinates) {
-                payload.address = 'Location pending from transferred emergency';
+                payload.address = 'Incident location pending from caller';
             }
             return payload;
         }
@@ -1832,11 +1830,38 @@ $assetBase = '../ADMIN/header/';
                 color: 'red',
                 breakdown: {
                     source: 'live_emergency_call',
-                    reason: 'Live calls are routed directly to ERS for immediate response.'
+                    reason: 'Live emergency call requires immediate Emergency Communication intake.'
                 }
             };
         }
 
+        async function persistOpenEmergencyCall(offerPayload) {
+            if (!offerPayload || !offerPayload.callId) return false;
+            try {
+                const response = await fetch('../ADMIN/api/call-session.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        action: 'upsert_open',
+                        callId: offerPayload.callId,
+                        room: offerPayload.room || getCallRoom(offerPayload.callId),
+                        caller: offerPayload.caller || currentCallCallerPayload(),
+                        location: offerPayload.location || currentCallLocationPayload(),
+                        conversationId: offerPayload.conversationId || offerPayload.conversation_id || null,
+                        offerPayload
+                    })
+                });
+                const data = await response.json().catch(() => null);
+                if (!response.ok || !data || data.success === false) {
+                    throw new Error(data?.error || data?.message || 'Unable to save open emergency call.');
+                }
+                return true;
+            } catch (error) {
+                console.error('[call][user] failed to persist open call', error);
+                return false;
+            }
+        }
         function emergencyComCallReference(callIdValue = callId) {
             const normalizedCallId = String(callIdValue || '').trim();
             return normalizedCallId ? `call-${normalizedCallId}` : '';
@@ -2041,7 +2066,7 @@ $assetBase = '../ADMIN/header/';
                     if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
                     peerDisconnectTimer = null;
                     if (!callConnectedAt) callConnectedAt = Date.now();
-                    setStatus('Connected to response team');
+                    setStatus('Connected to Emergency Communication admin');
                     setEndEnabled(true);
                     setCancelVisible(false);
                     setCallActiveBannerVisible(true);
@@ -2051,7 +2076,7 @@ $assetBase = '../ADMIN/header/';
                 if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
                     if (transferInProgress) return;
                     if (!callId || peerDisconnectTimer) return;
-                    setStatus('Response team connection interrupted. Reconnecting...');
+                    setStatus('Emergency Communication admin connection interrupted. Reconnecting...');
                     setCancelVisible(true);
                     peerDisconnectTimer = setTimeout(() => {
                         peerDisconnectTimer = null;
@@ -2106,8 +2131,8 @@ $assetBase = '../ADMIN/header/';
                     }
                 }).catch(() => {});
 
-                // Emergency-Com only relays this call. The unique room is sent
-                // to ERS; no Two-Way Communication record is created here.
+                // Emergency-Com answers this call first. The private room is announced
+                // to the admin call lobby and can be manually transferred later.
 
                 initPeer();
 
@@ -2140,8 +2165,9 @@ $assetBase = '../ADMIN/header/';
                     location: locationData || null
                 };
 
-                s.emit("offer", offerPayload, activeCallRoom);
-                autoTransferCurrentCallToErs();
+                await persistOpenEmergencyCall(offerPayload);
+                s.emit("offer", offerPayload, CALL_LOBBY_ROOM);
+                setStatus('Waiting for Emergency Communication admin to answer...');
             } catch (e) {
                 console.error('[call][user] call failed', e);
                 setStatus('Call failed');

@@ -170,9 +170,9 @@ function phivolcsMessage(array $event): array
     $message = "PHIVOLCS recorded a magnitude {$magnitude} earthquake near {$location}.\n\n"
         . "Depth: {$depth} km\nApproximate distance from Quezon City: {$distance} km\n"
         . 'Issued: ' . date('M j, Y g:i A', (int)$event['event_timestamp']) . "\n\n"
-        . "Safety actions:\n• If shaking is felt: DROP, COVER, and HOLD ON.\n"
-        . "• Stay away from windows and damaged structures.\n"
-        . "• Expect aftershocks and follow PHIVOLCS and Quezon City advisories.";
+        . "Safety actions:\n- If shaking is felt: DROP, COVER, and HOLD ON.\n"
+        . "- Stay away from windows and damaged structures.\n"
+        . "- Monitor official PHIVOLCS and Quezon City advisories.";
     $message .= "\n\nSee more info: https://emergency-comm.alertaraqc.com/USERS/earthquake-monitoring.php";
     return [$title, $message];
 }

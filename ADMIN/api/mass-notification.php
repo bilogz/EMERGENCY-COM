@@ -82,23 +82,44 @@ function mnEnsureCategoriesSchema(PDO $pdo, string $tableName): void {
         }
     }
 
-    $count = (int)$pdo->query("SELECT COUNT(*) FROM {$tableName}")->fetchColumn();
-    if ($count === 0) {
-        $seed = [
-            ['Weather', 'fa-cloud-sun-rain', 'Weather advisories and rainfall alerts', '#3498db', 'active'],
-            ['Earthquake', 'fa-mountain', 'Earthquake and aftershock notifications', '#e74c3c', 'active'],
-            ['Fire', 'fa-fire', 'Fire incidents and evacuation notices', '#e67e22', 'active'],
-            ['Flood', 'fa-water', 'Flood warnings and water level updates', '#1abc9c', 'active'],
-            ['Bomb Threat', 'fa-bomb', 'Bomb threat and security alerts', '#9b59b6', 'active'],
-            ['Health', 'fa-heartbeat', 'Health advisories and public health notices', '#2ecc71', 'active'],
-            ['General', 'fa-bell', 'General advisories and announcements', '#3a7675', 'active'],
-        ];
-        $stmt = $pdo->prepare("
-            INSERT INTO {$tableName} (name, icon, description, color, status, created_at)
-            VALUES (?, ?, ?, ?, ?, NOW())
-        ");
-        foreach ($seed as $row) {
-            $stmt->execute($row);
+    $seed = [
+        ['Weather', 'fa-cloud-sun-rain', 'Weather advisories and rainfall alerts', '#3498db', 'active'],
+        ['Earthquake', 'fa-mountain', 'Earthquake and aftershock notifications', '#e74c3c', 'active'],
+        ['Fire', 'fa-fire', 'Fire incidents and evacuation notices', '#e67e22', 'active'],
+        ['Flood', 'fa-water', 'Flood warnings, rising water levels, flooded roads, and evacuation updates', '#1abc9c', 'active'],
+        ['Bomb Threat', 'fa-bomb', 'Bomb threat and security alerts', '#9b59b6', 'active'],
+        ['Health', 'fa-heartbeat', 'Health advisories and public health notices', '#2ecc71', 'active'],
+        ['General', 'fa-bell', 'General advisories and announcements', '#3a7675', 'active'],
+    ];
+    $findStmt = $pdo->prepare("SELECT id FROM {$tableName} WHERE LOWER(name) = LOWER(?) LIMIT 1");
+    $insertStmt = $pdo->prepare("
+        INSERT INTO {$tableName} (name, icon, description, color, status, created_at)
+        VALUES (?, ?, ?, ?, ?, NOW())
+    ");
+    $updateParts = [];
+    if (in_array('icon', $cols, true)) $updateParts[] = 'icon = ?';
+    if (in_array('description', $cols, true)) $updateParts[] = 'description = ?';
+    if (in_array('color', $cols, true)) $updateParts[] = 'color = ?';
+    if (in_array('status', $cols, true)) $updateParts[] = "status = 'active'";
+    $updateStmt = null;
+    if (!empty($updateParts)) {
+        $updateStmt = $pdo->prepare("UPDATE {$tableName} SET " . implode(', ', $updateParts) . " WHERE id = ?");
+    }
+
+    foreach ($seed as $row) {
+        $findStmt->execute([$row[0]]);
+        $existingId = (int)($findStmt->fetchColumn() ?: 0);
+        if ($existingId <= 0) {
+            $insertStmt->execute($row);
+            continue;
+        }
+        if ($updateStmt) {
+            $params = [];
+            if (in_array('icon', $cols, true)) $params[] = $row[1];
+            if (in_array('description', $cols, true)) $params[] = $row[2];
+            if (in_array('color', $cols, true)) $params[] = $row[3];
+            $params[] = $existingId;
+            $updateStmt->execute($params);
         }
     }
 }
@@ -231,6 +252,57 @@ function mnResolveNotificationLogsTable(PDO $pdo): string {
     return 'Admin #' . $adminId;
 }
 
+function mnGetDispatchAnalytics(PDO $pdo, string $logsTable, bool $hasDeletedColumn): array {
+    $analytics = [
+        'total_dispatches' => 0,
+        'completed_dispatches' => 0,
+        'in_progress_dispatches' => 0,
+        'delivered' => 0,
+        'attempted' => 0,
+        'failed' => 0,
+        'delivery_rate' => 0,
+    ];
+
+    try {
+        $where = $hasDeletedColumn ? 'WHERE is_deleted = 0' : '';
+        $stmt = $pdo->query("SELECT
+            COUNT(*) AS total_dispatches,
+            SUM(CASE WHEN LOWER(COALESCE(status, '')) IN ('completed', 'success', 'sent') THEN 1 ELSE 0 END) AS completed_dispatches,
+            SUM(CASE WHEN LOWER(COALESCE(status, '')) IN ('pending', 'queued', 'sending', 'processing', 'in_progress') THEN 1 ELSE 0 END) AS in_progress_dispatches
+            FROM {$logsTable} {$where}");
+        $row = $stmt ? ($stmt->fetch(PDO::FETCH_ASSOC) ?: []) : [];
+        foreach (['total_dispatches', 'completed_dispatches', 'in_progress_dispatches'] as $key) {
+            $analytics[$key] = (int)($row[$key] ?? 0);
+        }
+    } catch (Throwable $e) {
+        error_log('Mass Notification analytics log aggregate failed: ' . $e->getMessage());
+    }
+
+    try {
+        $exists = $pdo->query("SHOW TABLES LIKE 'notification_queue'");
+        if ($exists && $exists->fetch()) {
+            $joinFilter = $hasDeletedColumn ? 'WHERE nl.is_deleted = 0' : '';
+            $stmt = $pdo->query("SELECT
+                COUNT(q.id) AS attempted,
+                SUM(CASE WHEN q.status = 'sent' THEN 1 ELSE 0 END) AS delivered,
+                SUM(CASE WHEN q.status = 'failed' THEN 1 ELSE 0 END) AS failed
+                FROM notification_queue q
+                INNER JOIN {$logsTable} nl ON nl.id = q.log_id
+                {$joinFilter}");
+            $row = $stmt ? ($stmt->fetch(PDO::FETCH_ASSOC) ?: []) : [];
+            $analytics['attempted'] = (int)($row['attempted'] ?? 0);
+            $analytics['delivered'] = (int)($row['delivered'] ?? 0);
+            $analytics['failed'] = (int)($row['failed'] ?? 0);
+            $analytics['delivery_rate'] = $analytics['attempted'] > 0
+                ? (int)round(($analytics['delivered'] / max(1, $analytics['attempted'])) * 100)
+                : 0;
+        }
+    } catch (Throwable $e) {
+        error_log('Mass Notification analytics queue aggregate failed: ' . $e->getMessage());
+    }
+
+    return $analytics;
+}
 function mnCategoryNameById(PDO $pdo, $categoryId): string {
     $id = (int)$categoryId;
     if ($id <= 0) return 'General';
@@ -789,7 +861,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
             $orderBy = 'id';
         }
 
-        $whereDeleted = in_array('is_deleted', $cols, true) ? 'WHERE is_deleted = 0' : '';
+        $hasDeletedColumn = in_array('is_deleted', $cols, true);
+        $whereDeleted = $hasDeletedColumn ? 'WHERE is_deleted = 0' : '';
+        $analytics = mnGetDispatchAnalytics($pdo, $logsTable, $hasDeletedColumn);
         $totalStmt = $pdo->query("SELECT COUNT(*) FROM {$logsTable} {$whereDeleted}");
         $totalRows = $totalStmt ? (int)$totalStmt->fetchColumn() : 0;
         $stmt = $pdo->query("
@@ -976,6 +1050,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'send') {
         echo json_encode([
             'success' => true,
             'notifications' => $notifications,
+            'analytics' => $analytics,
             'pagination' => [
                 'page' => $page,
                 'limit' => $limit,

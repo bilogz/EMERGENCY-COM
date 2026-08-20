@@ -39,6 +39,8 @@ function ensureNotificationQueueTableForWorker(PDO $pdo): bool {
                 channel VARCHAR(20) NOT NULL DEFAULT 'push',
                 title VARCHAR(255) NOT NULL DEFAULT '',
                 message TEXT NULL,
+                more_info_url VARCHAR(700) NULL,
+                notification_channel VARCHAR(120) NULL,
                 status VARCHAR(20) NOT NULL DEFAULT 'pending',
                 delivery_status VARCHAR(20) NULL,
                 error_message TEXT NULL,
@@ -79,6 +81,8 @@ try {
     $queueHasCreatedAt = false;
     $queueHasDeliveryStatus = false;
     $queueHasErrorMessage = false;
+    $queueHasMoreInfoUrl = false;
+    $queueHasNotificationChannel = false;
     $queueHasProcessedAt = false;
     $queueHasDeliveredAt = false;
     try {
@@ -87,6 +91,14 @@ try {
         $queueHasCreatedAt = in_array('created_at', $queueCols, true);
         $queueHasDeliveryStatus = in_array('delivery_status', $queueCols, true);
         $queueHasErrorMessage = in_array('error_message', $queueCols, true);
+        $queueHasMoreInfoUrl = in_array('more_info_url', $queueCols, true);
+        if (!$queueHasMoreInfoUrl) {
+            try { $pdo->exec("ALTER TABLE notification_queue ADD COLUMN more_info_url VARCHAR(700) NULL AFTER message"); $queueHasMoreInfoUrl = true; } catch (PDOException $e) {}
+        }
+        $queueHasNotificationChannel = in_array('notification_channel', $queueCols, true);
+        if (!$queueHasNotificationChannel) {
+            try { $pdo->exec("ALTER TABLE notification_queue ADD COLUMN notification_channel VARCHAR(120) NULL AFTER more_info_url"); $queueHasNotificationChannel = true; } catch (PDOException $e) {}
+        }
         $queueHasProcessedAt = in_array('processed_at', $queueCols, true);
         $queueHasDeliveredAt = in_array('delivered_at', $queueCols, true);
         if (!in_array('alert_id', $queueCols, true)) {
@@ -136,13 +148,19 @@ try {
                     break;
                 case 'push':
                     $alertMeta = getWorkerAlertMetadata($pdo, (int)($job['alert_id'] ?? 0));
+                    $forcedChannel = workerAutomatedNotificationChannelForJob($pdo, $job);
+                    $queuedChannel = trim((string)($job['notification_channel'] ?? ''));
+                    $queuedChannel = $forcedChannel ?: ($queuedChannel !== ''
+                        ? workerValidNotificationChannel($queuedChannel)
+                        : workerNotificationChannelForToken($pdo, (string)$job['recipient_value']));
                     $success = sendFCM($job['recipient_value'], [
                         'title' => $job['title'],
                         'body' => $job['message'],
                         'alert_id' => (string)($job['alert_id'] ?? ''),
                         'severity' => $alertMeta['severity'],
                         'category' => $alertMeta['category'],
-                        'notification_channel' => workerNotificationChannelForToken($pdo, (string)$job['recipient_value'])
+                        'more_info_url' => (string)($job['more_info_url'] ?? ''),
+                        'notification_channel' => $queuedChannel
                     ], $error);
                     if (!$success && isPermanentPushTokenError($error)) {
                         disableInvalidPushToken($pdo, (string)$job['recipient_value'], $error);
@@ -512,8 +530,11 @@ function getFirebaseAccessToken(array $serviceAccount, &$error = null): ?string 
     return $cached['token'];
 }
 
-function workerAlertMoreInfoUrl(string $category): string {
-    $needle = strtolower($category);
+function workerAlertMoreInfoUrl(string $category, string $body = ''): string {
+    $needle = strtolower($category . ' ' . $body);
+    if (strpos($needle, 'pagasa.dost.gov.ph/flood') !== false || strpos($needle, 'flood-information') !== false) {
+        return 'https://pagasa.dost.gov.ph/flood#flood-information';
+    }
     if (preg_match('/weather|pagasa|rain|flood|typhoon|storm|wind|landslide/', $needle)) {
         return 'https://emergency-comm.alertaraqc.com/USERS/weather-map.php';
     }
@@ -532,6 +553,22 @@ function workerValidNotificationChannel(?string $channel): string {
     return preg_match('/^[A-Za-z0-9_.-]{1,120}$/', $channel) ? $channel : FCM_EMERGENCY_CHANNEL_ID;
 }
 
+function workerAutomatedNotificationChannelForJob(PDO $pdo, array $job): ?string {
+    $logId = (int)($job['log_id'] ?? 0);
+    if ($logId <= 0) return null;
+    try {
+        $stmt = $pdo->prepare("SELECT channel, recipients, sent_by, message FROM notification_logs WHERE id = ? LIMIT 1");
+        $stmt->execute([$logId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $haystack = strtolower(implode(' ', array_map('strval', $row)));
+        if (preg_match('/auto|automated|pagasa|phivolcs|open_meteo|weather_risk|earthquake|ai_system/', $haystack)) {
+            return FCM_EMERGENCY_CHANNEL_ID;
+        }
+    } catch (Throwable $e) {
+        error_log('Unable to inspect automated notification source: ' . $e->getMessage());
+    }
+    return null;
+}
 function workerNotificationChannelForToken(PDO $pdo, string $token): string {
     $token = trim($token);
     if ($token === '') return FCM_EMERGENCY_CHANNEL_ID;
@@ -586,7 +623,7 @@ function sendFCM($token, $payload, &$error = null) {
     foreach (['source', 'latitude', 'longitude', 'locationName'] as $key) {
         if (isset($payload[$key]) && trim((string)$payload[$key]) !== '') $data[$key] = (string)$payload[$key];
     }
-    $moreInfoUrl = workerAlertMoreInfoUrl($data['category']);
+    $moreInfoUrl = trim((string)($payload['more_info_url'] ?? $payload['moreInfoUrl'] ?? ''));
     if ($moreInfoUrl !== '') $data['moreInfoUrl'] = $moreInfoUrl;
     $channelId = workerValidNotificationChannel((string)($payload['notification_channel'] ?? FCM_EMERGENCY_CHANNEL_ID));
     $isSilentChannel = $channelId === FCM_SILENT_CHANNEL_ID;
@@ -665,7 +702,7 @@ function sendExpoPushNotification(string $token, array $payload, &$error = null)
     foreach (['source', 'latitude', 'longitude', 'locationName'] as $key) {
         if (isset($payload[$key]) && trim((string)$payload[$key]) !== '') $message['data'][$key] = (string)$payload[$key];
     }
-    $moreInfoUrl = workerAlertMoreInfoUrl((string)($message['data']['category'] ?? ''));
+    $moreInfoUrl = trim((string)($payload['more_info_url'] ?? $payload['moreInfoUrl'] ?? ''));
     if ($moreInfoUrl !== '') $message['data']['moreInfoUrl'] = $moreInfoUrl;
     $ch = curl_init('https://exp.host/--/api/v2/push/send');
     curl_setopt_array($ch, [
@@ -697,6 +734,7 @@ function broadcastPA($message) {
     // error_log("PA Broadcast: $message");
     return true;
 }
+
 
 
 

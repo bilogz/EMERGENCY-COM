@@ -119,7 +119,7 @@ if (!function_exists('sidebarRouteContains')) {
                         </a>
                     </li>
                     
-                    <!-- Reports -->
+                    <!-- Emergency Reports -->
                     <?php
                     $isReportsPage = (
                         basename($_SERVER['PHP_SELF']) == 'two-way-communication.php'
@@ -127,26 +127,44 @@ if (!function_exists('sidebarRouteContains')) {
                         || sidebarRouteContains('/sidebar/two-way-comm/citizen')
                     );
                     $isGeneralEnquiriesPage = sidebarRouteContains('/sidebar/two-way-comm/general');
+                    $isEmergencyCallPage = sidebarRouteContains('/sidebar/two-way-comm/call');
+                    $isEmergencyReportsActive = $isReportsPage || $isGeneralEnquiriesPage || $isEmergencyCallPage;
                     ?>
                     <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>two-way-comm/citizen/" class="sidebar-link sidebar-accent-2way <?php echo $isReportsPage ? 'active' : ''; ?>">
-                            <i class="fas fa-clipboard-list sidebar-icon" aria-hidden="true"></i>
-                            <span class="sidebar-link-label">Reports</span>
-                            <span class="sidebar-realtime-badge" id="sidebarReportsUnreadBadge"
-                                data-label-singular="new report" data-label-plural="new reports"
-                                data-active-module="<?php echo $isReportsPage ? '1' : '0'; ?>" hidden></span>
+                        <a href="javascript:void(0)" class="sidebar-link sidebar-submenu-toggle sidebar-accent-2way <?php echo $isEmergencyReportsActive ? 'active' : ''; ?>">
+                            <i class="fas fa-file-medical-alt sidebar-icon" aria-hidden="true"></i>
+                            <span>Emergency Reports</span>
+                            <i class="fas fa-chevron-down submenu-icon" aria-hidden="true"></i>
                         </a>
-                    </li>
-
-                    <!-- General Enquiries -->
-                    <li class="sidebar-menu-item">
-                        <a href="<?php echo $sidebarBase; ?>two-way-comm/general/" class="sidebar-link sidebar-accent-2way <?php echo $isGeneralEnquiriesPage ? 'active' : ''; ?>">
-                            <i class="fas fa-comments sidebar-icon" aria-hidden="true"></i>
-                            <span class="sidebar-link-label">General Enquiries</span>
-                            <span class="sidebar-realtime-badge" id="sidebarGeneralUnreadBadge"
-                                data-label-singular="new enquiry" data-label-plural="new enquiries"
-                                data-active-module="<?php echo $isGeneralEnquiriesPage ? '1' : '0'; ?>" hidden></span>
-                        </a>
+                        <ul class="sidebar-submenu <?php echo $isEmergencyReportsActive ? 'sidebar-submenu-open' : ''; ?>">
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-comm/citizen/" class="sidebar-link sidebar-accent-2way <?php echo $isReportsPage ? 'active' : ''; ?>">
+                                    <i class="fas fa-clipboard-list sidebar-icon" aria-hidden="true"></i>
+                                    <span class="sidebar-link-label">Reports</span>
+                                    <span class="sidebar-realtime-badge" id="sidebarReportsUnreadBadge"
+                                        data-label-singular="new report" data-label-plural="new reports"
+                                        data-active-module="<?php echo $isReportsPage ? '1' : '0'; ?>" hidden></span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-comm/general/" class="sidebar-link sidebar-accent-2way <?php echo $isGeneralEnquiriesPage ? 'active' : ''; ?>">
+                                    <i class="fas fa-comments sidebar-icon" aria-hidden="true"></i>
+                                    <span class="sidebar-link-label">General Enquiries</span>
+                                    <span class="sidebar-realtime-badge" id="sidebarGeneralUnreadBadge"
+                                        data-label-singular="new enquiry" data-label-plural="new enquiries"
+                                        data-active-module="<?php echo $isGeneralEnquiriesPage ? '1' : '0'; ?>" hidden></span>
+                                </a>
+                            </li>
+                            <li class="sidebar-menu-item">
+                                <a href="<?php echo $sidebarBase; ?>two-way-comm/call/" class="sidebar-link sidebar-accent-2way <?php echo $isEmergencyCallPage ? 'active' : ''; ?>">
+                                    <i class="fas fa-phone-volume sidebar-icon" aria-hidden="true"></i>
+                                    <span class="sidebar-link-label">Emergency Call</span>
+                                    <span class="sidebar-realtime-badge" id="sidebarEmergencyCallBadge"
+                                        data-label-singular="new call" data-label-plural="new calls"
+                                        data-active-module="<?php echo $isEmergencyCallPage ? '1' : '0'; ?>" hidden></span>
+                                </a>
+                            </li>
+                        </ul>
                     </li>
                     <!-- Automated Warnings -->
                     <?php 
@@ -388,4 +406,152 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+
+<style>
+.sidebar-call-toast {
+    position: fixed;
+    right: 22px;
+    bottom: 24px;
+    width: min(340px, calc(100vw - 32px));
+    z-index: 99999;
+    background: #0f1b2d;
+    color: #fff;
+    border: 1px solid rgba(81, 169, 166, 0.45);
+    border-left: 5px solid #dc2626;
+    border-radius: 12px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.28);
+    padding: 14px;
+    display: none;
+    gap: 12px;
+    align-items: flex-start;
+}
+.sidebar-call-toast.show { display: flex; animation: sidebarCallToastIn .18s ease-out; }
+.sidebar-call-toast__icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: rgba(220,38,38,.18);
+    display: grid;
+    place-items: center;
+    color: #fecaca;
+    flex: 0 0 auto;
+}
+.sidebar-call-toast__body { flex: 1; min-width: 0; }
+.sidebar-call-toast__title { font-weight: 900; margin-bottom: 3px; }
+.sidebar-call-toast__text { font-size: 12px; opacity: .82; line-height: 1.35; }
+.sidebar-call-toast__actions { margin-top: 10px; display: flex; gap: 8px; }
+.sidebar-call-toast__actions a,
+.sidebar-call-toast__actions button {
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-weight: 800;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 12px;
+}
+.sidebar-call-toast__actions a { background: #4f9592; color: #fff; }
+.sidebar-call-toast__actions button { background: rgba(255,255,255,.1); color: #fff; }
+@keyframes sidebarCallToastIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+</style>
+<div class="sidebar-call-toast" id="sidebarEmergencyCallToast" role="status" aria-live="polite">
+    <div class="sidebar-call-toast__icon"><i class="fas fa-phone-alt"></i></div>
+    <div class="sidebar-call-toast__body">
+        <div class="sidebar-call-toast__title">Incoming emergency call</div>
+        <div class="sidebar-call-toast__text" id="sidebarEmergencyCallToastText">A caller is waiting in the emergency call queue.</div>
+        <div class="sidebar-call-toast__actions">
+            <a href="<?php echo $sidebarBase; ?>two-way-comm/call/">Open Call Queue</a>
+            <button type="button" id="sidebarEmergencyCallToastDismiss">Dismiss</button>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    const badge = document.getElementById('sidebarEmergencyCallBadge');
+    const toast = document.getElementById('sidebarEmergencyCallToast');
+    const toastText = document.getElementById('sidebarEmergencyCallToastText');
+    const dismiss = document.getElementById('sidebarEmergencyCallToastDismiss');
+    if (!badge) return;
+    const isCallPage = badge.dataset.activeModule === '1';
+    const seenKey = 'alertaraqc_seen_emergency_call_toasts';
+    const ownerPrefix = 'alertaraqc_active_call_';
+    let seenCalls = new Set();
+    try { seenCalls = new Set(JSON.parse(sessionStorage.getItem(seenKey) || '[]')); } catch (e) {}
+
+    function adminHasActiveCallLock() {
+        try {
+            const now = Date.now();
+            for (let i = 0; i < localStorage.length; i += 1) {
+                const key = localStorage.key(i) || '';
+                if (!key.startsWith(ownerPrefix)) continue;
+                const item = JSON.parse(localStorage.getItem(key) || '{}');
+                const startedAt = Number(item.startedAt || 0);
+                if (item.callId && startedAt && now - startedAt < 4 * 60 * 60 * 1000) return true;
+            }
+        } catch (e) {}
+        return false;
+    }
+
+    function setBadge(count) {
+        const total = Number(count || 0);
+        if (isCallPage || total <= 0) {
+            badge.hidden = true;
+            badge.textContent = '';
+            return;
+        }
+        badge.hidden = false;
+        badge.textContent = total + ' ' + (total === 1 ? badge.dataset.labelSingular : badge.dataset.labelPlural);
+    }
+
+    function showCallToast(call) {
+        if (isCallPage || adminHasActiveCallLock() || !toast || !call || !call.callId) return;
+        if (seenCalls.has(call.callId)) return;
+        seenCalls.add(call.callId);
+        try { sessionStorage.setItem(seenKey, JSON.stringify(Array.from(seenCalls).slice(-100))); } catch (e) {}
+        const callerName = call.caller && call.caller.name ? call.caller.name : 'Emergency Call User';
+        const location = call.location && (call.location.address || call.location.formatted || call.location.text) ? (call.location.address || call.location.formatted || call.location.text) : 'Location pending';
+        if (toastText) toastText.textContent = callerName + ' is waiting. ' + location;
+        toast.classList.add('show');
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) {
+                const ctx = new AudioCtx();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = 880;
+                gain.gain.value = 0.035;
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                setTimeout(() => { try { osc.stop(); ctx.close(); } catch (e) {} }, 160);
+            }
+        } catch (e) {}
+    }
+
+    if (dismiss && toast) dismiss.addEventListener('click', () => toast.classList.remove('show'));
+
+    function connectCallLobby() {
+        if (!window.io) return;
+        const socket = window.io(window.location.origin, { path: '/socket.io', transports: ['websocket', 'polling'], timeout: 5000, reconnection: true });
+        socket.on('connect', () => socket.emit('join', 'emergency-lobby'));
+        socket.on('call-queue', payload => setBadge(Array.isArray(payload && payload.open) ? payload.open.length : 0));
+        socket.on('call-created', payload => {
+            const call = payload && payload.call ? payload.call : null;
+            if (call) showCallToast(call);
+        });
+    }
+
+    if (window.io) {
+        connectCallLobby();
+    } else {
+        const script = document.createElement('script');
+        script.src = '/socket.io/socket.io.js';
+        script.onload = connectCallLobby;
+        script.onerror = function() {};
+        document.head.appendChild(script);
+    }
+})();
+</script>
 <script src="<?php echo $sidebarBase; ?>../assets/shared/js/draft-persist.js?v=<?php echo filemtime(__DIR__ . '/../../assets/shared/js/draft-persist.js'); ?>"></script>
+

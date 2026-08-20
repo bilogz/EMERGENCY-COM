@@ -96,6 +96,55 @@ function responseTeamActionFromUrl(string $targetUrl): string {
     return trim((string)($params['action'] ?? ''));
 }
 
+function transferCleanConversationText($value): string {
+    $text = preg_replace('/\[(CALL_ENDED|CALL_DECLINED|CALL_TRANSFERRED|TRANSFERRED_PENDING|AUTO_TRANSFERRED_TO_ERS|ERS_STATUS)\]/i', '', (string)$value);
+    $text = strip_tags((string)$text);
+    $text = preg_replace('/\s+/', ' ', (string)$text);
+    return trim((string)$text);
+}
+
+function transferBuildConversationSummary(array $messages, array $context): string {
+    $lines = ['Emergency report conversation summary'];
+    $caller = is_array($context['caller'] ?? null) ? $context['caller'] : [];
+    $location = is_array($context['location'] ?? null) ? $context['location'] : [];
+    $priority = is_array($context['priority'] ?? null) ? $context['priority'] : [];
+    $callerName = transferCleanConversationText($caller['name'] ?? 'Guest User');
+    $callerPhone = transferCleanConversationText($caller['phone'] ?? 'Not provided');
+    $type = transferCleanConversationText($context['emergencyType'] ?? 'Emergency report');
+    $locationText = transferCleanConversationText($caller['address'] ?? ($location['address'] ?? ''));
+    if ($locationText === '' && isset($location['lat'], $location['lng'])) {
+        $locationText = transferCleanConversationText($location['lat'] . ', ' . $location['lng']);
+    }
+    if ($locationText === '') {
+        $locationText = 'Not specified';
+    }
+    $priorityLabel = transferCleanConversationText($priority['label'] ?? $priority['priority'] ?? $priority['level'] ?? 'Not scored');
+    $priorityScore = isset($priority['score']) ? (string)(int)$priority['score'] : '';
+    $lines[] = 'Citizen: ' . ($callerName !== '' ? $callerName : 'Guest User');
+    $lines[] = 'Phone: ' . ($callerPhone !== '' ? $callerPhone : 'Not provided');
+    $lines[] = 'Emergency type: ' . ($type !== '' ? $type : 'Emergency report');
+    $lines[] = 'Location: ' . $locationText;
+    $lines[] = 'Priority: ' . trim($priorityLabel . ' ' . $priorityScore);
+    $history = [];
+    foreach ($messages as $message) {
+        if (!is_array($message)) {
+            continue;
+        }
+        $body = transferCleanConversationText($message['message_text'] ?? $message['text'] ?? '');
+        if ($body === '') {
+            continue;
+        }
+        $speaker = transferCleanConversationText($message['sender_name'] ?? $message['sender_type'] ?? 'Unknown');
+        $createdAt = transferCleanConversationText($message['created_at'] ?? '');
+        $history[] = '- ' . ($speaker !== '' ? $speaker : 'Unknown') . ($createdAt !== '' ? ' (' . $createdAt . ')' : '') . ': ' . $body;
+    }
+    if ($history) {
+        $lines[] = '';
+        $lines[] = 'Conversation history:';
+        $lines = array_merge($lines, array_slice($history, -20));
+    }
+    return trim(implode("\n", array_filter($lines, static fn($line) => $line !== null)));
+}
 function responseTeamAcceptedResponse($body): bool {
     $decoded = json_decode((string)$body, true);
     if (!is_array($decoded)) {
@@ -105,12 +154,72 @@ function responseTeamAcceptedResponse($body): bool {
         if (!array_key_exists($key, $decoded)) {
             continue;
         }
-        return $decoded[$key] === true
+        $accepted = $decoded[$key] === true
             || $decoded[$key] === 1
             || $decoded[$key] === '1'
             || strtolower((string)$decoded[$key]) === 'true';
+        if (!$accepted) {
+            return false;
+        }
+        break;
     }
-    return false;
+    foreach (['incident_id', 'call_id', 'reference_no', 'transfer_id'] as $key) {
+        if (isset($decoded[$key]) && trim((string)$decoded[$key]) !== '') {
+            return true;
+        }
+    }
+    $status = strtolower(trim((string)($decoded['status'] ?? '')));
+    return in_array($status, ['new', 'pending', 'received', 'created', 'success'], true)
+        || (($decoded['success'] ?? null) === true)
+        || (($decoded['ok'] ?? null) === true);
+}
+
+function responseTeamNormalizeIncidentType($value): string {
+    $raw = strtolower(trim((string)$value));
+    $raw = str_replace(['_', '-'], ' ', $raw);
+    $raw = preg_replace('/\s+/', ' ', $raw) ?: '';
+    if ($raw === '') {
+        return 'other';
+    }
+    $aliases = [
+        'medical' => 'medical',
+        'medical emergency' => 'medical',
+        'medical needs' => 'medical',
+        'health' => 'medical',
+        'fire' => 'fire',
+        'fire emergency' => 'fire',
+        'fire hazards' => 'fire',
+        'police' => 'police',
+        'crime' => 'police',
+        'crime public safety' => 'police',
+        'crime/public safety' => 'police',
+        'public safety' => 'police',
+        'traffic' => 'traffic',
+        'vehicular' => 'traffic',
+        'vehicular accident' => 'traffic',
+        'traffic vehicular incidents' => 'traffic',
+        'accident' => 'traffic',
+        'rescue' => 'rescue',
+        'flood' => 'rescue',
+        'floods natural hazards' => 'rescue',
+        'natural hazards' => 'rescue',
+        'incident report' => 'other',
+        'incident' => 'other',
+        'report' => 'other',
+        'general inquiry' => 'other',
+        'other' => 'other',
+        'other report' => 'other',
+        'other incident' => 'other',
+    ];
+    if (isset($aliases[$raw])) {
+        return $aliases[$raw];
+    }
+    foreach ($aliases as $needle => $normalized) {
+        if ($needle !== '' && str_contains($raw, $needle)) {
+            return $normalized;
+        }
+    }
+    return 'other';
 }
 
 function responseTeamFormPayload(array $payload, string $apiKey, string $action): array {
@@ -125,10 +234,7 @@ function responseTeamFormPayload(array $payload, string $apiKey, string $action)
     if ($description === '') {
         $description = 'Transferred emergency call/report from AlertaraQC two-way communication.';
     }
-    $incidentType = trim((string)($payload['emergencyType'] ?? ''));
-    if ($incidentType === '') {
-        $incidentType = 'emergency';
-    }
+    $incidentType = responseTeamNormalizeIncidentType($payload['emergencyType'] ?? $payload['incident_type'] ?? $payload['type'] ?? '');
     $incidentPriority = is_array($payload['incidentPriority'] ?? null) ? $payload['incidentPriority'] : [];
     $priorityLevel = strtolower(trim((string)($incidentPriority['priority'] ?? $incidentPriority['level'] ?? $payload['priority'] ?? 'high')));
     $priorityScore = (int)($incidentPriority['score'] ?? 0);
@@ -178,6 +284,8 @@ function responseTeamFormPayload(array $payload, string $apiKey, string $action)
         'incident_type' => $incidentType,
         'emergency_type' => $incidentType,
         'emergencyType' => $incidentType,
+        'emergency_type_label' => $payload['emergencyTypeLabel'] ?? $payload['emergencyType'] ?? $incidentType,
+        'emergencyTypeLabel' => $payload['emergencyTypeLabel'] ?? $payload['emergencyType'] ?? $incidentType,
         'priority' => $priorityLevel,
         'incident_priority' => $priorityLevel,
         'incident_priority_level' => $priorityLevel,
@@ -507,8 +615,19 @@ if (!empty($messages)) {
 }
 
 $providedIncidentPriority = is_array($input['incidentPriority'] ?? null) ? $input['incidentPriority'] : [];
-$descriptionInput = trim((string)($input['description'] ?? ($input['details'] ?? $latestMessage)));
 $emergencyTypeInput = trim((string)($input['emergencyType'] ?? ''));
+$adminDescriptionInput = trim((string)($input['description'] ?? ($input['details'] ?? '')));
+$summaryContext = [
+    'caller' => is_array($input['caller'] ?? null) ? $input['caller'] : [],
+    'location' => is_array($input['location'] ?? null) ? $input['location'] : [],
+    'emergencyType' => $emergencyTypeInput,
+    'priority' => $providedIncidentPriority,
+];
+$conversationSummary = !empty($messages) ? transferBuildConversationSummary($messages, $summaryContext) : '';
+$descriptionInput = $conversationSummary !== '' ? $conversationSummary : trim((string)($adminDescriptionInput !== '' ? $adminDescriptionInput : $latestMessage));
+if ($conversationSummary !== '' && $adminDescriptionInput !== '' && transferCleanConversationText($adminDescriptionInput) !== transferCleanConversationText($latestMessage)) {
+    $descriptionInput .= "\n\nAdmin transfer note:\n" . $adminDescriptionInput;
+}
 $requestedTransferType = strtolower(trim((string)($input['transfer_type'] ?? $input['transferType'] ?? '')));
 $hasLiveTransferRoom = $callId !== '' && trim((string)($input['room'] ?? '')) !== '';
 if ($requestedTransferType === '') {
@@ -673,6 +792,12 @@ $payload = [
     'transferredAt' => gmdate('c'),
 ];
 $payload['transfer_id'] = $payload['transferId'];
+$originalEmergencyType = trim((string)($payload['emergencyType'] ?? $payload['incident_type'] ?? $payload['type'] ?? ''));
+$normalizedEmergencyType = responseTeamNormalizeIncidentType($originalEmergencyType);
+$payload['emergencyTypeLabel'] = $originalEmergencyType !== '' ? $originalEmergencyType : $normalizedEmergencyType;
+$payload['emergency_type_label'] = $payload['emergencyTypeLabel'];
+$payload['emergencyType'] = $normalizedEmergencyType;
+$payload['emergency_type'] = $normalizedEmergencyType;
 
 $payloadCaller = is_array($payload['caller'] ?? null) ? $payload['caller'] : [];
 $payloadLocation = is_array($payload['locationData'] ?? null) ? $payload['locationData'] : [];

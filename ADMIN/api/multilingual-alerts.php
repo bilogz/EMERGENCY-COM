@@ -156,7 +156,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->query("
             SELECT language_code, language_name, native_name, flag_emoji, is_active, is_ai_supported, priority
             FROM {$languagesTable}
-            WHERE is_active = 1 AND LOWER(language_code) IN ('en', 'fil', 'tl', 'ceb', 'bis')
+            WHERE is_active = 1
+              AND language_code IN ('en', 'tl')
             ORDER BY priority DESC, language_name ASC
         ");
         $languages = $stmt->fetchAll();
@@ -175,8 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (PDOException $e) {
         $languages = [
             ['language_code' => 'en', 'language_name' => 'English', 'native_name' => 'English', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1],
-            ['language_code' => 'fil', 'language_name' => 'Tagalog (Filipino)', 'native_name' => 'Tagalog', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1],
-            ['language_code' => 'ceb', 'language_name' => 'Cebuano (Bisaya)', 'native_name' => 'Bisaya / Cebuano', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1]
+            ['language_code' => 'tl', 'language_name' => 'Tagalog', 'native_name' => 'Tagalog', 'flag_emoji' => '', 'is_active' => 1, 'is_ai_supported' => 1]
         ];
         echo json_encode([
             'success' => true,

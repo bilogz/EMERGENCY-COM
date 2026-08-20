@@ -62,7 +62,9 @@ $statusMap = [
     'ongoing' => 'ongoing_dispatch',
     'ongoing_dispatch' => 'ongoing_dispatch',
     'in_progress' => 'ongoing_dispatch',
-    'resolved' => 'resolved',
+    'resolved' => 'completed',
+    'done' => 'completed',
+    'action_completed' => 'completed',
     'complete' => 'completed',
     'completed' => 'completed',
 ];
@@ -76,6 +78,31 @@ if ($status === '') {
 $transferId = trim((string)($input['transferId'] ?? $input['transfer_id'] ?? ''));
 $conversationId = (int)($input['conversationId'] ?? $input['conversation_id'] ?? 0);
 $note = trim((string)($input['note'] ?? $input['message'] ?? ''));
+$proofUrl = trim((string)(
+    $input['proofUrl']
+    ?? $input['proof_url']
+    ?? $input['photoUrl']
+    ?? $input['photo_url']
+    ?? $input['proofPhoto']
+    ?? $input['proof_photo']
+    ?? ''
+));
+if ($proofUrl === '' && isset($input['attachments']) && is_array($input['attachments'])) {
+    foreach ($input['attachments'] as $attachment) {
+        if (!is_array($attachment)) {
+            continue;
+        }
+        $candidate = trim((string)($attachment['url'] ?? $attachment['href'] ?? ''));
+        if ($candidate !== '') {
+            $proofUrl = $candidate;
+            break;
+        }
+    }
+}
+$noteForStorage = $note;
+if ($proofUrl !== '') {
+    $noteForStorage = trim($noteForStorage . ($noteForStorage !== '' ? "\n" : '') . 'Proof photo: ' . $proofUrl);
+}
 
 try {
     $hasResponseStatus = ensureIncidentReportStatusColumn($pdo);
@@ -114,7 +141,7 @@ try {
         WHERE id = ?
     ")->execute([
         $status,
-        $note !== '' ? $note : null,
+        $noteForStorage !== '' ? $noteForStorage : null,
         $status === 'completed' ? 'completed' : 'sent',
         (int)$audit['id'],
     ]);
@@ -128,7 +155,7 @@ try {
 
         $label = ucwords(str_replace('_', ' ', $status));
         $workflow = $status === 'completed' ? 'resolved' : 'waiting_user';
-        $message = '[ERS_STATUS]' . $label . ($note !== '' ? ': ' . $note : '');
+        $message = '[ERS_STATUS]' . $label . ($noteForStorage !== '' ? ': ' . $noteForStorage : '');
         $pdo->prepare("
             UPDATE conversations
             SET status = ?, last_message = ?, last_message_time = NOW(), updated_at = NOW()
@@ -144,11 +171,20 @@ try {
         ");
         $lastStatus->execute([$conversationId]);
         if ((string)$lastStatus->fetchColumn() !== $message) {
-            $pdo->prepare("
-                INSERT INTO chat_messages
-                    (conversation_id, sender_id, sender_name, sender_type, message_text, ip_address, device_info, is_read, created_at)
-                VALUES (?, 'ers', 'Emergency Response System', 'system', ?, '', 'response_team_status', 0, NOW())
-            ")->execute([$conversationId, $message]);
+            $hasProofAttachment = $proofUrl !== '' && twc_ensure_chat_attachment_columns($pdo);
+            if ($hasProofAttachment) {
+                $pdo->prepare("
+                    INSERT INTO chat_messages
+                        (conversation_id, sender_id, sender_name, sender_type, message_text, attachment_url, ip_address, device_info, is_read, created_at)
+                    VALUES (?, 'ers', 'Emergency Response System', 'system', ?, ?, '', 'response_team_status', 0, NOW())
+                ")->execute([$conversationId, $message, $proofUrl]);
+            } else {
+                $pdo->prepare("
+                    INSERT INTO chat_messages
+                        (conversation_id, sender_id, sender_name, sender_type, message_text, ip_address, device_info, is_read, created_at)
+                    VALUES (?, 'ers', 'Emergency Response System', 'system', ?, '', 'response_team_status', 0, NOW())
+                ")->execute([$conversationId, $message]);
+            }
         }
     }
 
@@ -161,10 +197,10 @@ try {
         };
         if ($hasResponseStatus) {
             $pdo->prepare('UPDATE incident_reports SET status = ?, response_status = ?, admin_notes = ? WHERE id = ?')
-                ->execute([$legacyStatus, $status, $note !== '' ? $note : null, $reportId]);
+                ->execute([$legacyStatus, $status, $noteForStorage !== '' ? $noteForStorage : null, $reportId]);
         } else {
             $pdo->prepare('UPDATE incident_reports SET status = ?, admin_notes = ? WHERE id = ?')
-                ->execute([$legacyStatus, $note !== '' ? $note : null, $reportId]);
+                ->execute([$legacyStatus, $noteForStorage !== '' ? $noteForStorage : null, $reportId]);
         }
     }
     $pdo->commit();

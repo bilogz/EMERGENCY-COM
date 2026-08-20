@@ -27,15 +27,16 @@ try {
         $fcm_token = $native_fcm_token !== '' ? $native_fcm_token : $primary_push_token;
         $token_type = $native_fcm_token !== '' ? 'fcm' : trim((string)($data['token_type'] ?? 'expo'));
         $permission = trim((string)($data['notification_permission'] ?? 'granted'));
-        $notification_channel = trim((string)($data['notification_channel'] ?? 'alertara-emergency-default-v4'));
+        $notification_channel = trim((string)($data['notification_channel'] ?? 'alertara-emergency-default-v5'));
         $notification_sound = trim((string)($data['notification_sound'] ?? 'emergency'));
 
         if (!$device_id || (!$user_id && $primary_push_token === '')) {
             apiResponse::error("Missing required fields: device_id and either user_id or push_token", 400);
         }
 
+        $appDeviceRegistered = false;
         if ($primary_push_token !== '') {
-            registerAppNotificationDevice(
+            $appDeviceRegistered = registerAppNotificationDevice(
                 $pdo,
                 $user_id,
                 (string)$device_id,
@@ -48,6 +49,14 @@ try {
                 $notification_channel,
                 $notification_sound
             );
+        }
+
+        if ($primary_push_token !== '' && $appDeviceRegistered) {
+            apiResponse::success([
+                'device_id' => $device_id,
+                'action' => 'registered',
+                'guest' => !$user_id
+            ], $user_id ? "Notification device registered successfully" : "Guest notification device registered successfully");
         }
 
         if (!$user_id) {
@@ -166,14 +175,10 @@ try {
         $stmt = $pdo->prepare($query);
         $stmt->execute([$user_id, $device_id]);
 
-        if ($stmt->rowCount() > 0) {
-            apiResponse::success([
-                'device_id' => $device_id,
-                'action' => 'deactivated'
-            ], "Device deactivated successfully");
-        } else {
-            apiResponse::error("Device not found", 404);
-        }
+        apiResponse::success([
+            'device_id' => $device_id,
+            'action' => 'deactivated'
+        ], $stmt->rowCount() > 0 ? "Device deactivated successfully" : "Device was already inactive or not registered");
 
     } else {
         apiResponse::error("Invalid request method. Use GET, POST, or DELETE.", 405);
@@ -186,5 +191,3 @@ try {
     error_log("User Devices Error: " . $e->getMessage());
     apiResponse::error("An unexpected error occurred.", 500);
 }
-
-

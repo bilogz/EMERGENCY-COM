@@ -471,140 +471,154 @@ $current = 'alerts.php';
             }
         }
         
+        function getAlertSortTime(alert) {
+            const raw = alert.created_at || alert.sent_at || alert.updated_at || alert.timestamp || alert.date || '';
+            const parsed = raw ? Date.parse(String(raw).replace(' ', 'T')) : NaN;
+            if (!Number.isNaN(parsed)) return parsed;
+            return parseInt(alert.id || 0, 10) || 0;
+        }
+
+        function sortAlertsNewestFirst(alerts) {
+            return [...alerts].sort((a, b) => {
+                const timeDiff = getAlertSortTime(b) - getAlertSortTime(a);
+                if (timeDiff !== 0) return timeDiff;
+                return (parseInt(b.id || 0, 10) || 0) - (parseInt(a.id || 0, 10) || 0);
+            });
+        }
+
+        function ensureAlertsTable() {
+            const container = document.getElementById('alertsContainer');
+            let tbody = container.querySelector('#activeAlertsTableBody');
+            if (tbody) return tbody;
+
+            container.className = 'alerts-table-shell';
+            container.innerHTML = `
+                <div class="alerts-table-scroll">
+                    <table class="active-alerts-table" aria-label="Active alerts">
+                        <thead>
+                            <tr>
+                                <th>Alert</th>
+                                <th>Title</th>
+                                <th>Message Preview</th>
+                                <th>Severity</th>
+                                <th>Time</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activeAlertsTableBody"></tbody>
+                    </table>
+                </div>
+            `;
+            return container.querySelector('#activeAlertsTableBody');
+        }
+
         function displayAlerts(alerts, append = false, isNew = false) {
             const container = document.getElementById('alertsContainer');
             const noAlerts = document.getElementById('noAlerts');
+            const orderedAlerts = sortAlertsNewestFirst(alerts || []);
             
-            if (alerts.length === 0 && !append) {
+            if (orderedAlerts.length === 0 && !append) {
                 showNoAlerts();
                 return;
             }
             
             noAlerts.style.display = 'none';
+            const tbody = ensureAlertsTable();
             
             if (!append) {
-                container.innerHTML = '';
+                tbody.innerHTML = '';
             }
             
-            alerts.forEach((alert, index) => {
+            orderedAlerts.forEach((alert, index) => {
                 const category = alert.category_name || 'General';
                 const config = categoryConfig[category] || categoryConfig['General'];
-                // Cache alert data for quick access
-                alertsCache.set(parseInt(alert.id), alert);
-                const alertCard = createAlertCard(alert, config, isNew && index === 0);
-                
+                const alertId = parseInt(alert.id, 10);
+                if (Number.isFinite(alertId)) alertsCache.set(alertId, alert);
+                if (append && Number.isFinite(alertId) && tbody.querySelector(`[data-alert-id="${alertId}"]`)) return;
+
+                const alertRow = createAlertCard(alert, config, isNew && index === 0);
                 if (append) {
-                    container.insertBefore(alertCard, container.firstChild);
-                    // Scroll to top smoothly if new alert
+                    tbody.insertBefore(alertRow, tbody.firstChild);
                     if (isNew && index === 0) {
-                        setTimeout(() => {
-                            alertCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        }, 100);
+                        setTimeout(() => alertRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
                     }
                 } else {
-                    container.appendChild(alertCard);
+                    tbody.appendChild(alertRow);
                 }
             });
         }
         
         function createAlertCard(alert, config, isNew = false) {
-            const card = document.createElement('div');
-            card.className = 'card alert-card';
-            card.dataset.alertId = alert.id;
+            const row = document.createElement('tr');
+            row.className = 'alert-card alert-table-row';
+            row.dataset.alertId = alert.id;
             
-            // Check if alert is read
             const isRead = readAlerts.has(parseInt(alert.id));
-            if (!isRead) {
-                card.classList.add('unread-alert');
-            }
+            if (!isRead) row.classList.add('unread-alert');
             
-            // Determine severity color based on category (Emergency Alert/Warning/Advisory)
             let severityColor = config.color;
             let severityBgColor = config.bgColor || config.color + '15';
-            
             const severityRaw = String(alert.severity || '').toLowerCase();
             const isCriticalSeverity = severityRaw === 'critical' || severityRaw === 'extreme';
 
             if (alert.category === 'Emergency Alert' || isCriticalSeverity) {
-                // EXTREME severity â†’ red
                 severityColor = '#e74c3c';
                 severityBgColor = 'rgba(231, 76, 60, 0.1)';
-                card.style.borderLeft = '4px solid #e74c3c';
             } else if (alert.category === 'Warning') {
-                // MODERATE severity â†’ yellow
                 severityColor = '#f39c12';
                 severityBgColor = 'rgba(243, 156, 18, 0.1)';
-                card.style.borderLeft = '4px solid #f39c12';
-            } else {
-                // Default to category color
-                card.style.borderLeft = `4px solid ${config.color}`;
             }
+            row.style.setProperty('--alert-accent', severityColor);
+            row.style.setProperty('--alert-accent-bg', severityBgColor);
             
-            // Add new alert animation class
             if (isNew) {
-                card.classList.add('new-alert');
-                card.style.animation = 'slideInFromTop 0.5s ease';
+                row.classList.add('new-alert');
+                row.style.animation = 'slideInFromTop 0.5s ease';
             }
             
-            // Determine severity/urgency based on category or severity category
             const isUrgent = isCriticalSeverity || alert.category === 'Emergency Alert' || ['Bomb Threat', 'Fire', 'Earthquake'].includes(alert.category_name);
-            const urgencyBadge = isUrgent ? '<span class="urgent-badge" style="background: #e74c3c; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; margin-left: 0.5rem;">URGENT</span>' : '';
-            
-            // Read/unread indicator
-            const readIndicator = isRead ? '' : '<span class="unread-indicator" style="width: 8px; height: 8px; background: #4caf50; border-radius: 50%; display: inline-block; margin-right: 0.5rem; animation: pulse 2s infinite;"></span>';
-            
+            const urgencyBadge = isUrgent ? '<span class="urgent-badge">URGENT</span>' : '';
+            const readIndicator = isRead ? '' : '<span class="unread-indicator" aria-label="Unread alert"></span>';
             const messageText = String(alert.message || '').trim();
             const contentText = String(alert.content || '').trim();
-            const normalizedMessage = messageText.replace(/\s+/g, ' ').trim();
-            const normalizedContent = contentText.replace(/\s+/g, ' ').trim();
-            const isDuplicateBody = !!normalizedMessage && !!normalizedContent && normalizedMessage === normalizedContent;
             const previewRaw = messageText || contentText || '';
-            const previewText = previewRaw.length > 280 ? (previewRaw.slice(0, 277) + '...') : previewRaw;
+            const previewText = previewRaw.length > 160 ? (previewRaw.slice(0, 157) + '...') : previewRaw;
+            const severityLabel = (alert.severity || alert.category || 'Active').toString();
+            const categoryName = alert.category_name || 'General';
 
-            card.innerHTML = `
-                <div class="alert-header" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
-                    <div class="alert-category-badge" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: ${severityBgColor}; border-radius: 20px; color: ${severityColor}; font-weight: 600; font-size: 0.875rem;">
-                        ${readIndicator}
-                        <i class="fas ${config.icon}"></i>
-                        <span>${alert.category_name || 'General'}</span>
-                        ${alert.category ? `<span style="margin-left: 0.5rem; font-size: 0.75rem; opacity: 0.9;">(${alert.category})</span>` : ''}
-                        ${urgencyBadge}
-                    </div>
-                    <span class="alert-time" style="margin-left: auto; font-size: 0.875rem; color: #666; display: flex; align-items: center; gap: 0.25rem;">
-                        <i class="fas fa-clock" style="font-size: 0.75rem;"></i>
-                        ${alert.time_ago || 'Just now'}
+            row.innerHTML = `
+                <td class="alert-type-cell">
+                    <span class="alert-category-pill" style="background: ${severityBgColor}; color: ${severityColor};">
+                        ${readIndicator}<i class="fas ${config.icon}"></i><span>${escapeHtml(categoryName)}</span>
                     </span>
-                </div>
-                <h4 style="margin: 0 0 0.5rem 0; color: #1f2937; font-size: 1.25rem; font-weight: ${isRead ? '600' : '700'};">${escapeHtml(alert.title)}</h4>
-                <p style="margin: 0 0 1rem 0; color: #4b5563; line-height: 1.6;">${escapeHtml(previewText).replace(/\n/g, '<br>')}</p>
-                ${(alert.content && !isDuplicateBody) ? `<div class="alert-content" style="margin-bottom: 1rem; padding: 1rem; background: ${severityBgColor}; border-radius: 8px; color: #374151; border-left: 3px solid ${severityColor};">${formatAlertContent(alert.content)}</div>` : ''}
-                <div class="alert-actions" style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-primary btn-sm" onclick="viewAlertDetails(${alert.id})" data-no-translate>
-                        <i class="fas fa-info-circle"></i> <span>View Details</span>
+                    ${urgencyBadge}
+                </td>
+                <td class="alert-title-cell">
+                    <h4 style="font-weight: ${isRead ? '600' : '700'};">${escapeHtml(alert.title || 'Untitled Alert')}</h4>
+                    ${alert.category ? `<span class="alert-subtype">${escapeHtml(alert.category)}</span>` : ''}
+                </td>
+                <td class="alert-preview-cell alert-content"><p>${escapeHtml(previewText).replace(/\n/g, '<br>')}</p></td>
+                <td><span class="severity-chip" style="background: ${severityBgColor}; color: ${severityColor};">${escapeHtml(severityLabel)}</span></td>
+                <td class="alert-time-cell"><i class="fas fa-clock"></i> ${escapeHtml(alert.time_ago || 'Just now')}</td>
+                <td class="alert-actions-cell">
+                    <button class="btn btn-primary btn-sm" onclick="viewAlertDetails(${parseInt(alert.id, 10) || 0})" data-no-translate>
+                        <i class="fas fa-info-circle"></i> <span>View</span>
                     </button>
-                    ${isUrgent ? '<button class="btn btn-secondary btn-sm" onclick="shareAlert(' + alert.id + ')" data-no-translate><i class="fas fa-share"></i> <span>Share</span></button>' : ''}
-                </div>
+                    ${isUrgent ? '<button class="btn btn-secondary btn-sm" onclick="shareAlert(' + (parseInt(alert.id, 10) || 0) + ')" data-no-translate><i class="fas fa-share"></i></button>' : ''}
+                </td>
             `;
             
-            // Mark as read when clicked (but not on button clicks)
-            card.addEventListener('click', function(e) {
-                if (!e.target.closest('button')) {
-                    markAlertAsRead(parseInt(alert.id));
-                }
+            row.addEventListener('click', function(e) {
+                if (!e.target.closest('button')) markAlertAsRead(parseInt(alert.id));
             });
             
-            // Translate alert card content if needed (client-side fallback)
-            // Use setTimeout to avoid blocking and prevent recursion issues
             setTimeout(() => {
-                translateAlertCard(card, alert).catch(err => {
-                    console.debug(`Translation failed for alert #${alert.id}:`, err);
-                });
+                translateAlertCard(row, alert).catch(err => console.debug(`Translation failed for alert #${alert.id}:`, err));
             }, 100);
             
-            return card;
+            return row;
         }
-        
-        // Track translation in progress to prevent duplicate calls
+                // Track translation in progress to prevent duplicate calls
         const translatingCards = new Set();
         
         /**
@@ -1296,6 +1310,100 @@ $current = 'alerts.php';
             .alert-card:hover {
                 transform: translateY(-2px);
                 box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            }
+            .alerts-table-shell {
+                width: 100%;
+                border: 1px solid var(--card-border, #dbe8e8);
+                border-radius: 8px;
+                background: var(--card-bg, #ffffff);
+                overflow: hidden;
+            }
+            .alerts-table-scroll {
+                width: 100%;
+                overflow-x: auto;
+            }
+            .active-alerts-table {
+                width: 100%;
+                border-collapse: collapse;
+                min-width: 920px;
+            }
+            .active-alerts-table th {
+                padding: 0.95rem 1rem;
+                text-align: left;
+                background: rgba(76, 138, 137, 0.08);
+                border-bottom: 1px solid var(--card-border, #dbe8e8);
+                color: #345b5a;
+                font-size: 0.78rem;
+                letter-spacing: 0;
+                text-transform: uppercase;
+            }
+            .active-alerts-table td {
+                padding: 1rem;
+                border-bottom: 1px solid var(--card-border, #e5eeee);
+                vertical-align: middle;
+            }
+            .alert-table-row {
+                border-left: 4px solid var(--alert-accent, #4c8a89);
+                cursor: pointer;
+            }
+            .alert-table-row:hover {
+                background: rgba(76, 138, 137, 0.06);
+                box-shadow: inset 4px 0 0 var(--alert-accent, #4c8a89);
+                transform: none;
+            }
+            .alert-table-row.unread-alert {
+                background: linear-gradient(90deg, rgba(76, 138, 137, 0.12), transparent 45%);
+            }
+            .alert-category-pill,
+            .severity-chip,
+            .urgent-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.45rem;
+                padding: 0.35rem 0.65rem;
+                border-radius: 999px;
+                font-size: 0.78rem;
+                font-weight: 700;
+                white-space: nowrap;
+            }
+            .urgent-badge {
+                margin-top: 0.45rem;
+                background: #e74c3c;
+                color: #fff;
+            }
+            .unread-indicator {
+                width: 8px;
+                height: 8px;
+                background: #4caf50;
+                border-radius: 50%;
+                display: inline-block;
+                animation: pulse 2s infinite;
+            }
+            .alert-title-cell h4 {
+                margin: 0 0 0.25rem 0;
+                color: #1f2937;
+                font-size: 1rem;
+            }
+            .alert-subtype,
+            .alert-time-cell {
+                color: #6b7280;
+                font-size: 0.85rem;
+            }
+            .alert-preview-cell p {
+                margin: 0;
+                color: #4b5563;
+                line-height: 1.5;
+                max-width: 420px;
+            }
+            .alert-actions-cell {
+                display: flex;
+                gap: 0.5rem;
+                white-space: nowrap;
+            }
+            @media (max-width: 768px) {
+                .active-alerts-table { min-width: 760px; }
+                .active-alerts-table th,
+                .active-alerts-table td { padding: 0.8rem; }
             }
             .btn-sm {
                 padding: 0.5rem 1rem;

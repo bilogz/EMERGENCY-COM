@@ -12,6 +12,7 @@ const CALL_LOBBY_ROOM = 'emergency-lobby';
 const TRANSFER_INBOX_ROOM = 'ers-transfer-inbox';
 const SIGNALING_PROTOCOL_VERSION = '2026-08-01.8';
 const OFFER_TTL_MS = 60 * 60 * 1000;
+const RINGING_CALL_TTL_MS = 10 * 60 * 1000;
 const MESSAGE_TTL_MS = 60 * 60 * 1000;
 const MAX_MESSAGES_PER_ROOM = 50;
 const MAX_ACTIVE_OFFERS = Number(process.env.MAX_ACTIVE_OFFERS || 500);
@@ -31,12 +32,17 @@ function signalText(value, max = 200) {
 }
 
 function pruneExpiredCalls() {
-  const cutoff = Date.now() - OFFER_TTL_MS;
+  const now = Date.now();
+  const cutoff = now - OFFER_TTL_MS;
+  const ringingCutoff = now - RINGING_CALL_TTL_MS;
   for (const [room, offer] of activeOffersByRoom.entries()) {
     if (!offer || offer.ts < cutoff) activeOffersByRoom.delete(room);
   }
   for (const [callId, call] of activeCallsById.entries()) {
-    if (!call || call.updatedAt < cutoff) activeCallsById.delete(callId);
+    if (!call || call.updatedAt < cutoff || (call.status === 'ringing' && call.updatedAt < ringingCutoff)) {
+      if (call?.room) activeOffersByRoom.delete(call.room);
+      activeCallsById.delete(callId);
+    }
   }
   for (const [room, messages] of recentMessagesByRoom.entries()) {
     const current = Array.isArray(messages)
@@ -67,8 +73,43 @@ function callSummary(call) {
     caller: call.offer?.caller || null,
     location: call.offer?.location || null,
     conversationId: call.offer?.conversationId || null,
+    offer: call.offer || null,
     updatedAt: call.updatedAt,
   };
+}
+
+function callQueueSummary(call) {
+  return {
+    callId: call.callId,
+    room: call.room,
+    status: call.status,
+    adminKey: call.adminKey || null,
+    caller: call.offer?.caller || null,
+    location: call.offer?.location || null,
+    conversationId: call.offer?.conversationId || null,
+    offer: call.offer || null,
+    createdAt: call.createdAt || call.updatedAt,
+    updatedAt: call.updatedAt,
+  };
+}
+
+function emitCallQueue() {
+  pruneExpiredCalls();
+  const calls = Array.from(activeCallsById.values()).map(callQueueSummary);
+  io.to(CALL_LOBBY_ROOM).emit('call-queue', {
+    open: calls.filter((call) => call.status === 'ringing'),
+    assigned: calls.filter((call) => call.status === 'accepted'),
+    pending: calls.filter((call) => call.status === 'pending'),
+    updatedAt: Date.now(),
+  });
+}
+
+function emitCallUpdate(event, call) {
+  if (!call) return;
+  const payload = { event, call: callQueueSummary(call), updatedAt: Date.now() };
+  io.to(CALL_LOBBY_ROOM).emit('call-updated', payload);
+  if (call.room) io.to(call.room).emit('call-updated', payload);
+  emitCallQueue();
 }
 
 function liveCallIdentity(call) {
@@ -121,7 +162,12 @@ function relayHangup(socket, payload = {}, room) {
     socket.to(signalRoom).emit('call-ended', notice);
     socket.to(signalRoom).emit('call_ended', notice);
   }
-  if (callId) activeCallsById.delete(callId);
+  if (callId) {
+    const endedCall = activeCallsById.get(callId);
+    if (endedCall) emitCallUpdate('ended', { ...endedCall, status: 'ended', updatedAt: Date.now() });
+    activeCallsById.delete(callId);
+    emitCallQueue();
+  }
 }
 
 const io = new Server(server, {
@@ -154,9 +200,7 @@ io.on('connection', (socket) => {
         debugLog(`[socket] replayed cached offer room=${room} callId=${cached.payload?.callId || ''}`);
       }
       if (room === CALL_LOBBY_ROOM) {
-        for (const call of activeCallsById.values()) {
-          if (call.status === 'ringing' && call.offer) socket.emit('offer', call.offer);
-        }
+        emitCallQueue();
       }
       const roomCall = Array.from(activeCallsById.values()).find((call) => call.room === room) || null;
       if (roomCall && roomCall.callerSocketId && roomCall.callerSocketId !== socket.id) {
@@ -239,14 +283,24 @@ io.on('connection', (socket) => {
         adminSocketId: current?.adminSocketId || null,
         adminKey: current?.adminKey || null,
         status: current?.status === 'accepted' ? 'accepted' : 'ringing',
+        createdAt: current?.createdAt || Date.now(),
         updatedAt: Date.now(),
       });
+      const storedCall = activeCallsById.get(callId);
+      if (!current || current.status !== storedCall.status) {
+        socket.to(CALL_LOBBY_ROOM).emit('call-created', { call: callQueueSummary(storedCall), updatedAt: Date.now() });
+      }
+      emitCallUpdate('offered', storedCall);
     }
     // The caller and accepted admin exchange media in the private signalRoom.
     // A new incoming call is first announced to the shared admin lobby so an
     // admin can discover it, claim it, and then join the private room.
     const targetRoom = announcementRoom || signalRoom;
     socket.to(targetRoom).emit('offer', payload);
+    const isTransferredOffer = payload?.transferred === true || cleanText(payload?.target, 40) === 'ers';
+    if (!isTransferredOffer && targetRoom !== CALL_LOBBY_ROOM) {
+      socket.to(CALL_LOBBY_ROOM).emit('offer', payload);
+    }
     const activeCall = callId ? activeCallsById.get(callId) : null;
     const peerSocketId = activeCall
       ? (activeCall.callerSocketId === socket.id ? activeCall.adminSocketId : activeCall.callerSocketId)
@@ -269,12 +323,19 @@ io.on('connection', (socket) => {
       if (typeof acknowledge === 'function') acknowledge({ ok: false, reason: 'This call was answered by another admin.' });
       return;
     }
+    for (const item of activeCallsById.values()) {
+      if (item.callId !== callId && item.adminKey === adminKey && item.status === 'accepted') {
+        if (typeof acknowledge === 'function') acknowledge({ ok: false, reason: 'You already have an active call.' });
+        return;
+      }
+    }
     call.status = 'accepted';
     call.adminKey = adminKey;
     call.adminSocketId = socket.id;
     call.updatedAt = Date.now();
     socket.join(call.room);
-    socket.to(CALL_LOBBY_ROOM).emit('call-claimed', { callId, adminKey });
+    socket.to(CALL_LOBBY_ROOM).emit('call-claimed', { callId, adminKey, call: callQueueSummary(call) });
+    emitCallUpdate('claimed', call);
     if (typeof acknowledge === 'function') acknowledge({ ok: true, call: callSummary(call) });
   });
 
@@ -312,6 +373,7 @@ io.on('connection', (socket) => {
       return;
     }
     let call = activeCallsById.get(callId);
+    const wasMissing = !call;
     if (!call) {
       call = { callId, room, offer: null, adminSocketId: null, adminKey: null, status: payload?.accepted ? 'accepted' : 'ringing' };
       activeCallsById.set(callId, call);
@@ -320,6 +382,12 @@ io.on('connection', (socket) => {
     call.callerSocketId = socket.id;
     call.updatedAt = Date.now();
     socket.join(room);
+    if (!call.offer) {
+      socket.emit('request-offer', { callId, room, reason: 'user-resume' });
+    }
+    if (wasMissing || call.status === 'ringing') {
+      emitCallUpdate('user-resumed', call);
+    }
     if (typeof acknowledge === 'function') acknowledge({ ok: true, call: callSummary(call) });
   });
 
@@ -490,9 +558,8 @@ io.on('connection', (socket) => {
     if (transferRoom) socket.to(transferRoom).emit('call-transfer', transferNotice);
   });
 
-  // Production call route: Emergency-Com relays a live call's private room
-  // to ERS. Live calls are deliberately not persisted as Two-Way
-  // Communication conversations and are never emitted to the admin lobby.
+  // Manual admin route only. Incoming callers must first be answered by
+  // Emergency Communication, then an admin can transfer the live call to ERS.
   socket.on('route-call-to-ers', (payload, acknowledge) => {
     const callId = getSignalCallId(payload);
     const room = cleanText(payload?.room, 180);
@@ -503,9 +570,21 @@ io.on('connection', (socket) => {
       }
       return;
     }
-    if (!existing || existing.callerSocketId !== socket.id) {
+    if (!existing) {
       if (typeof acknowledge === 'function') {
-        acknowledge({ ok: false, reason: 'The caller must register its private room before routing to ERS.' });
+        acknowledge({ ok: false, reason: 'The call is no longer available.' });
+      }
+      return;
+    }
+    if (existing.callerSocketId === socket.id) {
+      if (typeof acknowledge === 'function') {
+        acknowledge({ ok: false, reason: 'Emergency Communication admin must answer and transfer this call.' });
+      }
+      return;
+    }
+    if (!existing.adminSocketId || existing.adminSocketId !== socket.id) {
+      if (typeof acknowledge === 'function') {
+        acknowledge({ ok: false, reason: 'Only the assigned Emergency Communication admin can transfer this call.' });
       }
       return;
     }
@@ -584,10 +663,20 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', (reason) => {
-    for (const call of activeCallsById.values()) {
-      if (call.callerSocketId === socket.id) call.callerSocketId = null;
+    let queueChanged = false;
+    for (const [callId, call] of activeCallsById.entries()) {
+      if (call.callerSocketId === socket.id) {
+        if (call.status === 'ringing') {
+          if (call.room) activeOffersByRoom.delete(call.room);
+          activeCallsById.delete(callId);
+          queueChanged = true;
+          continue;
+        }
+        call.callerSocketId = null;
+      }
       if (call.adminSocketId === socket.id) call.adminSocketId = null;
     }
+    if (queueChanged) emitCallQueue();
     debugLog(`[socket] disconnected ${socket.id} reason=${reason}`);
   });
 });

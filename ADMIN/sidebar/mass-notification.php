@@ -226,7 +226,7 @@ $pageTitle = 'Mass Notification System';
                                             <label for="message_body">2. Tell people what happened and what to do <span class="mn-required">Required</span></label>
                                             <div class="mn-guided-message" id="mnGuidedMessage">
                                                 <div class="mn-guided-heading">
-                                                    <div><strong>Answer these 3 simple questions</strong><span id="mnGuidedProgress">0 of 3 answered · The complete message will be written for you.</span></div>
+                                                    <div><strong>Answer these 3 simple questions</strong><span id="mnGuidedProgress">0 of 3 answered Â· The complete message will be written for you.</span></div>
                                                     <button type="button" class="btn ui-btn-ghost mn-clear-message-btn" onclick="mnClearMessageBuilder()"><i class="fas fa-eraser"></i> Clear</button>
                                                 </div>
 
@@ -260,7 +260,7 @@ $pageTitle = 'Mass Notification System';
                                                             <input type="text" id="mnActionToTake" placeholder="Example: Move to higher ground now">
                                                             <button type="button" class="mn-dictate-btn" onclick="mnStartDictation('mnActionToTake', this)" aria-label="Speak what people should do" title="Speak instead of typing"><i class="fas fa-microphone"></i></button>
                                                         </div>
-                                                        <div class="mn-action-chip-label">Quick actions — select one or more:</div>
+                                                        <div class="mn-action-chip-label">Quick actions â€” select one or more:</div>
                                                         <div class="mn-action-chips" role="group" aria-label="Recommended emergency actions">
                                                             <button type="button" aria-pressed="false" onclick="mnApplyActionChip('Duck, cover, and hold on', this)">Duck, Cover &amp; Hold</button>
                                                             <button type="button" aria-pressed="false" onclick="mnApplyActionChip('Evacuate immediately and follow official evacuation routes', this)">Evacuate Immediately</button>
@@ -280,11 +280,20 @@ $pageTitle = 'Mass Notification System';
                                             <textarea id="message_body" name="body" rows="6" required onkeyup="updateCharCount(this)" placeholder="Your complete alert message will appear here as you answer the questions above. You can also type or edit it directly."></textarea>
                                             <div class="mn-field-note"><i class="fas fa-pen"></i> Read this message once. You can click inside it and change any word.</div>
                                             <div class="mn-sms-counter" id="mnSmsCounter" aria-live="polite">
-                                                <span><i class="fas fa-comment-sms" aria-hidden="true"></i> <strong id="mnSmsMetrics">0 / 160 characters • 1 SMS Segment</strong></span>
+                                                <span><i class="fas fa-comment-sms" aria-hidden="true"></i> <strong id="mnSmsMetrics">0 / 160 characters - 1 SMS Segment</strong></span>
                                                 <span class="mn-sms-encoding" id="mnSmsEncoding">Standard SMS</span>
                                             </div>
                                             <div class="mn-sms-warning" id="mnSmsWarning" role="status"></div>
                                             <div class="mn-dictation-status" id="mnDictationStatus" aria-live="polite"></div>
+                                        </div>
+
+                                        <div class="form-group mn-primary-writing-field">
+                                            <label for="message_more_info_url">3. Link for more information <span class="mn-optional">Optional</span></label>
+                                            <div class="mn-url-field">
+                                                <span class="mn-url-field-icon" aria-hidden="true"><i class="fas fa-link"></i></span>
+                                                <input type="url" id="message_more_info_url" name="more_info_url" maxlength="700" placeholder="Paste a full advisory link, e.g. https://example.com/full-advisory" inputmode="url" autocomplete="url">
+                                            </div>
+                                            <div class="mn-help">This link is saved for the notification details page. It will not be shown in the phone banner.</div>
                                         </div>
 
                                         <div class="form-group mn-alert-location-card">
@@ -465,6 +474,7 @@ $pageTitle = 'Mass Notification System';
                     <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">Channels:</td><td id="pvChannels" style="padding: 0.5rem 0; font-weight: 600; text-align: right;"></td></tr>
                     <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">Severity:</td><td id="pvSeverity" style="padding: 0.5rem 0; font-weight: 600; text-align: right;"></td></tr>
                     <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">Location:</td><td id="pvLocation" style="padding: 0.5rem 0; font-weight: 600; text-align: right;">None</td></tr>
+                    <tr><td style="padding: 0.5rem 0; color: var(--text-secondary-1); font-size: 0.9rem;">More info link:</td><td id="pvMoreInfoUrl" style="padding: 0.5rem 0; font-weight: 600; text-align: right; word-break: break-word;">None</td></tr>
                 </table>
                 <div style="background: var(--bg-color-1); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color-1);">
                     <div id="pvTitle" style="font-weight: 700; color: var(--text-color-1); margin-bottom: 0.5rem;"></div>
@@ -498,7 +508,7 @@ $pageTitle = 'Mass Notification System';
                             <label for="mnMapSearch">Search (QC)</label>
                             <div style="display:flex; gap:0.5rem; align-items:center;">
                                 <input id="mnMapSearch" class="form-control" type="text" placeholder="e.g., Quezon Memorial Circle">
-                                <button type="button" class="btn btn-primary" onclick="mnMapDoSearch()"><i class="fas fa-search"></i></button>
+                                <button type="button" class="btn btn-primary" onclick="mnMapDoSearch({ autoSelect: true })"><i class="fas fa-search"></i></button>
                             </div>
                             <div class="mn-help">Tip: You can type a landmark, street, or barangay name.</div>
                         </div>
@@ -581,7 +591,7 @@ $pageTitle = 'Mass Notification System';
                 </div>
                 <div class="mn-guided-message mn-template-guided" id="mnTemplateGuidedMessage">
                     <div class="mn-guided-heading">
-                        <div><strong>2. Tell people what happened and what to do</strong><span id="mnTemplateGuidedProgress">0 of 3 answered � The complete message will be written below.</span></div>
+                        <div><strong>2. Tell people what happened and what to do</strong><span id="mnTemplateGuidedProgress">0 of 3 answered ï¿½ The complete message will be written below.</span></div>
                         <button type="button" class="btn ui-btn-ghost mn-clear-message-btn" onclick="mnClearTemplateBuilder()"><i class="fas fa-eraser"></i> Clear</button>
                     </div>
                     <div class="mn-guided-question">
@@ -778,8 +788,11 @@ $pageTitle = 'Mass Notification System';
             flex-wrap: wrap;
         }
         .mn-template-tools .form-group { flex: 1 1 240px; }
-        .mn-map-result { border: 1px solid var(--border-color-1, #d8eaea); border-radius: 8px; padding: .75rem; margin-bottom: .5rem; cursor: pointer; background: var(--card-bg, #fff); }
+        .mn-map-result { width: 100%; text-align: left; border: 1px solid var(--border-color-1, #d8eaea); border-radius: 8px; padding: .75rem; margin-bottom: .5rem; cursor: pointer; background: var(--card-bg, #fff); color: var(--text-primary-1, #111); display: block; }
         .mn-map-result:hover, .mn-map-result:focus { border-color: var(--primary-color-1, #4f9593); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color-1, #4f9593) 18%, transparent); }
+        .mn-map-result-title { display: block; font-weight: 800; line-height: 1.25; }
+        .mn-map-result-subtitle { display: block; margin-top: .25rem; color: var(--text-secondary-1, #536b6b); font-size: .86rem; line-height: 1.35; }
+        .mn-map-result.is-selected { border-color: var(--primary-color-1, #4f9593); background: color-mix(in srgb, var(--primary-color-1, #4f9593) 12%, var(--card-bg, #fff)); }
         @media (max-width: 760px) { .mn-detail-grid { grid-template-columns: 1fr; } }
     </style>
     <script>
@@ -800,6 +813,9 @@ $pageTitle = 'Mass Notification System';
         let mnReverseGeocodeTimer = null;
         let mnReverseGeocodeSeq = 0;
         let mnMapSearchTimer = null;
+        let mnMapSearchAbort = null;
+        let mnMapSearchSeq = 0;
+        let mnMapSearchResults = [];
         let mnLastFocusedBeforeConfirm = null;
 
         function mnEscapeHtml(value) {
@@ -935,7 +951,7 @@ $pageTitle = 'Mass Notification System';
             if (nextBtn) {
                 if (step === 1) nextBtn.innerHTML = 'Continue to Message <i class="fas fa-arrow-right"></i>';
                 else if (step === 2) nextBtn.innerHTML = '<i class="fas fa-eye"></i> Review Alert <i class="fas fa-arrow-right"></i>';
-                else nextBtn.innerHTML = '<i class="fas fa-eye"></i> Review Alert <span aria-hidden="true">→</span>';
+                else nextBtn.innerHTML = '<i class="fas fa-eye"></i> Review Alert <span aria-hidden="true">â†’</span>';
             }
             if (instruction) {
                 const instructions = {
@@ -1064,8 +1080,8 @@ $pageTitle = 'Mass Notification System';
             const weatherVisible = document.getElementById('mnWeatherSignalWrap')?.style.display !== 'none';
             const fireVisible = document.getElementById('mnFireLevelWrap')?.style.display !== 'none';
             let text = `${severity} urgency`;
-            if (weatherVisible) text += ` · Signal ${document.getElementById('mnWeatherSignal')?.value || '-'}`;
-            if (fireVisible) text += ` · Fire Level ${document.getElementById('mnFireLevel')?.value || '-'}`;
+            if (weatherVisible) text += ` Â· Signal ${document.getElementById('mnWeatherSignal')?.value || '-'}`;
+            if (fireVisible) text += ` Â· Fire Level ${document.getElementById('mnFireLevel')?.value || '-'}`;
             summary.textContent = text;
         }
 
@@ -1442,7 +1458,7 @@ $pageTitle = 'Mass Notification System';
                 return mnDefaultFireLevelFromSeverity(sev);
             })();
 
-            // Special: Weather signal (1–5)
+            // Special: Weather signal (1â€“5)
             const weatherSignal = (() => {
                 if (kind !== 'weather') return null;
                 const provided = String(ctx.weatherSignal || '').trim();
@@ -1659,8 +1675,8 @@ $pageTitle = 'Mass Notification System';
         function updateCharCount(textarea) {
             const value = String(textarea?.value || '');
             const characters = Array.from(value).length;
-            const gsmBasic = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
-            const gsmExtended = "^{}\\[~]|€";
+            const gsmBasic = "@Â£$Â¥Ã¨Ã©Ã¹Ã¬Ã²Ã‡\nÃ˜Ã¸\rÃ…Ã¥Î”_Î¦Î“Î›Î©Î Î¨Î£Î˜ÎžÃ†Ã¦ÃŸÃ‰ !\"#Â¤%&'()*+,-./0123456789:;<=>?Â¡ABCDEFGHIJKLMNOPQRSTUVWXYZÃ„Ã–Ã‘ÃœÂ§Â¿abcdefghijklmnopqrstuvwxyzÃ¤Ã¶Ã±Ã¼Ã ";
+            const gsmExtended = "^{}\\[~]|â‚¬";
             let gsmUnits = 0;
             let isGsm = true;
             for (const char of Array.from(value)) {
@@ -1678,7 +1694,7 @@ $pageTitle = 'Mass Notification System';
             const encoding = document.getElementById('mnSmsEncoding');
             const counter = document.getElementById('mnSmsCounter');
             const warning = document.getElementById('mnSmsWarning');
-            if (metrics) metrics.textContent = `${characters} / ${singleLimit} characters • ${segments} SMS Segment${segments === 1 ? '' : 's'}`;
+            if (metrics) metrics.textContent = `${characters} / ${singleLimit} characters â€¢ ${segments} SMS Segment${segments === 1 ? '' : 's'}`;
             if (encoding) encoding.textContent = isGsm ? 'Standard SMS' : 'Unicode SMS';
             counter?.classList.toggle('is-warning', segments > 1);
             counter?.classList.toggle('is-critical', segments > 3);
@@ -1732,7 +1748,8 @@ $pageTitle = 'Mass Notification System';
                     channels,
                     severity: (document.getElementById('pvSeverity')?.textContent || '').trim() || ($('input[name="severity"]:checked').val() || 'Medium'),
                     title: (document.getElementById('pvTitle')?.textContent || '').trim(),
-                    body: (document.getElementById('pvBody')?.textContent || '').trim()
+                    body: (document.getElementById('pvBody')?.textContent || '').trim(),
+                    more_info_url: (document.getElementById('pvMoreInfoUrl')?.textContent || '').trim() === 'None' ? '' : (document.getElementById('pvMoreInfoUrl')?.textContent || '').trim()
                 };
                 return payload;
             } catch (e) {
@@ -1747,7 +1764,8 @@ $pageTitle = 'Mass Notification System';
                 channels: getSelectedChannels(),
                 severity: $('input[name="severity"]:checked').val(),
                 title: (document.getElementById('message_title')?.value || '').trim(),
-                body: (document.getElementById('message_body')?.value || '').trim()
+                body: (document.getElementById('message_body')?.value || '').trim(),
+                more_info_url: (document.getElementById('message_more_info_url')?.value || '').trim()
             };
 
             const alertLat = (document.getElementById('mnTargetLat')?.value || '').trim();
@@ -1884,7 +1902,7 @@ $pageTitle = 'Mass Notification System';
         function mnFormatMessageForDisplay(message) {
             return String(message || '')
                 .replace(/\r\n?/g, '\n')
-                .replace(/[ \t]*•[ \t]*/g, '\n\n• ')
+                .replace(/[ \t]*â€¢[ \t]*/g, '\n\nâ€¢ ')
                 .replace(/\n{3,}/g, '\n\n')
                 .trim();
         }
@@ -2098,8 +2116,8 @@ $pageTitle = 'Mass Notification System';
                 progress.textContent = completed === 0 && hasCompleteMessage
                     ? 'A complete message is already provided. You may skip these questions.'
                     : completed === 3
-                    ? 'All 3 answered · Your complete message is ready below.'
-                    : `${completed} of 3 answered · Complete the remaining questions.`;
+                    ? 'All 3 answered Â· Your complete message is ready below.'
+                    : `${completed} of 3 answered Â· Complete the remaining questions.`;
             }
         }
 
@@ -2143,7 +2161,7 @@ $pageTitle = 'Mass Notification System';
             recognition.interimResults = false;
             recognition.continuous = false;
             button?.classList.add('is-listening');
-            if (status) status.textContent = 'Listening… Speak clearly, then pause.';
+            if (status) status.textContent = 'Listeningâ€¦ Speak clearly, then pause.';
 
             recognition.onresult = event => {
                 const spoken = Array.from(event.results).map(result => result[0]?.transcript || '').join(' ').trim();
@@ -2231,6 +2249,8 @@ $pageTitle = 'Mass Notification System';
                 mnUpdateGuidedProgress();
                 updateLivePreview();
             });
+            const moreInfoInput = document.getElementById('message_more_info_url');
+            if (moreInfoInput) moreInfoInput.addEventListener('input', updateLivePreview);
 
             ['mnWhatHappened', 'mnWhere', 'mnActionToTake'].forEach(id => {
                 const field = document.getElementById(id);
@@ -2270,16 +2290,27 @@ $pageTitle = 'Mass Notification System';
             });
 
             const mapSearch = document.getElementById('mnMapSearch');
-            if (mapSearch) mapSearch.addEventListener('input', () => {
-                clearTimeout(mnMapSearchTimer);
-                const q = (mapSearch.value || '').trim();
-                const resultsHost = document.getElementById('mnMapResults');
-                if (q.length < 3) {
-                    if (resultsHost) resultsHost.innerHTML = '<div class="mn-map-result" style="opacity:.7; cursor:default;">Type at least 3 letters to search Quezon City.</div>';
-                    return;
-                }
-                mnMapSearchTimer = setTimeout(() => mnMapDoSearch(), 350);
-            });
+            if (mapSearch) {
+                mapSearch.addEventListener('input', () => {
+                    clearTimeout(mnMapSearchTimer);
+                    const q = (mapSearch.value || '').trim();
+                    const resultsHost = document.getElementById('mnMapResults');
+                    if (q.length < 3) {
+                        mnMapSearchResults = [];
+                        if (mnMapSearchAbort) mnMapSearchAbort.abort();
+                        if (resultsHost) resultsHost.innerHTML = '<div class="mn-map-result" style="opacity:.7; cursor:default;">Type at least 3 letters to search Quezon City.</div>';
+                        return;
+                    }
+                    mnMapSearchTimer = setTimeout(() => mnMapDoSearch({ autoSelect: true }), 320);
+                });
+                mapSearch.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        clearTimeout(mnMapSearchTimer);
+                        mnMapDoSearch({ autoSelect: true });
+                    }
+                });
+            }
 
             document.querySelectorAll('.mn-preview-mode').forEach(btn => {
                 btn.addEventListener('click', () => setPreviewMode(btn.dataset.mode));
@@ -2421,8 +2452,8 @@ $pageTitle = 'Mass Notification System';
             const progress = document.getElementById('mnTemplateGuidedProgress');
             if (progress) {
                 progress.textContent = completed === 3
-                    ? 'All 3 answered � The reusable message is ready below.'
-                    : `${completed} of 3 answered � Complete the remaining questions.`;
+                    ? 'All 3 answered ï¿½ The reusable message is ready below.'
+                    : `${completed} of 3 answered ï¿½ Complete the remaining questions.`;
             }
         }
 
@@ -2565,6 +2596,10 @@ $pageTitle = 'Mass Notification System';
                 const locationText = data.alert_location_name || (data.alert_latitude && data.alert_longitude ? `${data.alert_latitude}, ${data.alert_longitude}` : '');
                 locationPreview.textContent = locationText || 'None';
             }
+            const moreInfoPreview = document.getElementById('pvMoreInfoUrl');
+            if (moreInfoPreview) {
+                moreInfoPreview.textContent = data.more_info_url || 'None';
+            }
 
             // Use class-based modal show/hide (compatible with global modal helpers)
             mnOpenModal('previewModal');
@@ -2634,7 +2669,7 @@ $pageTitle = 'Mass Notification System';
                     try { window.DraftPersist?.clearDraft('admin-mn-dispatch'); } catch {}
                     mnPendingDispatchPayload = null;
                     mnPlayDispatchQueueSound();
-                    loadNotifications();
+                    mnRefreshDispatchHistory(true);
 
                     // Close wizard too to avoid trapping the user under overlays.
                     try { closeDispatchWizard(); } catch (e) {}
@@ -2646,7 +2681,7 @@ $pageTitle = 'Mass Notification System';
                     // Safe to ignore errors; deployments may run the worker via cron.
                     try {
                         fetch(mnApiPath('notification-worker.php'), { cache: 'no-store' })
-                            .then(() => setTimeout(loadNotifications, 800))
+                            .then(() => setTimeout(() => mnRefreshDispatchHistory(true), 800))
                             .catch(() => {});
                     } catch (e) {}
                 } else {
@@ -2957,11 +2992,7 @@ $pageTitle = 'Mass Notification System';
             mnMapSelected.label = label || '';
 
             // Guard: keep selection within QC boundary (GeoJSON)
-            if (!mnQcGeojson) {
-                mnShowNotice('The Quezon City map is still loading. Please wait a moment and try again.', 'Please wait');
-                return;
-            }
-            if (!mnGeojsonContainsPoint(mnQcGeojson, mnMapSelected.lat, mnMapSelected.lng)) {
+            if (mnQcGeojson && !mnGeojsonContainsPoint(mnQcGeojson, mnMapSelected.lat, mnMapSelected.lng)) {
                 mnShowNotice('Please choose a location inside Quezon City.', 'Location outside the city');
                 return;
             }
@@ -2997,19 +3028,8 @@ $pageTitle = 'Mass Notification System';
             }, 350);
         }
 
-        async function mnMapDoSearch() {
-            const q = (document.getElementById('mnMapSearch')?.value || '').trim();
-            const resultsHost = document.getElementById('mnMapResults');
-            if (!resultsHost) return;
-            resultsHost.innerHTML = '<div class="mn-map-result" style="opacity:.7; cursor:default;">Searching...</div>';
-
-            if (!q) {
-                resultsHost.innerHTML = '<div class="mn-map-result" style="opacity:.7; cursor:default;">Type a search query above.</div>';
-                return;
-            }
-
-            // Nominatim search limited to PH + Quezon City viewbox
-            // viewbox = west, north, east, south
+        function mnMapBuildViewbox() {
+            // viewbox = west,north,east,south for Nominatim. Fallback is a tight QC box.
             let viewbox = '120.95,14.78,121.15,14.57';
             try {
                 if (mnQcBounds) {
@@ -3018,25 +3038,137 @@ $pageTitle = 'Mass Notification System';
                     viewbox = `${sw.lng},${ne.lat},${ne.lng},${sw.lat}`;
                 }
             } catch (e) {}
-            const url = `https://nominatim.openstreetmap.org/search?format=json&limit=8&countrycodes=ph&bounded=1&viewbox=${encodeURIComponent(viewbox)}&q=${encodeURIComponent(q + ' Quezon City')}`;
+            return viewbox;
+        }
+
+        function mnMapResultLabel(item) {
+            const address = item?.address || {};
+            const primary = item?.name || address.building || address.amenity || address.school || address.road || address.neighbourhood || address.suburb || address.quarter || address.village || address.city || item?.display_name || 'Selected place';
+            const parts = [
+                address.road,
+                address.neighbourhood || address.suburb || address.quarter || address.village,
+                address.city || 'Quezon City'
+            ].filter(Boolean);
+            const subtitle = parts.length ? Array.from(new Set(parts)).join(', ') : String(item?.display_name || '').split(',').slice(0, 4).join(', ');
+            return { primary: String(primary), subtitle: String(subtitle || item?.display_name || '') };
+        }
+
+        function mnMapDeduplicateResults(items) {
+            const seen = new Set();
+            return (items || []).filter((item) => {
+                const lat = Number(item.lat);
+                const lon = Number(item.lon);
+                if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+                const key = `${lat.toFixed(5)},${lon.toFixed(5)}:${String(item.display_name || '').toLowerCase()}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        }
+
+        function mnMapSortResults(items, q) {
+            const needle = String(q || '').toLowerCase();
+            return [...items].sort((a, b) => {
+                const an = String(a.display_name || a.name || '').toLowerCase();
+                const bn = String(b.display_name || b.name || '').toLowerCase();
+                const aExact = an.includes(needle) ? 1 : 0;
+                const bExact = bn.includes(needle) ? 1 : 0;
+                if (aExact !== bExact) return bExact - aExact;
+                return Number(b.importance || 0) - Number(a.importance || 0);
+            });
+        }
+
+        function mnRenderMapResults(items) {
+            const resultsHost = document.getElementById('mnMapResults');
+            if (!resultsHost) return;
+            mnMapSearchResults = items;
+            resultsHost.innerHTML = items.map((item, idx) => {
+                const label = mnMapResultLabel(item);
+                return `<button type="button" class="mn-map-result" data-map-result-index="${idx}">
+                    <span class="mn-map-result-title">${mnEscapeHtml(label.primary)}</span>
+                    <span class="mn-map-result-subtitle">${mnEscapeHtml(label.subtitle)}</span>
+                </button>`;
+            }).join('');
+            resultsHost.querySelectorAll('[data-map-result-index]').forEach((btn) => {
+                btn.addEventListener('click', () => mnMapChooseSearchResult(Number(btn.dataset.mapResultIndex)));
+            });
+        }
+
+        function mnMapChooseSearchResult(index) {
+            const item = mnMapSearchResults[index];
+            if (!item) return;
+            const lat = Number(item.lat);
+            const lon = Number(item.lon);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+            const label = mnMapResultLabel(item);
+            const fullLabel = label.subtitle ? `${label.primary}, ${label.subtitle}` : label.primary;
+            const input = document.getElementById('mnMapSearch');
+            if (input) input.value = fullLabel;
+            mnMapSelected.address = String(item.display_name || fullLabel || '').trim();
+            mnSetMapSelection(lat, lon, fullLabel);
+            if (mnMap) {
+                try { mnMap.flyTo([lat, lon], 17, { animate: true, duration: 0.55 }); } catch (e) { try { mnMap.setView([lat, lon], 17); } catch (ignore) {} }
+            }
+            document.querySelectorAll('#mnMapResults .mn-map-result').forEach((el, i) => el.classList.toggle('is-selected', i === index));
+            const addressHost = document.getElementById('mnMapSelectedAddress');
+            if (addressHost && mnMapSelected.address) addressHost.textContent = `Address: ${mnMapSelected.address}`;
+        }
+
+        async function mnMapDoSearch(options = {}) {
+            const q = (document.getElementById('mnMapSearch')?.value || '').trim();
+            const resultsHost = document.getElementById('mnMapResults');
+            if (!resultsHost) return;
+
+            if (q.length < 3) {
+                mnMapSearchResults = [];
+                resultsHost.innerHTML = '<div class="mn-map-result" style="opacity:.7; cursor:default;">Type at least 3 letters to search Quezon City.</div>';
+                return;
+            }
+
+            const seq = ++mnMapSearchSeq;
+            if (mnMapSearchAbort) mnMapSearchAbort.abort();
+            mnMapSearchAbort = new AbortController();
+            resultsHost.innerHTML = '<div class="mn-map-result" style="opacity:.7; cursor:default;">Searching Quezon City...</div>';
+
+            const viewbox = mnMapBuildViewbox();
+            const qcQuery = /quezon\s+city/i.test(q) ? q : `${q}, Quezon City, Metro Manila, Philippines`;
+            const params = new URLSearchParams({
+                format: 'jsonv2',
+                addressdetails: '1',
+                namedetails: '1',
+                limit: '10',
+                countrycodes: 'ph',
+                bounded: '1',
+                viewbox,
+                q: qcQuery
+            });
 
             try {
-                const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                const resp = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+                    headers: { 'Accept': 'application/json', 'Accept-Language': 'en' },
+                    signal: mnMapSearchAbort.signal
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 const data = await resp.json();
+                if (seq !== mnMapSearchSeq) return;
 
-                if (!Array.isArray(data) || data.length === 0) {
-                    resultsHost.innerHTML = '<div class="mn-map-result" style="opacity:.7; cursor:default;">No results found in Quezon City.</div>';
+                const filtered = mnMapSortResults(mnMapDeduplicateResults(Array.isArray(data) ? data : []), q)
+                    .filter((item) => {
+                        if (!mnQcGeojson) return true;
+                        return mnGeojsonContainsPoint(mnQcGeojson, Number(item.lat), Number(item.lon));
+                    })
+                    .slice(0, 6);
+
+                if (!filtered.length) {
+                    mnMapSearchResults = [];
+                    resultsHost.innerHTML = '<div class="mn-map-result" style="opacity:.7; cursor:default;">No exact Quezon City match found. Try a school, street, barangay, or landmark name.</div>';
                     return;
                 }
 
-                resultsHost.innerHTML = data.map(item => {
-                    const name = (item.display_name || '').split(',').slice(0, 3).join(', ');
-                    const lat = Number(item.lat);
-                    const lon = Number(item.lon);
-                    const safeName = String(name).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    return `<div class="mn-map-result" role="button" tabindex="0" onclick="mnSetMapSelection(${lat}, ${lon}, ${JSON.stringify(name)})">${safeName}</div>`;
-                }).join('');
+                mnRenderMapResults(filtered);
+                if (options.autoSelect) mnMapChooseSearchResult(0);
             } catch (e) {
+                if (e && e.name === 'AbortError') return;
                 resultsHost.innerHTML = '<div class="mn-map-result" style="opacity:.7; cursor:default;">Search failed. Please try again.</div>';
             }
         }
@@ -3180,6 +3312,7 @@ $pageTitle = 'Mass Notification System';
         let notificationPage = 1;
         let notificationTotalPages = 1;
         let notificationLoading = false;
+        let notificationRefreshQueued = false;
         let notificationRows = [];
         let mnDispatchSoundCtx = null;
         let mnDispatchSoundUnlocked = false;
@@ -3275,8 +3408,20 @@ $pageTitle = 'Mass Notification System';
             }, 'Delete dispatch');
         }
 
+        function mnRefreshDispatchHistory(forceFirstPage = false) {
+            if (forceFirstPage) notificationPage = 1;
+            if (notificationLoading) {
+                notificationRefreshQueued = true;
+                return;
+            }
+            loadNotifications(notificationPage);
+        }
+
         function loadNotifications(page = 1) {
-            if (notificationLoading) return;
+            if (notificationLoading) {
+                notificationRefreshQueued = true;
+                return;
+            }
             notificationPage = Math.max(1, Number(page) || 1);
             notificationLoading = true;
             updateNotificationsLazyLoadStatus();
@@ -3294,7 +3439,7 @@ $pageTitle = 'Mass Notification System';
                     notificationTotalPages = Number(data.pagination?.total_pages || 1) || 1;
                     if (rows.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color: var(--text-secondary-1);">No dispatch history yet.</td></tr>';
-                        updateMnAnalytics([]);
+                        updateMnAnalytics([], data.analytics || null);
                         renderNotificationsPager();
                         return;
                     }
@@ -3329,7 +3474,7 @@ $pageTitle = 'Mass Notification System';
                             </tr>
                         `;
                     }).join('');
-                    updateMnAnalytics(rows);
+                    updateMnAnalytics(rows, data.analytics || null);
                     renderNotificationsPager();
                 })
                 .catch(error => {
@@ -3340,6 +3485,10 @@ $pageTitle = 'Mass Notification System';
                 .finally(() => {
                     notificationLoading = false;
                     updateNotificationsLazyLoadStatus();
+                    if (notificationRefreshQueued) {
+                        notificationRefreshQueued = false;
+                        setTimeout(() => loadNotifications(notificationPage), 0);
+                    }
                 });
         }
 
@@ -3382,25 +3531,33 @@ $pageTitle = 'Mass Notification System';
             });
         }
         window.loadMoreNotifications = loadMoreNotifications;
-        function updateMnAnalytics(notifications) {
-            const total = notifications.length;
-            const completed = notifications.filter(n => n.status === 'completed').length;
-            const inProgress = notifications.filter(n => n.status === 'sending' || n.status === 'queued').length;
+        window.mnRefreshDispatchHistory = mnRefreshDispatchHistory;
+        function updateMnAnalytics(notifications, analytics = null) {
+            const source = analytics && typeof analytics === 'object' ? analytics : null;
+            let total = Number(source?.total_dispatches ?? 0);
+            let completed = Number(source?.completed_dispatches ?? 0);
+            let inProgress = Number(source?.in_progress_dispatches ?? 0);
+            let successSent = Number(source?.delivered ?? 0);
+            let successTotal = Number(source?.attempted ?? 0);
+            let rate = Number(source?.delivery_rate ?? 0);
 
-            let successSent = 0;
-            let successTotal = 0;
-            notifications.forEach(n => {
-                if (n.status === 'completed' && n.stats && n.stats.total) {
-                    successSent += Number(n.stats.sent || 0);
-                    successTotal += Number(n.stats.total || 0);
-                }
-            });
-            const rate = successTotal > 0 ? Math.round((successSent / successTotal) * 100) : 0;
+            if (!source) {
+                total = notifications.length;
+                completed = notifications.filter(n => ['completed', 'success', 'sent'].includes(String(n.status || '').toLowerCase())).length;
+                inProgress = notifications.filter(n => ['pending', 'queued', 'sending', 'processing', 'in_progress'].includes(String(n.status || '').toLowerCase())).length;
+                notifications.forEach(n => {
+                    if (n.stats && n.stats.total) {
+                        successSent += Number(n.stats.sent || 0);
+                        successTotal += Number(n.stats.total || 0);
+                    }
+                });
+                rate = successTotal > 0 ? Math.round((successSent / successTotal) * 100) : 0;
+            }
 
             document.getElementById('mnTotalDispatches').textContent = total;
             document.getElementById('mnCompletedDispatches').textContent = completed;
             document.getElementById('mnInProgressDispatches').textContent = inProgress;
-            document.getElementById('mnSuccessRate').textContent = rate;
+            document.getElementById('mnSuccessRate').textContent = Math.max(0, Math.min(100, rate));
             const sub = document.getElementById('mnSuccessRateSub');
             if (sub) sub.textContent = successTotal > 0 ? `${successSent}/${successTotal} delivered` : 'No completed delivery yet';
         }
@@ -3420,13 +3577,13 @@ $pageTitle = 'Mass Notification System';
             loadNotifications();
             setupNotificationsLazyLoader();
 
-            // Refresh the first page quietly; pause while hidden or while older pages are open.
+            // Refresh dispatch history and analytics quietly while the page is visible.
             setInterval(() => {
-                if (!document.hidden && notificationPage === 1) loadNotifications(true);
-            }, 30000);
+                if (!document.hidden) mnRefreshDispatchHistory(false);
+            }, 10000);
 
             document.addEventListener('visibilitychange', () => {
-                if (!document.hidden && notificationPage === 1) loadNotifications(true);
+                if (!document.hidden) mnRefreshDispatchHistory(false);
             });
 
             // Close wizard on backdrop click / escape
@@ -3446,6 +3603,8 @@ $pageTitle = 'Mass Notification System';
     </script>
 </body>
 </html>
+
+
 
 
 

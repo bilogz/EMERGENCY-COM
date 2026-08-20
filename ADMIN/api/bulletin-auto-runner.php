@@ -19,10 +19,11 @@ if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
     exit(0);
 }
 
-function runBulletinChild(string $script, bool $dryRun = false): array
+function runBulletinChild(string $script, bool $dryRun = false, array $extraArgs = []): array
 {
     $command = [PHP_BINARY, $script];
     if ($dryRun) $command[] = '--dry-run';
+    foreach ($extraArgs as $arg) $command[] = (string)$arg;
     $pipes = [];
     $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, __DIR__);
     if (!is_resource($process)) {
@@ -57,6 +58,7 @@ function appendBulletinRunnerLog(string $path, array $result): void
 
 $startedAt = date('Y-m-d H:i:s');
 $pagasa = runBulletinChild(__DIR__ . '/pagasa-auto-alert.php', $dryRun);
+$weatherRisk = runBulletinChild(__DIR__ . '/weather-monitoring.php', false, [$dryRun ? '--action=risk' : '--action=auto-risk-check']);
 $phivolcs = runBulletinChild(__DIR__ . '/phivolcs-auto-alert.php', $dryRun);
 
 $worker = ['success' => true, 'skipped' => $dryRun];
@@ -71,11 +73,12 @@ if (!$dryRun) {
 }
 
 $result = [
-    'success' => !empty($pagasa['success']) && !empty($phivolcs['success']) && !empty($worker['success']),
+    'success' => !empty($pagasa['success']) && !empty($weatherRisk['success']) && !empty($phivolcs['success']) && !empty($worker['success']),
     'dry_run' => $dryRun,
     'started_at' => $startedAt,
     'finished_at' => date('Y-m-d H:i:s'),
     'pagasa' => $pagasa,
+    'weather_risk' => $weatherRisk,
     'phivolcs' => $phivolcs,
     'worker' => $worker
 ];
@@ -85,3 +88,4 @@ echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL;
 flock($lock, LOCK_UN);
 fclose($lock);
 exit($result['success'] ? 0 : 1);
+

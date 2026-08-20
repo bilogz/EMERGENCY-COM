@@ -55,6 +55,7 @@ if ($method === 'GET') {
         $hasSource = checkTableColumn($pdo, $alertsTable, 'source');
         $hasType = checkTableColumn($pdo, $alertsTable, 'type');
         $hasCategoryCol = checkTableColumn($pdo, $alertsTable, 'category');
+        $hasMoreInfoUrl = checkTableColumn($pdo, $alertsTable, 'more_info_url');
         $hasCategoryTable = false;
         
         try {
@@ -70,6 +71,7 @@ if ($method === 'GET') {
         $query .= ($hasSource ? "a.source" : "'' AS source") . ", ";
         $query .= ($hasType ? "a.type" : "'' AS type") . ", ";
         $query .= ($hasCategoryCol ? "a.category" : "'' AS category") . ", ";
+        $query .= ($hasMoreInfoUrl ? "a.more_info_url" : "'' AS more_info_url") . ", ";
         $query .= "a.status, a.created_at, a.updated_at, ";
         
         if ($hasCategoryTable) {
@@ -263,6 +265,7 @@ elseif ($method === 'POST') {
         $hasLatitudeCol = checkTableColumn($pdo, $alertsTable, 'latitude');
         $hasLongitudeCol = checkTableColumn($pdo, $alertsTable, 'longitude');
         $hasCategoryCol = checkTableColumn($pdo, $alertsTable, 'category');
+        $hasMoreInfoUrl = checkTableColumn($pdo, $alertsTable, 'more_info_url');
 
         $alertCols = ['title', 'message', 'content', 'category_id', 'status'];
         $alertVals = [$title, $message, $message, $categoryId, 'active'];

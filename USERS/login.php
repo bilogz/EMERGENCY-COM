@@ -109,26 +109,22 @@ $assetBase = '../ADMIN/header/';
                 <div class="auth-page">
                 <section class="page-content">
                     <h2 data-translate="login.title">User Login</h2>
-                    <p class="login-instruction" data-translate="login.instruction">Log in using your registered contact number and full name.</p>
+                    <p class="login-instruction" data-translate="login.instruction">Log in using your registered email and password.</p>
                     
                     <!-- Login Form -->
                     <form class="auth-form" id="loginForm" style="display: block;">
                         <div class="form-group">
-                            <label for="full_name">
-                                <i class="fas fa-user"></i> <span data-translate="login.fullName">Full Name</span>
+                            <label for="email">
+                                <i class="fas fa-envelope"></i> <span data-translate="login.email">Email</span>
                             </label>
-                            <input type="text" id="full_name" name="full_name" placeholder="Juan Dela Cruz" required autocomplete="name">
+                            <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email">
                         </div>
 
                         <div class="form-group">
-                            <label for="phone">
-                                <i class="fas fa-phone"></i> <span data-translate="login.mobileNumber">Mobile Number</span>
+                            <label for="password">
+                                <i class="fas fa-lock"></i> <span data-translate="login.password">Password</span>
                             </label>
-                            <div class="input-with-prefix">
-                                <span class="prefix">+63</span>
-                                <input type="tel" id="phone" name="phone" pattern="[0-9]{10}" maxlength="10" placeholder="9XXXXXXXXX" title="Enter 10 digits without spaces" required autocomplete="tel">
-                            </div>
-                            <small class="form-hint" data-translate="login.mobileHint">Enter your 10-digit mobile number (without spaces)</small>
+                            <input type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password">
                         </div>
                         
                         <div class="error-message" id="errorMessage" style="display: none;">
@@ -572,48 +568,33 @@ $assetBase = '../ADMIN/header/';
                 loginButton.querySelector('.btn-spinner').style.display = 'none';
             }
         }
-        
-        // Phone input validation (digits only, no leading zero)
-        const phoneInput = document.getElementById('phone');
-        if (phoneInput) {
-            phoneInput.addEventListener('input', function () {
-                this.value = this.value.replace(/\D/g, '');
-                if (this.value.length === 1 && this.value === '0') {
-                    this.value = '';
-                }
-            });
-        }
-        
-        // Login with phone (no CAPTCHA)
+        // Login with email and password (no CAPTCHA)
         loginForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             hideError();
             
-            const fullName = document.getElementById('full_name').value.trim();
-            const phone = document.getElementById('phone').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
             
-            if (!fullName) {
-                showError('Please enter your full name.');
+            if (!email) {
+                showError('Please enter your email.');
                 return;
             }
             
-            if (!phone) {
-                showError('Please enter your mobile number.');
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                showError('Please enter a valid email address.');
                 return;
             }
             
-            // Validate phone number (should be 10 digits)
-            if (phone.length !== 10 || !/^[1-9]\d{9}$/.test(phone)) {
-                showError('Please enter a valid 10-digit mobile number.');
+            if (!password) {
+                showError('Please enter your password.');
                 return;
             }
             
             setLoading(true);
             
             try {
-                // Add +63 prefix to phone number
-                const phoneWithPrefix = '+63' + phone;
-                const payload = { phone: phoneWithPrefix, name: fullName };
+                const payload = { email, password };
 
                 const response = await fetch('api/login-with-phone.php', {
                     method: 'POST',
@@ -631,8 +612,11 @@ $assetBase = '../ADMIN/header/';
                     if (data.user_id) {
                         sessionStorage.setItem('user_id', data.user_id);
                     }
-                    if (data.user_name || fullName) {
-                        sessionStorage.setItem('user_name', data.user_name || fullName);
+                    if (data.user_name) {
+                        sessionStorage.setItem('user_name', data.user_name);
+                    }
+                    if (data.email) {
+                        sessionStorage.setItem('user_email', data.email);
                     }
                     if (data.phone) {
                         sessionStorage.setItem('user_phone', data.phone);
@@ -641,14 +625,14 @@ $assetBase = '../ADMIN/header/';
                     Swal.fire({
                         icon: 'success',
                         title: 'Login Successful!',
-                        text: 'Welcome, ' + (data.user_name || fullName),
+                        text: 'Welcome, ' + (data.user_name || 'User'),
                         showConfirmButton: false,
                         timer: 1500
                     }).then(() => {
                         window.location.href = '../index.php';
                     });
                 } else {
-                    showError(data.message || 'Login failed. Please check your phone number and name.');
+                    showError(data.message || 'Login failed. Please check your email and password.');
                 }
                 setLoading(false);
             } catch (error) {
@@ -1003,5 +987,6 @@ $assetBase = '../ADMIN/header/';
 
 </body>
 </html>
+
 
 

@@ -100,7 +100,7 @@ function ensureSupportedLanguagesSchema(PDO $pdo, string $tableName): void {
         $pdo->exec("ALTER TABLE {$tableName} ADD COLUMN updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP AFTER created_at");
     }
 
-    // Seed core languages and PH dialects; preserve existing rows via upsert.
+    // Keep the production language catalog intentionally small. Mobile and admin support English and Tagalog only.
     $seedStmt = $pdo->prepare("
         INSERT INTO {$tableName}
             (language_code, language_name, native_name, flag_emoji, is_active, is_ai_supported, priority)
@@ -109,44 +109,20 @@ function ensureSupportedLanguagesSchema(PDO $pdo, string $tableName): void {
         ON DUPLICATE KEY UPDATE
             language_name = VALUES(language_name),
             native_name = VALUES(native_name),
+            is_active = 1,
             is_ai_supported = VALUES(is_ai_supported),
+            priority = VALUES(priority),
             updated_at = NOW()
     ");
     $seedData = [
-        // Core
         ['en', 'English', 'English', '', 100],
-        ['fil', 'Filipino', 'Filipino', '', 98],
-        ['tl', 'Tagalog', 'Tagalog', '', 96],
-        // Major Philippine languages/dialects
-        ['ceb', 'Cebuano', 'Cebuano', '', 94],
-        ['ilo', 'Ilocano', 'Ilokano', '', 92],
-        ['hil', 'Hiligaynon', 'Hiligaynon', '', 90],
-        ['war', 'Waray', 'Winaray', '', 88],
-        ['bik', 'Bikol', 'Bikol', '', 86],
-        ['kap', 'Kapampangan', 'Kapampangan', '', 84],
-        ['pan', 'Pangasinan', 'Pangasinan', '', 82],
-        ['mrw', 'Maranao', 'Maranao', '', 80],
-        ['tsg', 'Tausug', 'Tausug', '', 78],
-        ['mag', 'Maguindanaon', 'Maguindanaon', '', 76],
-        ['cha', 'Chavacano', 'Chavacano', '', 74],
-        ['kin', 'Kinaray-a', 'Kinaray-a', '', 72],
-        ['akl', 'Aklanon', 'Aklanon', '', 70],
-        ['sur', 'Surigaonon', 'Surigaonon', '', 68],
-        ['yka', 'Yakan', 'Yakan', '', 66],
-        // Additional global languages
-        ['zh', 'Chinese', '中文', '', 60],
-        ['es', 'Spanish', 'Español', '', 58],
-        ['ja', 'Japanese', '日本語', '', 56],
-        ['ko', 'Korean', '한국어', '', 54],
-        ['ar', 'Arabic', 'العربية', '', 52],
-        ['fr', 'French', 'Français', '', 50],
-        ['de', 'German', 'Deutsch', '', 48],
-        ['ru', 'Russian', 'Русский', '', 46],
-        ['hi', 'Hindi', 'हिन्दी', '', 44],
+        ['tl', 'Tagalog', 'Tagalog', '', 90],
     ];
     foreach ($seedData as $row) {
         $seedStmt->execute($row);
     }
+
+    $pdo->exec("UPDATE {$tableName} SET is_active = 0, updated_at = NOW() WHERE language_code NOT IN ('en', 'tl')");
 }
 
 // Check admin authentication
@@ -185,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'add') {
     // Add new language
     $input = json_decode(file_get_contents('php://input'), true);
     
-    $languageCode = $input['language_code'] ?? '';
+    $languageCode = strtolower(trim((string)($input['language_code'] ?? '')));
     $languageName = $input['language_name'] ?? '';
     $nativeName = $input['native_name'] ?? $languageName;
     $flagEmoji = $input['flag_emoji'] ?? '🌐';
@@ -193,8 +169,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'add') {
     $isAISupported = isset($input['is_ai_supported']) ? (int)$input['is_ai_supported'] : 1;
     $priority = isset($input['priority']) ? (int)$input['priority'] : 0;
     
-    if (empty($languageCode) || empty($languageName)) {
-        echo json_encode(['success' => false, 'message' => 'Language code and name are required.']);
+    if (!in_array($languageCode, ['en', 'tl'], true)) {
+        echo json_encode(['success' => false, 'message' => 'Only English and Tagalog are supported.']);
+        exit;
+    }
+
+    if (empty($languageName)) {
+        echo json_encode(['success' => false, 'message' => 'Language name is required.']);
         exit;
     }
     
@@ -337,10 +318,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'add') {
             SELECT id, language_code, language_name, native_name, flag_emoji, 
                    is_active, is_ai_supported, priority, created_at, updated_at
             FROM {$languagesTable}
+            WHERE language_code IN ('en', 'tl')
         ";
         
         if (!$includeInactive) {
-            $query .= " WHERE is_active = 1";
+            $query .= " AND is_active = 1";
         }
         
         $query .= " ORDER BY priority DESC, language_name ASC";

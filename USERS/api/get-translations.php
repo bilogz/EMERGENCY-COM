@@ -298,11 +298,10 @@ $baseTranslations = [
     
     // Login Page
     'login.title' => 'User Login',
-    'login.instruction' => 'Log in using your registered contact number and full name.',
-    'login.fullName' => 'Full Name',
-    'login.mobileNumber' => 'Mobile Number',
-    'login.mobileHint' => 'Enter your 10-digit mobile number (without spaces)',
-    'login.smsHint' => 'We\'ll send you a verification code via SMS',
+    'login.instruction' => 'Log in using your registered email and password.',
+    'login.email' => 'Email',
+    'login.password' => 'Password',
+        'login.smsHint' => 'We\'ll send you a verification code via SMS',
     'login.sendOTP' => 'Send OTP',
     'login.backToLogin' => 'Back to Regular Login',
     
@@ -442,11 +441,10 @@ $filipinoTranslations = [
     
     // Login Page
     'login.title' => 'User Login',
-    'login.instruction' => 'Log in using your registered contact number and full name.',
-    'login.fullName' => 'Full Name',
-    'login.mobileNumber' => 'Mobile Number',
-    'login.mobileHint' => 'Enter your 10-digit mobile number (without spaces)',
-    'login.smsHint' => 'We\'ll send you a verification code via SMS',
+    'login.instruction' => 'Log in using your registered email and password.',
+    'login.email' => 'Email',
+    'login.password' => 'Password',
+        'login.smsHint' => 'We\'ll send you a verification code via SMS',
     'login.sendOTP' => 'Send OTP',
     'login.backToLogin' => 'Back to Regular Login',
     'login.login' => 'Login',
