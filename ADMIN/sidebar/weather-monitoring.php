@@ -1,0 +1,2889 @@
+<?php
+/**
+ * Weather Monitoring Page
+ * Real-time weather monitoring with map, AI analysis, and Google Weather style display
+ */
+
+session_start();
+header('Content-Type: text/html; charset=UTF-8');
+
+$publicView = isset($_GET['public']) && $_GET['public'] == '1';
+
+// Check if user is logged in (skip for public view)
+if (!$publicView && (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true)) {
+    header('Location: ../login.php');
+    exit();
+}
+
+$pageTitle = 'Weather Monitoring';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo htmlspecialchars($pageTitle); ?></title>
+    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+    <link rel="stylesheet" href="css/global.css?v=<?php echo filemtime(__DIR__ . '/css/global.css'); ?>">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/sidebar.css?v=<?php echo filemtime(__DIR__ . '/css/sidebar.css'); ?>">
+    <link rel="stylesheet" href="css/admin-header.css">
+    <link rel="stylesheet" href="css/buttons.css">
+    <link rel="stylesheet" href="css/hero.css">
+    <link rel="stylesheet" href="css/sidebar-footer.css">
+    <link rel="stylesheet" href="css/modules.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="css/module-weather-monitoring.css?v=<?php echo filemtime(__DIR__ . '/css/module-weather-monitoring.css'); ?>">
+    <?php if ($publicView): ?>
+    <style>
+        body.public-view .main-content {
+            margin-left: 0;
+            padding-top: 2rem;
+        }
+        body.public-view .main-container {
+            max-width: 1200px;
+        }
+    </style>
+    <?php endif; ?>
+    <style>
+        .alertara-action-modal { position:fixed; inset:0; z-index:100000; display:none; align-items:center; justify-content:center; padding:1.25rem; background:rgba(4,15,20,0.62); backdrop-filter:blur(4px); }
+        .alertara-action-dialog { width:min(470px, 100%); background:var(--card-bg-1); color:var(--text-color-1); border:1px solid var(--border-color-1); border-radius:10px; box-shadow:0 22px 60px rgba(0,0,0,0.32); padding:1.25rem; display:grid; grid-template-columns:auto 1fr; gap:1rem; }
+        .alertara-action-icon { width:48px; height:48px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; background:linear-gradient(135deg,#2563eb,#06b6d4); font-size:1.25rem; }
+        .alertara-action-copy h3 { margin:0 0 0.4rem; font-size:1rem; font-weight:800; }
+        .alertara-action-copy p { margin:0; color:var(--text-secondary-1); line-height:1.45; font-size:0.9rem; }
+        .alertara-action-actions { grid-column:1 / -1; display:flex; justify-content:flex-end; gap:0.7rem; margin-top:0.6rem; }
+        .alertara-action-actions.single { justify-content:flex-end; }
+        .alertara-modal-primary, .alertara-modal-secondary { border:0; border-radius:8px; padding:0.7rem 1rem; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:0.4rem; }
+        .alertara-modal-primary { background:#4f9a97; color:#fff; }
+        .alertara-modal-secondary { background:var(--bg-color-2); color:var(--text-color-1); border:1px solid var(--border-color-1); }
+        .alertara-action-modal.is-error .alertara-action-icon { background:linear-gradient(135deg,#991b1b,#ef4444); }
+    </style>
+</head>
+<body class="<?php echo $publicView ? 'public-view' : ''; ?>" data-disable-auto-darkmode="true">
+    <?php if (!$publicView): ?>
+        <?php include 'includes/sidebar.php'; ?>
+        <?php include 'includes/admin-header.php'; ?>
+    <?php endif; ?>
+    
+    <div class="main-content">
+        <div class="main-container">
+            <div class="title">
+                <h1><i class="fas fa-cloud-sun-rain"></i> Weather Monitoring</h1>
+                <p>Real-time weather data with AI-powered analysis</p>
+            </div>
+            
+            <div class="weather-container">
+                <!-- Weather Bulletin Board Section -->
+                <div class="map-section" style="padding: 1.5rem; overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--border-color-1); padding-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <h2 style="margin: 0; font-size: 1.25rem; color: var(--text-color-1); font-weight: 700; text-transform: uppercase;"><i class="fas fa-bullhorn" style="color: #2980b9;"></i> PAGASA Weather Bulletin Board</h2>
+                            <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-weight: 700; color: #27ae60;">
+                                <span style="width:8px;height:8px;border-radius:50%;background:#27ae60;display:inline-block;animation:wxPulse 2s infinite;"></span> LIVE
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <span id="wxLastRefresh" style="font-size: 0.75rem; color: var(--text-secondary-1);">Updated just now</span>
+                            <button onclick="fetchPagasaBulletins(null)" style="background: var(--bg-color-1); border: 1px solid var(--border-color-1); color: var(--text-color-1); padding: 0.45rem 0.75rem; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; font-weight: 600;"><i class="fas fa-sync-alt"></i> Refresh</button>
+                            <button onclick="openWeatherMapModal()" class="btn btn-primary" style="background: linear-gradient(135deg, #2980b9, #3498db); color: white; padding: 0.5rem 1rem; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 0.82rem;"><i class="fas fa-map-marked-alt"></i> Open Weather Map</button>
+                        </div>
+                    </div>
+
+                    <!-- Active Warning Status -->
+                    <div id="autoWarningStatus" class="auto-warning-status" style="display: none; margin-bottom: 1rem; padding: 1rem; background: rgba(231, 76, 60, 0.15); border-left: 4px solid #e74c3c; border-radius: 4px;">
+                        <i class="fas fa-exclamation-triangle" style="color: #e74c3c; margin-right: 0.5rem;"></i>
+                        <span id="warningMessage" style="font-weight: 600; color: var(--text-color-1);"></span>
+                    </div>
+
+                    <!-- PAGASA Real-time Bulletins Feed -->
+                    <div id="pagasaBulletinsFeed" class="pagasa-bulletins-feed">
+                        <div style="text-align: center; padding: 3rem; opacity: 0.7;">
+                            <i class="fas fa-circle-notch fa-spin" style="font-size: 2.5rem; margin-bottom: 1rem; color: #2980b9;"></i>
+                            <p style="font-size: 1.1rem; font-weight: 500; color: var(--text-color-1);">Retrieving latest weather advisories from PAGASA...</p>
+                        </div>
+                    </div>
+
+                    <!-- PAGASA Weather Alert Archive Collapsible -->
+                    <div style="margin-top: 1.5rem; border-top: 1px solid var(--border-color-1); padding-top: 1rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                            <h3 style="margin: 0; font-size: 1rem; color: var(--text-color-1); font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
+                                <i class="fas fa-history" style="color: #2980b9;"></i> PAGASA Weather Alert Archive
+                            </h3>
+                            <button onclick="togglePagasaArchive()" id="toggleArchiveBtn" style="background: var(--bg-color-1); border: 1px solid var(--border-color-1); color: var(--text-color-1); padding: 0.35rem 0.65rem; border-radius: 5px; cursor: pointer; font-size: 0.76rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.3rem;">
+                                <i class="fas fa-eye"></i> Show Archive
+                            </button>
+                        </div>
+                        <div id="pagasaHistoryWrapper" style="display: none;">
+                            <div id="pagasaHistoryFeed" style="max-height: 300px; overflow-y: auto; background: var(--bg-color-1); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color-1);">
+                                <div style="text-align: center; padding: 1.5rem; opacity: 0.5; color: var(--text-color-2);">
+                                    <i class="fas fa-spinner fa-spin" style="margin-bottom: 0.3rem;"></i> Loading bulletin archive...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sidebar Section -->
+                <div class="weather-sidebar">
+                    <!-- Current Weather - Google Style -->
+                    <div class="weather-card google-weather-card">
+                        <div id="currentWeatherGoogle" class="google-weather-display">
+                            <div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Hourly Chart -->
+                    <div class="weather-card">
+                        <div class="weather-tabs">
+                            <button class="weather-tab active" data-tab="temperature">Temperature</button>
+                            <button class="weather-tab" data-tab="precipitation">Precipitation</button>
+                            <button class="weather-tab" data-tab="wind">Wind</button>
+                        </div>
+                        <div id="hourlyGraph" class="hourly-graph">
+                            <canvas id="hourlyTempChart" height="120"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- 7-Day Forecast -->
+                    <div class="weather-card">
+                        <h3><i class="fas fa-calendar-week"></i> 7-Day Forecast</h3>
+                        <div id="weeklyForecast" class="weekly-forecast">
+                            <div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+                        </div>
+                    </div>
+                    
+                    
+                    <!-- Weather Risk Monitor -->
+                    <div class="weather-card weather-risk-card">
+                        <h3>
+                            <i class="fas fa-triangle-exclamation" style="color:#e67e22;"></i> Weather Risk Monitor
+                            <span id="weatherRiskStatus" class="ai-status">Loading</span>
+                        </h3>
+                        <div id="weatherRiskMonitor" class="weather-risk-monitor">
+                            <div class="loading"><i class="fas fa-spinner fa-spin"></i> Checking Open-Meteo forecast risks...</div>
+                        </div>
+                    </div>
+                    <!-- AI Analysis -->
+                    <div class="weather-card ai-analysis-card">
+                        <h3>
+                            <i class="fas fa-robot" style="color: #8e44ad;"></i> AI Weather Analysis
+                            <span id="aiStatus" class="ai-status">Ready</span>
+                        </h3>
+<div id="aiAnalysis" class="ai-analysis-content">
+                            <button onclick="getAIWeatherAnalysis()" class="ai-analyze-btn">
+                                <i class="fas fa-brain"></i> Analyze Weather
+                            </button>
+                            <button onclick="sendWeatherAlert()" class="ai-analyze-btn" style="margin-top: 0.5rem; background: linear-gradient(135deg, #27ae60, #229954);">
+                                <i class="fas fa-paper-plane"></i> Send Alert
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // API Keys - Will be loaded from server
+        // Note: API key is now handled securely server-side via gemini-proxy.php
+        let GEMINI_API_KEY = null;
+        
+        // Load Gemini API key from server
+        fetch('../api/get-gemini-key.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.apiKey) {
+                    GEMINI_API_KEY = data.apiKey;
+                } else {
+                    console.warn('Gemini API key not configured:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading Gemini API key:', error);
+            });
+        
+        let map;
+        let markers = [];
+        let mapInitialized = false;
+        let windFlowEnabled = false;
+        let radarEnabled = false;
+        let precipitationEnabled = false;
+        let humidityEnabled = false;
+        let temperatureEnabled = false;
+        let windSpeedEnabled = false;
+        let cloudsEnabled = false;
+        let aiAnalysisInProgress = false;
+        
+        // Weather layers
+        let radarLayer = null;
+        let precipitationLayer = null;
+        let humidityLayer = null;
+        let temperatureLayer = null;
+        let windSpeedLayer = null;
+        let cloudsLayer = null;
+        let satelliteLayer = null;
+        let parPolygon = null;
+        let satelliteEnabled = false;
+        let windFlowCanvas = null;
+        let windFlowCtx = null;
+        let windParticles = [];
+        let animationFrameId = null;
+        
+        // Map tile layer - always uses light tiles (not affected by dark mode)
+        let currentTileLayer = null;
+        
+        // Automated warning system
+        let autoWarningInterval = null;
+        let lastWarningTime = null;
+        
+        // Initialize map
+        function initMap() {
+            // Focus on Quezon City with smooth animation
+            map = L.map('weatherMap').setView([14.6488, 121.0509], 12);
+            
+            // Always use light mode tiles - Standard OpenStreetMap (green land, blue ocean)
+            // Map is not affected by page dark mode setting
+            currentTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: 'Ã‚Â© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 19
+            });
+            currentTileLayer.addTo(map);
+            
+            // Draw PAR (Philippine Area of Responsibility) boundary red line
+            const parCoords = [
+                [25.0, 120.0],
+                [25.0, 135.0],
+                [5.0, 135.0],
+                [5.0, 115.0],
+                [15.0, 115.0],
+                [21.0, 120.0]
+            ];
+            parPolygon = L.polygon(parCoords, {
+                color: '#ff3b30',
+                weight: 2,
+                dashArray: '5, 8',
+                fill: false,
+                attribution: 'PAGASA PAR Boundary'
+            }).addTo(map);
+            
+            // Ensure map shows green land and blue ocean clearly
+            document.getElementById('weatherMap').style.filter = 'none';
+            
+            // Smooth fly to Quezon City center
+            setTimeout(() => {
+                map.flyTo([14.6488, 121.0509], 12, {
+                    duration: 1.5,
+                    easeLinearity: 0.25
+                });
+            }, 300);
+            
+            // Ensure Quezon City stays in view on resize
+            window.addEventListener('resize', () => {
+                setTimeout(() => {
+                    if (map) {
+                        map.invalidateSize();
+                        if (!map.getBounds().contains([14.6488, 121.0509])) {
+                            map.setView([14.6488, 121.0509], map.getZoom());
+                        }
+                    }
+                }, 100);
+            });
+            
+            // Load Quezon City boundary
+            loadQuezonCityBoundary();
+            
+            // Update marker visibility on zoom
+            map.on('zoomend', function() {
+                updateMarkerVisibility();
+                const zoom = map.getZoom();
+                const indicator = document.getElementById('zoomIndicator');
+                if (indicator) {
+                    indicator.textContent = `Zoom: ${zoom}`;
+                }
+                if (windFlowEnabled && windFlowCanvas) {
+                    createWindParticles();
+                    if (animationFrameId) {
+                        drawWindFlow();
+                    }
+                }
+                updateQuezonCityStatus();
+            });
+            
+            map.on('moveend', function() {
+                if (windFlowEnabled && windFlowCanvas) {
+                    createWindParticles();
+                    if (animationFrameId) {
+                        drawWindFlow();
+                    }
+                }
+                updateQuezonCityStatus();
+            });
+            
+            // Initial status update
+            updateQuezonCityStatus();
+            
+            mapInitialized = true;
+            
+            // Initialize weather layers
+            initWeatherLayers();
+            
+            // Initialize wind flow canvas
+            initWindFlowCanvas();
+            
+            // Load map markers data
+            setTimeout(() => {
+                loadMapData();
+            }, 300);
+        }
+        
+        // Initialize weather layers
+        function initWeatherLayers() {
+            // RainViewer Radar will be initialized when needed (no need to create it here)
+            radarLayer = null;
+            
+            // OpenWeatherMap Humidity Layer (requires API key)
+            humidityLayer = L.tileLayer('https://tile.openweathermap.org/map/humidity_new/{z}/{x}/{y}.png?appid={apiKey}', {
+                attribution: 'OpenWeatherMap',
+                opacity: 0.6,
+                apiKey: 'YOUR_OPENWEATHER_API_KEY' // Will be fetched from API
+            });
+            
+            // OpenWeatherMap Temperature Layer
+            temperatureLayer = L.tileLayer('https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid={apiKey}', {
+                attribution: 'OpenWeatherMap',
+                opacity: 0.6,
+                apiKey: 'YOUR_OPENWEATHER_API_KEY'
+            });
+            
+            // OpenWeatherMap Wind Speed Layer
+            windSpeedLayer = L.tileLayer('https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid={apiKey}', {
+                attribution: 'OpenWeatherMap',
+                opacity: 0.6,
+                apiKey: 'YOUR_OPENWEATHER_API_KEY'
+            });
+            
+            // OpenWeatherMap Clouds Layer
+            cloudsLayer = L.tileLayer('https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid={apiKey}', {
+                attribution: 'OpenWeatherMap',
+                opacity: 0.5,
+                apiKey: 'YOUR_OPENWEATHER_API_KEY'
+            });
+            
+            // Setup button handlers
+            setupLayerButtons();
+            
+            // Start automated weather warnings
+            startAutomatedWarnings();
+        }
+        
+        // Setup layer toggle buttons
+        function setupLayerButtons() {
+            document.getElementById('satelliteBtn')?.addEventListener('click', toggleSatellite);
+            document.getElementById('windFlowBtn')?.addEventListener('click', toggleWindFlow);
+            document.getElementById('radarBtn')?.addEventListener('click', toggleRadar);
+            document.getElementById('precipitationBtn')?.addEventListener('click', togglePrecipitation);
+            document.getElementById('humidityBtn')?.addEventListener('click', toggleHumidity);
+            document.getElementById('temperatureBtn')?.addEventListener('click', toggleTemperature);
+            document.getElementById('windSpeedBtn')?.addEventListener('click', toggleWindSpeed);
+            document.getElementById('cloudsBtn')?.addEventListener('click', toggleClouds);
+        }
+        
+        // Map always uses light tiles - not affected by page dark mode
+        // Removed toggleDarkMode function to keep map consistent
+        
+        // Helper function to disable all other map modes
+        function disableAllMapModes() {
+            // Disable all modes
+            windFlowEnabled = false;
+            radarEnabled = false;
+            precipitationEnabled = false;
+            humidityEnabled = false;
+            temperatureEnabled = false;
+            windSpeedEnabled = false;
+            cloudsEnabled = false;
+            satelliteEnabled = false;
+            
+            // Remove all layers
+            if (radarLayer && map.hasLayer(radarLayer)) {
+                map.removeLayer(radarLayer);
+            }
+            if (precipitationLayer && map.hasLayer(precipitationLayer)) {
+                map.removeLayer(precipitationLayer);
+            }
+            if (humidityLayer && map.hasLayer(humidityLayer)) {
+                map.removeLayer(humidityLayer);
+            }
+            if (temperatureLayer && map.hasLayer(temperatureLayer)) {
+                map.removeLayer(temperatureLayer);
+            }
+            if (windSpeedLayer && map.hasLayer(windSpeedLayer)) {
+                map.removeLayer(windSpeedLayer);
+            }
+            if (cloudsLayer && map.hasLayer(cloudsLayer)) {
+                map.removeLayer(cloudsLayer);
+            }
+            if (satelliteLayer && map.hasLayer(satelliteLayer)) {
+                map.removeLayer(satelliteLayer);
+            }
+            stopWindFlowAnimation();
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('.map-control-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+        }
+        
+        function toggleSatellite() {
+            const btn = document.getElementById('satelliteBtn');
+            if (satelliteEnabled) {
+                satelliteEnabled = false;
+                btn.classList.remove('active');
+                if (satelliteLayer && map.hasLayer(satelliteLayer)) {
+                    map.removeLayer(satelliteLayer);
+                }
+            } else {
+                disableAllMapModes();
+                satelliteEnabled = true;
+                btn.classList.add('active');
+                
+                if (!satelliteLayer) {
+                    satelliteLayer = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Himawari_AHI_Band13_Clean_Infrared/default/default/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png', {
+                        attribution: 'NASA GIBS / JMA Himawari-9',
+                        maxZoom: 9,
+                        minZoom: 1,
+                        opacity: 0.65,
+                        zIndex: 250
+                    });
+                }
+                satelliteLayer.addTo(map);
+                
+                // Fly to regional view to see the PAR boundary and satellite clouds
+                if (map) {
+                    map.flyTo([13.0, 122.0], 5, {
+                        duration: 1.5
+                    });
+                }
+            }
+        }
+
+        // Toggle functions - Only one mode can be active at a time
+        function toggleWindFlow() {
+            const btn = document.getElementById('windFlowBtn');
+            if (windFlowEnabled) {
+                // Turn off
+                windFlowEnabled = false;
+                btn.classList.remove('active');
+                stopWindFlowAnimation();
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on wind flow
+                windFlowEnabled = true;
+                btn.classList.add('active');
+                if (markers.length > 0) {
+                    startWindFlowAnimation();
+                } else {
+                    // Wait for markers to load
+                    setTimeout(() => {
+                        if (markers.length > 0) {
+                            startWindFlowAnimation();
+                        }
+                    }, 500);
+                }
+            }
+        }
+        
+        function toggleRadar() {
+            const btn = document.getElementById('radarBtn');
+            if (radarEnabled) {
+                // Turn off
+                radarEnabled = false;
+                btn.classList.remove('active');
+                if (radarLayer && map.hasLayer(radarLayer)) {
+                    map.removeLayer(radarLayer);
+                }
+                if (window.radarUpdateInterval) {
+                    clearInterval(window.radarUpdateInterval);
+                }
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on radar
+                radarEnabled = true;
+                btn.classList.add('active');
+                
+                // Use RainViewer API for radar (free, no API key needed)
+                // First, get available radar timestamps
+                fetch('https://api.rainviewer.com/public/weather-maps.json')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data && data.radar && data.radar.past && data.radar.past.length > 0) {
+                            // Get the latest available timestamp
+                            const latestTimestamp = data.radar.past[data.radar.past.length - 1].time;
+                            
+                            // Remove existing radar layer if any
+                            if (radarLayer && map.hasLayer(radarLayer)) {
+                                map.removeLayer(radarLayer);
+                            }
+                            
+                            // Create new radar layer with latest timestamp
+                            radarLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${latestTimestamp}/256/{z}/{x}/{y}/2/1_1.png`, {
+                                attribution: 'RainViewer &copy; <a href="https://www.rainviewer.com">RainViewer.com</a>',
+                                opacity: 0.6, // Increased opacity for better visibility
+                                zIndex: 300
+                            });
+                            
+                            radarLayer.addTo(map);
+                            
+                            // Update radar every 10 minutes
+                            if (window.radarUpdateInterval) {
+                                clearInterval(window.radarUpdateInterval);
+                            }
+                            window.radarUpdateInterval = setInterval(() => {
+                                if (radarEnabled && radarLayer) {
+                                    fetch('https://api.rainviewer.com/public/weather-maps.json')
+                                        .then(response => response.json())
+                                        .then(updateData => {
+                                            if (updateData && updateData.radar && updateData.radar.past && updateData.radar.past.length > 0) {
+                                                const newTimestamp = updateData.radar.past[updateData.radar.past.length - 1].time;
+                                                radarLayer.setUrl(`https://tilecache.rainviewer.com/v2/radar/${newTimestamp}/256/{z}/{x}/{y}/2/1_1.png`);
+                                            }
+                                        })
+                                        .catch(err => console.error('Error updating radar:', err));
+                                }
+                            }, 600000); // 10 minutes
+                        } else {
+                            showWeatherSendResult('Weather Notice', 'Radar data is currently unavailable. Please try again later.', true);
+                            radarEnabled = false;
+                            btn.classList.remove('active');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading radar:', error);
+                        showWeatherSendResult('Weather Notice', 'Could not load radar data. Please check your internet connection.', true);
+                        radarEnabled = false;
+                        btn.classList.remove('active');
+                    });
+            }
+        }
+        
+        function togglePrecipitation() {
+            const btn = document.getElementById('precipitationBtn');
+            if (precipitationEnabled) {
+                // Turn off
+                precipitationEnabled = false;
+                btn.classList.remove('active');
+                if (precipitationLayer && map.hasLayer(precipitationLayer)) {
+                    map.removeLayer(precipitationLayer);
+                }
+                // Remove info box
+                const infoBox = document.getElementById('precipitationInfo');
+                if (infoBox) infoBox.remove();
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on precipitation
+                precipitationEnabled = true;
+                btn.classList.add('active');
+                
+                // Use RainViewer API for precipitation (free, no API key needed)
+                if (!precipitationLayer) {
+                    const timestamp = Math.floor(Date.now() / 1000);
+                    precipitationLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`, {
+                        attribution: 'RainViewer &copy; <a href="https://www.rainviewer.com">RainViewer.com</a>',
+                        opacity: 0.5, // Moderate opacity for precipitation visibility
+                        zIndex: 350
+                    });
+                }
+                
+                precipitationLayer.addTo(map);
+                
+                // Show precipitation info
+                showPrecipitationInfo();
+                
+                // Update precipitation every 10 minutes
+                if (window.precipitationUpdateInterval) {
+                    clearInterval(window.precipitationUpdateInterval);
+                }
+                window.precipitationUpdateInterval = setInterval(() => {
+                    if (precipitationEnabled && precipitationLayer) {
+                        const timestamp = Math.floor(Date.now() / 1000);
+                        precipitationLayer.setUrl(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`);
+                    }
+                }, 600000); // 10 minutes
+            }
+        }
+        
+        // Show precipitation information
+        function showPrecipitationInfo() {
+            // Create or update info box
+            let infoBox = document.getElementById('precipitationInfo');
+            if (!infoBox) {
+                infoBox = document.createElement('div');
+                infoBox.id = 'precipitationInfo';
+                infoBox.className = 'precipitation-info';
+                infoBox.innerHTML = `
+                    <div class="precipitation-info-header">
+                        <i class="fas fa-cloud-rain"></i>
+                        <span>Precipitation Layer Active</span>
+                        <button onclick="document.getElementById('precipitationInfo').remove()" style="background:none;border:none;color:inherit;cursor:pointer;margin-left:auto;">x</button>
+                    </div>
+                    <div class="precipitation-info-content">
+                        <p><strong>Intensity:</strong> Real-time radar data</p>
+                        <p><strong>Update:</strong> Every 10 minutes</p>
+                        <p><strong>Source:</strong> RainViewer API</p>
+                        <div class="precipitation-legend">
+                            <div class="legend-item"><span class="legend-color" style="background:rgba(0,0,255,0.3)"></span> Light</div>
+                            <div class="legend-item"><span class="legend-color" style="background:rgba(0,255,0,0.5)"></span> Moderate</div>
+                            <div class="legend-item"><span class="legend-color" style="background:rgba(255,255,0,0.7)"></span> Heavy</div>
+                            <div class="legend-item"><span class="legend-color" style="background:rgba(255,0,0,0.8)"></span> Intense</div>
+                        </div>
+                    </div>
+                `;
+                document.querySelector('.map-container').appendChild(infoBox);
+            }
+        }
+        
+        function toggleHumidity() {
+            const btn = document.getElementById('humidityBtn');
+            if (humidityEnabled) {
+                // Turn off
+                humidityEnabled = false;
+                btn.classList.remove('active');
+                if (humidityLayer && map.hasLayer(humidityLayer)) {
+                    map.removeLayer(humidityLayer);
+                }
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on humidity
+                humidityEnabled = true;
+                btn.classList.add('active');
+                loadOpenWeatherLayer('humidity', humidityLayer);
+            }
+        }
+        
+        function toggleTemperature() {
+            const btn = document.getElementById('temperatureBtn');
+            if (temperatureEnabled) {
+                // Turn off
+                temperatureEnabled = false;
+                btn.classList.remove('active');
+                if (temperatureLayer && map.hasLayer(temperatureLayer)) {
+                    map.removeLayer(temperatureLayer);
+                }
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on temperature
+                temperatureEnabled = true;
+                btn.classList.add('active');
+                loadOpenWeatherLayer('temp', temperatureLayer);
+            }
+        }
+        
+        function toggleWindSpeed() {
+            const btn = document.getElementById('windSpeedBtn');
+            if (windSpeedEnabled) {
+                // Turn off
+                windSpeedEnabled = false;
+                btn.classList.remove('active');
+                if (windSpeedLayer && map.hasLayer(windSpeedLayer)) {
+                    map.removeLayer(windSpeedLayer);
+                }
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on wind speed
+                windSpeedEnabled = true;
+                btn.classList.add('active');
+                loadOpenWeatherLayer('wind', windSpeedLayer);
+            }
+        }
+        
+        function toggleClouds() {
+            const btn = document.getElementById('cloudsBtn');
+            if (cloudsEnabled) {
+                // Turn off
+                cloudsEnabled = false;
+                btn.classList.remove('active');
+                if (cloudsLayer && map.hasLayer(cloudsLayer)) {
+                    map.removeLayer(cloudsLayer);
+                }
+            } else {
+                // Turn off all other modes first
+                disableAllMapModes();
+                
+                // Turn on clouds
+                cloudsEnabled = true;
+                btn.classList.add('active');
+                loadOpenWeatherLayer('clouds', cloudsLayer);
+            }
+        }
+        
+        // Load OpenWeather layer with API key
+        function loadOpenWeatherLayer(type, layer) {
+            fetch('../api/weather-monitoring.php?action=getApiKey')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.apiKey) {
+                        const url = layer.options.urlTemplate || `https://tile.openweathermap.org/map/${type}_new/{z}/{x}/{y}.png?appid={apiKey}`;
+                        layer.setUrl(url.replace('{apiKey}', data.apiKey));
+                        layer.addTo(map);
+                    } else {
+                        showWeatherSendResult('Weather Notice', 'OpenWeatherMap API key not configured. Please set it up in Automated Warnings.', true);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading API key:', error);
+                    showWeatherSendResult('Weather Notice', 'Could not load weather layer. API key may not be configured.', true);
+                });
+        }
+        
+        // Update radar time for animation (no longer needed - handled in toggleRadar)
+        function updateRadarTime() {
+            if (radarEnabled && radarLayer) {
+                const timestamp = Math.floor(Date.now() / 1000);
+                radarLayer.setUrl(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_1.png`);
+            }
+        }
+        
+        // Initialize wind flow canvas
+        function initWindFlowCanvas() {
+            if (!map) return;
+            
+            // Create custom canvas overlay for wind flow
+            const WindFlowOverlay = L.Layer.extend({
+                onAdd: function(map) {
+                    this._map = map;
+                    this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated');
+                    const ctx = this._canvas.getContext('2d');
+                    windFlowCtx = ctx;
+                    
+                    const size = map.getSize();
+                    this._canvas.width = size.x;
+                    this._canvas.height = size.y;
+                    this._canvas.style.position = 'absolute';
+                    this._canvas.style.top = '0';
+                    this._canvas.style.left = '0';
+                    this._canvas.style.pointerEvents = 'none';
+                    
+                    // Add to overlay pane (above markers, below popups)
+                    map.getPanes().overlayPane.appendChild(this._canvas);
+                    
+                    // Update on map events
+                    map.on('viewreset', this._reset, this);
+                    map.on('moveend', this._update, this);
+                    map.on('zoomend', this._reset, this);
+                    map.on('resize', this._reset, this);
+                    
+                    this._reset();
+                },
+                
+                onRemove: function(map) {
+                    if (this._canvas && this._canvas.parentNode) {
+                        map.getPanes().overlayPane.removeChild(this._canvas);
+                    }
+                    map.off('viewreset', this._reset, this);
+                    map.off('moveend', this._update, this);
+                    map.off('zoomend', this._reset, this);
+                    map.off('resize', this._reset, this);
+                },
+                
+                _reset: function() {
+                    const size = this._map.getSize();
+                    this._canvas.width = size.x;
+                    this._canvas.height = size.y;
+                    this._update();
+                },
+                
+                _update: function() {
+                    if (windFlowEnabled && markers.length > 0) {
+                        createWindParticles();
+                    }
+                }
+            });
+            
+            windFlowCanvas = new WindFlowOverlay();
+            windFlowCanvas.addTo(map);
+        }
+        
+        function resizeWindCanvas() {
+            if (windFlowCanvas && windFlowCanvas._canvas && windFlowEnabled) {
+                const size = map.getSize();
+                windFlowCanvas._canvas.width = size.x;
+                windFlowCanvas._canvas.height = size.y;
+                createWindParticles();
+            }
+        }
+        
+        // Get color based on wind speed
+        function getWindSpeedColor(speed) {
+            // Speed in km/h
+            if (speed < 5) {
+                return { r: 100, g: 150, b: 255, opacity: 0.4 }; // Light blue - calm
+            } else if (speed < 10) {
+                return { r: 50, g: 200, b: 255, opacity: 0.5 }; // Blue - light breeze
+            } else if (speed < 20) {
+                return { r: 0, g: 255, b: 200, opacity: 0.6 }; // Cyan - moderate
+            } else if (speed < 30) {
+                return { r: 100, g: 255, b: 100, opacity: 0.7 }; // Green - fresh
+            } else if (speed < 40) {
+                return { r: 255, g: 255, b: 0, opacity: 0.8 }; // Yellow - strong
+            } else if (speed < 50) {
+                return { r: 255, g: 200, b: 0, opacity: 0.85 }; // Orange - very strong
+            } else {
+                return { r: 255, g: 50, b: 50, opacity: 0.9 }; // Red - extreme
+            }
+        }
+        
+        // Create wind particles from marker data - small particles version
+        function createWindParticles() {
+            windParticles = [];
+            if (!markers || markers.length === 0) return;
+            
+            const bounds = map.getBounds();
+            const zoom = map.getZoom();
+            
+            // Create more particles for better coverage (small particles)
+            const particleCount = Math.min(1200, Math.max(500, zoom * 60));
+            const gridSpacing = Math.max(0.02, 0.2 / zoom); // Closer spacing for small particles
+            
+            // Create grid-based particles for consistent coverage
+            const latStep = (bounds.getNorth() - bounds.getSouth()) / Math.sqrt(particleCount);
+            const lonStep = (bounds.getEast() - bounds.getWest()) / Math.sqrt(particleCount);
+            
+            for (let lat = bounds.getSouth(); lat < bounds.getNorth(); lat += latStep) {
+                for (let lon = bounds.getWest(); lon < bounds.getEast(); lon += lonStep) {
+                    // Add some randomness
+                    const finalLat = lat + (Math.random() - 0.5) * latStep * 0.6;
+                    const finalLon = lon + (Math.random() - 0.5) * lonStep * 0.6;
+                    
+                    // Find nearest marker for wind data
+                    let nearestMarker = markers[0];
+                    let minDist = Infinity;
+                    markers.forEach(m => {
+                        const dist = Math.sqrt(Math.pow(m.lat - finalLat, 2) + Math.pow(m.lon - finalLon, 2));
+                        if (dist < minDist) {
+                            minDist = dist;
+                            nearestMarker = m;
+                        }
+                    });
+                    
+                    if (nearestMarker && nearestMarker.windDeg !== undefined && nearestMarker.windSpeed !== undefined && nearestMarker.windSpeed > 0) {
+                        // Convert wind direction (meteorological: where wind comes FROM)
+                        // To display direction (where wind is GOING)
+                        const windDirection = (nearestMarker.windDeg + 180) % 360;
+                        const radians = (windDirection * Math.PI) / 180;
+                        
+                        // Wind speed is already in km/h
+                        const speed = nearestMarker.windSpeed || 0;
+                        const color = getWindSpeedColor(speed);
+                        
+                        windParticles.push({
+                            x: finalLon,
+                            y: finalLat,
+                            vx: Math.sin(radians) * speed * 0.00008, // Adjusted for small particles
+                            vy: -Math.cos(radians) * speed * 0.00008,
+                            speed: speed,
+                            direction: windDirection,
+                            color: color,
+                            age: Math.random() * 100 // Random age for animation offset
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Draw wind flow - Small particles with color coding
+        function drawWindFlow() {
+            if (!windFlowEnabled || !windFlowCtx || !windFlowCanvas || windParticles.length === 0) return;
+            
+            const canvas = windFlowCanvas._canvas;
+            if (!canvas) return;
+            
+            // Clear with transparent background (no black background)
+            windFlowCtx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const currentTime = Date.now() * 0.001; // Time in seconds
+            
+            windParticles.forEach(particle => {
+                const point = map.latLngToContainerPoint([particle.y, particle.x]);
+                
+                if (point.x >= -10 && point.x <= canvas.width + 10 && 
+                    point.y >= -10 && point.y <= canvas.height + 10) {
+                    
+                    // Small particle size based on wind speed
+                    const particleSize = Math.max(1.5, Math.min(particle.speed / 8, 4));
+                    
+                    // Calculate direction in radians
+                    const angle = particle.direction * Math.PI / 180;
+                    
+                    // Animated position for flowing effect
+                    const animationSpeed = particle.speed * 0.2;
+                    const moveDistance = (currentTime * animationSpeed + particle.age) % 20;
+                    
+                    // Calculate particle position (small movement)
+                    const particleX = point.x + Math.sin(angle) * moveDistance * 0.5;
+                    const particleY = point.y - Math.cos(angle) * moveDistance * 0.5;
+                    
+                    // Use color based on wind speed
+                    const color = particle.color || getWindSpeedColor(particle.speed);
+                    
+                    // Draw small circular particle
+                    windFlowCtx.beginPath();
+                    windFlowCtx.arc(particleX, particleY, particleSize, 0, Math.PI * 2);
+                    windFlowCtx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.opacity})`;
+                    windFlowCtx.fill();
+                    
+                    // Add small tail for direction indication (very subtle)
+                    if (particle.speed > 5) {
+                        const tailLength = Math.min(particle.speed / 3, 8);
+                        const tailX = particleX - Math.sin(angle) * tailLength;
+                        const tailY = particleY + Math.cos(angle) * tailLength;
+                        
+                        windFlowCtx.beginPath();
+                        windFlowCtx.moveTo(particleX, particleY);
+                        windFlowCtx.lineTo(tailX, tailY);
+                        windFlowCtx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.opacity * 0.6})`;
+                        windFlowCtx.lineWidth = particleSize * 0.8;
+                        windFlowCtx.lineCap = 'round';
+                        windFlowCtx.stroke();
+                    }
+                }
+            });
+        }
+        
+        // Start wind flow animation
+        function startWindFlowAnimation() {
+            if (!windFlowCanvas) {
+                // Re-initialize if needed
+                initWindFlowCanvas();
+            }
+            if (markers.length > 0) {
+                createWindParticles();
+                animateWindFlow();
+            } else {
+                // Wait for markers
+                setTimeout(() => {
+                    if (markers.length > 0 && windFlowEnabled) {
+                        createWindParticles();
+                        animateWindFlow();
+                    }
+                }, 1000);
+            }
+        }
+        
+        // Stop wind flow animation
+        function stopWindFlowAnimation() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            if (windFlowCtx && windFlowCanvas && windFlowCanvas._canvas) {
+                windFlowCtx.clearRect(0, 0, windFlowCanvas._canvas.width, windFlowCanvas._canvas.height);
+            }
+            windParticles = [];
+        }
+        
+        // Animate wind flow - smooth continuous animation
+        function animateWindFlow() {
+            if (!windFlowEnabled) {
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+                return;
+            }
+            
+            drawWindFlow();
+            
+            // Update particle ages for animation (particles don't move, streaks animate)
+            windParticles.forEach(particle => {
+                particle.age += 0.5; // Increment age for animation
+                
+                // Reset age periodically for continuous flow
+                if (particle.age > 200) {
+                    particle.age = 0;
+                }
+            });
+            
+            animationFrameId = requestAnimationFrame(animateWindFlow);
+        }
+        
+        // Load Quezon City boundary
+        function loadQuezonCityBoundary() {
+            fetch('../api/quezon-city.geojson')
+                .then(response => response.json())
+                .then(geojsonData => {
+                    L.geoJSON(geojsonData, {
+                        style: {
+                            color: '#FF5722', // Vibrant orange-red color for visibility
+                            weight: 5, // Thicker line for easy visibility
+                            fillColor: '#3a7675', // Teal fill
+                            fillOpacity: 0.15, // Slight transparency
+                            dashArray: '10, 5', // Dashed line pattern
+                            opacity: 1.0 // Full opacity for vibrant appearance
+                        }
+                    }).addTo(map);
+                })
+                .catch(err => console.error('Error loading boundary:', err));
+        }
+        
+        // Focus on Quezon City
+        function focusQuezonCity() {
+            if (!map) return;
+            map.flyTo([14.6488, 121.0509], 12, {
+                duration: 1.5,
+                easeLinearity: 0.25
+            });
+        }
+        
+        // Update Quezon City focus status
+        function updateQuezonCityStatus() {
+            const statusDiv = document.getElementById('quezonCityStatus');
+            if (!statusDiv || !map) return;
+            
+            const bounds = map.getBounds();
+            const quezonCityLat = 14.6488;
+            const quezonCityLon = 121.0509;
+            
+            // Check if Quezon City is in view
+            const isInView = bounds.contains([quezonCityLat, quezonCityLon]);
+            const center = map.getCenter();
+            const distance = Math.sqrt(
+                Math.pow(center.lat - quezonCityLat, 2) + 
+                Math.pow(center.lng - quezonCityLon, 2)
+            );
+            
+            if (isInView && distance < 0.1) {
+                // Quezon City is focused
+                statusDiv.style.display = 'flex';
+                statusDiv.innerHTML = '<i class="fas fa-map-marker-alt"></i><span>Focused on Quezon City</span>';
+                statusDiv.style.background = 'linear-gradient(135deg, var(--primary-color-1), #3d6f6e)';
+            } else if (isInView) {
+                // Quezon City is visible but not centered
+                statusDiv.style.display = 'flex';
+                statusDiv.innerHTML = '<i class="fas fa-eye"></i><span>Quezon City in view - Click to focus</span>';
+                statusDiv.style.background = 'linear-gradient(135deg, var(--primary-color-1), #3d6f6e)';
+            } else {
+                // Quezon City is not in view
+                statusDiv.style.display = 'flex';
+                statusDiv.innerHTML = '<i class="fas fa-map-marker-alt"></i><span>Click to focus on Quezon City</span>';
+                statusDiv.style.background = 'linear-gradient(135deg, var(--text-secondary-1), var(--border-color-1))';
+            }
+        }
+        
+        // Update marker visibility
+        function updateMarkerVisibility() {
+            if (!map) return;
+            // Removed zoom threshold hiding to comply with requirements
+            document.querySelectorAll('.weather-marker-icon').forEach(markerEl => {
+                markerEl.style.opacity = '1';
+                markerEl.style.pointerEvents = 'auto';
+                markerEl.style.transform = 'scale(1)';
+            });
+        }
+        
+        // Load weather details
+        function loadWeatherDetails(lat, lon, name) {
+            const container = document.getElementById('currentWeatherGoogle');
+            if (!container) return;
+            
+            container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+            
+            fetch(`../api/weather-monitoring.php?action=current&lat=${lat}&lon=${lon}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.data) {
+                        renderGoogleWeatherDisplay(data.data, name);
+                        window.currentWeatherData = data.data;
+                        window.currentLocationName = name;
+                    } else {
+                        container.innerHTML = `<div class="error-message">${data.message || 'Failed to load'}</div>`;
+                    }
+                })
+                .catch(error => {
+                    container.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+                });
+        }
+        
+        // Render Google Weather display
+        function renderGoogleWeatherDisplay(weather, name) {
+            const container = document.getElementById('currentWeatherGoogle');
+            if (!container) return;
+            
+            const temp = Math.round(weather.main.temp);
+            const icon = weather.weather[0].icon;
+            const condition = weather.weather[0].description;
+            const humidity = weather.main.humidity;
+            const windSpeed = (weather.wind.speed * 3.6).toFixed(1);
+            const precipMm = weather.rain ? (weather.rain['1h'] || 0) : 0;
+            
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const today = days[new Date().getDay()];
+            
+            container.innerHTML = `
+                <div class="gw-header">
+                    <div class="gw-left">
+                        <div class="gw-main-temp">
+                            <img src="https://openweathermap.org/img/wn/${icon}@4x.png" alt="${condition}" class="gw-icon">
+                            <span class="gw-temp-value">${temp}</span>
+                            <span class="gw-temp-unit">&deg;C</span>
+                        </div>
+                        <div class="gw-details">
+                            <div class="gw-detail-item">
+                                <i class="fas fa-tint" style="color: var(--primary-color-1);"></i>
+                                Precipitation (1h): ${Number(precipMm).toFixed(1)} mm
+                            </div>
+                            <div class="gw-detail-item">
+                                <i class="fas fa-water" style="color: var(--primary-color-1);"></i>
+                                Humidity: ${humidity}%
+                            </div>
+                            <div class="gw-detail-item">
+                                <i class="fas fa-wind" style="color: var(--text-secondary-1);"></i>
+                                Wind: ${windSpeed} km/h
+                            </div>
+                        </div>
+                    </div>
+                    <div class="gw-right">
+                        <div class="gw-day">${today}</div>
+                        <div class="gw-condition">${condition.charAt(0).toUpperCase() + condition.slice(1)}</div>
+                        <div class="gw-location">${name}</div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Load forecast
+        function loadWeatherForecast(lat, lon, name) {
+            setHourlyGraphState('loading', 'Loading forecast...');
+            setWeeklyForecastState('loading', 'Loading...');
+
+            fetch(`../api/weather-monitoring.php?action=forecast&lat=${lat}&lon=${lon}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && Array.isArray(data.forecast) && data.forecast.length > 0) {
+                        const forecast = data.forecast;
+                        window.forecastData = forecast;
+
+                        setHourlyGraphState('chart');
+                        renderHourlyChart(forecast);
+                        renderWeeklyForecast(forecast);
+
+                        // Auto-trigger AI analysis (only if enabled)
+                        setTimeout(() => {
+                            if (window.currentWeatherData) {
+                                // Check if AI is enabled before auto-triggering
+                                fetch('../api/ai-warnings.php?action=getSettings')
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success && data.settings) {
+                                            const aiEnabled = data.settings.ai_enabled === 1 || data.settings.ai_enabled === true;
+                                            if (aiEnabled) {
+                                                getAIWeatherAnalysis();
+                                            }
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error checking AI status for auto-trigger:', error);
+                                    });
+                            }
+                        }, 1000);
+                    } else {
+                        const message = data.message || 'No forecast data available for this location.';
+                        window.forecastData = [];
+                        setHourlyGraphState('error', message);
+                        setWeeklyForecastState('error', message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Forecast error:', error);
+                    window.forecastData = [];
+                    const message = `Forecast request failed: ${error.message || 'Network error'}`;
+                    setHourlyGraphState('error', message);
+                    setWeeklyForecastState('error', message);
+                });
+        }
+
+        function setHourlyGraphState(state, message = '') {
+            const container = document.getElementById('hourlyGraph');
+            if (!container) return;
+
+            if (state === 'chart') {
+                container.innerHTML = '<canvas id="hourlyTempChart" height="120"></canvas>';
+                return;
+            }
+
+            if (state === 'loading') {
+                container.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> ${message}</div>`;
+                return;
+            }
+
+            container.innerHTML = `<div class="error-message">${message || 'Unable to load chart data.'}</div>`;
+        }
+
+        function setWeeklyForecastState(state, message = '') {
+            const container = document.getElementById('weeklyForecast');
+            if (!container) return;
+
+            if (state === 'loading') {
+                container.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> ${message}</div>`;
+                return;
+            }
+
+            if (state === 'error') {
+                container.innerHTML = `<div class="error-message">${message || 'Unable to load forecast.'}</div>`;
+            }
+        }
+        
+        // Render hourly chart
+        function renderHourlyChart(forecastData) {
+            const ctx = document.getElementById('hourlyTempChart');
+            if (!ctx || !forecastData || forecastData.length === 0) return;
+            
+            const hourlyData = forecastData.slice(0, 8);
+            const labels = hourlyData.map(item => {
+                const date = new Date(item.datetime);
+                return date.getHours() + ':00';
+            });
+            const temps = hourlyData.map(item => Math.round(item.temp));
+            
+            if (window.hourlyChart) {
+                window.hourlyChart.destroy();
+            }
+            
+            // Detect dark mode
+            const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+            const textColor = isDarkMode ? '#fafafa' : '#171717';
+            const gridColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+            const borderColor = isDarkMode ? '#3a7675' : '#3a7675';
+            const backgroundColor = isDarkMode ? 'rgba(58, 118, 117, 0.3)' : 'rgba(58, 118, 117, 0.1)';
+            
+            window.hourlyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: temps,
+                        borderColor: borderColor,
+                        backgroundColor: backgroundColor,
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointBackgroundColor: borderColor,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 7,
+                        pointHoverBackgroundColor: borderColor,
+                        pointHoverBorderColor: '#ffffff',
+                        pointHoverBorderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { 
+                            backgroundColor: isDarkMode ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                            titleColor: textColor,
+                            bodyColor: textColor,
+                            borderColor: borderColor,
+                            borderWidth: 1,
+                            callbacks: { label: (ctx) => ctx.raw + '\u00B0C' } 
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            grid: { 
+                                display: true,
+                                color: gridColor
+                            },
+                            ticks: {
+                                color: textColor,
+                                font: { size: 11 }
+                            }
+                        },
+                        y: { 
+                            grid: { 
+                                color: gridColor,
+                                drawBorder: true,
+                                borderColor: gridColor
+                            }, 
+                            ticks: { 
+                                color: textColor,
+                                font: { size: 11 },
+                                callback: (val) => val + '\u00B0' 
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Render weekly forecast
+        function renderWeeklyForecast(forecastData) {
+            const container = document.getElementById('weeklyForecast');
+            if (!container || !forecastData) return;
+            
+            const dailyData = {};
+            forecastData.forEach(item => {
+                const date = new Date(item.datetime);
+                const dayKey = date.toDateString();
+                if (!dailyData[dayKey]) {
+                    dailyData[dayKey] = { temps: [], icons: [], rainMm: 0, maxPop: 0 };
+                }
+                dailyData[dayKey].temps.push(item.temp);
+                dailyData[dayKey].icons.push(item.icon);
+                dailyData[dayKey].rainMm += Number(item.rain || 0);
+                dailyData[dayKey].maxPop = Math.max(dailyData[dayKey].maxPop, Number(item.pop || 0));
+            });
+            
+            const days = Object.keys(dailyData).slice(0, 7);
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const today = new Date().toDateString();
+            
+            let overallMin = Infinity, overallMax = -Infinity;
+            days.forEach(day => {
+                const d = dailyData[day];
+                overallMin = Math.min(overallMin, Math.min(...d.temps));
+                overallMax = Math.max(overallMax, Math.max(...d.temps));
+            });
+            
+            let html = '';
+            days.forEach((day, index) => {
+                const d = dailyData[day];
+                const date = new Date(day);
+                const dayName = index === 0 && day === today ? 'Today' : dayNames[date.getDay()];
+                const minTemp = Math.round(Math.min(...d.temps));
+                const maxTemp = Math.round(Math.max(...d.temps));
+                const icon = d.icons[Math.floor(d.icons.length / 2)];
+                const precipChance = d.maxPop > 0 ? Math.round(d.maxPop) : 0;
+                const rainMm = d.rainMm > 0 ? d.rainMm.toFixed(1) : '';
+                const precipText = precipChance > 0 ? `${precipChance}%` : (rainMm ? `${rainMm}mm` : '');
+                const precipTitle = rainMm ? ` title="Expected rain: ${rainMm} mm"` : '';
+                
+                const range = overallMax - overallMin || 1;
+                const barStart = ((minTemp - overallMin) / range) * 100;
+                const barWidth = ((maxTemp - minTemp) / range) * 100;
+                
+                html += `
+                    <div class="forecast-day-row">
+                        <div class="forecast-day-name ${day === today ? 'today' : ''}">${dayName}</div>
+                        <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="" class="forecast-day-icon">
+                        <div class="forecast-temp-bar">
+                            <span class="forecast-temp-min">${minTemp}&deg;</span>
+                            <div class="forecast-bar-container">
+                                <div class="forecast-bar" style="margin-left: ${barStart}%; width: ${Math.max(barWidth, 10)}%;"></div>
+                            </div>
+                            <span class="forecast-temp-max">${maxTemp}&deg;</span>
+                        </div>
+                        <div class="forecast-precip"${precipTitle}>${precipText ? `<i class="fas fa-tint"></i> ${precipText}` : ''}</div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        // Load map data
+        function loadMapData() {
+            fetch('../api/weather-monitoring.php?action=map')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.data) {
+                        data.data.forEach(point => {
+                            if (point.temp !== null) {
+                                addWeatherMarker(
+                                    point.lat, 
+                                    point.lon, 
+                                    point.name, 
+                                    point.temp, 
+                                    point.condition, 
+                                    point.icon,
+                                    point.windSpeed,
+                                    point.windDeg
+                                );
+                            }
+                        });
+                        
+                        // Create wind particles if wind flow is enabled
+                        if (windFlowEnabled && markers.length > 0 && windFlowCanvas) {
+                            createWindParticles();
+                            if (!animationFrameId) {
+                                startWindFlowAnimation();
+                            }
+                        }
+                    }
+                })
+                .catch(error => console.error('Map data error:', error));
+        }
+        
+        // Add weather marker
+        function addWeatherMarker(lat, lon, name, temp, condition, icon, windSpeed, windDeg) {
+            const iconHtml = `
+                <div class="weather-marker-icon">
+                    <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="${condition}">
+                    <div class="weather-marker-temp">${temp}&deg;C</div>
+                    <div class="weather-marker-city">${name}</div>
+                </div>
+            `;
+            
+            const customIcon = L.divIcon({
+                html: iconHtml,
+                className: '',
+                iconSize: [80, 100],
+                iconAnchor: [40, 50]
+            });
+            
+            const marker = L.marker([lat, lon], { icon: customIcon }).addTo(map);
+            
+            // Convert wind speed from m/s to km/h for visualization
+            // API returns m/s, we need km/h for better visualization
+            const windSpeedKmh = (windSpeed || 0) * 3.6;
+            
+            markers.push({ 
+                marker, 
+                lat, 
+                lon, 
+                windSpeed: windSpeedKmh, // Store in km/h
+                windDeg: windDeg || 0 
+            });
+        }
+        
+        // AI Analysis
+        async function getAIWeatherAnalysis() {
+            const container = document.getElementById('aiAnalysis');
+            const statusBadge = document.getElementById('aiStatus');
+            
+            if (!window.currentWeatherData) {
+                container.innerHTML = '<p style="color: #e74c3c;">Please wait for weather data to load.</p>';
+                return;
+            }
+            if (aiAnalysisInProgress) {
+                return;
+            }
+            aiAnalysisInProgress = true;
+            
+            statusBadge.textContent = 'Analyzing...';
+            statusBadge.className = 'ai-status loading';
+            container.innerHTML = `
+                <div style="text-align: center; padding: 2rem;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #8e44ad;"></i>
+                    <p style="margin-top: 1rem; color: rgba(255,255,255,0.7);">AI is analyzing...</p>
+                </div>
+            `;
+            
+            try {
+                const weather = window.currentWeatherData;
+                const forecast = window.forecastData || [];
+                const locationName = window.currentLocationName || 'Quezon City';
+                
+                const prompt = buildWeatherPrompt(weather, forecast, locationName);
+                
+                // Use PHP proxy to avoid CORS issues (API key is handled securely server-side)
+                const response = await fetch('../api/gemini-proxy.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: prompt
+                    })
+                });
+                
+                // Get response text first to check if it's valid JSON
+                const responseText = await response.text();
+                let data;
+                
+                try {
+                    data = JSON.parse(responseText);
+                } catch (e) {
+                    // If not JSON, it's a real error
+                    throw new Error(`API Error: ${response.status} - ${responseText}`);
+                }
+                
+                // Check if the response indicates success (even if HTTP status isn't 200)
+                if (data.success === true && data.response) {
+                    // Success! Display the analysis
+                    displayAIAnalysis(data.response);
+                    statusBadge.textContent = 'Complete';
+                    statusBadge.className = 'ai-status';
+                    return; // Exit successfully
+                }
+                
+                // Check if error is due to AI being disabled
+                if (data.message && (data.message.includes('disabled') || data.message.includes('General Settings'))) {
+                    showAIDisabledNote();
+                    return;
+                }
+                
+                // If we get here, there was an error
+                if (!response.ok && !data.success) {
+                    if (response.status === 429 || data.error_code === 429) {
+                        throw new Error('Rate limit reached for AI analysis. Please retry in 30-60 seconds.');
+                    }
+                    throw new Error(data.message || `API Error: ${response.status}`);
+                }
+                
+                // Check for response even if success flag is missing
+                if (data.response) {
+                    displayAIAnalysis(data.response);
+                    statusBadge.textContent = 'Complete';
+                    statusBadge.className = 'ai-status';
+                } else {
+                    throw new Error(data.message || 'No response from AI');
+                }
+            } catch (error) {
+                console.error('AI Error:', error);
+                statusBadge.textContent = 'Error';
+                statusBadge.className = 'ai-status error';
+                
+                // Check if error is due to AI being disabled
+                let errorMessage = error.message;
+                if (errorMessage && (errorMessage.includes('disabled') || errorMessage.includes('403'))) {
+                    showAIDisabledNote();
+                    return;
+                }
+                
+                // Parse error message for better display
+                let errorDetails = '';
+                
+                // Try to extract JSON from error message if it contains a successful response
+                try {
+                    const jsonMatch = errorMessage.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        const parsedData = JSON.parse(jsonMatch[0]);
+                        if (parsedData.success === true && parsedData.response) {
+                            // Actually a success! Display it
+                            displayAIAnalysis(parsedData.response);
+                            statusBadge.textContent = 'Complete';
+                            statusBadge.className = 'ai-status';
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    // Not JSON, continue with error handling
+                }
+                
+                // Check if it's an API key error
+                if (errorMessage.includes('expired') || errorMessage.includes('invalid') || errorMessage.includes('400')) {
+                    errorMessage = 'API key expired or invalid';
+                    errorDetails = 'Please update your Gemini API key in Automated Warnings -> AI Warning Settings';
+                } else if (errorMessage.includes('429') || errorMessage.toLowerCase().includes('rate limit') || errorMessage.toLowerCase().includes('too many requests')) {
+                    errorMessage = 'AI service is temporarily rate-limited';
+                    errorDetails = 'Please wait 30-60 seconds, then click Retry.';
+                } else if (errorMessage.includes('404')) {
+                    // Check if 404 error contains successful JSON response
+                    const jsonMatch = errorMessage.match(/\{[\s\S]*"success":true[\s\S]*\}/);
+                    if (jsonMatch) {
+                        try {
+                            const parsedData = JSON.parse(jsonMatch[0]);
+                            if (parsedData.response) {
+                                displayAIAnalysis(parsedData.response);
+                                statusBadge.textContent = 'Complete';
+                                statusBadge.className = 'ai-status';
+                                return;
+                            }
+                        } catch (e) {
+                            // Continue with error display
+                        }
+                    }
+                }
+                
+                container.innerHTML = `
+                    <div style="color: #e74c3c; padding: 1rem;">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>Error:</strong> ${errorMessage}
+                        ${errorDetails ? `<br><small style="color: rgba(255,255,255,0.7); margin-top: 0.5rem; display: block;">${errorDetails}</small>` : ''}
+                    </div>
+                    <button onclick="getAIWeatherAnalysis()" class="ai-analyze-btn" style="margin-top: 1rem;">
+                        <i class="fas fa-redo"></i> Retry
+                    </button>
+                    <a href="automated-warnings.php" class="ai-analyze-btn" style="margin-top: 0.5rem; display: inline-block; text-decoration: none; background: #8e44ad;">
+                        <i class="fas fa-cog"></i> Configure API Key
+                    </a>
+                `;
+            } finally {
+                aiAnalysisInProgress = false;
+            }
+        }
+        
+        function buildWeatherPrompt(weather, forecast, locationName) {
+            const temp = weather.main.temp;
+            const humidity = weather.main.humidity;
+            const condition = weather.weather[0].description;
+            const windSpeed = (weather.wind.speed * 3.6).toFixed(1);
+            
+            let forecastSummary = '';
+            if (forecast.length > 0) {
+                const next24h = forecast.slice(0, 8);
+                const maxTemp = Math.max(...next24h.map(f => f.temp));
+                const minTemp = Math.min(...next24h.map(f => f.temp));
+                forecastSummary = `Next 24 hours: ${Math.round(minTemp)}\u00B0C - ${Math.round(maxTemp)}\u00B0C.`;
+            }
+            
+            return `You are an emergency weather analyst for ${locationName}, Philippines. Analyze:
+
+CURRENT: Temp ${temp}\u00B0C, Humidity ${humidity}%, ${condition}, Wind ${windSpeed} km/h
+${forecastSummary}
+
+Provide analysis in this format:
+
+**SUMMARY:**
+[1-2 sentence summary]
+
+**ALERTS:**
+[List alerts or "None"]
+
+**RECOMMENDATIONS:**
+[3-5 action items]
+
+**RISK LEVEL:**
+[LOW/MEDIUM/HIGH] - [Brief explanation]
+
+Keep concise and actionable.`;
+        }
+        
+        function displayAIAnalysis(aiResponse) {
+            const container = document.getElementById('aiAnalysis');
+            const sections = parseAIResponse(aiResponse);
+            
+            let html = '<div class="ai-result">';
+            
+            if (sections.summary) {
+                html += `
+                    <div class="ai-result-section">
+                        <div class="ai-result-title"><i class="fas fa-cloud-sun"></i> Summary</div>
+                        <div class="ai-result-content">${sections.summary}</div>
+                    </div>
+                `;
+            }
+            
+            if (sections.alerts && sections.alerts.toLowerCase() !== 'none') {
+                html += `
+                    <div class="ai-result-section">
+                        <div class="ai-result-title"><i class="fas fa-exclamation-triangle"></i> Alerts</div>
+                        <div class="ai-alert-item">${sections.alerts}</div>
+                    </div>
+                `;
+            }
+            
+            if (sections.recommendations) {
+                const recs = sections.recommendations.split(/[-\n]/).filter(r => r.trim());
+                html += `
+                    <div class="ai-result-section">
+                        <div class="ai-result-title"><i class="fas fa-tasks"></i> Recommendations</div>
+                        <div class="ai-result-content">
+                            ${recs.map(r => `
+                                <div class="ai-recommendation">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>${r.trim()}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (sections.riskLevel) {
+                const riskColor = sections.riskLevel.includes('HIGH') ? '#e74c3c' : 
+                                  sections.riskLevel.includes('MEDIUM') ? '#f39c12' : '#27ae60';
+                html += `
+                    <div class="ai-result-section">
+                        <div class="ai-result-title"><i class="fas fa-shield-alt"></i> Risk Assessment</div>
+                        <div class="ai-result-content" style="color: ${riskColor}; font-weight: 600;">
+                            ${sections.riskLevel}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            html += `<button onclick="getAIWeatherAnalysis()" class="ai-analyze-btn" style="margin-top: 1rem;">
+                <i class="fas fa-sync-alt"></i> Refresh Analysis
+            </button>`;
+            html += `<button onclick="sendWeatherAlert()" class="ai-analyze-btn" style="margin-top: 0.5rem; background: linear-gradient(135deg, #27ae60, #229954);">
+                <i class="fas fa-paper-plane"></i> Send Alert
+            </button>`;
+            
+            container.innerHTML = html;
+        }
+        function showWeatherSendModal(message, onConfirm) {
+            let modal = document.getElementById('weatherSendModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'weatherSendModal';
+                modal.className = 'alertara-action-modal';
+                modal.innerHTML = `
+                    <div class="alertara-action-dialog">
+                        <div class="alertara-action-icon"><i class="fas fa-cloud-sun-rain"></i></div>
+                        <div class="alertara-action-copy">
+                            <h3>Send Weather Alert</h3>
+                            <p id="weatherSendModalMessage"></p>
+                        </div>
+                        <div class="alertara-action-actions">
+                            <button type="button" class="alertara-modal-secondary" data-action="cancel">Cancel</button>
+                            <button type="button" class="alertara-modal-primary" data-action="confirm"><i class="fas fa-paper-plane"></i> Send Alert</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+            }
+            modal.querySelector('#weatherSendModalMessage').textContent = message;
+            modal.style.display = 'flex';
+            const close = () => { modal.style.display = 'none'; };
+            modal.querySelector('[data-action="cancel"]').onclick = close;
+            modal.querySelector('[data-action="confirm"]').onclick = () => { close(); onConfirm(); };
+            modal.onclick = (event) => { if (event.target === modal) close(); };
+        }
+
+        function showWeatherSendResult(title, message, isError = false) {
+            let modal = document.getElementById('weatherResultModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'weatherResultModal';
+                modal.className = 'alertara-action-modal';
+                modal.innerHTML = `
+                    <div class="alertara-action-dialog">
+                        <div class="alertara-action-icon"><i class="fas fa-bell"></i></div>
+                        <div class="alertara-action-copy">
+                            <h3 id="weatherResultTitle"></h3>
+                            <p id="weatherResultMessage"></p>
+                        </div>
+                        <div class="alertara-action-actions single">
+                            <button type="button" class="alertara-modal-primary" data-action="ok">OK</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+            }
+            modal.classList.toggle('is-error', isError);
+            modal.querySelector('#weatherResultTitle').textContent = title;
+            modal.querySelector('#weatherResultMessage').textContent = message;
+            modal.style.display = 'flex';
+            const close = () => { modal.style.display = 'none'; };
+            modal.querySelector('[data-action="ok"]').onclick = close;
+            modal.onclick = (event) => { if (event.target === modal) close(); };
+        }
+
+        // Send Weather Alert
+        async function sendWeatherAlert() {
+            showWeatherSendModal('Send weather analysis alert to all subscribed users?', async () => {
+                const statusBadge = document.getElementById('aiStatus');
+                statusBadge.textContent = 'Sending...';
+                statusBadge.className = 'ai-status loading';
+                try {
+                    const response = await fetch('../api/ai-warnings.php?action=sendWeatherAnalysis');
+                    const text = await response.text();
+                    let data = {};
+                    try { data = text ? JSON.parse(text) : {}; } catch (_) { data = { success: false, message: text || 'Invalid server response.' }; }
+                    if (!response.ok || !data.success) throw new Error(data.message || 'Failed to send alert');
+                    statusBadge.textContent = 'Sent';
+                    statusBadge.className = 'ai-status';
+                    showWeatherSendResult('Weather Alert Sent', `Recipients: ${data.recipients || 0}. Notifications sent: ${data.notifications_sent || 0}.`);
+                    setTimeout(() => {
+                        statusBadge.textContent = 'Ready';
+                        statusBadge.className = 'ai-status';
+                    }, 3000);
+                } catch (error) {
+                    statusBadge.textContent = 'Error';
+                    statusBadge.className = 'ai-status error';
+                    console.error('Error sending alert:', error);
+                    showWeatherSendResult('Weather Alert Failed', error.message, true);
+                }
+            });
+        }
+                // AI Auto-Send Alerts
+        let aiAutoSendInterval = null;
+        
+        async function checkAndStartAIAutoSend() {
+            try {
+                // Get AI settings to check if auto-send is enabled
+                const response = await fetch('../api/ai-warnings.php?action=getSettings');
+                const data = await response.json();
+                
+                if (data.success && data.settings) {
+                    const settings = data.settings;
+                    
+                    // Check if weather analysis auto-send is enabled
+                    if (settings.weather_analysis_auto_send && settings.weather_analysis_interval) {
+                        const intervalMinutes = parseInt(settings.weather_analysis_interval) || 60;
+                        const intervalMs = intervalMinutes * 60 * 1000;
+                        
+                        // Clear existing interval if any
+                        if (aiAutoSendInterval) {
+                            clearInterval(aiAutoSendInterval);
+                        }
+                        
+                        // Set up auto-send interval
+                        aiAutoSendInterval = setInterval(async () => {
+                            try {
+                                console.log('Auto-sending weather analysis alert...');
+                                const sendResponse = await fetch('../api/ai-warnings.php?action=sendWeatherAnalysis');
+                                const sendData = await sendResponse.json();
+                                
+                                if (sendData.success) {
+                                    console.log(`Auto-sent alert to ${sendData.notifications_sent || 0} recipients`);
+                                    // Update status badge if visible
+                                    const statusBadge = document.getElementById('aiStatus');
+                                    if (statusBadge) {
+                                        statusBadge.textContent = 'Auto-Sent';
+                                        setTimeout(() => {
+                                            statusBadge.textContent = 'Ready';
+                                        }, 5000);
+                                    }
+                                } else {
+                                    console.error('Auto-send failed:', sendData.message);
+                                }
+                            } catch (error) {
+                                console.error('Error in auto-send:', error);
+                            }
+                        }, intervalMs);
+                        
+                        console.log(`AI Auto-Send enabled: Sending alerts every ${intervalMinutes} minutes`);
+                    } else {
+                        // Auto-send is disabled, clear interval if exists
+                        if (aiAutoSendInterval) {
+                            clearInterval(aiAutoSendInterval);
+                            aiAutoSendInterval = null;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking AI auto-send settings:', error);
+            }
+        }
+        
+        function parseAIResponse(text) {
+            const sections = { summary: '', alerts: '', recommendations: '', riskLevel: '' };
+            const summaryMatch = text.match(/\*\*SUMMARY:\*\*\s*([\s\S]*?)(?=\*\*|$)/i);
+            const alertsMatch = text.match(/\*\*ALERTS:\*\*\s*([\s\S]*?)(?=\*\*|$)/i);
+            const recsMatch = text.match(/\*\*RECOMMENDATIONS:\*\*\s*([\s\S]*?)(?=\*\*|$)/i);
+            const riskMatch = text.match(/\*\*RISK LEVEL:\*\*\s*([\s\S]*?)(?=\*\*|$)/i);
+            
+            if (summaryMatch) sections.summary = summaryMatch[1].trim();
+            if (alertsMatch) sections.alerts = alertsMatch[1].trim();
+            if (recsMatch) sections.recommendations = recsMatch[1].trim();
+            if (riskMatch) sections.riskLevel = riskMatch[1].trim();
+            
+            return sections;
+        }
+        
+        // Automated Weather Warning System
+        function startAutomatedWarnings() {
+            // Check weather every 5 minutes
+            checkWeatherConditions();
+            autoWarningInterval = setInterval(checkWeatherConditions, 5 * 60 * 1000); // 5 minutes
+        }
+        
+        async function checkWeatherConditions() {
+            try {
+                // Get current weather for Quezon City
+                const response = await fetch('../api/weather-monitoring.php?action=current&lat=14.6488&lon=121.0509');
+                const data = await response.json();
+                
+                if (!data.success || !data.data) {
+                    return;
+                }
+                
+                const weather = data.data;
+                const warnings = [];
+                
+                // Check for extreme heat
+                if (weather.main.temp >= 35) {
+                    warnings.push({
+                        type: 'extreme_heat',
+                        severity: 'high',
+                        message: `Extreme Heat Alert: ${weather.main.temp.toFixed(1)}\u00B0C in Quezon City. Stay hydrated and avoid outdoor activities.`,
+                        temp: weather.main.temp
+                    });
+                } else if (weather.main.temp >= 32) {
+                    warnings.push({
+                        type: 'heat',
+                        severity: 'warning',
+                        message: `High Temperature: ${weather.main.temp.toFixed(1)}\u00B0C in Quezon City. Take precautions.`,
+                        temp: weather.main.temp
+                    });
+                }
+                
+                // Check for heavy rain
+                if (weather.rain && weather.rain['1h'] > 10) {
+                    warnings.push({
+                        type: 'heavy_rain',
+                        severity: 'high',
+                        message: `Heavy Rain Alert: ${weather.rain['1h'].toFixed(1)}mm in the last hour in Quezon City. Risk of flooding.`,
+                        rain: weather.rain['1h']
+                    });
+                } else if (weather.rain && weather.rain['1h'] > 5) {
+                    warnings.push({
+                        type: 'rain',
+                        severity: 'warning',
+                        message: `Rain Alert: ${weather.rain['1h'].toFixed(1)}mm in the last hour in Quezon City.`,
+                        rain: weather.rain['1h']
+                    });
+                }
+                
+                // Check for strong winds
+                const windSpeedKmh = (weather.wind.speed || 0) * 3.6;
+                if (windSpeedKmh >= 50) {
+                    warnings.push({
+                        type: 'strong_wind',
+                        severity: 'high',
+                        message: `Strong Wind Alert: ${windSpeedKmh.toFixed(1)} km/h in Quezon City. Secure outdoor items.`,
+                        windSpeed: windSpeedKmh
+                    });
+                } else if (windSpeedKmh >= 30) {
+                    warnings.push({
+                        type: 'wind',
+                        severity: 'warning',
+                        message: `Windy Conditions: ${windSpeedKmh.toFixed(1)} km/h in Quezon City.`,
+                        windSpeed: windSpeedKmh
+                    });
+                }
+                
+                // Check for thunderstorms
+                if (weather.weather && weather.weather[0].main === 'Thunderstorm') {
+                    warnings.push({
+                        type: 'thunderstorm',
+                        severity: 'high',
+                        message: `Thunderstorm Alert in Quezon City. Seek shelter immediately.`,
+                        condition: weather.weather[0].description
+                    });
+                }
+                
+                // Check for high humidity + heat (heat index)
+                if (weather.main.humidity >= 80 && weather.main.temp >= 30) {
+                    const heatIndex = calculateHeatIndex(weather.main.temp, weather.main.humidity);
+                    if (heatIndex >= 40) {
+                        warnings.push({
+                            type: 'heat_index',
+                            severity: 'high',
+                            message: `Dangerous Heat Index: ${heatIndex.toFixed(1)}\u00B0C in Quezon City. Extreme caution advised.`,
+                            heatIndex: heatIndex
+                        });
+                    }
+                }
+                
+                // Display warnings
+                if (warnings.length > 0) {
+                    displayWeatherWarning(warnings[0]); // Show most severe warning
+                    sendWeatherWarning(warnings);
+                } else {
+                    hideWeatherWarning();
+                }
+                
+            } catch (error) {
+                console.error('Error checking weather conditions:', error);
+            }
+        }
+        
+        // Calculate Heat Index
+        function calculateHeatIndex(tempC, humidity) {
+            // Convert to Fahrenheit for calculation
+            const tempF = (tempC * 9/5) + 32;
+            
+            // Heat Index formula (Rothfusz equation)
+            const hi = -42.379 + 
+                       2.04901523 * tempF + 
+                       10.14333127 * humidity - 
+                       0.22475541 * tempF * humidity - 
+                       6.83783e-3 * tempF * tempF - 
+                       5.481717e-2 * humidity * humidity + 
+                       1.22874e-3 * tempF * tempF * humidity + 
+                       8.5282e-4 * tempF * humidity * humidity - 
+                       1.99e-6 * tempF * tempF * humidity * humidity;
+            
+            // Convert back to Celsius
+            return (hi - 32) * 5/9;
+        }
+        
+        // Display weather warning on map
+        function displayWeatherWarning(warning) {
+            const statusDiv = document.getElementById('autoWarningStatus');
+            const messageSpan = document.getElementById('warningMessage');
+            
+            if (!statusDiv || !messageSpan) return;
+            
+            statusDiv.className = `auto-warning-status ${warning.severity === 'high' ? '' : 'warning'}`;
+            messageSpan.textContent = warning.message;
+            statusDiv.style.display = 'flex';
+            
+            // Auto-hide after 10 seconds, but keep checking
+            setTimeout(() => {
+                if (statusDiv) {
+                    statusDiv.style.opacity = '0.7';
+                }
+            }, 10000);
+        }
+        
+        // Hide weather warning
+        function hideWeatherWarning() {
+            const statusDiv = document.getElementById('autoWarningStatus');
+            if (statusDiv) {
+                statusDiv.style.display = 'none';
+                statusDiv.style.opacity = '1';
+            }
+        }
+        
+        // Send weather warning to server
+        async function sendWeatherWarning(warnings) {
+            // Prevent duplicate warnings (only send once per hour per type)
+            const now = Date.now();
+            const warningKey = warnings[0].type;
+            
+            if (lastWarningTime && lastWarningTime[warningKey] && (now - lastWarningTime[warningKey]) < 3600000) {
+                return; // Already sent warning for this type in the last hour
+            }
+            
+            if (!lastWarningTime) {
+                lastWarningTime = {};
+            }
+            lastWarningTime[warningKey] = now;
+            
+            try {
+                const response = await fetch('../api/weather-warning.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        location: 'Quezon City',
+                        lat: 14.6488,
+                        lon: 121.0509,
+                        warnings: warnings,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    console.log('Weather warning sent successfully');
+                }
+            } catch (error) {
+                console.error('Error sending weather warning:', error);
+            }
+        }
+        
+        // Tab switching
+        // Check AI Analysis status on page load
+        function checkAIAnalysisStatus() {
+            fetch('../api/ai-warnings.php?action=getSettings')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.settings) {
+                        const settings = data.settings;
+                        const aiEnabled = settings.ai_weather_enabled === 1 || settings.ai_weather_enabled === true ||
+                                         (settings.ai_weather_enabled === undefined && (settings.ai_enabled === 1 || settings.ai_enabled === true));
+                        if (!aiEnabled) {
+                            showAIDisabledNote();
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking AI status:', error);
+                    // Keep AI actions available on settings-read errors; actual permission is enforced server-side.
+                });
+        }
+        
+        // Show note when AI is disabled
+        function showAIDisabledNote() {
+            const container = document.getElementById('aiAnalysis');
+            const statusBadge = document.getElementById('aiStatus');
+            
+            if (container) {
+                container.innerHTML = `
+                    <div style="background: rgba(231, 76, 60, 0.1); border: 2px solid #e74c3c; border-radius: 8px; padding: 1.5rem; text-align: center;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #e74c3c; margin-bottom: 1rem;"></i>
+                        <h4 style="color: #e74c3c; margin: 0 0 0.75rem 0; font-size: 1.1rem;">AI Weather Analysis is Disabled</h4>
+                        <p style="color: rgba(255,255,255,0.9); margin: 0 0 1rem 0; line-height: 1.6;">
+                            AI weather analysis is currently disabled. To enable AI weather analysis, please go to 
+                            <strong>General Settings -> System Settings -> AI Analysis - Weather Monitoring</strong> and turn it on.
+                        </p>
+                        <a href="general-settings.php" style="display: inline-block; background: #8e44ad; color: white; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; transition: all 0.3s;">
+                            <i class="fas fa-cog"></i> Go to General Settings
+                        </a>
+                    </div>
+                `;
+            }
+            
+            if (statusBadge) {
+                statusBadge.textContent = 'Disabled';
+                statusBadge.className = 'ai-status error';
+            }
+        }
+        
+
+        function weatherRiskClass(level) {
+            const normalized = String(level || 'normal').toLowerCase();
+            return ['warning', 'advisory', 'watch', 'normal'].includes(normalized) ? normalized : 'normal';
+        }
+
+        function weatherRiskPercent(value, max, invert = false) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric) || max <= 0) return 0;
+            const raw = invert ? ((max - numeric) / max) * 100 : (numeric / max) * 100;
+            return Math.max(0, Math.min(100, Math.round(raw)));
+        }
+
+        function weatherRiskMetric(label, value, unit, percent, level) {
+            const display = value === null || value === undefined || value === '' ? '--' : `${value}${unit}`;
+            return `
+                <div class="weather-risk-meter">
+                    <div class="weather-risk-meter-head">
+                        <span>${label}</span>
+                        <strong>${display}</strong>
+                    </div>
+                    <div class="weather-risk-track" aria-hidden="true">
+                        <span class="weather-risk-fill ${weatherRiskClass(level)}" style="width:${percent}%"></span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function weatherRiskVisual(risk, metrics) {
+            const key = risk.key || '';
+            const level = risk.level || 'normal';
+            if (key === 'rainfall') {
+                return `
+                    <div class="weather-risk-visual">
+                        ${weatherRiskMetric('3h rain', metrics.max_rain_3h_mm, ' mm', weatherRiskPercent(metrics.max_rain_3h_mm, 20), level)}
+                        ${weatherRiskMetric('Probability', metrics.max_precipitation_probability, '%', weatherRiskPercent(metrics.max_precipitation_probability, 100), level)}
+                    </div>
+                `;
+            }
+            if (key === 'flood_risk') {
+                return `
+                    <div class="weather-risk-visual">
+                        ${weatherRiskMetric('24h total', metrics.rain_24h_mm, ' mm', weatherRiskPercent(metrics.rain_24h_mm, 50), level)}
+                        ${weatherRiskMetric('48h total', metrics.rain_48h_mm, ' mm', weatherRiskPercent(metrics.rain_48h_mm, 80), level)}
+                    </div>
+                `;
+            }
+            if (key === 'wind') {
+                return `
+                    <div class="weather-risk-visual">
+                        ${weatherRiskMetric('Wind', metrics.max_wind_kmh, ' km/h', weatherRiskPercent(metrics.max_wind_kmh, 55), level)}
+                        ${weatherRiskMetric('Gusts', metrics.max_gust_kmh, ' km/h', weatherRiskPercent(metrics.max_gust_kmh, 75), level)}
+                    </div>
+                `;
+            }
+            if (key === 'visibility') {
+                const km = metrics.min_visibility_m === null || metrics.min_visibility_m === undefined ? null : (Number(metrics.min_visibility_m) / 1000).toFixed(1);
+                const percent = km === null ? 0 : weatherRiskPercent(Number(metrics.min_visibility_m), 10000, true);
+                return `
+                    <div class="weather-risk-visual">
+                        ${weatherRiskMetric('Visibility risk', km, ' km', percent, level)}
+                        <span class="weather-risk-mini-note">Shorter bar means clearer visibility.</span>
+                    </div>
+                `;
+            }
+            if (key === 'heat') {
+                return `
+                    <div class="weather-risk-visual">
+                        ${weatherRiskMetric('Temp', metrics.max_temp_c, ' C', weatherRiskPercent(metrics.max_temp_c, 38), level)}
+                        ${weatherRiskMetric('Feels like', metrics.max_feels_like_c, ' C', weatherRiskPercent(metrics.max_feels_like_c, 42), level)}
+                        ${weatherRiskMetric('Humidity', metrics.max_humidity, '%', weatherRiskPercent(metrics.max_humidity, 100), level)}
+                    </div>
+                `;
+            }
+            const rankPercent = { normal: 12, watch: 38, advisory: 68, warning: 100 }[weatherRiskClass(level)] || 12;
+            return `
+                <div class="weather-risk-visual">
+                    ${weatherRiskMetric('Signal strength', weatherRiskClass(level).toUpperCase(), '', rankPercent, level)}
+                </div>
+            `;
+        }
+
+        function renderWeatherRiskMonitor(analysis) {
+            const container = document.getElementById('weatherRiskMonitor');
+            const status = document.getElementById('weatherRiskStatus');
+            if (!container || !analysis) return;
+            const overall = analysis.overall || { level: 'normal', label: 'Weather' };
+            const overallClass = weatherRiskClass(overall.level);
+            if (status) {
+                status.textContent = String(overall.level || 'normal').toUpperCase();
+                status.className = `ai-status weather-risk-status ${overallClass}`;
+            }
+            const risks = Array.isArray(analysis.risks) ? analysis.risks : [];
+            const metrics = analysis.metrics || {};
+            const riskCounts = risks.reduce((acc, risk) => {
+                const key = weatherRiskClass(risk.level);
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, { normal: 0, watch: 0, advisory: 0, warning: 0 });
+            container.innerHTML = `
+                <div class="weather-risk-summary ${overallClass}">
+                    <strong>${overall.label || 'Weather'} ${overall.level || 'Normal'}</strong>
+                    <span>${analysis.source || 'Open-Meteo forecast'} - Updated ${analysis.generated_at || ''}</span>
+                </div>
+                <div class="weather-risk-analytics">
+                    <div class="weather-risk-donut ${overallClass}" aria-hidden="true">
+                        <span>${String(overall.level || 'normal').toUpperCase()}</span>
+                    </div>
+                    <div class="weather-risk-chip-grid">
+                        <span><strong>${riskCounts.warning || 0}</strong> Warning</span>
+                        <span><strong>${riskCounts.advisory || 0}</strong> Advisory</span>
+                        <span><strong>${riskCounts.watch || 0}</strong> Watch</span>
+                        <span><strong>${riskCounts.normal || 0}</strong> Normal</span>
+                    </div>
+                    <div class="weather-risk-metric-strip">
+                        <span>Rain 24h <strong>${metrics.rain_24h_mm ?? '--'} mm</strong></span>
+                        <span>Rain chance <strong>${metrics.max_precipitation_probability ?? '--'}%</strong></span>
+                        <span>Gusts <strong>${metrics.max_gust_kmh ?? '--'} km/h</strong></span>
+                    </div>
+                </div>
+                <div class="weather-risk-grid">
+                    ${risks.map(risk => `
+                        <div class="weather-risk-row ${weatherRiskClass(risk.level)}">
+                            <div class="weather-risk-content">
+                                <div class="weather-risk-row-head">
+                                    <strong>${risk.label || 'Risk'}</strong>
+                                    <span class="weather-risk-badge ${weatherRiskClass(risk.level)}">${risk.level || 'normal'}</span>
+                                </div>
+                                <p>${risk.summary || ''}</p>
+                                ${weatherRiskVisual(risk, metrics)}
+                                ${risk.more_info_url ? `<a href="${risk.more_info_url}" target="_blank" rel="noopener">More Flood Information</a>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        function loadWeatherRiskMonitor() {
+            fetch('../api/weather-monitoring.php?action=risk&lat=14.6760&lon=121.0437')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.data) {
+                        renderWeatherRiskMonitor(data.data);
+                    } else {
+                        const container = document.getElementById('weatherRiskMonitor');
+                        const status = document.getElementById('weatherRiskStatus');
+                        if (status) status.textContent = 'Unavailable';
+                        if (container) container.innerHTML = `<div class="weather-risk-error">${data.message || 'Weather risk monitor is unavailable.'}</div>`;
+                    }
+                })
+                .catch(error => {
+                    const container = document.getElementById('weatherRiskMonitor');
+                    const status = document.getElementById('weatherRiskStatus');
+                    if (status) status.textContent = 'Offline';
+                    if (container) container.innerHTML = `<div class="weather-risk-error">Unable to load weather risk monitor.</div>`;
+                    console.error('Weather risk monitor error:', error);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check AI status first
+            checkAIAnalysisStatus();
+            
+            // Load sidebar weather data immediately on page load
+            loadWeatherDetails(14.6488, 121.0509, 'Quezon City');
+            loadWeatherForecast(14.6488, 121.0509, 'Quezon City');
+            loadWeatherRiskMonitor();
+            
+            // Fetch bulletins
+            fetchPagasaBulletins(null);
+            
+            // Real-time auto-refresh for PAGASA bulletins. Successful refreshes trigger the auto-alert dedupe check.
+            setInterval(() => {
+                fetchPagasaBulletins(null);
+                if (archiveLoaded) {
+                    loadPagasaHistory();
+                }
+                loadWeatherRiskMonitor();
+            }, 30000);
+            
+            // Start automated warnings check
+            setTimeout(() => {
+                checkWeatherConditions();
+            }, 2500);
+            
+            document.querySelectorAll('.weather-tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    document.querySelectorAll('.weather-tab').forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    const tabType = this.getAttribute('data-tab');
+                    if (window.forecastData && window.forecastData.length > 0) {
+                        renderChartByType(tabType, window.forecastData);
+                    }
+                });
+            });
+            
+            // Check and start AI auto-send if enabled
+            checkAndStartAIAutoSend();
+        });
+        
+        function renderChartByType(type, forecastData) {
+            const ctx = document.getElementById('hourlyTempChart');
+            if (!ctx || !forecastData || forecastData.length === 0) return;
+            
+            const hourlyData = forecastData.slice(0, 8);
+            const labels = hourlyData.map(item => {
+                const date = new Date(item.datetime);
+                return date.getHours() + ':00';
+            });
+            
+            // Detect dark mode
+            const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+            const textColor = isDarkMode ? '#fafafa' : '#171717';
+            const gridColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+            
+            let data, borderColor, backgroundColor, label;
+            
+            switch(type) {
+                case 'precipitation':
+                    data = hourlyData.map(item => item.rain || 0);
+                    borderColor = isDarkMode ? '#3a7675' : '#3a7675';
+                    backgroundColor = isDarkMode ? 'rgba(58, 118, 117, 0.3)' : 'rgba(58, 118, 117, 0.2)';
+                    label = 'mm';
+                    break;
+                case 'wind':
+                    data = hourlyData.map(item => (item.wind_speed || 0) * 3.6);
+                    borderColor = isDarkMode ? '#a1a1aa' : '#575757';
+                    backgroundColor = isDarkMode ? 'rgba(161, 161, 170, 0.3)' : 'rgba(161, 161, 170, 0.2)';
+                    label = 'km/h';
+                    break;
+                default:
+                    data = hourlyData.map(item => Math.round(item.temp));
+                    borderColor = isDarkMode ? '#3a7675' : '#3a7675';
+                    backgroundColor = isDarkMode ? 'rgba(58, 118, 117, 0.3)' : 'rgba(58, 118, 117, 0.1)';
+                    label = '\u00B0C';
+            }
+            
+            if (window.hourlyChart) {
+                window.hourlyChart.destroy();
+            }
+            
+            window.hourlyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        borderColor: borderColor,
+                        backgroundColor: backgroundColor,
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointBackgroundColor: borderColor,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 7,
+                        pointHoverBackgroundColor: borderColor,
+                        pointHoverBorderColor: '#ffffff',
+                        pointHoverBorderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { 
+                            backgroundColor: isDarkMode ? 'rgba(24, 24, 27, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                            titleColor: textColor,
+                            bodyColor: textColor,
+                            borderColor: borderColor,
+                            borderWidth: 1,
+                            callbacks: { label: (ctx) => ctx.raw + ' ' + label } 
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            grid: { 
+                                display: true,
+                                color: gridColor
+                            },
+                            ticks: {
+                                color: textColor,
+                                font: { size: 11 }
+                            }
+                        },
+                        y: { 
+                            beginAtZero: type === 'precipitation',
+                            grid: { 
+                                color: gridColor,
+                                drawBorder: true,
+                                borderColor: gridColor
+                            },
+                            ticks: {
+                                color: textColor,
+                                font: { size: 11 }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        let activePagasaData = null;
+        let pagasaAutoAlertInFlight = false;
+
+        async function fetchPagasaBulletins(event) {
+            let btn = null;
+            if (event && event.target) {
+                btn = event.target.closest('button');
+            }
+            const originalHTML = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+                btn.disabled = true;
+            }
+
+            const container = document.getElementById('pagasaBulletinsFeed');
+            if (container && !activePagasaData) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; opacity: 0.7;">
+                        <i class="fas fa-circle-notch fa-spin" style="font-size: 2.5rem; margin-bottom: 1rem; color: #2980b9;"></i>
+                        <p style="font-size: 1.1rem; font-weight: 500; color: var(--text-color-1);">Retrieving latest weather advisories from PAGASA...</p>
+                    </div>
+                `;
+            }
+
+            try {
+                const response = await fetch('../api/pagasa-bulletin-parser.php');
+                const data = await response.json();
+
+                if (btn) {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                }
+
+                if (data.success && data.bulletins) {
+                    activePagasaData = data;
+                    renderPagasaBulletins(data.bulletins, data.is_mock);
+                    maybeAutoSendPagasaAlert(data.bulletins, data.is_mock);
+                } else {
+                    if (container) {
+                        container.innerHTML = `
+                            <div style="text-align: center; padding: 2rem; border: 1px solid #e74c3c; border-radius: 8px; background: rgba(231, 76, 60, 0.05); margin: 1rem 0;">
+                                <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #e74c3c; margin-bottom: 0.5rem;"></i>
+                                <p style="color: #e74c3c; font-weight: 600; margin: 0.25rem 0;">Error fetching bulletins</p>
+                                <p style="font-size: 0.85rem; margin: 0 0 1rem 0; color: var(--text-color-1);">${data.message || 'Unable to parse bulletin feed.'}</p>
+                                <button onclick="fetchPagasaBulletins(event)" class="btn btn-primary" style="background: #2980b9; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">
+                                    <i class="fas fa-sync-alt"></i> Try Again
+                                </button>
+                            </div>
+                        `;
+                    }
+                }
+            } catch (error) {
+                if (btn) {
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                }
+                if (container) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; border: 1px solid #e74c3c; border-radius: 8px; background: rgba(231, 76, 60, 0.05); margin: 1rem 0;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #e74c3c; margin-bottom: 0.5rem;"></i>
+                            <p style="color: #e74c3c; font-weight: 600; margin: 0.25rem 0;">Network Error</p>
+                            <p style="font-size: 0.85rem; margin: 0 0 1rem 0; color: var(--text-color-1);">${error.message}</p>
+                            <button onclick="fetchPagasaBulletins(event)" class="btn btn-primary" style="background: #2980b9; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">
+                                <i class="fas fa-sync-alt"></i> Try Again
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+
+        function pagasaBulletinAutoKey(bulletin) {
+            if (!bulletin) return '';
+            return bulletin.hash || [bulletin.title || '', bulletin.issued_at || bulletin.pubDate || '', bulletin.link || ''].join('|');
+        }
+
+        async function maybeAutoSendPagasaAlert(bulletins, isMock) {
+            if (isMock || !Array.isArray(bulletins) || !bulletins.length || pagasaAutoAlertInFlight) return;
+
+            const latest = bulletins[0];
+            const key = pagasaBulletinAutoKey(latest);
+            if (key && localStorage.getItem('pagasaAutoAlertLastKey') === key) return;
+
+            pagasaAutoAlertInFlight = true;
+            try {
+                const response = await fetch('../api/pagasa-auto-alert.php?action=realtime');
+                const data = await response.json().catch(() => ({}));
+                if (data && data.success && key && (data.alerted || /no new bulletins|already alerted|already sent/i.test(String(data.message || '')))) {
+                    localStorage.setItem('pagasaAutoAlertLastKey', key);
+                }
+                if (data && data.alerted && typeof loadNotificationStats === 'function') {
+                    loadNotificationStats();
+                }
+                if (data && data.alerted && typeof archiveLoaded !== 'undefined' && archiveLoaded) {
+                    loadPagasaHistory();
+                }
+            } catch (error) {
+                console.warn('PAGASA realtime auto-alert check failed:', error);
+            } finally {
+                pagasaAutoAlertInFlight = false;
+            }
+        }
+        function renderPagasaBulletins(bulletins, isMock) {
+            const container = document.getElementById('pagasaBulletinsFeed');
+            if (!container) return;
+
+            // Update refresh timestamp
+            const wxRef = document.getElementById('wxLastRefresh');
+            if (wxRef) wxRef.textContent = 'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+            if (!bulletins || bulletins.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; background: var(--bg-color-2); border-radius: 8px; border: 1px dashed var(--border-color-1);">
+                        <i class="fas fa-sun" style="font-size: 3rem; color: #f39c12; margin-bottom: 1rem;"></i>
+                        <p style="font-size: 1.1rem; font-weight: 600; margin: 0; color: var(--text-color-1);">No Active Tropical Cyclones</p>
+                        <p style="font-size: 0.9rem; opacity: 0.8; margin: 0.25rem 0 0 0; color: var(--text-color-2);">No active weather alerts or typhoon warning bulletins are currently issued by PAGASA.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            if (isMock) {
+                html += `<div style="background: #7f8c8d; color: white; font-size: 0.72rem; font-weight: 700; padding: 0.3rem 0.65rem; border-radius: 4px; display: inline-block; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em;"><i class="fas fa-info-circle"></i> Mock Failsafe Active (PAGASA Feed Offline)</div>`;
+            }
+
+            bulletins.forEach((b, index) => {
+                const qc = b.quezon_city_impact || {};
+                const level = qc.level || 'Priority';
+                const severity = qc.severity || 'Medium';
+                const summary = qc.summary || '';
+                const actionSteps = qc.action_steps || [];
+
+                let sevColor = '#27ae60';
+                if (severity === 'Critical') sevColor = '#c0392b';
+                else if (severity === 'High') sevColor = '#d35400';
+                else if (severity === 'Medium') sevColor = '#f39c12';
+
+                let lvlColor = '#3498db';
+                if (level === 'Urgent') lvlColor = '#e74c3c';
+                else if (level === 'Prioritized') lvlColor = '#e67e22';
+
+                // Cyclone name from title
+                let cycloneName = '';
+                const nameMatch = (b.title || '').match(/"([^"]+)"/);
+                if (nameMatch) cycloneName = nameMatch[1];
+
+                html += `
+                <div style="margin-bottom: 1.25rem; background: var(--bg-color-2); border-radius: 10px; border: 1px solid var(--border-color-1); overflow: hidden;">
+                    <!-- Bulletin Header -->
+                    <div style="background: linear-gradient(135deg, #2c3e50, #34495e); color: white; padding: 1rem 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <div style="font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.75; margin-bottom: 0.3rem;"><i class="fas fa-satellite-dish"></i> PAGASA Weather Bulletin</div>
+                                <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; line-height: 1.3;">${b.title}</h3>
+                            </div>
+                            <div style="text-align: right; flex-shrink: 0;">
+                                <div style="font-size: 0.72rem; opacity: 0.8;"><i class="fas fa-clock"></i> ${b.issued_at || 'N/A'}</div>
+                                ${cycloneName ? '<div style="margin-top: 0.25rem;"><span style="background: rgba(255,255,255,0.2); padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.72rem; font-weight: 600;">' + cycloneName + '</span></div>' : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bulletin Content -->
+                    <div style="padding: 1.25rem;">
+                        <p style="font-size: 0.88rem; line-height: 1.7; color: var(--text-color-1); margin: 0 0 1rem 0; white-space: pre-wrap;">${b.description}</p>
+
+                        <!-- QC Impact -->
+                        <div style="background: var(--bg-color-1); padding: 1rem; border-radius: 8px; border-left: 3px solid ${lvlColor}; margin-bottom: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <span style="font-size: 0.82rem; font-weight: 700; text-transform: uppercase; color: var(--text-color-1); letter-spacing: 0.3px;"><i class="fas fa-shield-alt" style="color: ${lvlColor};"></i> Quezon City LGU Impact</span>
+                                <div style="display: flex; gap: 0.35rem;">
+                                    <span style="background: ${lvlColor}15; color: ${lvlColor}; border: 1px solid ${lvlColor}55; font-weight: 700; padding: 0.15rem 0.45rem; font-size: 0.68rem; border-radius: 4px; text-transform: uppercase;">Level: ${level}</span>
+                                    <span style="background: ${sevColor}15; color: ${sevColor}; border: 1px solid ${sevColor}55; font-weight: 700; padding: 0.15rem 0.45rem; font-size: 0.68rem; border-radius: 4px; text-transform: uppercase;">Severity: ${severity}</span>
+                                </div>
+                            </div>
+                            <p style="margin: 0; font-size: 0.85rem; line-height: 1.5; color: var(--text-color-1);">${summary}</p>
+                            ${actionSteps.length > 0 ? `
+                            <div style="margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid var(--border-color-1);">
+                                <div style="font-size: 0.78rem; font-weight: 700; color: var(--text-color-1); margin-bottom: 0.35rem;">Recommended LGU Actions:</div>
+                                <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.82rem; line-height: 1.6; color: var(--text-secondary-1);">
+                                    ${actionSteps.map(s => '<li>' + s + '</li>').join('')}
+                                </ul>
+                            </div>` : ''}
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button onclick="pushPagasaStatusToRespondTeamAtIndex(${index}, event)" style="background: #27ae60; color: white; font-weight: 600; padding: 0.45rem 0.85rem; border-radius: 5px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem;"><i class="fas fa-share-square"></i> Push to Respond Team</button>
+                            <button onclick="convertPagasaToBroadcastAlert(${index})" style="background: #8e44ad; color: white; font-weight: 600; padding: 0.45rem 0.85rem; border-radius: 5px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem;"><i class="fas fa-paper-plane"></i> Convert to Broadcast Alert</button>
+                            ${b.link ? '<a href="' + b.link + '" target="_blank" style="background: var(--bg-color-1); color: var(--text-color-1); border: 1px solid var(--border-color-1); font-weight: 600; padding: 0.45rem 0.85rem; border-radius: 5px; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem;"><i class="fas fa-file-pdf"></i> View Official PDF</a>' : ''}
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function pushPagasaStatusToRespondTeamAtIndex(bulletinIndex, event) {
+            if (!activePagasaData || !activePagasaData.bulletins || !activePagasaData.bulletins[bulletinIndex]) return;
+            const b = activePagasaData.bulletins[bulletinIndex];
+            const btn = event.target.closest('button');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Pushing...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('../api/push-monitoring-status.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        source: 'pagasa_parser',
+                        type: 'weather_bulletin',
+                        data: b
+                    })
+                });
+                const resData = await response.json();
+
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+
+                if (resData.success) {
+                    showWeatherSendResult('Response Team Updated', 'PAGASA Bulletin details pushed to the Emergency Response Team.');
+                } else {
+                    showWeatherSendResult('Response Team Update Failed', resData.message || 'Failed to push bulletin status.', true);
+                }
+            } catch (e) {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                showWeatherSendResult('Response Team Update Failed', e.message, true);
+            }
+        }
+
+        async function convertPagasaToBroadcastAlert(bulletinIndex) {
+            if (!activePagasaData || !activePagasaData.bulletins || !activePagasaData.bulletins[bulletinIndex]) return;
+            const btn = document.querySelector('button[onclick*="convertPagasaToBroadcastAlert"]');
+            const originalHTML = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Broadcasting...';
+            }
+            
+            try {
+                const response = await fetch('../api/pagasa-auto-alert.php?action=force');
+                const data = await response.json();
+                
+                if (data.success) {
+                    showWeatherSendResult('Weather Alert Broadcasted', `Weather bulletin converted and broadcasted to ${data.recipients || 0} citizens successfully.`);
+                    if (typeof archiveLoaded !== 'undefined' && archiveLoaded) {
+                        loadPagasaHistory();
+                    }
+                } else {
+                    showWeatherSendResult('Weather Broadcast Failed', data.message || 'Unknown error', true);
+                }
+            } catch (e) {
+                console.error(e);
+                showWeatherSendResult('Weather Broadcast Failed', 'Network error: Could not complete the broadcast request.', true);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHTML;
+                }
+            }
+        }
+
+        function openWeatherMapModal() {
+            const modal = document.getElementById('weatherMapModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                if (!mapInitialized) {
+                    initMap();
+                } else if (map) {
+                    setTimeout(() => {
+                        map.invalidateSize();
+                    }, 100);
+                }
+            }
+        }
+
+        function closeWeatherMapModal() {
+            const modal = document.getElementById('weatherMapModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        let archiveLoaded = false;
+        function togglePagasaArchive() {
+            const wrapper = document.getElementById('pagasaHistoryWrapper');
+            const btn = document.getElementById('toggleArchiveBtn');
+            if (!wrapper || !btn) return;
+            
+            if (wrapper.style.display === 'none') {
+                wrapper.style.display = 'block';
+                btn.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Archive';
+                if (!archiveLoaded) {
+                    loadPagasaHistory();
+                    archiveLoaded = true;
+                }
+            } else {
+                wrapper.style.display = 'none';
+                btn.innerHTML = '<i class="fas fa-eye"></i> Show Archive';
+            }
+        }
+
+        async function loadPagasaHistory() {
+            const feed = document.getElementById('pagasaHistoryFeed');
+            if (!feed) return;
+
+            try {
+                const response = await fetch('../api/pagasa-auto-alert.php?action=history&limit=10');
+                const data = await response.json();
+
+                if (data.success && data.logs && data.logs.length > 0) {
+                    let html = '<div style="display: flex; flex-direction: column; gap: 0.75rem;">';
+                    data.logs.forEach(log => {
+                        let badgeColor = '#27ae60';
+                        if (log.severity === 'critical') badgeColor = '#c0392b';
+                        else if (log.severity === 'high') badgeColor = '#d35400';
+                        else if (log.severity === 'medium') badgeColor = '#f39c12';
+
+                        const formattedTime = new Date(log.created_at).toLocaleString('en-PH', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                        });
+
+                        html += `
+                        <div style="padding: 1rem; background: var(--bg-color-2); border: 1px solid var(--border-color-1); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 250px;">
+                                <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-color-1); margin-bottom: 0.25rem;">${log.bulletin_title}</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary-1); display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+                                    <span><i class="fas fa-clock"></i> ${formattedTime}</span>
+                                    <span style="background: ${badgeColor}22; color: ${badgeColor}; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: 700; font-size: 0.65rem; border: 1px solid ${badgeColor}44; text-transform: uppercase;">${log.severity}</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; flex-shrink: 0; align-items: center;">
+                                ${log.bulletin_link ? `<a href="${log.bulletin_link}" target="_blank" style="background: linear-gradient(135deg, #2980b9, #3498db); color: white; padding: 0.45rem 0.85rem; border-radius: 5px; text-decoration: none; font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;"><i class="fas fa-file-pdf"></i> View PDF</a>` : '<span style="font-size: 0.75rem; color: var(--text-secondary-1); font-style: italic;"><i class="fas fa-times-circle"></i> No PDF Link</span>'}
+                            </div>
+                        </div>
+                        `;
+                    });
+                    html += '</div>';
+                    feed.innerHTML = html;
+                } else {
+                    feed.innerHTML = `
+                    <div style="text-align: center; padding: 2rem; background: var(--bg-color-2); border-radius: 8px; border: 1px dashed var(--border-color-1);">
+                        <i class="fas fa-history" style="font-size: 2rem; color: var(--text-secondary-1); margin-bottom: 0.5rem;"></i>
+                        <p style="margin: 0; font-size: 0.88rem; color: var(--text-color-2);">No archived weather alerts found.</p>
+                    </div>
+                    `;
+                }
+            } catch (e) {
+                console.error('Failed to load PAGASA history:', e);
+                feed.innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: #e74c3c;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                    <p style="margin: 0; font-size: 0.88rem; font-weight: 600;">Error loading archive</p>
+                </div>
+                `;
+            }
+        }
+    </script>
+
+    <!-- Interactive Weather Map Modal -->
+    <div id="weatherMapModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 99999; background: rgba(0,0,0,0.8); align-items: center; justify-content: center;">
+        <div onclick="closeWeatherMapModal()" style="position: absolute; width: 100%; height: 100%; cursor: pointer; z-index: 99998; background: transparent;"></div>
+        <div style="position: relative; width: 90%; max-width: 1000px; height: 80%; background: var(--card-bg-1); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--border-color-1); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3); z-index: 99999;">
+            <div class="modal-header" style="padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color-1); background: var(--bg-color-2); z-index: 100000;">
+                <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--text-color-1); display: flex; align-items: center; gap: 0.5rem;"><i class="fas fa-map-marked-alt" style="color: #2980b9;"></i> Interactive Weather Map Monitor</h2>
+                <button onclick="closeWeatherMapModal()" style="background: none; border: none; font-size: 2rem; cursor: pointer; color: var(--text-color-2); line-height: 1; padding: 0;">&times;</button>
+            </div>
+            <div class="modal-body" style="flex: 1; position: relative; padding: 0; background: #e5e5e5; display: flex; flex-direction: column; min-height: 400px; z-index: 100000;">
+                <div id="weatherMap" style="width: 100%; height: 100%; flex: 1; z-index: 1;"></div>
+                
+                <div id="mapLoading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; background: rgba(255,255,255,0.9); padding: 1rem; border-radius: 8px; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <i class="fas fa-spinner fa-spin"></i> Loading map...
+                </div>
+                
+                <!-- Map Controls Overlay inside Modal -->
+                <div class="modal-map-controls-panel" style="position: absolute !important; bottom: 20px !important; left: 20px !important; top: auto !important; right: auto !important; z-index: 1000 !important; display: flex !important; flex-wrap: wrap !important; gap: 0.5rem !important; background: rgba(24, 24, 27, 0.85) !important; padding: 0.5rem !important; border-radius: 8px !important; backdrop-filter: blur(4px) !important; flex-direction: row !important; border: 1px solid rgba(255,255,255,0.15) !important; width: auto !important; max-width: calc(100% - 40px) !important;">
+                    <button id="satelliteBtn" class="map-control-btn" title="Toggle Satellite Infrared Imagery" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-satellite"></i> Satellite</button>
+                    <button id="windFlowBtn" class="map-control-btn" title="Toggle Wind Flow Animation" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-wind"></i> Wind Flow</button>
+                    <button id="radarBtn" class="map-control-btn" title="Toggle Weather Radar" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-satellite-dish"></i> Radar</button>
+                    <button id="precipitationBtn" class="map-control-btn" title="Toggle Precipitation Layer" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-cloud-rain"></i> Rain</button>
+                    <button id="humidityBtn" class="map-control-btn" title="Toggle Humidity Layer" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-tint"></i> Humidity</button>
+                    <button id="temperatureBtn" class="map-control-btn" title="Toggle Temperature Layer" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-thermometer-half"></i> Temp</button>
+                    <button id="windSpeedBtn" class="map-control-btn" title="Toggle Wind Speed Layer" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-wind"></i> Wind Speed</button>
+                    <button id="cloudsBtn" class="map-control-btn" title="Toggle Cloud Cover" style="color: white; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; white-space: nowrap;"><i class="fas fa-cloud"></i> Clouds</button>
+                </div>
+                
+                <div id="quezonCityStatus" class="quezon-city-status" onclick="focusQuezonCity()" style="position: absolute !important; top: 20px !important; right: 20px !important; bottom: auto !important; left: auto !important; z-index: 1000 !important; background: rgba(0,0,0,0.7) !important; color: white !important; padding: 0.5rem 0.75rem !important; border-radius: 6px !important; cursor: pointer !important; font-size: 0.85rem !important; display: flex !important; align-items: center !important; gap: 0.35rem !important; height: auto !important; width: auto !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;" title="Click to focus on Quezon City">
+                    <i class="fas fa-map-marker-alt" style="color: #e74c3c;"></i>
+                    <span>QC Focus</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <style>
+        .weather-risk-card { border-left: 4px solid #e67e22; }
+        .weather-risk-card h3 { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; }
+        .weather-risk-status.normal { background:#16a34a; }
+        .weather-risk-status.watch { background:#0ea5e9; }
+        .weather-risk-status.advisory { background:#f59e0b; }
+        .weather-risk-status.warning { background:#dc2626; }
+        .weather-risk-summary { display:flex; flex-direction:column; gap:0.25rem; padding:0.85rem 1rem; border-radius:8px; margin-bottom:0.85rem; border:1px solid rgba(58,118,117,0.25); background:rgba(58,118,117,0.08); }
+        .weather-risk-summary strong { color:var(--text-color-1); }
+        .weather-risk-summary span { color:var(--text-secondary-1); font-size:0.82rem; }
+        .weather-risk-analytics { display:grid; grid-template-columns:72px 1fr; gap:0.75rem; align-items:center; padding:0.75rem; border:1px solid var(--border-color-1); border-radius:8px; margin-bottom:0.75rem; background:rgba(58,118,117,0.06); }
+        .weather-risk-donut { width:64px; height:64px; border-radius:50%; display:grid; place-items:center; background:conic-gradient(#16a34a 0 25%, #0ea5e9 25% 50%, #f59e0b 50% 75%, #dc2626 75% 100%); box-shadow:inset 0 0 0 10px var(--bg-color-1); }
+        .weather-risk-donut span { font-size:0.58rem; font-weight:900; color:var(--text-color-1); text-align:center; }
+        .weather-risk-chip-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.4rem; }
+        .weather-risk-chip-grid span, .weather-risk-metric-strip span { padding:0.4rem 0.5rem; border-radius:7px; background:var(--bg-color-1); color:var(--text-secondary-1); font-size:0.72rem; border:1px solid var(--border-color-1); }
+        .weather-risk-chip-grid strong, .weather-risk-metric-strip strong { color:var(--text-color-1); }
+        .weather-risk-metric-strip { grid-column:1 / -1; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.4rem; }
+        .weather-risk-grid { display:grid; gap:0.65rem; }
+        .weather-risk-row { display:block; padding:0.8rem; border:1px solid var(--border-color-1); border-radius:8px; background:var(--bg-color-1); }
+        .weather-risk-content { width:100%; }
+        .weather-risk-row-head { display:flex; justify-content:space-between; align-items:center; gap:0.65rem; }
+        .weather-risk-row p { margin:0.25rem 0 0; color:var(--text-secondary-1); font-size:0.84rem; line-height:1.45; }
+        .weather-risk-row a { display:inline-block; margin-top:0.35rem; color:#2980b9; font-weight:700; font-size:0.82rem; }
+        .weather-risk-visual { display:grid; gap:0.45rem; margin-top:0.65rem; }
+        .weather-risk-meter { display:grid; gap:0.28rem; }
+        .weather-risk-meter-head { display:flex; justify-content:space-between; gap:0.5rem; font-size:0.75rem; color:var(--text-secondary-1); }
+        .weather-risk-meter-head strong { color:var(--text-color-1); font-size:0.76rem; white-space:nowrap; }
+        .weather-risk-track { width:100%; height:7px; border-radius:999px; overflow:hidden; background:rgba(58,118,117,0.12); }
+        .weather-risk-fill { display:block; height:100%; min-width:5%; border-radius:999px; transition:width 0.45s ease; }
+        .weather-risk-fill.normal { background:#16a34a; }
+        .weather-risk-fill.watch { background:#0ea5e9; }
+        .weather-risk-fill.advisory { background:#f59e0b; }
+        .weather-risk-fill.warning { background:#dc2626; }
+        .weather-risk-mini-note { color:var(--text-secondary-1); font-size:0.72rem; }
+        .weather-risk-row.warning { border-left:4px solid #dc2626; }
+        .weather-risk-row.advisory { border-left:4px solid #f59e0b; }
+        .weather-risk-row.watch { border-left:4px solid #0ea5e9; }
+        .weather-risk-row.normal { border-left:4px solid #16a34a; }
+        .weather-risk-badge { flex:0 0 auto; padding:0.22rem 0.55rem; border-radius:999px; color:white; text-transform:uppercase; font-size:0.72rem; font-weight:800; }
+        .weather-risk-badge.normal { background:#16a34a; }
+        .weather-risk-badge.watch { background:#0ea5e9; }
+        .weather-risk-badge.advisory { background:#f59e0b; }
+        .weather-risk-badge.warning { background:#dc2626; }
+        .weather-risk-error { padding:0.9rem; border-radius:8px; background:rgba(220,38,38,0.1); color:#b91c1c; font-weight:700; }
+        .weather-ai-config-warning { display:grid; gap:0.35rem; }
+        .weather-ai-config-warning p { margin:0; color:rgba(255,255,255,0.9); line-height:1.5; }
+        @keyframes wxPulse {
+            0% { box-shadow: 0 0 0 0 rgba(39,174,96,0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(39,174,96,0); }
+            100% { box-shadow: 0 0 0 0 rgba(39,174,96,0); }
+        }
+    </style>
+</body>
+</html>
+
+
+
+
