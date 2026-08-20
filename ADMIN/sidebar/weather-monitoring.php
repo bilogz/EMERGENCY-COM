@@ -1373,9 +1373,10 @@ $pageTitle = 'Weather Monitoring';
                 const precipText = precipChance > 0 ? `${precipChance}%` : (rainMm ? `${rainMm}mm` : '');
                 const precipTitle = rainMm ? ` title="Expected rain: ${rainMm} mm"` : '';
                 
-                const range = overallMax - overallMin || 1;
-                const barStart = ((minTemp - overallMin) / range) * 100;
-                const barWidth = ((maxTemp - minTemp) / range) * 100;
+                const range = (overallMax - overallMin) || 1;
+                const leftPercent = Math.max(0, Math.min(92, ((minTemp - overallMin) / range) * 100));
+                const rightPercent = Math.max(leftPercent + 8, Math.min(100, ((maxTemp - overallMin) / range) * 100));
+                const barWidth = Math.max(10, rightPercent - leftPercent);
                 
                 html += `
                     <div class="forecast-day-row">
@@ -1384,7 +1385,7 @@ $pageTitle = 'Weather Monitoring';
                         <div class="forecast-temp-bar">
                             <span class="forecast-temp-min">${minTemp}&deg;</span>
                             <div class="forecast-bar-container">
-                                <div class="forecast-bar" style="margin-left: ${barStart}%; width: ${Math.max(barWidth, 10)}%;"></div>
+                                <div class="forecast-bar" style="left: ${leftPercent}%; width: ${Math.min(barWidth, 100 - leftPercent)}%;"></div>
                             </div>
                             <span class="forecast-temp-max">${maxTemp}&deg;</span>
                         </div>
@@ -2187,8 +2188,8 @@ Keep concise and actionable.`;
             if (key === 'heat') {
                 return `
                     <div class="weather-risk-visual">
-                        ${weatherRiskMetric('Temp', metrics.max_temp_c, ' C', weatherRiskPercent(metrics.max_temp_c, 38), level)}
-                        ${weatherRiskMetric('Feels like', metrics.max_feels_like_c, ' C', weatherRiskPercent(metrics.max_feels_like_c, 42), level)}
+                        ${weatherRiskMetric('Temp', metrics.max_temp_c, '&deg;C', weatherRiskPercent(metrics.max_temp_c, 38), level)}
+                        ${weatherRiskMetric('Feels like', metrics.max_feels_like_c, '&deg;C', weatherRiskPercent(metrics.max_feels_like_c, 42), level)}
                         ${weatherRiskMetric('Humidity', metrics.max_humidity, '%', weatherRiskPercent(metrics.max_humidity, 100), level)}
                     </div>
                 `;
