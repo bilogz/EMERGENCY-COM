@@ -1284,7 +1284,10 @@ function sendEmailNotification($email, $name, $subject, $body, $alertId) {
     if (file_exists(__DIR__ . '/../../USERS/lib/mail.php')) {
         require_once __DIR__ . '/../../USERS/lib/mail.php';
         $error = null;
-        $emailSent = sendSMTPMail($email, $subject, $body, false, $error);
+        $htmlBody = function_exists('buildEmergencyAlertEmailTemplate')
+            ? buildEmergencyAlertEmailTemplate($subject, $body, 'warning', 'Weather Warning')
+            : nl2br(htmlspecialchars($body));
+        $emailSent = sendSMTPMail($email, $subject, $htmlBody, true, $error);
     } else {
         // Fallback to PHP mail()
         $headers = "From: noreply@emergency-com.local\r\n";

@@ -62,27 +62,25 @@ try {
     
     // Prepare email content
     $emailSubject = 'Email Verification Code - Emergency Communication System';
-    $emailBody = "Hello {$name},\n\n";
-    $emailBody .= "Your email verification code is: {$otp_code}\n\n";
-    $emailBody .= "This code will expire in 1 minute.\n\n";
-    $emailBody .= "If you did not request this code, please ignore this email.\n\n";
-    $emailBody .= "Thank you,\n";
-    $emailBody .= "Emergency Communication System";
+    $emailBodyHtml = function_exists('buildOTPEmailTemplate')
+        ? buildOTPEmailTemplate($name, $otp_code, 'Citizen Registration', 1)
+        : "<p>Hello " . htmlspecialchars($name) . ",</p><p>Your verification code is: <strong>{$otp_code}</strong> (valid for 1 minute).</p>";
+    $emailBodyText = "Hello {$name},\n\nYour email verification code is: {$otp_code}\n\nThis code will expire in 1 minute.\n\nThank you,\nEmergency Communication System";
     
-    // Try sending via mail function
-    if (function_exists('mail')) {
-        $headers = "From: noreply@emergency-com.local\r\n";
-        $headers .= "Reply-To: support@emergency-com.local\r\n";
-        $headers .= "X-Mailer: PHP/" . phpversion();
-        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
-        
-        $otp_sent = @mail($email, $emailSubject, $emailBody, $headers);
+    // Try sending via PHPMailer first
+    if (function_exists('sendSMTPMail')) {
+        $otp_sent = sendSMTPMail($email, $emailSubject, $emailBodyHtml, true, $error);
     }
     
-    // If default mail fails, try PHPMailer if configured
-    if (!$otp_sent) {
-        // Try PHPMailer
-        $otp_sent = sendSMTPMail($email, $emailSubject, $emailBody, false, $error);
+    // If PHPMailer fails or not available, fallback to mail()
+    if (!$otp_sent && function_exists('mail')) {
+        $headers = "From: alertaraqc.notification@gmail.com\r\n";
+        $headers .= "Reply-To: alertaraqc.notification@gmail.com\r\n";
+        $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
+        $headers .= "MIME-Version: 1.0\r\n";
+        $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+        
+        $otp_sent = @mail($email, $emailSubject, $emailBodyHtml, $headers);
     }
     
     $response['success'] = true;

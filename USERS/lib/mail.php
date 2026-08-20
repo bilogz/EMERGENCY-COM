@@ -222,26 +222,272 @@ HTML;
 }
 
 /**
- * Generate a modern, beautiful, responsive HTML email template for Emergency Alerts
+ * Parse structured or plain-text notifications into components for rich email rendering
+ */
+function parseNotificationMessageForEmail($rawMessage) {
+    $lines = preg_split('/\r\n|\r|\n/', trim((string)$rawMessage));
+    $summary = [];
+    $metrics = [];
+    $precautions = [];
+    $ctaUrl = null;
+    $ctaLabel = null;
+    $inPrecautions = false;
+
+    foreach ($lines as $line) {
+        $trimmed = trim($line);
+        if ($trimmed === '' || $trimmed === '---') continue;
+
+        // Check for Link / CTA
+        if (preg_match('/(?:View Full Forecast|View Forecast|View Bulletin|View Alert|View Details|More info|Full Forecast|Link|Open Alertara|Open App|Dashboard)\s*:\s*(https?:\/\/[^\s]+)/i', $trimmed, $m)) {
+            $ctaLabel = 'View Full Live Forecast & Radar';
+            $ctaUrl = $m[1];
+            continue;
+        } elseif (preg_match('/^(https?:\/\/[^\s]+)$/i', $trimmed, $m)) {
+            $ctaUrl = $m[1];
+            $ctaLabel = 'View Full Details & Live Map';
+            continue;
+        }
+
+        // Check for Precautions / Recommendations header
+        if (preg_match('/^(?:PRECAUTIONS|SAFETY MEASURES|RECOMMENDATIONS|ACTION ITEMS|WHAT TO DO|SAFETY ADVISORY)\s*:?$/i', $trimmed)) {
+            $inPrecautions = true;
+            continue;
+        }
+
+        // Precautions items
+        if ($inPrecautions || preg_match('/^[-*•]\s*(.+)/', $trimmed, $m)) {
+            $item = preg_replace('/^[-*•]\s*/', '', $trimmed);
+            if ($item !== '') {
+                $precautions[] = $item;
+            }
+            continue;
+        }
+
+        // Metrics (Key: Value)
+        if (preg_match('/^(Rain chance|Precipitation probability|Expected rainfall|Rain total|Rainfall|Temperature|Temp|Heat index|Feels like|Wind|Wind speed|Gusts|Peak period|Peak time|Magnitude|Depth|Location|Reported Intensities|Intensity)\s*:\s*(.+)$/i', $trimmed, $m)) {
+            $k = trim($m[1]);
+            $v = trim($m[2]);
+
+            // Clean temperature units like "26.2-30.2 C" -> "26.2 - 30.2°C"
+            $v = preg_replace('/(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*C\b/i', '$1 - $2°C', $v);
+            $v = preg_replace('/(\d+(?:\.\d+)?)\s*C\b/i', '$1°C', $v);
+
+            $icon = '📊';
+            $kl = strtolower($k);
+            if (strpos($kl, 'rain chance') !== false || strpos($kl, 'probability') !== false) $icon = '🌧️';
+            elseif (strpos($kl, 'rain') !== false) $icon = '💧';
+            elseif (strpos($kl, 'temp') !== false || strpos($kl, 'heat') !== false) $icon = '🌡️';
+            elseif (strpos($kl, 'wind') !== false || strpos($kl, 'gust') !== false) $icon = '💨';
+            elseif (strpos($kl, 'peak') !== false || strpos($kl, 'time') !== false) $icon = '⏰';
+            elseif (strpos($kl, 'magnitude') !== false) $icon = '⚡';
+            elseif (strpos($kl, 'depth') !== false) $icon = '📏';
+            elseif (strpos($kl, 'location') !== false) $icon = '📍';
+            elseif (strpos($kl, 'intensity') !== false) $icon = '📈';
+
+            $metrics[] = [
+                'label' => $k,
+                'value' => $v,
+                'icon' => $icon
+            ];
+            continue;
+        }
+
+        // Header lines to skip if redundant with title
+        if (preg_match('/^WEATHER FORECAST\s*-\s*QUEZON CITY$/i', $trimmed)) {
+            continue;
+        }
+
+        // Summary text
+        $summary[] = $trimmed;
+    }
+
+    return [
+        'summary' => implode("\n\n", $summary),
+        'metrics' => $metrics,
+        'precautions' => $precautions,
+        'cta_url' => $ctaUrl,
+        'cta_label' => $ctaLabel
+    ];
+}
+
+/**
+ * Generate a modern, beautiful, responsive HTML email template for Mass Notifications & Alerts
  */
 function buildEmergencyAlertEmailTemplate($title, $message, $severity = 'warning', $category = 'Emergency Alert', $issuedAt = null) {
-    $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
-    $safeCategory = htmlspecialchars($category, ENT_QUOTES, 'UTF-8');
-    $safeTime = htmlspecialchars($issuedAt ?: date('Y-m-d H:i:s T'), ENT_QUOTES, 'UTF-8');
-    $formattedMessage = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
+    $safeTitle = htmlspecialchars($title ?: 'Emergency Notification', ENT_QUOTES, 'UTF-8');
+    $safeCategory = htmlspecialchars($category ?: 'Emergency Alert', ENT_QUOTES, 'UTF-8');
+    $safeTime = htmlspecialchars($issuedAt ?: date('M d, Y \a\t h:i A T'), ENT_QUOTES, 'UTF-8');
     
-    $severityUpper = strtoupper((string)$severity);
-    $badgeBg = '#dc2626';
-    $headerGradient = 'linear-gradient(135deg, #7f1d1d 0%, #b91c1c 100%)';
-    if ($severityUpper === 'INFO') {
-        $badgeBg = '#2563eb';
-        $headerGradient = 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)';
-    } elseif ($severityUpper === 'WARNING' || $severityUpper === 'MODERATE') {
-        $badgeBg = '#d97706';
-        $headerGradient = 'linear-gradient(135deg, #78350f 0%, #d97706 100%)';
-    } elseif ($severityUpper === 'LOW') {
-        $badgeBg = '#059669';
-        $headerGradient = 'linear-gradient(135deg, #064e3b 0%, #059669 100%)';
+    // Parse message structure
+    $parsed = parseNotificationMessageForEmail($message);
+    $summary = $parsed['summary'];
+    $metrics = $parsed['metrics'];
+    $precautions = $parsed['precautions'];
+    $ctaUrl = $parsed['cta_url'];
+    $ctaLabel = $parsed['cta_label'] ?: 'Open Alertara Emergency Portal';
+
+    $severityLower = strtolower(trim((string)$severity));
+    $categoryLower = strtolower(trim((string)$category));
+    $titleLower = strtolower(trim((string)$title));
+
+    // Determine Theme & Colors
+    $isWeather = (strpos($categoryLower, 'weather') !== false || strpos($titleLower, 'weather') !== false || strpos($titleLower, 'rain') !== false || strpos($titleLower, 'typhoon') !== false || strpos($titleLower, 'flood') !== false);
+    $isEarthquake = (strpos($categoryLower, 'earthquake') !== false || strpos($titleLower, 'earthquake') !== false || strpos($titleLower, 'seismic') !== false || strpos($titleLower, 'phivolcs') !== false);
+    $isFire = (strpos($categoryLower, 'fire') !== false || strpos($titleLower, 'fire') !== false);
+    
+    // Gradients & Badges
+    if ($severityLower === 'critical' || $severityLower === 'high' || $severityLower === 'extreme') {
+        $headerGradient = 'linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #dc2626 100%)';
+        $badgeBg = 'rgba(255, 255, 255, 0.22)';
+        $badgeBorder = '#fca5a5';
+        $accentColor = '#dc2626';
+        $headerIcon = '🚨';
+        $badgeText = 'CRITICAL EMERGENCY ALERT';
+        $btnBg = '#dc2626';
+    } elseif ($isWeather) {
+        if ($severityLower === 'warning') {
+            $headerGradient = 'linear-gradient(135deg, #1e3a8a 0%, #0369a1 50%, #0284c7 100%)';
+            $badgeText = 'WEATHER WARNING • QUEZON CITY';
+            $headerIcon = '⛈️';
+            $btnBg = '#0284c7';
+        } elseif ($severityLower === 'advisory') {
+            $headerGradient = 'linear-gradient(135deg, #0f4c75 0%, #1b262c 50%, #1e3c72 100%)';
+            $badgeText = 'WEATHER ADVISORY • QUEZON CITY';
+            $headerIcon = '🌧️';
+            $btnBg = '#0284c7';
+        } else {
+            $headerGradient = 'linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #1e3a5f 100%)';
+            $badgeText = 'WEATHER FORECAST • QUEZON CITY';
+            $headerIcon = '🌦️';
+            $btnBg = '#0ea5e9';
+        }
+        $badgeBg = 'rgba(255, 255, 255, 0.2)';
+        $badgeBorder = '#7dd3fc';
+        $accentColor = '#0284c7';
+    } elseif ($isEarthquake) {
+        $headerGradient = 'linear-gradient(135deg, #78350f 0%, #991b1b 50%, #b45309 100%)';
+        $badgeBg = 'rgba(255, 255, 255, 0.2)';
+        $badgeBorder = '#fde68a';
+        $accentColor = '#b45309';
+        $headerIcon = '🌋';
+        $badgeText = 'EARTHQUAKE BULLETIN';
+        $btnBg = '#b45309';
+    } elseif ($isFire) {
+        $headerGradient = 'linear-gradient(135deg, #7c2d12 0%, #c2410c 50%, #ea580c 100%)';
+        $badgeBg = 'rgba(255, 255, 255, 0.2)';
+        $badgeBorder = '#fdba74';
+        $accentColor = '#ea580c';
+        $headerIcon = '🔥';
+        $badgeText = 'FIRE INCIDENT ALERT';
+        $btnBg = '#ea580c';
+    } else {
+        $headerGradient = 'linear-gradient(135deg, #1e3a4c 0%, #2b5756 50%, #3a7675 100%)';
+        $badgeBg = 'rgba(255, 255, 255, 0.2)';
+        $badgeBorder = '#99f6e4';
+        $accentColor = '#3a7675';
+        $headerIcon = '📢';
+        $badgeText = strtoupper($safeCategory) . ' • QUEZON CITY';
+        $btnBg = '#3a7675';
+    }
+
+    // Build Metrics HTML if present
+    $metricsHtml = '';
+    if (!empty($metrics)) {
+        $metricRows = '';
+        $chunks = array_chunk($metrics, 2);
+        foreach ($chunks as $chunk) {
+            $metricRows .= '<tr>';
+            foreach ($chunk as $m) {
+                $mLabel = htmlspecialchars($m['label'], ENT_QUOTES, 'UTF-8');
+                $mVal = htmlspecialchars($m['value'], ENT_QUOTES, 'UTF-8');
+                $mIcon = $m['icon'];
+                $metricRows .= <<<HTML
+                <td width="50%" valign="top" style="padding: 5px;">
+                  <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; font-weight: 700; margin-bottom: 4px;">
+                      {$mIcon} {$mLabel}
+                    </div>
+                    <div style="font-size: 15px; font-weight: 800; color: #0f172a; line-height: 1.25;">
+                      {$mVal}
+                    </div>
+                  </div>
+                </td>
+HTML;
+            }
+            if (count($chunk) === 1) {
+                $metricRows .= '<td width="50%" style="padding: 5px;"></td>';
+            }
+            $metricRows .= '</tr>';
+        }
+
+        $metricsHtml = <<<HTML
+        <!-- Key Metrics Section -->
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 10px; margin-bottom: 22px;">
+          <tr>
+            <td colspan="2" style="padding: 4px 6px 8px 6px; font-size: 12px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.8px;">
+              📊 Key Forecast & Environmental Metrics
+            </td>
+          </tr>
+          {$metricRows}
+        </table>
+HTML;
+    }
+
+    // Build Summary HTML
+    $summaryHtml = '';
+    if (!empty($summary)) {
+        $formattedSummary = nl2br(htmlspecialchars($summary, ENT_QUOTES, 'UTF-8'));
+        $summaryHtml = <<<HTML
+        <div style="background: #f8fafc; border-left: 4px solid {$accentColor}; border-radius: 10px; padding: 16px 18px; margin-bottom: 20px; font-size: 15px; line-height: 1.65; color: #1e293b;">
+          {$formattedSummary}
+        </div>
+HTML;
+    }
+
+    // Build Precautions HTML
+    $precautionsHtml = '';
+    if (!empty($precautions)) {
+        $itemsHtml = '';
+        foreach ($precautions as $p) {
+            $safeP = htmlspecialchars($p, ENT_QUOTES, 'UTF-8');
+            $itemsHtml .= <<<HTML
+            <tr style="margin-bottom: 8px;">
+              <td width="24" valign="top" style="padding: 6px 0; font-size: 15px; color: #16a34a; font-weight: bold;">✔</td>
+              <td valign="top" style="padding: 6px 0 6px 8px; font-size: 14px; color: #334155; line-height: 1.5;">{$safeP}</td>
+            </tr>
+HTML;
+        }
+
+        $precautionsHtml = <<<HTML
+        <!-- Precautions Section -->
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 12px; padding: 16px 18px; margin-bottom: 24px;">
+          <tr>
+            <td colspan="2" style="font-size: 13px; font-weight: 800; color: #92400e; text-transform: uppercase; letter-spacing: 0.6px; padding-bottom: 8px;">
+              🛡️ Recommended Precautions & Safety Measures
+            </td>
+          </tr>
+          {$itemsHtml}
+        </table>
+HTML;
+    }
+
+    // Build CTA Button HTML
+    $ctaHtml = '';
+    if (!empty($ctaUrl)) {
+        $safeCtaUrl = htmlspecialchars($ctaUrl, ENT_QUOTES, 'UTF-8');
+        $safeCtaLabel = htmlspecialchars($ctaLabel, ENT_QUOTES, 'UTF-8');
+        $ctaHtml = <<<HTML
+        <!-- CTA Button -->
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 24px 0 12px 0;">
+          <tr>
+            <td align="center">
+              <a href="{$safeCtaUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; width: 100%; max-width: 440px; box-sizing: border-box; background: {$btnBg}; color: #ffffff; text-decoration: none; padding: 14px 24px; border-radius: 12px; font-weight: 700; font-size: 15px; text-align: center; box-shadow: 0 4px 14px rgba(0,0,0,0.15); letter-spacing: 0.2px;">
+                {$safeCtaLabel} &rarr;
+              </a>
+            </td>
+          </tr>
+        </table>
+HTML;
     }
 
     return <<<HTML
@@ -253,34 +499,44 @@ function buildEmergencyAlertEmailTemplate($title, $message, $severity = 'warning
 <title>{$safeTitle}</title>
 </head>
 <body style="margin:0; padding:0; background-color:#f1f5f9; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#334155; -webkit-font-smoothing:antialiased;">
-<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f1f5f9; padding:30px 15px;">
+<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f1f5f9; padding: 28px 12px;">
   <tr>
     <td align="center">
-      <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:580px; background:#ffffff; border-radius:18px; overflow:hidden; box-shadow:0 10px 25px rgba(0,0,0,0.06); border:1px solid #e2e8f0;">
+      <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; background:#ffffff; border-radius: 18px; overflow:hidden; box-shadow:0 12px 32px rgba(0,0,0,0.08); border:1px solid #e2e8f0;">
         
-        <!-- Alert Header Banner -->
+        <!-- Header Banner -->
         <tr>
-          <td style="background: {$headerGradient}; padding: 28px 24px; text-align: center;">
-            <div style="display:inline-block; padding:4px 12px; background:rgba(255,255,255,0.2); border-radius:20px; color:#ffffff; font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px;">
-              🚨 {$severityUpper} ALERT
+          <td style="background: {$headerGradient}; padding: 32px 24px 28px 24px; text-align: center;">
+            <div style="display:inline-block; padding: 5px 14px; background: {$badgeBg}; border: 1px solid {$badgeBorder}; border-radius: 20px; color: #ffffff; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px;">
+              {$headerIcon} {$badgeText}
             </div>
-            <h1 style="margin:0 0 6px 0; color:#ffffff; font-size:22px; font-weight:800; letter-spacing:-0.3px;">{$safeTitle}</h1>
-            <p style="margin:0; color:#e2e8f0; font-size:13px;">{$safeCategory} &bull; Issued at {$safeTime}</p>
+            <h1 style="margin:0 0 8px 0; color:#ffffff; font-size: 22px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.3;">
+              {$safeTitle}
+            </h1>
+            <p style="margin:0; color: #e2e8f0; font-size: 13px; font-weight: 400;">
+              Quezon City DRRMO &bull; Issued {$safeTime}
+            </p>
           </td>
         </tr>
 
-        <!-- Alert Content -->
+        <!-- Main Body Content -->
         <tr>
-          <td style="padding: 30px 28px 24px 28px;">
-            <div style="background:#f8fafc; border-left:4px solid {$badgeBg}; border-radius:8px; padding:20px; margin-bottom:24px; font-size:15px; line-height:1.7; color:#1e293b;">
-              {$formattedMessage}
-            </div>
+          <td style="padding: 28px 24px 20px 24px;">
+            {$summaryHtml}
+            {$metricsHtml}
+            {$precautionsHtml}
+            {$ctaHtml}
+          </td>
+        </tr>
 
-            <!-- Action Advice -->
-            <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background:#f1f5f9; border-radius:10px; padding:14px 18px; margin-bottom:20px;">
+        <!-- Emergency Helpline Bar -->
+        <tr>
+          <td style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 24px;">
+            <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
               <tr>
-                <td style="font-size:13px; color:#475569; line-height:1.5;">
-                  ℹ️ <strong>Safety Advisory:</strong> Follow official advisories, stay tuned to verified local channels, and keep emergency contacts ready.
+                <td style="font-size: 12px; color: #64748b; line-height: 1.6; text-align: center;">
+                  <strong style="color: #0f172a;">📞 Quezon City Emergency Hotline:</strong> <a href="tel:122" style="color: #dc2626; font-weight: 800; text-decoration: none;">122</a> &nbsp;|&nbsp; 
+                  <strong style="color: #0f172a;">DRRMO Operations:</strong> <a href="tel:0289284396" style="color: #0284c7; font-weight: 700; text-decoration: none;">(02) 8928-4396</a>
                 </td>
               </tr>
             </table>
@@ -289,9 +545,10 @@ function buildEmergencyAlertEmailTemplate($title, $message, $severity = 'warning
 
         <!-- Footer -->
         <tr>
-          <td style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:18px 24px; text-align:center; font-size:12px; color:#94a3b8; line-height:1.5;">
-            <p style="margin:0 0 4px 0; font-weight:600; color:#64748b;">Quezon City Disaster Risk Reduction and Management Office</p>
-            <p style="margin:0;">AlertaraQC Emergency Communication System</p>
+          <td style="background: #ffffff; border-top: 1px solid #f1f5f9; padding: 18px 24px; text-align:center; font-size: 11px; color: #94a3b8; line-height: 1.6;">
+            <p style="margin:0 0 4px 0; font-weight: 700; color: #64748b;">Quezon City Disaster Risk Reduction & Management Office</p>
+            <p style="margin:0;">AlertaraQC Emergency Broadcast & Mass Communication System</p>
+            <p style="margin: 6px 0 0 0; color: #cbd5e1; font-size: 10px;">This is an automated public safety advisory. Please do not reply directly to this email.</p>
           </td>
         </tr>
 
