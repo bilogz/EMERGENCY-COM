@@ -2119,8 +2119,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 : '';
             const workflowRaw = (conv.workflowStatus || '').toLowerCase();
             const workflowLabelMap = {
-                open: 'In Queue', active: 'In Queue', in_progress: 'Assigned', waiting_user: 'Pending Status',
-                pending: 'Pending Status', resolved: 'Completed', completed: 'Completed', closed: 'Closed'
+                open: 'Open', active: 'Open', in_progress: 'Assigned', waiting_user: 'Pending',
+                pending: 'Pending', resolved: 'Completed', completed: 'Completed', closed: 'Closed'
             };
             const workflowClassMap = {
                 open: 'workflow-open', active: 'workflow-open', in_progress: 'workflow-progress',
@@ -4681,7 +4681,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const locationText = queued.location?.address || queued.location?.formatted || queued.location?.text || 'Location pending';
         const lastMessage = queued.sdp ? 'Incoming live emergency call' : 'Incoming call - waiting for caller connection';
         const busy = adminHasActiveCall() && queued.callId !== callId;
-        const statusText = totalCalls > 1 && index > 0 ? 'Queued' : 'Incoming';
+        const statusText = queued.status === 'pending'
+            ? 'Pending'
+            : (queued.status === 'assigned' || queued.status === 'accepted')
+                ? 'Assigned'
+                : 'Open';
         const actionLabel = busy ? 'Finish active call' : 'Answer Call';
         const actionDisabled = busy ? 'disabled' : '';
         const priorityCell = REPORT_TABLE_MODE
