@@ -341,7 +341,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 </select>
                             </div>
                             <?php endif; ?><div class="conversations-list-table-wrapper" id="scrollableList" style="flex: 1; overflow-y: auto; overflow-x: auto; padding: 0.75rem;">
-                                <div id="incomingEmergencyCallRow" style="display:none;"></div>
                                 <table class="twc-table">
                                     <thead>
                                         <tr>
@@ -2120,8 +2119,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 : '';
             const workflowRaw = (conv.workflowStatus || '').toLowerCase();
             const workflowLabelMap = {
-                open: 'In Queue', active: 'In Queue', in_progress: 'Assigned', waiting_user: 'Pending Status',
-                pending: 'Pending Status', resolved: 'Completed', completed: 'Completed', closed: 'Closed'
+                open: 'Open', active: 'Open', in_progress: 'Assigned', waiting_user: 'Pending',
+                pending: 'Pending', resolved: 'Completed', completed: 'Completed', closed: 'Closed'
             };
             const workflowClassMap = {
                 open: 'workflow-open', active: 'workflow-open', in_progress: 'workflow-progress',
@@ -4481,9 +4480,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     }
 
     function setIncomingEmergencyCallRowVisible(visible) {
-        const el = document.getElementById('incomingEmergencyCallRow');
-        if (!el) return;
-        el.style.display = visible ? 'block' : 'none';
+        // The emergency call queue is rendered directly in the Open list; no separate hidden row is used.
+        return;
     }
 
     function callTimestampMs(value) {
@@ -4683,7 +4681,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const locationText = queued.location?.address || queued.location?.formatted || queued.location?.text || 'Location pending';
         const lastMessage = queued.sdp ? 'Incoming live emergency call' : 'Incoming call - waiting for caller connection';
         const busy = adminHasActiveCall() && queued.callId !== callId;
-        const statusText = totalCalls > 1 && index > 0 ? 'Queued' : 'Incoming';
+        const statusText = queued.status === 'pending'
+            ? 'Pending'
+            : (queued.status === 'assigned' || queued.status === 'accepted')
+                ? 'Assigned'
+                : 'Open';
         const actionLabel = busy ? 'Finish active call' : 'Answer Call';
         const actionDisabled = busy ? 'disabled' : '';
         const priorityCell = REPORT_TABLE_MODE
@@ -4759,81 +4761,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     }
 
     function renderIncomingEmergencyCallRow() {
-        const host = document.getElementById('incomingEmergencyCallRow');
-        if (!host) return;
-
-        if (EMERGENCY_COM_CALL_INTAKE_ENABLED) {
-            host.innerHTML = '';
-            setIncomingEmergencyCallRowVisible(false);
-            renderIncomingCallTableRows();
-            return;
-        }
-
-        const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned' && isQueuedCallFresh(item));
-        if (!queuedCalls.length) {
-            host.innerHTML = '';
-            setIncomingEmergencyCallRowVisible(false);
-            renderIncomingCallTableRows();
-            return;
-        }
-
-        const busy = adminHasActiveCall();
-        const title = queuedCalls.length > 1 ? `Emergency Call Queue (${queuedCalls.length})` : 'Incoming Emergency Call';
-        const subtitle = queuedCalls.length > 1
-            ? 'Multiple callers are waiting. Answer one call at a time.'
-            : 'A caller is waiting. Answer from this call intake panel.';
-
-        const cards = queuedCalls.map((queued, index) => {
-            const callerName = queued.caller?.name || 'Emergency Call User';
-            const callerPhone = queued.caller?.phone ? `<span style="opacity:.78;">${queued.caller.phone}</span>` : '';
-            const locationText = queued.location?.address || queued.location?.formatted || queued.location?.text || 'Location pending';
-            const acceptDisabled = (busy && queued.callId !== callId);
-            const acceptLabel = acceptDisabled ? 'Finish active call' : 'Answer';
-            return `
-                <div class="emergency-call-card" data-call-id="${queued.callId}" style="display:flex; align-items:center; gap:12px; padding:14px; border:1px solid rgba(220,38,38,0.28); background:rgba(255,255,255,0.82); border-radius:12px; box-shadow:0 8px 24px rgba(15,23,42,.06);">
-                    <div style="width:44px; height:44px; border-radius:12px; background:rgba(220,38,38,0.12); border:1px solid rgba(220,38,38,0.28); display:flex; align-items:center; justify-content:center; flex:0 0 auto;">
-                        <i class="fas fa-phone-alt" style="color:#dc2626;"></i>
-                    </div>
-                    <div style="flex:1; min-width:0;">
-                        <div style="font-weight:900; letter-spacing:0.2px; color:#111827;">${queuedCalls.length > 1 ? `Caller ${index + 1}` : 'Live Caller'}</div>
-                        <div style="font-size:13px; color:#1f2937; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${callerName} ${callerPhone}</div>
-                        <div style="font-size:12px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${locationText}</div>
-                    </div>
-                    <div style="display:flex; gap:8px; flex:0 0 auto;">
-                        <button class="btn btn-sm btn-secondary emergency-call-decline-btn" data-call-id="${queued.callId}" style="padding:0.55rem 0.8rem;">Decline</button>
-                        <button class="btn btn-sm btn-primary emergency-call-accept-btn" data-call-id="${queued.callId}" ${acceptDisabled ? 'disabled' : ''} style="padding:0.55rem 0.9rem; opacity:${acceptDisabled ? '.55' : '1'}; pointer-events:${acceptDisabled ? 'none' : 'auto'};">${acceptLabel}</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        host.innerHTML = `
-            <section style="margin:0 0 14px; border:1px solid rgba(79,149,146,0.35); border-radius:14px; background:#f8fffe; overflow:hidden;">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border-bottom:1px solid rgba(79,149,146,0.2); background:linear-gradient(135deg, rgba(79,149,146,.14), rgba(220,38,38,.08));">
-                    <div>
-                        <div style="font-weight:900; color:#0f172a; display:flex; align-items:center; gap:8px;"><i class="fas fa-phone-volume" style="color:#dc2626;"></i>${title}</div>
-                        <div style="font-size:12px; color:#475569; margin-top:2px;">${subtitle}</div>
-                    </div>
-                    <span style="font-size:12px; font-weight:900; color:#dc2626; background:#fee2e2; border:1px solid #fecaca; border-radius:999px; padding:5px 9px;">LIVE</span>
-                </div>
-                <div style="display:flex; flex-direction:column; gap:10px; padding:12px;">${cards}</div>
-            </section>
-        `;
-
-        setIncomingEmergencyCallRowVisible(true);
         renderIncomingCallTableRows();
-
-        host.querySelectorAll('.emergency-call-accept-btn').forEach(btn => {
-            btn.onclick = () => {
-                if (typeof window.acceptIncomingEmergencyCall === 'function') window.acceptIncomingEmergencyCall(btn.dataset.callId);
-            };
-        });
-
-        host.querySelectorAll('.emergency-call-decline-btn').forEach(btn => {
-            btn.onclick = () => {
-                if (typeof window.declineIncomingEmergencyCall === 'function') window.declineIncomingEmergencyCall(btn.dataset.callId);
-            };
-        });
+        return;
     }
 
     function setStatus(text) {
@@ -5485,7 +5414,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 status: existing.status || queued.status || 'open'
             };
             incomingCallQueue.set(queued.callId, merged);
-            if (!pendingCallId && !adminHasActiveCall(queued.callId)) applyQueuedCallToPending(merged);
             const signalingSocket = ensureSocket();
             if (signalingSocket) signalingSocket.emit('join', merged.room || getCallRoom(merged.callId));
             const persistedOfferPayload = {
@@ -5509,13 +5437,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }));
             if (notify && !adminHasActiveCall(merged.callId) && !notifiedIncomingCallIds.has(merged.callId)) {
                 notifiedIncomingCallIds.add(merged.callId);
+                // Keep the fresh emergency call visible in the Open queue without forcing a floating modal notification.
+                setIncomingCallModalVisible(false);
                 _startAlertSound(notificationSound);
-                if (!EMERGENCY_COM_CALL_INTAKE_ENABLED) {
-                    setIncomingCallModalText('Incoming emergency call. Open the queue to answer.');
-                    setIncomingCallModalVisible(true);
-                } else {
-                    setIncomingCallModalVisible(false);
-                }
             }
             renderIncomingEmergencyCallRow();
             renderIncomingCallTableRows();

@@ -2038,6 +2038,16 @@ $assetBase = '../ADMIN/header/';
         }
 
         function initPeer() {
+            if (pc) {
+                try {
+                    pc.ontrack = null;
+                    pc.onicecandidate = null;
+                    pc.onconnectionstatechange = null;
+                    pc.close();
+                } catch (e) {}
+                pc = null;
+            }
+
             pc = new RTCPeerConnection({
                 iceServers: WEBRTC_ICE_SERVERS
             });
@@ -2133,14 +2143,20 @@ $assetBase = '../ADMIN/header/';
                     }
                 }).catch(() => {});
 
+                // Emergency-Com answers this call first. The private room is announced
+                // to the admin call lobby and can be manually transferred later.
+
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                localStream.getAudioTracks().forEach(track => { track.enabled = true; });
+                monitorAudioActivity(localStream, 'userSpeakingLabel', 'userLocalMicIndicator');
+
                 const guestCaller = getGuestCallerInfo();
                 const caller = currentCallCallerPayload();
                 if (!userProfile && guestCaller.address && locationData) {
                     locationData.address = guestCaller.address;
                 }
 
-                const offerPayload = {
-                    sdp: offer,
+                const baseOfferPayload = {
                     callId,
                     room: activeCallRoom,
                     conversationId: emergencyComCallReference(callId),
@@ -2153,7 +2169,36 @@ $assetBase = '../ADMIN/header/';
                     location: locationData || null
                 };
 
-                // 4. Save call in database immediately so Admin dashboard sees it
+                await persistOpenEmergencyCall(baseOfferPayload);
+
+                let offer = null;
+                let offerError = null;
+                for (let attempt = 0; attempt < 2; attempt += 1) {
+                    try {
+                        initPeer();
+                        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                        offer = await pc.createOffer({ iceRestart: attempt > 0 });
+                        await pc.setLocalDescription(offer);
+                        offerError = null;
+                        break;
+                    } catch (e) {
+                        offerError = e;
+                        console.warn('[call][user] failed to create local offer; rebuilding peer', e);
+                        if (pc) {
+                            try { pc.close(); } catch (closeError) {}
+                            pc = null;
+                        }
+                    }
+                }
+
+                if (!offer) throw offerError || new Error('Failed to create emergency call offer.');
+
+                console.log('[call][user] emitting offer', { callId, room: activeCallRoom });
+                const offerPayload = {
+                    ...baseOfferPayload,
+                    sdp: offer
+                };
+
                 await persistOpenEmergencyCall(offerPayload);
                 logCall('started');
 
