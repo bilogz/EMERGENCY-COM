@@ -1508,17 +1508,17 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
         // Prevent form autofill abuse
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
-                if (passwordInput.value) {
+                if (passwordInput && passwordInput.value) {
                     passwordInput.value = '';
                 }
             }, 100);
         });
-                });
 
         // Security: Clear sensitive data on page unload
         window.addEventListener('beforeunload', function() {
-            // Clear password field
-            passwordInput.value = '';
+            if (passwordInput) {
+                passwordInput.value = '';
+            }
             resetRecaptcha();
         });
 
@@ -1529,4 +1529,5 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
     </script>
 </body>
 </html>
+
 
