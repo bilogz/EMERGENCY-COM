@@ -350,12 +350,14 @@ $pageTitle = 'Weather Bulletins and Map';
                 currentForecast = Array.isArray(forecast) ? forecast : [];
                 const first = currentForecast[0] || {};
                 const daily = aggregateDailyForecast(currentForecast);
+                const pop24 = currentForecast.length ? Math.max(...currentForecast.slice(0, 8).map(item => Number(item.pop || 0))) : 0;
+                const rain24 = currentForecast.length ? currentForecast.slice(0, 8).reduce((sum, item) => sum + Number(item.rain || 0), 0) : 0;
                 document.getElementById('forecastCurrentTemp').innerHTML = `${Math.round(first.temp ?? 0)}&deg;C`;
                 document.getElementById('forecastCurrentCondition').textContent = first.description || first.condition || 'Current conditions';
                 document.getElementById('forecastCurrentIcon').className = `fas ${iconForCondition(first.description || first.condition)}`;
                 document.getElementById('forecastFeelsLike').innerHTML = `${formatNumber(first.feels_like)}&deg;C`;
-                document.getElementById('forecastRainChance').textContent = `${formatNumber(first.pop)}%`;
-                document.getElementById('forecastRainfall').textContent = `${formatNumber(first.rain, 1)} mm`;
+                document.getElementById('forecastRainChance').textContent = `${Math.round(pop24)}%`;
+                document.getElementById('forecastRainfall').textContent = `${formatNumber(rain24, 1)} mm`;
                 document.getElementById('forecastWindGust').textContent = first.wind_gust ? `${formatNumber(Number(first.wind_gust) * 3.6, 0)} km/h` : `${formatNumber(Number(first.wind_speed || 0) * 3.6, 0)} km/h`;
                 document.getElementById('forecastVisibility').textContent = first.visibility ? `${formatNumber(Number(first.visibility) / 1000, 1)} km` : '-- km';
 

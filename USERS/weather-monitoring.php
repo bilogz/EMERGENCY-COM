@@ -1340,12 +1340,22 @@ $pageTitle = 'Weather Monitoring';
                 overallMin = Math.min(overallMin, Math.min(...d.temps));
                 overallMax = Math.max(overallMax, Math.max(...d.temps));
             });
+
+            if (overallMin === overallMax) {
+                overallMin -= 1;
+                overallMax += 1;
+            }
+
+            const currentTemp = (window.currentWeatherData?.main?.temp !== undefined)
+                ? Math.round(window.currentWeatherData.main.temp)
+                : (forecastData && forecastData[0] ? Math.round(forecastData[0].temp) : null);
             
             let html = '';
             days.forEach((day, index) => {
                 const d = dailyData[day];
                 const date = new Date(day);
-                const dayName = index === 0 && day === today ? 'Today' : dayNames[date.getDay()];
+                const isToday = (index === 0 && day === today);
+                const dayName = isToday ? 'Today' : dayNames[date.getDay()];
                 const minTemp = Math.round(Math.min(...d.temps));
                 const maxTemp = Math.round(Math.max(...d.temps));
                 const icon = d.icons[Math.floor(d.icons.length / 2)];
@@ -1353,20 +1363,20 @@ $pageTitle = 'Weather Monitoring';
                 const rainMm = d.rainMm > 0 ? d.rainMm.toFixed(1) : '';
                 const precipText = precipChance > 0 ? `${precipChance}%` : (rainMm ? `${rainMm}mm` : '');
                 const precipTitle = rainMm ? ` title="Expected rain: ${rainMm} mm"` : '';
-                
-                const range = (overallMax - overallMin) || 1;
-                const leftPercent = Math.max(0, Math.min(92, ((minTemp - overallMin) / range) * 100));
-                const rightPercent = Math.max(leftPercent + 8, Math.min(100, ((maxTemp - overallMin) / range) * 100));
-                const barWidth = Math.max(10, rightPercent - leftPercent);
+
+                const startColor = getWeatherTempColor(minTemp);
+                const endColor = getWeatherTempColor(maxTemp);
+                const barBackground = minTemp === maxTemp ? startColor : `linear-gradient(90deg, ${startColor}, ${endColor})`;
+                const barWidth = precipChance > 0 ? Math.max(6, Math.min(100, precipChance)) : 0;
                 
                 html += `
                     <div class="forecast-day-row">
-                        <div class="forecast-day-name ${day === today ? 'today' : ''}">${dayName}</div>
+                        <div class="forecast-day-name ${isToday ? 'today' : ''}">${dayName}</div>
                         <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="" class="forecast-day-icon">
                         <div class="forecast-temp-bar">
                             <span class="forecast-temp-min">${minTemp}&deg;</span>
                             <div class="forecast-bar-container">
-                                <div class="forecast-bar" style="left: ${leftPercent}%; width: ${Math.min(barWidth, 100 - leftPercent)}%;"></div>
+                                <div class="forecast-bar" style="left: 0; width: ${barWidth}%; background: ${barBackground};"></div>
                             </div>
                             <span class="forecast-temp-max">${maxTemp}&deg;</span>
                         </div>

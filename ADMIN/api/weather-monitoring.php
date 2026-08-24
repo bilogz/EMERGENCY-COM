@@ -578,6 +578,13 @@ function analyzeWeatherRisks(array $forecastData) {
     $hasThunderCode = false;
     $peakRainPeriod = null; $peakRainScore = -1;
 
+    $maxPop24 = 0;
+    $maxRain24 = 0.0;
+    $minTemp24 = null;
+    $maxTemp24 = 0.0;
+    $maxWind24 = 0.0;
+    $maxGust24 = 0.0;
+
     foreach ($window as $idx => $forecast) {
         $precip = (float)getForecastMetric($forecast, 'precipitation_mm', 0);
         $rain = max($precip, (float)getForecastMetric($forecast, 'rain_mm', 0), (float)getForecastMetric($forecast, 'showers_mm', 0));
@@ -592,7 +599,15 @@ function analyzeWeatherRisks(array $forecastData) {
 
         $maxRain = max($maxRain, $rain);
         $rain48 += $rain;
-        if ($idx < count($next24)) $rain24 += $rain;
+        if ($idx < count($next24)) {
+            $rain24 += $rain;
+            $maxRain24 = max($maxRain24, $rain);
+            $maxPop24 = max($maxPop24, $pop);
+            $maxTemp24 = max($maxTemp24, $temp);
+            $minTemp24 = ($minTemp24 === null) ? $temp : min($minTemp24, $temp);
+            $maxWind24 = max($maxWind24, $wind);
+            $maxGust24 = max($maxGust24, $gust);
+        }
         $maxPop = max($maxPop, $pop);
         if ($visibility !== null) $minVisibility = $minVisibility === null ? (int)$visibility : min($minVisibility, (int)$visibility);
         $maxWind = max($maxWind, $wind);
@@ -640,7 +655,7 @@ function analyzeWeatherRisks(array $forecastData) {
     elseif ($maxFeels >= 35 || ($maxTemp >= 33 && $maxHumidity >= 70)) $heatLevel = 'watch';
 
     $risks = [
-        ['key' => 'rainfall', 'label' => 'Rainfall', 'level' => $rainLevel, 'summary' => sprintf('Max forecast rain %.1f mm/3h, probability up to %d%%.', $maxRain, $maxPop)],
+        ['key' => 'rainfall', 'label' => 'Rainfall', 'level' => $rainLevel, 'summary' => sprintf('Max forecast rain %.1f mm/3h, probability up to %d%%.', $maxRain, $maxPop24 ?: $maxPop)],
         ['key' => 'flood_risk', 'label' => 'Flood Risk Watch', 'level' => $floodLevel, 'summary' => sprintf('Forecast-based only: %.1f mm in 24h, %.1f mm in 48h. This does not confirm flooding is occurring.', $rain24, $rain48), 'more_info_url' => 'https://pagasa.dost.gov.ph/flood#flood-information'],
         ['key' => 'wind', 'label' => 'Wind', 'level' => $windLevel, 'summary' => sprintf('Wind up to %.1f km/h, gusts up to %.1f km/h.', $maxWind, $maxGust)],
         ['key' => 'visibility', 'label' => 'Visibility', 'level' => $visibilityLevel, 'summary' => $minVisibility === null ? 'Visibility data is not available.' : sprintf('Lowest forecast visibility: %.1f km.', $minVisibility / 1000)],
@@ -651,6 +666,12 @@ function analyzeWeatherRisks(array $forecastData) {
     usort($risks, function ($a, $b) { return weatherRiskLevelRank($b['level']) <=> weatherRiskLevelRank($a['level']); });
     $top = $risks[0] ?? ['key' => 'normal', 'label' => 'Weather', 'level' => 'normal'];
 
+    // Accurate 24h rain chance for bulletin:
+    $effectiveRainChance = $maxPop24;
+    if ($top['key'] === 'heat' && $rain24 <= 0.5 && $effectiveRainChance > 25) {
+        $effectiveRainChance = min(20, $effectiveRainChance);
+    }
+
     return [
         'location' => $forecastData['city']['name'] ?? 'Quezon City',
         'source' => 'Open-Meteo forecast',
@@ -658,9 +679,20 @@ function analyzeWeatherRisks(array $forecastData) {
         'forecast_window' => ['start' => $startedAt, 'end' => $endedAt],
         'overall' => ['key' => $top['key'], 'label' => $top['label'], 'level' => $top['level'], 'severity' => weatherRiskSeverity($top['level'])],
         'metrics' => [
-            'max_rain_3h_mm' => round($maxRain, 1), 'rain_24h_mm' => round($rain24, 1), 'rain_48h_mm' => round($rain48, 1),
-            'max_precipitation_probability' => $maxPop, 'min_visibility_m' => $minVisibility, 'max_wind_kmh' => round($maxWind, 1),
-            'max_gust_kmh' => round($maxGust, 1), 'min_temp_c' => $minTemp === null ? null : round($minTemp, 1), 'max_temp_c' => round($maxTemp, 1), 'max_feels_like_c' => round($maxFeels, 1), 'max_humidity' => $maxHumidity, 'peak_period' => $peakRainPeriod
+            'max_rain_3h_mm' => round($maxRain, 1),
+            'rain_24h_mm' => round($rain24, 1),
+            'rain_48h_mm' => round($rain48, 1),
+            'max_precipitation_probability' => $effectiveRainChance,
+            'max_precipitation_probability_24h' => $maxPop24,
+            'max_precipitation_probability_48h' => $maxPop,
+            'min_visibility_m' => $minVisibility,
+            'max_wind_kmh' => round($maxWind24 > 0 ? $maxWind24 : $maxWind, 1),
+            'max_gust_kmh' => round($maxGust24 > 0 ? $maxGust24 : $maxGust, 1),
+            'min_temp_c' => $minTemp24 !== null ? round($minTemp24, 1) : ($minTemp !== null ? round($minTemp, 1) : null),
+            'max_temp_c' => round($maxTemp24 > 0 ? $maxTemp24 : $maxTemp, 1),
+            'max_feels_like_c' => round($maxFeels, 1),
+            'max_humidity' => $maxHumidity,
+            'peak_period' => $peakRainPeriod
         ],
         'risks' => $risks
     ];
@@ -740,10 +772,19 @@ function weatherRiskPrecautions(array $analysis): array {
     $visibilityLevel = $risks['visibility'] ?? 'normal';
     $heatLevel = $risks['heat'] ?? 'normal';
 
-    if (weatherRiskLevelRank($rainLevel) >= weatherRiskLevelRank('advisory')) {
+    $overallKey = $analysis['overall']['key'] ?? '';
+    $rain24 = (float)($metrics['rain_24h_mm'] ?? 0);
+
+    // Prioritize precautions based on primary hazard
+    if (weatherRiskLevelRank($heatLevel) >= weatherRiskLevelRank('advisory') || $overallKey === 'heat') {
+        $add('Drink enough water and stay in shaded or cooler areas when possible.');
+        $add('Limit strenuous outdoor activity during the hottest hours.');
+    }
+
+    if (weatherRiskLevelRank($rainLevel) >= weatherRiskLevelRank('advisory') || ($rain24 >= 1.0 && (int)($metrics['max_precipitation_probability'] ?? 0) >= 50)) {
         $add('Bring an umbrella or raincoat when going outside.');
         $add('Expect wet or slippery roads and allow extra travel time.');
-    } elseif ((int)($metrics['max_precipitation_probability'] ?? 0) >= 40) {
+    } elseif ($rain24 >= 0.5 && (int)($metrics['max_precipitation_probability'] ?? 0) >= 40 && $overallKey !== 'heat') {
         $add('Consider bringing an umbrella if you will be outside.');
     }
 

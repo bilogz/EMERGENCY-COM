@@ -157,9 +157,9 @@
             /* Weekly Forecast Enhancement - Refactored */
             .forecast-day-row {
                 display: grid;
-                grid-template-columns: 46px 28px 1fr 48px; 
+                grid-template-columns: 50px 30px 1fr 52px; 
                 align-items: center;
-                padding: 8px 0;
+                padding: 9px 0;
                 border-bottom: 1px solid var(--border-color-1);
                 gap: 10px;
             }
@@ -171,6 +171,11 @@
                 font-size: 0.88rem; 
                 color: var(--text-color-1); 
                 line-height: 1;
+            }
+
+            .forecast-day-name.today {
+                font-weight: 800;
+                color: var(--primary-color-1);
             }
             
             .forecast-day-icon {
@@ -188,30 +193,30 @@
             }
             
             .forecast-temp-min { 
-                width: 28px;
+                width: 30px;
                 text-align: right;
                 color: var(--text-secondary-1); 
-                font-size: 0.85rem; 
-                font-weight: 500;
+                font-size: 0.88rem; 
+                font-weight: 600;
                 font-variant-numeric: tabular-nums;
             }
             
             .forecast-temp-max { 
-                width: 28px;
+                width: 30px;
                 text-align: left;
                 color: var(--text-color-1); 
                 font-weight: 700; 
-                font-size: 0.85rem; 
+                font-size: 0.88rem; 
                 font-variant-numeric: tabular-nums;
             }
             
             .forecast-bar-container {
                 flex: 1;
-                height: 7px;
+                height: 6px;
                 background: rgba(0, 0, 0, 0.08);
                 border-radius: 999px;
-                overflow: hidden;
                 position: relative;
+                overflow: visible;
             }
             
             [data-theme="dark"] .forecast-bar-container {
@@ -223,9 +228,28 @@
                 border-radius: 999px;
                 position: absolute;
                 top: 0;
-                background: linear-gradient(90deg, #38bdf8, #0ea5e9, #f59e0b);
                 opacity: 0.95;
                 transition: left 0.3s ease, width 0.3s ease;
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            }
+
+            .forecast-current-dot {
+                position: absolute;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                width: 10px;
+                height: 10px;
+                background: #ffffff;
+                border: 2.5px solid #0f172a;
+                border-radius: 50%;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+                z-index: 2;
+                pointer-events: none;
+            }
+
+            [data-theme="dark"] .forecast-current-dot {
+                background: #ffffff;
+                border-color: #38bdf8;
             }
             
             .forecast-precip {
@@ -234,8 +258,9 @@
                 align-items: center;
                 gap: 4px;
                 font-size: 0.8rem;
-                color: #3498db;
-                font-weight: 500;
+                color: #0ea5e9;
+                font-weight: 600;
+                font-variant-numeric: tabular-nums;
             }
             
             /* Map Controls Enhancement */
