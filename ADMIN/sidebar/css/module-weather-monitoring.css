@@ -78,38 +78,52 @@
                 color: white;
                 border: none;
                 padding: 0;
-                overflow: visible;
+                overflow: hidden;
+                border-radius: 12px;
                 position: relative;
                 z-index: 1006;
             }
             
-            .google-weather-display { padding: 2rem; }
+            .google-weather-display { padding: 1.5rem; }
             
             .gw-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: flex-start;
-                margin-bottom: 1.5rem;
-                gap: 1.5rem;
+                margin-bottom: 1.25rem;
+                gap: 1.25rem;
+            }
+
+            .gw-main-temp {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            .gw-icon {
+                width: 60px;
+                height: 60px;
+                object-fit: contain;
+                filter: drop-shadow(0 2px 6px rgba(0,0,0,0.3));
             }
             
-            .gw-temp-value { font-size: 4.5rem; font-weight: 200; line-height: 1; }
-            .gw-temp-unit { font-size: 1.5rem; opacity: 0.7; margin-top: 0.75rem; }
+            .gw-temp-value { font-size: 3.8rem; font-weight: 300; line-height: 1; letter-spacing: -1px; }
+            .gw-temp-unit { font-size: 1.5rem; opacity: 0.8; align-self: flex-start; margin-top: 0.25rem; }
             
             .gw-details {
                 display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 1rem;
-                margin-top: 1.5rem;
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+                margin-top: 1rem;
                 font-size: 0.85rem;
                 opacity: 0.9;
             }
             
             .gw-detail-item { display: flex; align-items: center; gap: 0.5rem; }
             
-            .gw-day { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem; }
-            .gw-condition { opacity: 0.8; font-size: 1rem; margin-bottom: 0.5rem; }
-            .gw-location { font-size: 0.85rem; opacity: 0.6; display: flex; align-items: center; gap: 0.35rem; }
+            .gw-day { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.25rem; }
+            .gw-condition { opacity: 0.85; font-size: 0.95rem; margin-bottom: 0.5rem; text-transform: capitalize; }
+            .gw-location { font-size: 0.82rem; opacity: 0.7; display: flex; align-items: center; gap: 0.35rem; }
             
             /* Weather Tabs */
             .weather-tabs {
@@ -143,26 +157,25 @@
             /* Weekly Forecast Enhancement - Refactored */
             .forecast-day-row {
                 display: grid;
-                /* Fixed widths for Name, Icon, Precip. Flexible for Temp Bar */
-                grid-template-columns: 48px 32px 1fr 48px; 
-                align-items: center; /* Center vertically */
-                padding: 10px 0;
+                grid-template-columns: 46px 28px 1fr 48px; 
+                align-items: center;
+                padding: 8px 0;
                 border-bottom: 1px solid var(--border-color-1);
-                gap: 12px;
+                gap: 10px;
             }
             
             .forecast-day-row:last-child { border-bottom: none; }
             
             .forecast-day-name { 
                 font-weight: 600; 
-                font-size: 0.9rem; 
+                font-size: 0.88rem; 
                 color: var(--text-color-1); 
                 line-height: 1;
             }
             
             .forecast-day-icon {
-                width: 32px;
-                height: 32px;
+                width: 28px;
+                height: 28px;
                 object-fit: contain;
                 display: block;
             }
@@ -180,6 +193,7 @@
                 color: var(--text-secondary-1); 
                 font-size: 0.85rem; 
                 font-weight: 500;
+                font-variant-numeric: tabular-nums;
             }
             
             .forecast-temp-max { 
@@ -188,22 +202,30 @@
                 color: var(--text-color-1); 
                 font-weight: 700; 
                 font-size: 0.85rem; 
+                font-variant-numeric: tabular-nums;
             }
             
             .forecast-bar-container {
                 flex: 1;
-                height: 6px;
-                background: var(--bg-color-1);
-                border-radius: 10px;
+                height: 7px;
+                background: rgba(0, 0, 0, 0.08);
+                border-radius: 999px;
                 overflow: hidden;
                 position: relative;
             }
             
+            [data-theme="dark"] .forecast-bar-container {
+                background: rgba(255, 255, 255, 0.12);
+            }
+            
             .forecast-bar {
                 height: 100%;
-                border-radius: 10px;
-                background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
-                opacity: 0.8;
+                border-radius: 999px;
+                position: absolute;
+                top: 0;
+                background: linear-gradient(90deg, #38bdf8, #0ea5e9, #f59e0b);
+                opacity: 0.95;
+                transition: left 0.3s ease, width 0.3s ease;
             }
             
             .forecast-precip {

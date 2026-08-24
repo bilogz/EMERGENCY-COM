@@ -668,7 +668,7 @@ require_once __DIR__ . '/session-config.php';
                     const formattedCondition = condition.charAt(0).toUpperCase() + condition.slice(1);
 
                     if (hasTopbar) {
-                        tempEl.textContent = `${temp}°C`;
+                        tempEl.textContent = `${temp}\u00B0C`;
                         conditionEl.textContent = formattedCondition;
                         if (icon) {
                             iconEl.innerHTML = `<img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="${condition}" />`;
@@ -676,7 +676,7 @@ require_once __DIR__ . '/session-config.php';
                     }
 
                     if (hasAuthPill) {
-                        authTempEl.textContent = `${temp}°C`;
+                        authTempEl.textContent = `${temp}\u00B0C`;
                         authConditionEl.textContent = formattedCondition;
                         if (icon) {
                             authIconEl.innerHTML = `<img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="${condition}" />`;

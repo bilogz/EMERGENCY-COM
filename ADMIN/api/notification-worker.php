@@ -144,7 +144,8 @@ try {
                     $success = sendSMS($job['recipient_value'], $job['message'], $error);
                     break;
                 case 'email':
-                    $success = sendEmail($job['recipient_value'], $job['title'], $job['message'], $error);
+                    $alertMeta = getWorkerAlertMetadata($pdo, (int)($job['alert_id'] ?? 0));
+                    $success = sendEmail($job['recipient_value'], $job['title'], $job['message'], $error, $alertMeta);
                     break;
                 case 'push':
                     $alertMeta = getWorkerAlertMetadata($pdo, (int)($job['alert_id'] ?? 0));
@@ -337,13 +338,25 @@ function sendSMS($phone, $message, &$error = null) {
 /**
  * PLACEHOLDER: Email Dispatch
  */
-function sendEmail($email, $subject, $body, &$error = null) {
+function sendEmail($email, $subject, $body, &$error = null, $meta = []) {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Invalid recipient email address.';
         return false;
     }
     require_once dirname(__DIR__, 2) . '/USERS/lib/mail.php';
-    return sendSMTPMail($email, $subject, $body, false, $error);
+
+    $isAlreadyHtml = (stripos($body, '<html') !== false || stripos($body, '<table') !== false);
+    if ($isAlreadyHtml) {
+        return sendSMTPMail($email, $subject, $body, true, $error);
+    }
+
+    $severity = $meta['severity'] ?? 'warning';
+    $category = $meta['category'] ?? 'Emergency Alert';
+    $htmlBody = function_exists('buildEmergencyAlertEmailTemplate')
+        ? buildEmergencyAlertEmailTemplate($subject, $body, $severity, $category)
+        : nl2br(htmlspecialchars($body));
+
+    return sendSMTPMail($email, $subject, $htmlBody, true, $error);
 }
 
 function getWorkerAlertMetadata(PDO $pdo, int $alertId): array {

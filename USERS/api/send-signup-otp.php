@@ -44,7 +44,7 @@ try {
     $otp = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
     
     // Store OTP in database (expires in 10 minutes)
-    $expiresAt = date('Y-m-d H:i:s', time() + (10 * 60)); // 10 minutes from now
+    $expiresAt = date('Y-m-d H:i:s', time() + 60); // 1 minute from now
     $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
     
     try {
@@ -75,7 +75,7 @@ try {
         $_SESSION['signup_otp_code'] = $otp;
         $_SESSION['signup_otp_phone'] = $phoneNormalized;
         $_SESSION['signup_otp_name'] = $name;
-        $_SESSION['signup_otp_expires'] = time() + (10 * 60);
+        $_SESSION['signup_otp_expires'] = time() + 60; // 1 minute
         
     } catch (PDOException $e) {
         error_log("OTP Storage Error: " . $e->getMessage());
@@ -83,7 +83,7 @@ try {
     }
     
     // Send OTP via SMS
-    $smsMessage = "Your verification code is: $otp. This code is valid for 10 minutes. - Emergency Communication System";
+    $smsMessage = "Your verification code is: $otp. This code is valid for 1 minute. - Emergency Communication System";
 
     // Try to send via SMS helper if available
     $smsSent = false;

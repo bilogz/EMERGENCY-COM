@@ -5,6 +5,7 @@
  */
 
 session_start();
+header('Content-Type: text/html; charset=UTF-8');
 
 $publicView = isset($_GET['public']) && $_GET['public'] == '1';
 
@@ -1136,7 +1137,7 @@ $pageTitle = 'Weather Monitoring';
                         <div class="gw-main-temp">
                             <img src="https://openweathermap.org/img/wn/${icon}@4x.png" alt="${condition}" class="gw-icon">
                             <span class="gw-temp-value">${temp}</span>
-                            <span class="gw-temp-unit">Ã‚Â°C</span>
+                            <span class="gw-temp-unit">&deg;C</span>
                         </div>
                         <div class="gw-details">
                             <div class="gw-detail-item">
@@ -1299,7 +1300,7 @@ $pageTitle = 'Weather Monitoring';
                             bodyColor: textColor,
                             borderColor: borderColor,
                             borderWidth: 1,
-                            callbacks: { label: (ctx) => ctx.raw + 'Ã‚Â°C' } 
+                            callbacks: { label: (ctx) => ctx.raw + '\u00B0C' } 
                         }
                     },
                     scales: {
@@ -1322,7 +1323,7 @@ $pageTitle = 'Weather Monitoring';
                             ticks: { 
                                 color: textColor,
                                 font: { size: 11 },
-                                callback: (val) => val + 'Ã‚Â°' 
+                                callback: (val) => val + '\u00B0' 
                             }
                         }
                     }
@@ -1372,20 +1373,21 @@ $pageTitle = 'Weather Monitoring';
                 const precipText = precipChance > 0 ? `${precipChance}%` : (rainMm ? `${rainMm}mm` : '');
                 const precipTitle = rainMm ? ` title="Expected rain: ${rainMm} mm"` : '';
                 
-                const range = overallMax - overallMin || 1;
-                const barStart = ((minTemp - overallMin) / range) * 100;
-                const barWidth = ((maxTemp - minTemp) / range) * 100;
+                const range = (overallMax - overallMin) || 1;
+                const leftPercent = Math.max(0, Math.min(92, ((minTemp - overallMin) / range) * 100));
+                const rightPercent = Math.max(leftPercent + 8, Math.min(100, ((maxTemp - overallMin) / range) * 100));
+                const barWidth = Math.max(10, rightPercent - leftPercent);
                 
                 html += `
                     <div class="forecast-day-row">
                         <div class="forecast-day-name ${day === today ? 'today' : ''}">${dayName}</div>
                         <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="" class="forecast-day-icon">
                         <div class="forecast-temp-bar">
-                            <span class="forecast-temp-min">${minTemp}Ã‚Â°</span>
+                            <span class="forecast-temp-min">${minTemp}&deg;</span>
                             <div class="forecast-bar-container">
-                                <div class="forecast-bar" style="margin-left: ${barStart}%; width: ${Math.max(barWidth, 10)}%;"></div>
+                                <div class="forecast-bar" style="left: ${leftPercent}%; width: ${Math.min(barWidth, 100 - leftPercent)}%;"></div>
                             </div>
-                            <span class="forecast-temp-max">${maxTemp}Ã‚Â°</span>
+                            <span class="forecast-temp-max">${maxTemp}&deg;</span>
                         </div>
                         <div class="forecast-precip"${precipTitle}>${precipText ? `<i class="fas fa-tint"></i> ${precipText}` : ''}</div>
                     </div>
@@ -1433,7 +1435,7 @@ $pageTitle = 'Weather Monitoring';
             const iconHtml = `
                 <div class="weather-marker-icon">
                     <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="${condition}">
-                    <div class="weather-marker-temp">${temp}Ã‚Â°C</div>
+                    <div class="weather-marker-temp">${temp}&deg;C</div>
                     <div class="weather-marker-city">${name}</div>
                 </div>
             `;
@@ -1627,12 +1629,12 @@ $pageTitle = 'Weather Monitoring';
                 const next24h = forecast.slice(0, 8);
                 const maxTemp = Math.max(...next24h.map(f => f.temp));
                 const minTemp = Math.min(...next24h.map(f => f.temp));
-                forecastSummary = `Next 24 hours: ${Math.round(minTemp)}Ã‚Â°C - ${Math.round(maxTemp)}Ã‚Â°C.`;
+                forecastSummary = `Next 24 hours: ${Math.round(minTemp)}\u00B0C - ${Math.round(maxTemp)}\u00B0C.`;
             }
             
             return `You are an emergency weather analyst for ${locationName}, Philippines. Analyze:
 
-CURRENT: Temp ${temp}Ã‚Â°C, Humidity ${humidity}%, ${condition}, Wind ${windSpeed} km/h
+CURRENT: Temp ${temp}\u00B0C, Humidity ${humidity}%, ${condition}, Wind ${windSpeed} km/h
 ${forecastSummary}
 
 Provide analysis in this format:
@@ -1900,14 +1902,14 @@ Keep concise and actionable.`;
                     warnings.push({
                         type: 'extreme_heat',
                         severity: 'high',
-                        message: `Extreme Heat Alert: ${weather.main.temp.toFixed(1)}Ã‚Â°C in Quezon City. Stay hydrated and avoid outdoor activities.`,
+                        message: `Extreme Heat Alert: ${weather.main.temp.toFixed(1)}\u00B0C in Quezon City. Stay hydrated and avoid outdoor activities.`,
                         temp: weather.main.temp
                     });
                 } else if (weather.main.temp >= 32) {
                     warnings.push({
                         type: 'heat',
                         severity: 'warning',
-                        message: `High Temperature: ${weather.main.temp.toFixed(1)}Ã‚Â°C in Quezon City. Take precautions.`,
+                        message: `High Temperature: ${weather.main.temp.toFixed(1)}\u00B0C in Quezon City. Take precautions.`,
                         temp: weather.main.temp
                     });
                 }
@@ -1964,7 +1966,7 @@ Keep concise and actionable.`;
                         warnings.push({
                             type: 'heat_index',
                             severity: 'high',
-                            message: `Dangerous Heat Index: ${heatIndex.toFixed(1)}Ã‚Â°C in Quezon City. Extreme caution advised.`,
+                            message: `Dangerous Heat Index: ${heatIndex.toFixed(1)}\u00B0C in Quezon City. Extreme caution advised.`,
                             heatIndex: heatIndex
                         });
                     }
@@ -2186,8 +2188,8 @@ Keep concise and actionable.`;
             if (key === 'heat') {
                 return `
                     <div class="weather-risk-visual">
-                        ${weatherRiskMetric('Temp', metrics.max_temp_c, ' C', weatherRiskPercent(metrics.max_temp_c, 38), level)}
-                        ${weatherRiskMetric('Feels like', metrics.max_feels_like_c, ' C', weatherRiskPercent(metrics.max_feels_like_c, 42), level)}
+                        ${weatherRiskMetric('Temp', metrics.max_temp_c, '&deg;C', weatherRiskPercent(metrics.max_temp_c, 38), level)}
+                        ${weatherRiskMetric('Feels like', metrics.max_feels_like_c, '&deg;C', weatherRiskPercent(metrics.max_feels_like_c, 42), level)}
                         ${weatherRiskMetric('Humidity', metrics.max_humidity, '%', weatherRiskPercent(metrics.max_humidity, 100), level)}
                     </div>
                 `;
@@ -2353,7 +2355,7 @@ Keep concise and actionable.`;
                     data = hourlyData.map(item => Math.round(item.temp));
                     borderColor = isDarkMode ? '#3a7675' : '#3a7675';
                     backgroundColor = isDarkMode ? 'rgba(58, 118, 117, 0.3)' : 'rgba(58, 118, 117, 0.1)';
-                    label = 'Ã‚Â°C';
+                    label = '\u00B0C';
             }
             
             if (window.hourlyChart) {

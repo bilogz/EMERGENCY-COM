@@ -61,7 +61,7 @@ try {
     $otp = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
     
     // Store OTP in database (expires in 10 minutes)
-    $expiresAt = date('Y-m-d H:i:s', time() + (10 * 60)); // 10 minutes from now
+    $expiresAt = date('Y-m-d H:i:s', time() + 60); // 1 minute from now
     $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
     
     try {
@@ -94,7 +94,7 @@ try {
         $_SESSION['login_otp_code'] = $otp;
         $_SESSION['login_otp_email'] = $email;
         $_SESSION['login_otp_user_id'] = $user['id'];
-        $_SESSION['login_otp_expires'] = time() + (10 * 60);
+        $_SESSION['login_otp_expires'] = time() + 60; // 1 minute
         
     } catch (PDOException $e) {
         error_log("OTP Storage Error: " . $e->getMessage());
@@ -105,7 +105,7 @@ try {
     $emailSubject = 'Login Verification Code - Emergency Communication System';
     
     $emailBodyHtml = function_exists('buildOTPEmailTemplate')
-        ? buildOTPEmailTemplate($user['name'], $otp, 'Citizen Login', 10)
+        ? buildOTPEmailTemplate($user['name'], $otp, 'Citizen Login', 1)
         : "<p>Hello {$user['name']},</p><p>Your login verification code is: <strong>{$otp}</strong></p>";
 
     // Try to send email

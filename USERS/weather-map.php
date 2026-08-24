@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../session-config.php';
+header('Content-Type: text/html; charset=UTF-8');
 
 $assetBase = '../ADMIN/header/';
 $current = 'weather-map.php';
@@ -42,7 +43,7 @@ $pageTitle = 'Weather Bulletins and Map';
             </header>
 
             <section class="bulletin-metrics" aria-label="Current Quezon City weather">
-                <div class="bulletin-metric"><span>Temperature</span><strong id="weatherTemperature">--°C</strong></div>
+                <div class="bulletin-metric"><span>Temperature</span><strong id="weatherTemperature">--&deg;C</strong></div>
                 <div class="bulletin-metric"><span>Humidity</span><strong id="weatherHumidity">--%</strong></div>
                 <div class="bulletin-metric"><span>Wind</span><strong id="weatherWind">-- km/h</strong></div>
                 <div class="bulletin-metric"><span>Condition</span><strong id="weatherCondition" style="font-size:1rem">Loading...</strong></div>
@@ -418,7 +419,7 @@ $pageTitle = 'Weather Bulletins and Map';
                     const result = await response.json();
                     if (!result.success || !result.data) throw new Error('Current weather unavailable');
                     const weather = result.data;
-                    document.getElementById('weatherTemperature').innerHTML = `${Math.round(weather.main?.temp ?? 0)}&deg;C`;
+document.getElementById('weatherTemperature').innerHTML = `${Math.round(weather.main?.temp ?? 0)}&deg;C`;
                     document.getElementById('weatherHumidity').textContent = `${Math.round(weather.main?.humidity ?? 0)}%`;
                     document.getElementById('weatherWind').textContent = `${Math.round((weather.wind?.speed ?? 0) * 3.6)} km/h`;
                     const condition = weather.weather?.[0]?.description || 'Current conditions';
