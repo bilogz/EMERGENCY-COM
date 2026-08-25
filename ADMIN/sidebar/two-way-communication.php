@@ -5421,6 +5421,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
     async function completeAdminCallAnswerFromOffer() {
         if (!callId || !activeCallRoom || !pendingOffer) return false;
+        // Guard: if the peer connection is already fully established (signalingState===stable
+        // AND connectionState===connected) there is nothing to do. A second call here causes
+        // "InvalidStateError: Failed to set local answer sdp: Called in wrong state: stable".
+        if (pc && pc.signalingState === 'stable' && pc.connectionState === 'connected') {
+            console.warn('[call][admin] completeAdminCallAnswerFromOffer called but connection already established – ignoring duplicate invocation.');
+            pendingOffer = null;
+            pendingCandidates = [];
+            return true;
+        }
         try {
             if (!pc || pc.signalingState === 'closed') initPeer();
             if (pc.signalingState !== 'stable') {

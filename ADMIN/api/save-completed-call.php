@@ -363,13 +363,13 @@ try {
         saveCallInsertMessage($pdo, (int)$conversationId, 'admin', $adminName, 'admin', $contextMessage, 0, (int)$endedAt);
     }
     
-    // Update conversation's last message
+    // Update conversation's last message (use the safe DB status, not a hardcoded string)
     $stmt = $pdo->prepare("
         UPDATE conversations 
-        SET last_message = ?, last_message_time = FROM_UNIXTIME(?), updated_at = NOW(), status = 'open'
+        SET last_message = ?, last_message_time = FROM_UNIXTIME(?), updated_at = NOW(), status = ?
         WHERE conversation_id = ?
     ");
-    $stmt->execute([$callEndedMessage, $endedAt, $conversationId]);
+    $stmt->execute([$callEndedMessage, $endedAt, $activeStatus, $conversationId]);
     saveCallIncidentPriority($pdo, (int)$conversationId, $incidentPriority);
     
     // Also save to completed_calls table for reference (if table exists)
