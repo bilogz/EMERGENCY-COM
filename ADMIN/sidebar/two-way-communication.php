@@ -4676,7 +4676,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             });
 
             const assignedSessions = Array.isArray(data.assigned) ? data.assigned : [];
-            const ownedSession = assignedSessions.find(session => String(session.assigned_admin_id || '') === String(ADMIN_ID || ''));
+            const ownedSession = (ADMIN_ID && assignedSessions.length)
+                ? assignedSessions.find(session => session.assigned_admin_id && String(session.assigned_admin_id) === String(ADMIN_ID))
+                : null;
             if (ownedSession && !callId) {
                 const source = callSessionToQueuedOffer(ownedSession);
                 if (source) {
@@ -5410,13 +5412,22 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
 
             if (!localStream) {
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                monitorAudioActivity(localStream, 'adminSpeakingLabel', 'adminLocalMicIndicator');
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    monitorAudioActivity(localStream, 'adminSpeakingLabel', 'adminLocalMicIndicator');
+                } catch (micErr) {
+                    console.warn('[call][admin] microphone capture unavailable, continuing in listen-only mode:', micErr);
+                    if (typeof showToast === 'function') {
+                        showToast('Listen-Only Mode', 'No active microphone found or permission blocked. You can hear the caller.');
+                    }
+                }
             }
-            localStream.getTracks().forEach(track => {
-                const alreadyAdded = pc.getSenders && pc.getSenders().some(sender => sender.track === track);
-                if (!alreadyAdded) pc.addTrack(track, localStream);
-            });
+            if (localStream && localStream.getTracks) {
+                localStream.getTracks().forEach(track => {
+                    const alreadyAdded = pc.getSenders && pc.getSenders().some(sender => sender.track === track);
+                    if (!alreadyAdded) pc.addTrack(track, localStream);
+                });
+            }
 
             await pc.setRemoteDescription(pendingOffer);
 

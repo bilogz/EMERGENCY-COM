@@ -897,7 +897,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const safeCount = Math.max(0, parseInt(count || 0, 10));
         const isCurrentModule = badge.dataset.activeModule === '1';
         badge.hidden = isCurrentModule || safeCount === 0;
-        if (badge.hidden) return;
+        if (badge.hidden) {
+            badge.textContent = '';
+            return;
+        }
 
         const label = safeCount === 1
             ? badge.dataset.labelSingular
@@ -915,6 +918,10 @@ document.addEventListener('DOMContentLoaded', function() {
         generalEnquiries: {
             badgeId: 'sidebarGeneralUnreadBadge',
             storageKey: SIDEBAR_COMMUNICATION_STORAGE_PREFIX + 'generalEnquiries'
+        },
+        emergencyCalls: {
+            badgeId: 'sidebarEmergencyCallBadge',
+            storageKey: SIDEBAR_COMMUNICATION_STORAGE_PREFIX + 'emergencyCalls'
         }
     };
 
@@ -941,12 +948,16 @@ document.addEventListener('DOMContentLoaded', function() {
     function applySidebarCommunicationPayload(payload = {}) {
         const values = {
             reports: {
-                count: payload.reportNew ?? payload.report_new ?? 0,
+                count: payload.reportUnread ?? payload.reportNew ?? payload.report_unread ?? payload.report_new ?? 0,
                 latest: payload.reportLatestMessageId ?? payload.report_latest_message_id ?? 0
             },
             generalEnquiries: {
-                count: payload.generalEnquiryNew ?? payload.general_enquiry_new ?? 0,
-                latest: payload.generalEnquiryLatestMessageId ?? payload.general_enquiry_latest_message_id ?? 0
+                count: payload.generalEnquiryUnread ?? payload.generalEnquiryNew ?? payload.general_enquiry_unread ?? payload.general_enquiry_new ?? 0,
+                latest: payload.generalLatestMessageId ?? payload.general_latest_message_id ?? 0
+            },
+            emergencyCalls: {
+                count: payload.openCallCount ?? payload.emergencyCallOpenCount ?? payload.emergency_call_open_count ?? 0,
+                latest: Date.now()
             }
         };
 
@@ -959,18 +970,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const isCurrentModule = badge.dataset.activeModule === '1';
             badge.dataset.latestMessageId = String(latest);
 
-            // First load establishes a baseline. Visiting the module acknowledges
-            // everything currently visible without changing conversation read state.
-            if (seen === null || isCurrentModule) {
-                writeCommunicationSeenId(scope, latest);
+            if (isCurrentModule) {
+                if (latest > 0) writeCommunicationSeenId(scope, latest);
                 setSidebarCommunicationBadge(scope.badgeId, 0);
                 return;
             }
 
-            const count = latest > seen
-                ? Math.max(0, parseInt(values[name].count || 0, 10))
-                : 0;
-            setSidebarCommunicationBadge(scope.badgeId, count);
+            const unreadVal = Math.max(0, parseInt(values[name].count || 0, 10));
+            setSidebarCommunicationBadge(scope.badgeId, unreadVal);
         });
     }
 
