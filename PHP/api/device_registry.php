@@ -12,8 +12,7 @@ function deviceRegistryTableReadable(PDO $pdo, string $table): bool {
 }
 
 function resolveDeviceRegistryTable(PDO $pdo): string {
-    if (deviceRegistryTableReadable($pdo, 'user_devices')) return 'user_devices';
-    $table = 'user_devices_runtime';
+    $table = 'user_devices';
     $pdo->exec("CREATE TABLE IF NOT EXISTS {$table} (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         user_id BIGINT UNSIGNED NOT NULL,
@@ -29,6 +28,20 @@ function resolveDeviceRegistryTable(PDO $pdo): string {
         UNIQUE KEY uniq_user_device (user_id, device_id),
         INDEX idx_user_active (user_id, is_active)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    try {
+        $colsStmt = $pdo->query("SHOW COLUMNS FROM {$table}");
+        $cols = $colsStmt ? $colsStmt->fetchAll(PDO::FETCH_COLUMN) : [];
+        if (!in_array('push_token', $cols, true)) {
+            $pdo->exec("ALTER TABLE {$table} ADD COLUMN push_token TEXT NULL AFTER device_name");
+        }
+        if (!in_array('fcm_token', $cols, true)) {
+            $pdo->exec("ALTER TABLE {$table} ADD COLUMN fcm_token TEXT NULL AFTER push_token");
+        }
+    } catch (Throwable $e) {
+        error_log('Device registry schema column check skipped: ' . $e->getMessage());
+    }
+
     return $table;
 }
 

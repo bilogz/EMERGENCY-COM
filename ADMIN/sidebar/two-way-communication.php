@@ -3754,6 +3754,22 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                         <input id="callerNameInput" type="text" placeholder="Admin edit: caller name" autocomplete="off" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
                         <input id="callerPhoneInput" type="tel" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" placeholder="09XXXXXXXXX" autocomplete="off" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
                         <input id="callerAddressInput" type="text" placeholder="Type location or address" style="grid-column:1 / -1; min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:600;">
+                        <div id="callLocationStatusSection" style="grid-column:1 / -1; padding:10px 12px; border:1px solid rgba(56,189,248,0.28); border-radius:10px; background:rgba(56,189,248,0.06); display:flex; flex-direction:column; gap:4px; font-size:12px;">
+                            <div style="font-weight:800; color:#38bdf8; font-size:11px; letter-spacing:0.5px; text-transform:uppercase;">Current Call Location</div>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="opacity:0.75;">GPS Auto Detected:</span>
+                                <span id="adminAutoDetectedBarangay" style="font-weight:700; color:#e2e8f0;">Not detected</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="opacity:0.75;">Caller Selected:</span>
+                                <span id="adminCallerSelectedBarangay" style="font-weight:700; color:#e2e8f0;">None</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed rgba(255,255,255,0.12); padding-top:4px; margin-top:2px;">
+                                <span style="opacity:0.85; font-weight:700;">Final Barangay:</span>
+                                <span id="adminCurrentFinalBarangay" style="font-weight:800; color:#38bdf8;">None</span>
+                            </div>
+                        </div>
+
                         <div id="callBarangaySelector" style="grid-column:1 / -1; display:flex; flex-direction:column; gap:6px; position:relative;">
                             <label for="callBarangaySearch" style="font-size:12px; opacity:0.82;">Incident Barangay</label>
                             <input id="callBarangaySearch" type="text" placeholder="Search Quezon City barangay..." autocomplete="off" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
@@ -4398,14 +4414,112 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
         return String(value || '').trim().toLowerCase() === 'san agustin';
     }
 
+    let locationPromptActive = false;
+    let locationPromptAudio = null;
+    let locationPromptTimer = null;
+    let autoDetectedBarangay = '';
+    let callerSelectedBarangay = '';
+    let adminSelectedBarangay = '';
+
+    function getEffectiveBarangay() {
+        return adminSelectedBarangay || callerSelectedBarangay || autoDetectedBarangay || selectedCallBarangay || '';
+    }
+
+    function updateAdminCallModalBarangayUI() {
+        const autoEl = document.getElementById('adminAutoDetectedBarangay');
+        const callerEl = document.getElementById('adminCallerSelectedBarangay');
+        const finalEl = document.getElementById('adminCurrentFinalBarangay');
+        const selectedTextEl = document.getElementById('callBarangaySelected');
+        const searchInput = document.getElementById('callBarangaySearch');
+
+        if (autoEl) autoEl.textContent = autoDetectedBarangay || 'Not detected';
+        if (callerEl) callerEl.textContent = callerSelectedBarangay || 'None';
+        const effective = getEffectiveBarangay();
+        if (finalEl) finalEl.textContent = effective || 'None';
+        if (selectedTextEl) selectedTextEl.textContent = effective ? `Selected: ${effective}` : 'No barangay selected';
+        if (searchInput && effective && document.activeElement !== searchInput) {
+            searchInput.value = effective;
+        }
+    }
+
+    function getCallerLanguage() {
+        const callerData = currentCallerPayload || getManualCallerInfo() || {};
+        const lang = String(callerData.language || callerData.lang || callerData.userLanguage || '').toLowerCase().trim();
+        if (lang === 'fil' || lang === 'tl' || lang === 'tagalog' || lang === 'filipino') {
+            return 'fil';
+        }
+        return 'en';
+    }
+
+    function stopLocationPromptAudio() {
+        locationPromptActive = false;
+        if (locationPromptTimer) {
+            clearTimeout(locationPromptTimer);
+            locationPromptTimer = null;
+        }
+        if (locationPromptAudio) {
+            locationPromptAudio.onended = null;
+            locationPromptAudio.onerror = null;
+            try {
+                locationPromptAudio.pause();
+                locationPromptAudio.currentTime = 0;
+            } catch (e) {}
+            locationPromptAudio = null;
+        }
+    }
+
+    function startLocationPromptAudio() {
+        stopLocationPromptAudio();
+        if (!callConnectedAt || transferInProgress) return;
+        const lang = getCallerLanguage();
+        const audioFileName = lang === 'fil' ? 'call-location-fil.mp3' : 'call-location-en.mp3';
+        const publicAudioUrl = (window.APP_BASE_PATH || '').replace(/\/$/, '') + '/assets/audio/call/' + audioFileName;
+
+        locationPromptActive = true;
+
+        const s = ensureSocket();
+        if (s && callId) {
+            s.emit('start-location-prompt', { language: lang, audioUrl: publicAudioUrl, callId, room: activeCallRoom || getCallRoom() }, activeCallRoom || getCallRoom());
+        }
+
+        function playLoop() {
+            if (!locationPromptActive || transferInProgress) return;
+            locationPromptAudio = new Audio(publicAudioUrl);
+            locationPromptAudio.onended = () => {
+                if (!locationPromptActive || transferInProgress) return;
+                locationPromptTimer = setTimeout(() => {
+                    if (locationPromptActive && !transferInProgress) {
+                        playLoop();
+                    }
+                }, 2500);
+            };
+            locationPromptAudio.onerror = (e) => {
+                console.warn('Location prompt audio playback notice:', e);
+            };
+            locationPromptAudio.play().catch(e => console.warn('Location prompt play notice:', e));
+        }
+
+        playLoop();
+    }
+
     function setCallBarangaySelection(value) {
         selectedCallBarangay = String(value || '').trim();
+        adminSelectedBarangay = selectedCallBarangay;
+        stopLocationPromptAudio();
+
+        const s = ensureSocket();
+        if (s && callId) {
+            s.emit('stop-location-prompt', { callId, room: activeCallRoom || getCallRoom() }, activeCallRoom || getCallRoom());
+            s.emit('barangay-update', { source: 'admin', barangay: selectedCallBarangay, callId, room: activeCallRoom || getCallRoom() }, activeCallRoom || getCallRoom());
+        }
+
         const input = document.getElementById('callBarangaySearch');
         const selected = document.getElementById('callBarangaySelected');
         const results = document.getElementById('callBarangayResults');
         if (input) input.value = selectedCallBarangay;
         if (selected) selected.textContent = selectedCallBarangay ? `Selected: ${selectedCallBarangay}` : 'No barangay selected';
         if (results) results.style.display = 'none';
+        updateAdminCallModalBarangayUI();
     }
 
     function renderCallBarangayResults(query = '') {
@@ -5396,6 +5510,7 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
         stopAudioActivityMonitors();
         setEndEnabled(false);
 
+        stopLocationPromptAudio();
         if (localStream) {
             localStream.getTracks().forEach(t => t.stop());
             localStream = null;
@@ -5418,6 +5533,7 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
     }
 
     async function endCall(notifyPeer = true) {
+        stopLocationPromptAudio();
         const durationSec = callConnectedAt ? Math.floor((Date.now() - callConnectedAt) / 1000) : 0;
         
         // Log call end event (non-blocking)
@@ -5556,6 +5672,7 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                 logCall(resumed ? 'reconnected' : 'connected');
                 _stopAlertSound();
                 setIncomingCallModalVisible(false);
+                startLocationPromptAudio();
             }
             if (pc.connectionState === 'connecting' || pc.connectionState === 'new') {
                 // Start a timeout so the call is not permanently stuck on 'Connecting to caller audio...'.
@@ -5572,6 +5689,7 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                 }, 30000);
             }
             if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+                stopLocationPromptAudio();
                 if (callConnectingTimer) { clearTimeout(callConnectingTimer); callConnectingTimer = null; }
                 if (transferInProgress) return;
                 if (!callId || peerDisconnectTimer) return;

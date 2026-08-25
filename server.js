@@ -228,6 +228,7 @@ function relayHangup(socket, payload = {}, room) {
     socket.to(signalRoom).emit('hangup', notice);
     socket.to(signalRoom).emit('call-ended', notice);
     socket.to(signalRoom).emit('call_ended', notice);
+    socket.to(signalRoom).emit('stop-location-prompt', notice);
   }
   if (callId) {
     const endedCall = activeCallsById.get(callId);
@@ -570,6 +571,35 @@ io.on('connection', (socket) => {
   socket.on('hangup', (payload, room) => relayHangup(socket, payload, room));
   socket.on('call-ended', (payload, room) => relayHangup(socket, payload, room));
   socket.on('call_ended', (payload, room) => relayHangup(socket, payload, room));
+
+  socket.on('location-update', (payload, room) => {
+    const signalRoom = resolveSignalRoom(payload, room);
+    if (signalRoom) {
+      socket.to(signalRoom).emit('location-update', payload);
+    }
+  });
+
+  socket.on('barangay-update', (payload, room) => {
+    const signalRoom = resolveSignalRoom(payload, room);
+    const callId = getSignalCallId(payload);
+    if (callId && activeCallsById.has(callId)) {
+      const call = activeCallsById.get(callId);
+      const bgy = payload?.barangay || payload?.currentBarangay;
+      if (bgy) call.currentBarangay = bgy;
+      if (payload?.source === 'caller') call.callerSelectedBarangay = bgy;
+      if (payload?.source === 'admin') call.adminSelectedBarangay = bgy;
+    }
+    if (signalRoom) {
+      socket.to(signalRoom).emit('barangay-update', payload);
+    }
+  });
+
+  socket.on('stop-location-prompt', (payload, room) => {
+    const signalRoom = resolveSignalRoom(payload, room);
+    if (signalRoom) {
+      socket.to(signalRoom).emit('stop-location-prompt', payload);
+    }
+  });
 
   socket.on('call-message', (payload, room, acknowledge) => {
     const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
