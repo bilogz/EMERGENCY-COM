@@ -195,7 +195,10 @@ io.on('connection', (socket) => {
       const cached = activeOffersByRoom.get(room);
       const cachedCallId = cleanText(cached?.payload?.callId, 128);
       const cachedCall = cachedCallId ? activeCallsById.get(cachedCallId) : null;
-      if (cached && Date.now() - cached.ts <= OFFER_TTL_MS && (!cachedCall || cachedCall.status === 'ringing')) {
+      const canReplayCachedOffer = cached
+        && Date.now() - cached.ts <= OFFER_TTL_MS
+        && (!cachedCall || cachedCall.status === 'ringing' || cachedCall.status === 'accepted');
+      if (canReplayCachedOffer) {
         socket.emit('offer', cached.payload);
         debugLog(`[socket] replayed cached offer room=${room} callId=${cached.payload?.callId || ''}`);
       }
@@ -203,23 +206,9 @@ io.on('connection', (socket) => {
         emitCallQueue();
       }
       const roomCall = Array.from(activeCallsById.values()).find((call) => call.room === room) || null;
-      if (roomCall && roomCall.callerSocketId && roomCall.callerSocketId !== socket.id) {
-        roomCall.adminSocketId = socket.id;
-        roomCall.status = 'accepted';
-        roomCall.updatedAt = Date.now();
-        const responseReady = {
-          callId: roomCall.callId,
-          call_id: roomCall.callId,
-          room,
-          role: 'response_team',
-          reason: 'response-team-room-joined',
-        };
-        // Joining the private room is the authoritative acceptance signal.
-        // This prevents a missed UI control event from leaving mobile stuck
-        // at "Waiting" even though ERS has opened the call.
-        socket.to(room).emit('dispatcher-ready', responseReady);
-        socket.to(room).emit('request-transfer-offer', responseReady);
-      }
+      // Joining a private room is presence only. A call must move from Open to
+      // Assigned only through the explicit claim-call action; otherwise the
+      // admin page can accidentally "answer" while just rendering the queue.
       const recentMessages = recentMessagesByRoom.get(room) || [];
       if (recentMessages.length) socket.emit('call-message-history', recentMessages);
       const memberCount = io.sockets.adapter.rooms.get(room)?.size || 0;
@@ -270,6 +259,7 @@ io.on('connection', (socket) => {
     const announcementRoom = cleanText(room, 180);
     const callId = cleanText(payload?.callId, 128);
     if (typeof signalRoom === 'string' && signalRoom.length > 0) {
+      socket.join(signalRoom);
       activeOffersByRoom.set(signalRoom, { payload, ts: Date.now() });
       debugLog(`[signal] offer room=${signalRoom} broadcast=${announcementRoom || signalRoom} callId=${payload?.callId || ''}`);
     }
@@ -334,6 +324,24 @@ io.on('connection', (socket) => {
     call.adminSocketId = socket.id;
     call.updatedAt = Date.now();
     socket.join(call.room);
+
+    const cached = activeOffersByRoom.get(call.room);
+    if (cached && Date.now() - cached.ts <= OFFER_TTL_MS) {
+      socket.emit('offer', {
+        ...(cached.payload || {}),
+        callId: call.callId,
+        call_id: call.callId,
+        room: call.room,
+      });
+      debugLog(`[socket] sent cached offer to claiming admin room=${call.room} callId=${call.callId}`);
+    }
+    socket.to(call.room).emit('request-offer', {
+      callId: call.callId,
+      call_id: call.callId,
+      room: call.room,
+      reason: 'admin-claimed-call',
+    });
+
     socket.to(CALL_LOBBY_ROOM).emit('call-claimed', { callId, adminKey, call: callQueueSummary(call) });
     emitCallUpdate('claimed', call);
     if (typeof acknowledge === 'function') acknowledge({ ok: true, call: callSummary(call) });
@@ -423,6 +431,29 @@ io.on('connection', (socket) => {
     acknowledge({ ok: true, call: liveCallIdentity(call) });
   });
 
+  socket.on('request-offer', (payload, room, acknowledge) => {
+    const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
+    const callId = getSignalCallId(payload);
+    const call = callId ? activeCallsById.get(callId) : null;
+    const targetRoom = call?.room || signalRoom;
+    const normalizedPayload = call
+      ? { ...(payload || {}), callId: call.callId, call_id: call.callId, room: call.room }
+      : { ...(payload || {}), room: targetRoom };
+
+    if (targetRoom) socket.join(targetRoom);
+    debugLog(`[signal] request-offer room=${targetRoom || ''} callId=${callId || ''}`);
+    if (targetRoom) socket.to(targetRoom).emit('request-offer', normalizedPayload);
+
+    const callerSocketId = call?.callerSocketId;
+    const roomMembers = targetRoom ? io.sockets.adapter.rooms.get(targetRoom) : null;
+    if (callerSocketId && callerSocketId !== socket.id && !roomMembers?.has(callerSocketId)) {
+      io.to(callerSocketId).emit('request-offer', normalizedPayload);
+    }
+
+    if (typeof acknowledge === 'function') {
+      acknowledge({ ok: true, room: targetRoom, callerOnline: !!callerSocketId });
+    }
+  });
   socket.on('answer', (payload, room) => {
     const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
     debugLog(`[signal] answer room=${signalRoom} callId=${payload?.callId || ''}`);
@@ -432,7 +463,10 @@ io.on('connection', (socket) => {
       ? { ...(payload || {}), callId: call.callId, call_id: call.callId, room: call.room }
       : payload;
     const targetRoom = call?.room || signalRoom;
-    if (targetRoom) socket.to(targetRoom).emit('answer', normalizedPayload);
+    if (targetRoom) {
+      socket.join(targetRoom);
+      socket.to(targetRoom).emit('answer', normalizedPayload);
+    }
     const peerSocketId = call
       ? (call.callerSocketId === socket.id ? call.adminSocketId : call.callerSocketId)
       : null;
@@ -450,7 +484,10 @@ io.on('connection', (socket) => {
       ? { ...(candidate || {}), callId: call.callId, call_id: call.callId, room: call.room }
       : candidate;
     const targetRoom = call?.room || signalRoom;
-    if (targetRoom) socket.to(targetRoom).emit('candidate', normalizedCandidate);
+    if (targetRoom) {
+      socket.join(targetRoom);
+      socket.to(targetRoom).emit('candidate', normalizedCandidate);
+    }
     const peerSocketId = call
       ? (call.callerSocketId === socket.id ? call.adminSocketId : call.callerSocketId)
       : null;
@@ -688,3 +725,4 @@ const HOST = process.env.SOCKET_HOST || '0.0.0.0'; // Listen on all interfaces f
 server.listen(PORT, HOST, () => {
   console.log(`Socket.IO signaling server listening on ${HOST}:${PORT}`);
 });
+

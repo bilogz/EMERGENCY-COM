@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Two-Way Communication Interface Page
  * Manage interactive communication between administrators and citizens
@@ -4503,8 +4503,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         return isFreshIncomingCallTimestamp(callTimestampMs(session.updated_at || session.created_at));
     }
     function pruneStaleIncomingCalls() {
+        const closedStatuses = new Set(['assigned', 'accepted', 'pending', 'transferred', 'completed', 'ended', 'declined', 'cancelled', 'canceled']);
         incomingCallQueue.forEach((call, id) => {
-            if (!isQueuedCallFresh(call)) incomingCallQueue.delete(id);
+            const status = String(call?.status || '').toLowerCase();
+            if (closedStatuses.has(status)) incomingCallQueue.delete(id);
         });
         if (!incomingCallQueue.size) _stopAlertSound();
     }
@@ -4577,7 +4579,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const data = await response.json().catch(() => null);
             if (!response.ok || !data || data.success === false) return;
             const s = ensureSocket();
-            const openSessions = (Array.isArray(data.open) ? data.open : []).filter(isCallSessionFresh);
+            const openSessions = Array.isArray(data.open) ? data.open : [];
             const openSessionIds = new Set(openSessions.map(session => String(session.call_id || session.callId || '')).filter(Boolean));
             if (force) {
                 incomingCallQueue.forEach((call, id) => {
@@ -4738,7 +4740,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const list = document.getElementById('conversationsList');
         if (!list) return;
         list.querySelectorAll('.emergency-call-table-row').forEach(row => row.remove());
-        const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned' && isQueuedCallFresh(item));
+        const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned');
         const openBadge = document.getElementById('openCount');
         if (!queuedCalls.length) {
             if (openBadge) {
@@ -5206,106 +5208,26 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         };
     }
 
-    async function acceptIncomingEmergencyCall(targetCallId = null) {
-        const selectedCallId = targetCallId ? String(targetCallId) : pendingCallId;
-        if (selectedCallId && incomingCallQueue.has(selectedCallId)) {
-            applyQueuedCallToPending(incomingCallQueue.get(selectedCallId));
-        }
-        if (!pendingCallId) return;
-        if (!pendingOffer) {
-            const signalingSocket = ensureSocket();
-            const requestRoom = pendingCallRoom || getCallRoom(pendingCallId);
-            if (signalingSocket?.connected) {
-                signalingSocket.emit('join', requestRoom);
-                signalingSocket.emit('request-offer', {
-                    callId: pendingCallId,
-                    room: requestRoom,
-                    reason: 'admin-answer-needs-offer'
-                }, requestRoom);
-            }
-            setIncomingCallModalText('Waiting for caller connection. Keep this call in Open and try Answer again in a moment.');
-            renderIncomingEmergencyCallRow();
-            renderIncomingCallTableRows();
-            return;
-        }
-        if (callId && pendingCallId !== callId) return;
-        acceptingCallId = String(pendingCallId || '');
-        if (adminHasActiveCall(pendingCallId)) {
-            acceptingCallId = null;
-            setIncomingCallModalText('You already have an active call. Finish or transfer it before taking another call.');
-            renderIncomingEmergencyCallRow();
-            return;
-        }
-
-        const wasRestoring = restoringAdminCall && callId === pendingCallId;
-        const dbClaim = await syncCallSession('claim', callSessionPayload({ callId: pendingCallId, room: pendingCallRoom }));
-        if (!dbClaim?.success) {
-            setIncomingCallModalText(dbClaim?.error || 'This call is no longer available.');
-            removeQueuedCall(pendingCallId);
-            _stopAlertSound();
-            return;
-        }
-        const signalingSocket = ensureSocket();
-        if (!signalingSocket?.connected) {
-            setIncomingCallModalText('Call service is reconnecting. The call is still in Open. Please try again.');
-            await syncCallSession('mark', { callId: pendingCallId, status: 'open' });
-            acceptingCallId = null;
-            renderIncomingEmergencyCallRow();
-            renderIncomingCallTableRows();
-            return;
-        }
-        const claimResult = await new Promise(resolve => {
-            const timer = setTimeout(() => resolve({ ok: true, degraded: true, reason: 'Socket claim timed out; database claim already succeeded.' }), 2500);
-            signalingSocket.emit('claim-call', {
-                callId: pendingCallId,
-                room: pendingCallRoom || getCallRoom(pendingCallId),
-                adminKey: ADMIN_CALL_OWNER_KEY
-            }, result => {
-                clearTimeout(timer);
-                resolve(result || { ok: true, degraded: true });
-            });
-        });
-        if (claimResult && claimResult.ok === false) {
-            // The database claim is the source of truth. If the socket room lost state after a PM2 restart,
-            // continue opening the admin call modal and let the caller replay the offer into the room.
-            console.warn('[call][admin] socket claim did not acknowledge cleanly', claimResult);
-        }
-        callId = pendingCallId;
-        activeCallRoom = pendingCallRoom || getCallRoom(callId);
-        setAdminCallLock(callId, {
-            room: activeCallRoom,
-            callerInfo,
-            callerLocation,
-            conversationId: callConversationId,
-            connectedAt: callConnectedAt
-        });
+    async function completeAdminCallAnswerFromOffer() {
+        if (!callId || !activeCallRoom || !pendingOffer) return false;
         try {
-            if (wasRestoring) {
-                await logCall('reconnecting', {
-                    adminUsername: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : null)
-                });
-            } else {
-            await logCall('accepted', {
-                adminUsername: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : null)
-            });
+            if (!pc || pc.signalingState === 'closed') initPeer();
+            if (pc.signalingState !== 'stable') {
+                try { pc.close(); } catch (e) {}
+                pc = null;
+                initPeer();
             }
-        } catch (e) {}
-        incomingCallQueue.delete(String(pendingCallId));
-        acceptingCallId = null;
-        setIncomingEmergencyCallRowVisible(false);
-        setOverlayVisible(true);
-        setCallActiveBannerVisible(true);
-        setStatus('Connecting...');
-        setTimer(0);
-        setEndEnabled(false);
 
-        try {
-            if (!pc) initPeer();
+            if (!localStream) {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                monitorAudioActivity(localStream, 'adminSpeakingLabel', 'adminLocalMicIndicator');
+            }
+            localStream.getTracks().forEach(track => {
+                const alreadyAdded = pc.getSenders && pc.getSenders().some(sender => sender.track === track);
+                if (!alreadyAdded) pc.addTrack(track, localStream);
+            });
+
             await pc.setRemoteDescription(pendingOffer);
-
-            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-            monitorAudioActivity(localStream, 'adminSpeakingLabel', 'adminLocalMicIndicator');
 
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
@@ -5317,6 +5239,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     try { if (pc && cand) await pc.addIceCandidate(cand); } catch (e) {}
                 }
             }
+            pendingOffer = null;
+            pendingCandidates = [];
+            setStatus('Connecting to caller audio...');
+            return true;
         } catch (e) {
             console.error('[call][admin] accept call failed', e);
             acceptingCallId = null;
@@ -5331,10 +5257,125 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             setStatus(userFriendlyError);
             setEndEnabled(true);
             endCall(true);
+            return false;
         } finally {
-            pendingOffer = null;
-            pendingCandidates = [];
             renderIncomingEmergencyCallRow();
+            renderIncomingCallTableRows();
+        }
+    }
+    async function acceptIncomingEmergencyCall(targetCallId = null) {
+        let selectedCallId = targetCallId ? String(targetCallId) : (pendingCallId ? String(pendingCallId) : null);
+        if (!selectedCallId && incomingCallQueue.size) {
+            selectedCallId = String(Array.from(incomingCallQueue.keys())[0]);
+        }
+        if (selectedCallId && incomingCallQueue.has(selectedCallId)) {
+            applyQueuedCallToPending(incomingCallQueue.get(selectedCallId));
+        }
+        if (!pendingCallId && selectedCallId && incomingCallQueue.has(selectedCallId)) {
+            applyQueuedCallToPending(incomingCallQueue.get(selectedCallId));
+        }
+        if (!pendingCallId) {
+            acceptingCallId = null;
+            renderIncomingCallTableRows();
+            return;
+        }
+        if (callId && pendingCallId !== callId) return;
+        acceptingCallId = String(pendingCallId || '');
+        if (adminHasActiveCall(pendingCallId)) {
+            acceptingCallId = null;
+            setIncomingCallModalText('You already have an active call. Finish or transfer it before taking another call.');
+            renderIncomingEmergencyCallRow();
+            return;
+        }
+
+        const selectedPendingCallId = String(pendingCallId);
+        callId = selectedPendingCallId;
+        activeCallRoom = pendingCallRoom || getCallRoom(callId);
+        setAdminCallLock(callId, {
+            room: activeCallRoom,
+            callerInfo,
+            callerLocation,
+            conversationId: callConversationId,
+            connectedAt: callConnectedAt
+        });
+        incomingCallQueue.delete(selectedPendingCallId);
+        setIncomingEmergencyCallRowVisible(false);
+        setIncomingCallModalVisible(false);
+        setOverlayVisible(true);
+        setCallActiveBannerVisible(true);
+        setStatus('Claiming call...');
+        setTimer(0);
+        setEndEnabled(false);
+        renderIncomingEmergencyCallRow();
+        renderIncomingCallTableRows();
+
+        const wasRestoring = restoringAdminCall && callId === pendingCallId;
+        const dbClaim = await syncCallSession('claim', callSessionPayload({ callId: pendingCallId, room: pendingCallRoom }));
+        if (!dbClaim?.success) {
+            setIncomingCallModalText(dbClaim?.error || 'This call is no longer available.');
+            clearAdminCallLock();
+            callId = null;
+            activeCallRoom = null;
+            acceptingCallId = null;
+            setOverlayVisible(false);
+            setCallActiveBannerVisible(false);
+            removeQueuedCall(selectedPendingCallId);
+            _stopAlertSound();
+            return;
+        }
+        const signalingSocket = ensureSocket();
+        if (!signalingSocket?.connected) {
+            setStatus('Call service is reconnecting. Keep this call window open...');
+        }
+        const claimResult = signalingSocket?.connected ? await new Promise(resolve => {
+            const timer = setTimeout(() => resolve({ ok: true, degraded: true, reason: 'Socket claim timed out; database claim already succeeded.' }), 2500);
+            signalingSocket.emit('join', activeCallRoom);
+            signalingSocket.emit('claim-call', {
+                callId,
+                room: activeCallRoom,
+                adminKey: ADMIN_CALL_OWNER_KEY
+            }, result => {
+                clearTimeout(timer);
+                resolve(result || { ok: true, degraded: true });
+            });
+        }) : { ok: true, degraded: true, reason: 'Socket reconnecting; database claim already succeeded.' };
+        if (claimResult && claimResult.ok === false) {
+            // The database claim is the source of truth. If the socket room lost state after a PM2 restart,
+            // continue opening the admin call modal and let the caller replay the offer into the room.
+            console.warn('[call][admin] socket claim did not acknowledge cleanly', claimResult);
+        }
+        try {
+            if (wasRestoring) {
+                await logCall('reconnecting', {
+                    adminUsername: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : null)
+                });
+            } else {
+            await logCall('accepted', {
+                adminUsername: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : null)
+            });
+            }
+        } catch (e) {}
+        acceptingCallId = null;
+        setStatus('Connecting...');
+        const signalingSocketForOffer = ensureSocket();
+        if (signalingSocketForOffer?.connected) {
+            signalingSocketForOffer.emit('join', activeCallRoom);
+        }
+
+        if (pendingOffer) {
+            await completeAdminCallAnswerFromOffer();
+        } else {
+            setStatus('Waiting for caller connection...');
+            setEndEnabled(true);
+            if (signalingSocketForOffer?.connected) {
+                signalingSocketForOffer.emit('request-offer', {
+                    callId,
+                    room: activeCallRoom,
+                    reason: 'admin-answer-needs-offer'
+                }, activeCallRoom);
+            }
+            renderIncomingEmergencyCallRow();
+            renderIncomingCallTableRows();
         }
     }
 
@@ -5590,6 +5631,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
 </body>
 </html>
+
+
+
+
+
 
 
 
