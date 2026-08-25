@@ -2123,16 +2123,6 @@ $assetBase = '../ADMIN/header/';
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 localStream.getAudioTracks().forEach(track => { track.enabled = true; });
 
-                // 2. Initialize WebRTC Peer Connection
-                initPeer();
-                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-                monitorAudioActivity(localStream, 'userSpeakingLabel', 'userLocalMicIndicator');
-
-                // 3. Create SDP Offer
-                setStatus('Creating secure call connection…');
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-
                 const activeCallId = callId;
                 tryGetLocation().then((location) => {
                     if (callId !== activeCallId) return;
@@ -2141,13 +2131,23 @@ $assetBase = '../ADMIN/header/';
                     if (!userProfile && guestInfo.address && locationData) {
                         locationData.address = guestInfo.address;
                     }
+                    const refreshedPayload = {
+                        callId,
+                        room: activeCallRoom,
+                        conversationId: emergencyComCallReference(callId),
+                        conversation_id: emergencyComCallReference(callId),
+                        emergencyComConversationId: emergencyComCallReference(callId),
+                        emergency_com_conversation_id: emergencyComCallReference(callId),
+                        userId: userProfile?.id || null,
+                        userName: userProfile?.name || guestInfo.name || null,
+                        caller: currentCallCallerPayload(),
+                        location: locationData || null
+                    };
+                    persistOpenEmergencyCall(refreshedPayload).catch(() => {});
                 }).catch(() => {});
 
                 // Emergency-Com answers this call first. The private room is announced
                 // to the admin call lobby and can be manually transferred later.
-
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                localStream.getAudioTracks().forEach(track => { track.enabled = true; });
                 monitorAudioActivity(localStream, 'userSpeakingLabel', 'userLocalMicIndicator');
 
                 const guestCaller = getGuestCallerInfo();

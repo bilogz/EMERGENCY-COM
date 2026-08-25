@@ -4573,7 +4573,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         restoringCallSessionsFromDb = true;
         lastCallSessionRestoreAt = Date.now();
         try {
-            const response = await fetch('../api/call-session.php?action=list', { credentials: 'same-origin' });
+            const response = await fetch(`${ADMIN_API_BASE}call-session.php?action=list`, { credentials: 'same-origin' });
             const data = await response.json().catch(() => null);
             if (!response.ok || !data || data.success === false) return;
             const s = ensureSocket();
@@ -4636,8 +4636,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
     async function syncCallSession(action, payload = {}) {
         try {
-            const response = await fetch('../api/call-session.php', {
+            const response = await fetch(`${ADMIN_API_BASE}call-session.php`, {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action, ...payload })
             });
@@ -5594,6 +5595,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
 </body>
 </html>
+
 
 
 

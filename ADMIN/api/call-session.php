@@ -84,7 +84,9 @@ function callSessionPayloadFields(array $data) {
         'room' => callSessionClean($data['room'] ?? '', 180),
         'offer_payload' => isset($data['offerPayload']) && is_array($data['offerPayload'])
             ? json_encode($data['offerPayload'])
-            : (isset($data['offer_payload']) && is_array($data['offer_payload']) ? json_encode($data['offer_payload']) : null),
+            : (isset($data['offer_payload']) && is_array($data['offer_payload'])
+                ? json_encode($data['offer_payload'])
+                : (isset($data['sdp']) && is_array($data['sdp']) ? json_encode($data) : null)),
         'caller_user_id' => callSessionClean($caller['user_id'] ?? $caller['id'] ?? $data['callerUserId'] ?? '', 100),
         'caller_name' => callSessionClean($caller['name'] ?? $data['callerName'] ?? 'Emergency Call User', 180),
         'caller_phone' => callSessionClean($caller['phone'] ?? $data['callerPhone'] ?? '', 80),
