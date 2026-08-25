@@ -4796,34 +4796,37 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         `;
     }
 
+    let emergencyCallDelegationBound = false;
     function bindEmergencyCallTableButtons(container) {
         if (!container) return;
-        container.querySelectorAll('.emergency-call-accept-btn').forEach(btn => {
-            btn.addEventListener('click', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                console.log('[call-btn] Accept clicked for call:', btn.dataset.callId);
-                if (typeof window.acceptIncomingEmergencyCall === 'function') {
-                    window.acceptIncomingEmergencyCall(btn.dataset.callId);
-                } else {
-                    console.error('window.acceptIncomingEmergencyCall is not defined');
-                    alert('Error: acceptIncomingEmergencyCall is not defined.');
+        const list = document.getElementById('conversationsList');
+        if (list && !emergencyCallDelegationBound) {
+            emergencyCallDelegationBound = true;
+            list.addEventListener('click', (event) => {
+                const acceptBtn = event.target.closest('.emergency-call-accept-btn');
+                if (acceptBtn) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const callId = acceptBtn.getAttribute('data-call-id') || acceptBtn.dataset.callId;
+                    console.log('[call-btn-delegated] Accept clicked for call:', callId);
+                    if (typeof window.acceptIncomingEmergencyCall === 'function') {
+                        window.acceptIncomingEmergencyCall(callId);
+                    }
+                    return;
+                }
+                const declineBtn = event.target.closest('.emergency-call-decline-btn');
+                if (declineBtn) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const callId = declineBtn.getAttribute('data-call-id') || declineBtn.dataset.callId;
+                    console.log('[call-btn-delegated] Decline clicked for call:', callId);
+                    if (typeof window.declineIncomingEmergencyCall === 'function') {
+                        window.declineIncomingEmergencyCall(callId);
+                    }
+                    return;
                 }
             });
-        });
-        container.querySelectorAll('.emergency-call-decline-btn').forEach(btn => {
-            btn.addEventListener('click', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                console.log('[call-btn] Decline clicked for call:', btn.dataset.callId);
-                if (typeof window.declineIncomingEmergencyCall === 'function') {
-                    window.declineIncomingEmergencyCall(btn.dataset.callId);
-                } else {
-                    console.error('window.declineIncomingEmergencyCall is not defined');
-                    alert('Error: declineIncomingEmergencyCall is not defined.');
-                }
-            });
-        });
+        }
     }
 
     function loggedCallTableRowHtml(session, statusGroup) {
@@ -4889,14 +4892,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         `;
     }
 
+    let lastRenderedTableStateKey = '';
+
     function renderCallTableForStatus() {
         if (!EMERGENCY_COM_CALL_INTAKE_ENABLED) return;
         const list = document.getElementById('conversationsList');
         if (!list) return;
 
-        list.innerHTML = '';
-
         const openBadge = document.getElementById('openCount');
+        let newHtml = '';
 
         if (currentStatus === 'open') {
             pruneStaleIncomingCalls();
@@ -4906,41 +4910,44 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 openBadge.style.display = 'inline-block';
             }
             if (!queuedCalls.length) {
-                list.innerHTML = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No open emergency calls</td></tr>';
-                return;
+                newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No open emergency calls</td></tr>';
+            } else {
+                newHtml = queuedCalls.map((queued, index) => queuedCallTableRowHtml(queued, index, queuedCalls.length)).join('');
             }
-            const html = queuedCalls.map((queued, index) => queuedCallTableRowHtml(queued, index, queuedCalls.length)).join('');
-            list.insertAdjacentHTML('afterbegin', html);
-            bindEmergencyCallTableButtons(list);
         } else if (currentStatus === 'assigned') {
             const assignedSessions = Array.isArray(lastDbCallSessions?.assigned) ? lastDbCallSessions.assigned : [];
             if (!assignedSessions.length) {
-                list.innerHTML = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No assigned emergency calls</td></tr>';
-                return;
+                newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No assigned emergency calls</td></tr>';
+            } else {
+                newHtml = assignedSessions.map(session => loggedCallTableRowHtml(session, 'assigned')).join('');
             }
-            const html = assignedSessions.map(session => loggedCallTableRowHtml(session, 'assigned')).join('');
-            list.innerHTML = html;
         } else if (currentStatus === 'unanswered') {
             const unansweredSessions = Array.isArray(lastDbCallSessions?.all) ? lastDbCallSessions.all.filter(session => {
                 return !session.answered_at && ['ended', 'declined', 'cancelled'].includes(String(session.status).toLowerCase());
             }) : [];
             if (!unansweredSessions.length) {
-                list.innerHTML = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No unanswered calls found</td></tr>';
-                return;
+                newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No unanswered calls found</td></tr>';
+            } else {
+                newHtml = unansweredSessions.map(session => loggedCallTableRowHtml(session, 'unanswered')).join('');
             }
-            const html = unansweredSessions.map(session => loggedCallTableRowHtml(session, 'unanswered')).join('');
-            list.innerHTML = html;
         } else if (currentStatus === 'completed') {
             const completedSessions = Array.isArray(lastDbCallSessions?.all) ? lastDbCallSessions.all.filter(session => {
                 return session.answered_at && String(session.status).toLowerCase() === 'ended';
             }) : [];
             if (!completedSessions.length) {
-                list.innerHTML = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No completed emergency calls</td></tr>';
-                return;
+                newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No completed emergency calls</td></tr>';
+            } else {
+                newHtml = completedSessions.map(session => loggedCallTableRowHtml(session, 'completed')).join('');
             }
-            const html = completedSessions.map(session => loggedCallTableRowHtml(session, 'completed')).join('');
-            list.innerHTML = html;
         }
+
+        const currentStateKey = currentStatus + '::' + newHtml;
+        if (lastRenderedTableStateKey === currentStateKey && list.children.length > 0) {
+            return;
+        }
+        lastRenderedTableStateKey = currentStateKey;
+        list.innerHTML = newHtml;
+        bindEmergencyCallTableButtons(list);
     }
 
     function renderIncomingCallTableRows() {
