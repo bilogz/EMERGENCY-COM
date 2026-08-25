@@ -5754,43 +5754,54 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const queued = normalizeQueuedCall(payload, sdp);
             if (!queued) return null;
             const existing = incomingCallQueue.get(queued.callId) || {};
+            const isNew = !incomingCallQueue.has(queued.callId);
             const merged = {
                 ...existing,
                 ...queued,
                 sdp: queued.sdp || existing.sdp || null,
                 pendingCandidates: existing.pendingCandidates || queued.pendingCandidates || [],
-                status: existing.status || queued.status || 'open'
+                status: existing.status || queued.status || 'open',
+                lastUpsertTime: existing.lastUpsertTime || 0
             };
             incomingCallQueue.set(queued.callId, merged);
             const signalingSocket = ensureSocket();
             if (signalingSocket) signalingSocket.emit('join', merged.room || getCallRoom(merged.callId));
-            const persistedOfferPayload = {
-                ...(payload && typeof payload === 'object' ? payload : {}),
-                sdp: merged.sdp,
-                callId: merged.callId,
-                call_id: merged.callId,
-                room: merged.room || getCallRoom(merged.callId),
-                caller: merged.caller || null,
-                location: merged.location || null,
-                conversationId: merged.conversationId || null,
-                conversation_id: merged.conversationId || null
-            };
-            syncCallSession('upsert_open', callSessionPayload({
-                callId: merged.callId,
-                room: merged.room,
-                caller: merged.caller,
-                location: merged.location,
-                conversationId: merged.conversationId,
-                offerPayload: persistedOfferPayload
-            }));
+            
+            // Rate limit database session sync (upsert_open): only run if new or more than 10 seconds since last upsert
+            const now = Date.now();
+            if (isNew || (now - merged.lastUpsertTime > 10000)) {
+                merged.lastUpsertTime = now;
+                const persistedOfferPayload = {
+                    ...(payload && typeof payload === 'object' ? payload : {}),
+                    sdp: merged.sdp,
+                    callId: merged.callId,
+                    call_id: merged.callId,
+                    room: merged.room || getCallRoom(merged.callId),
+                    caller: merged.caller || null,
+                    location: merged.location || null,
+                    conversationId: merged.conversationId || null,
+                    conversation_id: merged.conversationId || null
+                };
+                syncCallSession('upsert_open', callSessionPayload({
+                    callId: merged.callId,
+                    room: merged.room,
+                    caller: merged.caller,
+                    location: merged.location,
+                    conversationId: merged.conversationId,
+                    offerPayload: persistedOfferPayload
+                }));
+            }
+
             if (notify && !adminHasActiveCall(merged.callId) && !notifiedIncomingCallIds.has(merged.callId)) {
                 notifiedIncomingCallIds.add(merged.callId);
                 // Keep the fresh emergency call visible in the Open queue without forcing a floating modal notification.
                 setIncomingCallModalVisible(false);
                 _startAlertSound(notificationSound);
             }
-            renderIncomingEmergencyCallRow();
-            renderIncomingCallTableRows();
+            if (isNew) {
+                renderIncomingEmergencyCallRow();
+                renderIncomingCallTableRows();
+            }
             return merged;
         }
         queueIncomingOfferFromSocket = queueIncomingOffer;
@@ -5829,15 +5840,22 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             }
         });
 
+        let lastOfferWarnTime = 0;
         s.on('offer', async payload => {
             if (!EMERGENCY_COM_CALL_INTAKE_ENABLED) return;
             const incomingCallId = payload && payload.callId ? String(payload.callId) : null;
             if (!incomingCallId || (payload && payload.transferred)) return;
             const shouldAutoResume = restoringAdminCall && callId === incomingCallId;
+            const isNewOffer = !incomingCallQueue.has(incomingCallId);
             const queued = queueIncomingOffer(payload, payload && payload.sdp ? payload.sdp : payload, !shouldAutoResume);
             if (!queued) return;
-            locationData = await tryGetLocation();
-            if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+            
+            // Only trigger location checks & conversation reloads on NEW call offers to avoid network flooding
+            if (isNewOffer) {
+                locationData = await tryGetLocation();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+            }
+
             if (callId === incomingCallId) {
                 pendingOffer = queued.sdp || null;
                 pendingCandidates = queued.pendingCandidates || [];
@@ -5846,7 +5864,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 if (!callAnswerInFlight) {
                     await completeAdminCallAnswerFromOffer();
                 } else {
-                    console.warn('[call][admin] New offer arrived while answer already in flight – pendingOffer updated, will be picked up by ongoing negotiation.');
+                    const now = Date.now();
+                    if (now - lastOfferWarnTime > 5000) {
+                        lastOfferWarnTime = now;
+                        console.warn('[call][admin] New offer arrived while answer already in flight – pendingOffer updated.');
+                    }
                 }
             } else if (shouldAutoResume) {
                 setIncomingCallModalText('Restoring your active emergency call...');
