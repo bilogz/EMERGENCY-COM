@@ -20,6 +20,43 @@ $pageMode = $pageMode ?? 'citizen_reports';
 $isReportTableMode = in_array($pageMode, ['citizen_reports', 'emergency_calls'], true);
 $assetBaseUrl = $assetBaseUrl ?? '';
 $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
+
+$turnUrl = '';
+$turnUsername = '';
+$turnCredential = '';
+$adminConfigPath = __DIR__ . '/../api/config.local.php';
+if (is_file($adminConfigPath)) {
+    $adminConfig = @require $adminConfigPath;
+    if (is_array($adminConfig)) {
+        $turnUrl = trim((string)($adminConfig['WEBRTC_TURN_URL'] ?? ''));
+        $turnUsername = trim((string)($adminConfig['WEBRTC_TURN_USERNAME'] ?? ''));
+        $turnCredential = trim((string)($adminConfig['WEBRTC_TURN_CREDENTIAL'] ?? ''));
+    }
+}
+if (($turnUrl === '' || $turnUsername === '' || $turnCredential === '') && file_exists(__DIR__ . '/../../USERS/api/config.env.php')) {
+    require_once __DIR__ . '/../../USERS/api/config.env.php';
+    if (function_exists('getSecureConfig')) {
+        $turnUrl = $turnUrl !== '' ? $turnUrl : trim((string) getSecureConfig('WEBRTC_TURN_URL', ''));
+        $turnUsername = $turnUsername !== '' ? $turnUsername : trim((string) getSecureConfig('WEBRTC_TURN_USERNAME', ''));
+        $turnCredential = $turnCredential !== '' ? $turnCredential : trim((string) getSecureConfig('WEBRTC_TURN_CREDENTIAL', ''));
+    }
+}
+
+$turnUrls = [];
+if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredential !== '') {
+    $turnUrls = [$turnUrl];
+    if (preg_match('/^turns?:(?:\/\/)?([^:\/?]+)/i', $turnUrl, $hostMatch)) {
+        $turnHost = strtolower($hostMatch[1]);
+        if (strpos($turnHost, 'metered.ca') !== false) {
+            $turnUrls = [
+                'turn:' . $turnHost . ':80',
+                'turn:' . $turnHost . ':80?transport=tcp',
+                'turn:' . $turnHost . ':443',
+                'turns:' . $turnHost . ':443?transport=tcp',
+            ];
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -3728,6 +3765,18 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         : window.location.origin;
     const SOCKET_HEALTH_URL = `${SIGNALING_URL}${SOCKET_IO_PATH}/?EIO=4&transport=polling`;
     console.log('[call][admin] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
+
+    const WEBRTC_ICE_SERVERS = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' }
+        <?php if (!empty($turnUrls)): ?>,
+        {
+            urls: <?php echo json_encode($turnUrls, JSON_UNESCAPED_SLASHES); ?>,
+            username: <?php echo json_encode($turnUsername); ?>,
+            credential: <?php echo json_encode($turnCredential); ?>
+        }
+        <?php endif; ?>
+    ];
     const CALL_LOBBY_ROOM = "emergency-lobby";
     let activeCallRoom = null;
     let pendingCallRoom = null;
@@ -5391,17 +5440,18 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
     function initPeer() {
         pc = new RTCPeerConnection({
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:global.stun.twilio.com:3478' }
-            ]
+            iceServers: WEBRTC_ICE_SERVERS
         });
 
         pc.ontrack = e => {
             const remote = document.getElementById('remote');
-            const remoteStream = e.streams[0];
-            if (remote) remote.srcObject = remoteStream;
-            monitorAudioActivity(remoteStream, 'userSpeakingLabel');
+            const remoteStream = (e.streams && e.streams[0])
+                || (e.track ? new MediaStream([e.track]) : null);
+            if (remote && remoteStream) {
+                remote.srcObject = remoteStream;
+                remote.play().catch(err => console.warn('[call][admin] audio play notice:', err));
+            }
+            if (remoteStream) monitorAudioActivity(remoteStream, 'userSpeakingLabel');
         };
 
         pc.onicecandidate = e => {
