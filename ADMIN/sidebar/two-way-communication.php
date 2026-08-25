@@ -3884,8 +3884,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         console.log('[socket] re-registered admin for active call on reconnect:', result);
                     });
                 }
+                // Don't run restoreCallSessionsFromDatabase when already in an active call —
+                // it would re-queue open sessions and send duplicate offers causing hangups.
+            } else if (EMERGENCY_COM_CALL_INTAKE_ENABLED && typeof restoreCallSessionsFromDatabase === 'function') {
+                restoreCallSessionsFromDatabase(true);
             }
-            if (EMERGENCY_COM_CALL_INTAKE_ENABLED && typeof restoreCallSessionsFromDatabase === 'function') restoreCallSessionsFromDatabase(true);
 
             socketRetryCount = 0; // Reset retry count on successful connection
         });
@@ -4122,12 +4125,21 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             adminKey: ADMIN_CALL_OWNER_KEY
         }, result => {
             if (!result?.ok) {
-                setStatus(result?.reason || 'The previous call is no longer available.');
-                clearAdminCallLock(callId);
-                setTimeout(() => {
-                    setOverlayVisible(false);
-                    cleanupCall();
-                }, 900);
+                // The socket server may have lost state (e.g. PM2 restart) but the
+                // database claim is the source of truth. Log a warning but keep the
+                // overlay open so the caller can replay their offer into the room.
+                console.warn('[call][admin] resume-admin-call not acknowledged cleanly:', result?.reason);
+                setStatus('Waiting for caller to reconnect...');
+                if (adminCallResumeTimer) clearTimeout(adminCallResumeTimer);
+                adminCallResumeTimer = setTimeout(() => {
+                    if (!restoringAdminCall) return;
+                    setStatus('Caller did not reconnect. You can receive new calls now.');
+                    clearAdminCallLock(callId);
+                    setTimeout(() => {
+                        setOverlayVisible(false);
+                        cleanupCall();
+                    }, 1200);
+                }, ADMIN_CALL_RESUME_TIMEOUT_MS);
                 return;
             }
             setStatus('Reconnecting to caller...');
@@ -4661,19 +4673,25 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     }
                 });
             }
-            openSessions.forEach(session => {
-                const source = callSessionToQueuedOffer(session);
-                if (!source || incomingCallQueue.has(source.callId)) return;
-                if (callId === source.callId || pendingCallId === source.callId) return;
-                if (!s || !s.connected) {
-                    if (typeof queueIncomingOfferFromSocket === 'function') {
-                        queueIncomingOfferFromSocket(source, source.sdp || null, false);
+            // Only populate incoming call queue when admin has no active call.
+            // If a call is already active, do not re-queue open sessions — doing so
+            // triggers duplicate WebRTC offers which cause the server to emit hangup
+            // events that terminate the current call after ~1 second.
+            if (!callId) {
+                openSessions.forEach(session => {
+                    const source = callSessionToQueuedOffer(session);
+                    if (!source || incomingCallQueue.has(source.callId)) return;
+                    if (pendingCallId === source.callId) return;
+                    if (!s || !s.connected) {
+                        if (typeof queueIncomingOfferFromSocket === 'function') {
+                            queueIncomingOfferFromSocket(source, source.sdp || null, false);
+                        }
                     }
-                }
-                if (!source.sdp && s?.connected) {
-                    s.emit('request-offer', { callId: source.callId, room: source.room, reason: 'admin-db-restore-open' }, source.room);
-                }
-            });
+                    if (!source.sdp && s?.connected) {
+                        s.emit('request-offer', { callId: source.callId, room: source.room, reason: 'admin-db-restore-open' }, source.room);
+                    }
+                });
+            }
 
             const assignedSessions = Array.isArray(data.assigned) ? data.assigned : [];
             const ownedSession = (ADMIN_ID && assignedSessions.length)
