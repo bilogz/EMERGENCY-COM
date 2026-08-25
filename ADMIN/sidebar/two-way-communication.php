@@ -4037,6 +4037,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     // Mutex: prevents concurrent WebRTC answer negotiations from fighting each other.
     // When true, any new call to completeAdminCallAnswerFromOffer() returns immediately.
     let callAnswerInFlight = false;
+    // Freeze table re-renders while the user is actively hovering/clicking the call buttons.
+    // Any DOM replacement during a click causes the event to be lost and the button to jitter.
+    let callTableInteractionFrozen = false;
+    let callTableInteractionTimer = null;
     const notifiedIncomingCallIds = new Set();
     const ADMIN_CALL_LOCK_KEY = `alertaraqc_active_call_${ADMIN_ID || ADMIN_USERNAME || 'admin'}`;
     const ADMIN_CALL_OWNER_KEY = String(ADMIN_ID || ADMIN_USERNAME || 'admin');
@@ -4825,6 +4829,22 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const list = document.getElementById('conversationsList');
         if (list && !emergencyCallDelegationBound) {
             emergencyCallDelegationBound = true;
+            list.addEventListener('mouseenter', () => {
+                // Freeze DOM re-renders while the mouse is inside the table.
+                if (callTableInteractionTimer) clearTimeout(callTableInteractionTimer);
+                callTableInteractionFrozen = true;
+            }, true);
+            list.addEventListener('mouseleave', () => {
+                // Unfreeze after a brief delay to allow click events to complete.
+                if (callTableInteractionTimer) clearTimeout(callTableInteractionTimer);
+                callTableInteractionTimer = setTimeout(() => {
+                    callTableInteractionFrozen = false;
+                    callTableInteractionTimer = null;
+                    // Flush any pending render now that interaction is done.
+                    lastRenderedTableStateKey = '';
+                    renderCallTableForStatus();
+                }, 600);
+            }, true);
             list.addEventListener('click', (event) => {
                 const acceptBtn = event.target.closest('.emergency-call-accept-btn');
                 if (acceptBtn) {
@@ -4968,6 +4988,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         if (lastRenderedTableStateKey === currentStateKey && list.children.length > 0) {
             return;
         }
+        // Do not replace the DOM while the user is hovering over or clicking buttons.
+        // Destroying and re-creating nodes mid-hover resets the browser's hover state and
+        // swallows click events, causing the Answer/Decline buttons to appear to do nothing.
+        if (callTableInteractionFrozen) return;
         lastRenderedTableStateKey = currentStateKey;
         list.innerHTML = newHtml;
         bindEmergencyCallTableButtons(list);
@@ -5371,6 +5395,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }, 800);
     }
 
+    // Timer reference for ICE connection timeout (stuck in 'connecting' state).
+    let callConnectingTimer = null;
+
     function initPeer() {
         pc = new RTCPeerConnection({
             iceServers: [
@@ -5398,6 +5425,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 const resumed = restoringAdminCall;
                 if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
                 peerDisconnectTimer = null;
+                if (callConnectingTimer) clearTimeout(callConnectingTimer);
+                callConnectingTimer = null;
                 if (!callConnectedAt) callConnectedAt = Date.now();
                 restoringAdminCall = false;
                 if (adminCallResumeTimer) clearTimeout(adminCallResumeTimer);
@@ -5410,7 +5439,22 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 _stopAlertSound();
                 setIncomingCallModalVisible(false);
             }
+            if (pc.connectionState === 'connecting' || pc.connectionState === 'new') {
+                // Start a timeout so the call is not permanently stuck on 'Connecting to caller audio...'.
+                // If ICE never completes within 30 seconds, close the peer and let the caller retry.
+                if (callConnectingTimer) return; // timer already running
+                callConnectingTimer = setTimeout(() => {
+                    callConnectingTimer = null;
+                    if (!pc || pc.connectionState === 'connected') return;
+                    console.warn('[call][admin] ICE connection timed out in state:', pc.connectionState, '– closing peer so caller can retry.');
+                    setStatus('Audio connection timed out. Waiting for caller to retry...');
+                    try { pc.close(); } catch (e) {}
+                    pc = null;
+                    // Do not endCall – keep the overlay open and wait for a new offer from the caller.
+                }, 30000);
+            }
             if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+                if (callConnectingTimer) { clearTimeout(callConnectingTimer); callConnectingTimer = null; }
                 if (transferInProgress) return;
                 if (!callId || peerDisconnectTimer) return;
                 setStatus('Connection interrupted. Waiting for caller to reconnect...');
