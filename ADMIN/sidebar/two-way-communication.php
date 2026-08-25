@@ -117,6 +117,34 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
         }
 
+        /* Premium Status Pills */
+        .workflow-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            border-radius: 9999px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .workflow-pill.workflow-open {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+        .workflow-pill.workflow-completed, .workflow-pill.workflow-resolved {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+        }
+        .workflow-pill.workflow-closed {
+            background-color: rgba(107, 114, 128, 0.1);
+            color: #6b7280;
+        }
+        .workflow-pill.workflow-pending {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+        }
+
         .twc-modal-backdrop {
             position: fixed;
             inset: 0;
@@ -304,6 +332,20 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         <!-- Conversations List Container -->
                         <div class="conversations-list-container">
                             <div class="chat-tabs">
+                                <?php if ($pageMode === 'emergency_calls'): ?>
+                                <div class="chat-tab active" onclick="switchTab('open')">
+                                    <i class="fas fa-inbox"></i> Open <span id="openCount" class="badge"></span>
+                                </div>
+                                <div class="chat-tab" onclick="switchTab('assigned')">
+                                    <i class="fas fa-user-check"></i> Assigned
+                                </div>
+                                <div class="chat-tab" onclick="switchTab('unanswered')">
+                                    <i class="fas fa-phone-slash"></i> Unanswered
+                                </div>
+                                <div class="chat-tab" onclick="switchTab('completed')">
+                                    <i class="fas fa-circle-check"></i> Completed
+                                </div>
+                                <?php else: ?>
                                 <div class="chat-tab active" onclick="switchTab('open')">
                                     <i class="fas fa-inbox"></i> Open <span id="openCount" class="badge"></span>
                                 </div>
@@ -321,6 +363,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 <div class="chat-tab" onclick="switchTab('closed')">
                                     <i class="fas fa-circle-check"></i> Closed
                                 </div>
+                                <?php endif; ?>
                                 <?php endif; ?>
                             </div>
                             <?php if ($isReportTableMode): ?><div class="chat-filters">
@@ -703,6 +746,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=4c8a89&color=fff&size=128`;
         const PAGE_MODE = <?php echo json_encode($pageMode); ?>;
         const REPORT_TABLE_MODE = <?php echo json_encode($isReportTableMode); ?>;
+        const EMERGENCY_COM_CALL_INTAKE_ENABLED = PAGE_MODE === 'emergency_calls';
+        const incomingCallQueue = new Map();
+        let lastDbCallSessions = { open: [], assigned: [], completed: [], all: [] };
         
         // State Management
         let currentStatus = 'open';
@@ -1729,6 +1775,18 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         async function loadConversations(isInitial = false, append = false, silent = false) {
+            if (typeof EMERGENCY_COM_CALL_INTAKE_ENABLED !== 'undefined' && EMERGENCY_COM_CALL_INTAKE_ENABLED) {
+                const spinner = document.getElementById('loadingSpinner');
+                const pagination = document.getElementById('paginationContainer');
+                if (spinner) spinner.style.display = 'none';
+                if (pagination) pagination.style.display = 'none';
+                if (typeof renderCallTableForStatus === 'function') {
+                    renderCallTableForStatus();
+                } else if (typeof renderIncomingCallTableRows === 'function') {
+                    renderIncomingCallTableRows();
+                }
+                return;
+            }
             const requestSequence = ++conversationLoadSequence;
             if (conversationLoadController) {
                 conversationLoadController.abort();
@@ -3667,7 +3725,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     const SOCKET_HEALTH_URL = `${SIGNALING_URL}${SOCKET_IO_PATH}/?EIO=4&transport=polling`;
     console.log('[call][admin] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
     const CALL_LOBBY_ROOM = "emergency-lobby";
-    const EMERGENCY_COM_CALL_INTAKE_ENABLED = <?php echo ($pageMode === 'emergency_calls') ? 'true' : 'false'; ?>;
     let activeCallRoom = null;
     let pendingCallRoom = null;
 
@@ -3970,7 +4027,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let pendingCallId = null;
     let pendingCandidates = [];
     let acceptingCallId = null;
-    const incomingCallQueue = new Map();
     const notifiedIncomingCallIds = new Set();
     const ADMIN_CALL_LOCK_KEY = `alertaraqc_active_call_${ADMIN_ID || ADMIN_USERNAME || 'admin'}`;
     const ADMIN_CALL_OWNER_KEY = String(ADMIN_ID || ADMIN_USERNAME || 'admin');
@@ -4590,6 +4646,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const response = await fetch(`${ADMIN_API_BASE}call-session.php?action=list`, { credentials: 'same-origin' });
             const data = await response.json().catch(() => null);
             if (!response.ok || !data || data.success === false) return;
+            lastDbCallSessions = data;
             const s = ensureSocket();
             const openSessions = Array.isArray(data.open) ? data.open : [];
             const openSessionIds = new Set(openSessions.map(session => String(session.call_id || session.callId || '')).filter(Boolean));
@@ -4747,37 +4804,129 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         });
     }
 
-    function renderIncomingCallTableRows() {
-        if (!EMERGENCY_COM_CALL_INTAKE_ENABLED || currentStatus !== 'open') return;
-        pruneStaleIncomingCalls();
+    function loggedCallTableRowHtml(session, statusGroup) {
+        const callerName = session.caller_name || session.caller?.name || 'Emergency Call User';
+        const callerPhone = session.caller_phone || session.caller?.phone || '';
+        const locationText = session.location_text || session.location?.address || session.location?.formatted || session.location?.text || 'Location pending';
+        
+        let priorityCell = '';
+        if (REPORT_TABLE_MODE) {
+            let offerPayload = {};
+            try {
+                offerPayload = typeof session.offer_payload === 'string' 
+                    ? JSON.parse(session.offer_payload) 
+                    : (session.offer_payload || {});
+            } catch (e) {}
+            const priority = offerPayload.incidentPriority || { level: 'low', label: 'LOW', score: 0 };
+            priorityCell = `<td style="padding:0.85rem 0.75rem;vertical-align:middle;"><span class="incident-priority-badge incident-priority-${priority.level || 'low'}">${priority.label || 'LOW'} ${priority.score || 0}</span></td>`;
+        }
+
+        const adminName = session.assigned_admin_name || '<span class="assigned-admin-empty">None</span>';
+        
+        let displayStatus = 'Ended';
+        let statusClass = 'workflow-closed';
+        if (statusGroup === 'unanswered') {
+            displayStatus = 'Unanswered';
+            statusClass = 'workflow-pending';
+        } else if (statusGroup === 'assigned') {
+            displayStatus = 'Active';
+            statusClass = 'workflow-open';
+        } else if (statusGroup === 'completed') {
+            displayStatus = 'Completed';
+            statusClass = 'workflow-completed';
+        }
+        
+        let durationText = '';
+        if (session.answered_at && session.ended_at) {
+            const start = Date.parse(session.answered_at.replace(' ', 'T'));
+            const end = Date.parse(session.ended_at.replace(' ', 'T'));
+            if (!isNaN(start) && !isNaN(end)) {
+                const durationSec = Math.max(0, Math.floor((end - start) / 1000));
+                durationText = ` • ${formatTime(durationSec)}`;
+            }
+        }
+
+        const dateStr = session.updated_at ? new Date(session.updated_at.replace(' ', 'T')).toLocaleString() : '';
+
+        return `
+            <tr class="conversation-item emergency-call-table-row">
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;">
+                    <div style="display:flex;align-items:center;gap:0.35rem;">
+                        <strong>${escapeHtml(callerName)}</strong>
+                        <span class="list-chip list-chip-call" style="background:#64748b;color:white;padding:2px 6px;border-radius:4px;font-size:0.7rem;font-weight:800;margin-left:0.25rem;"><i class="fas fa-phone"></i> Call Log</span>
+                    </div>
+                    ${callerPhone ? `<div style="font-size:0.75rem;opacity:0.65;margin-top:0.15rem;"><i class="fas fa-phone" style="font-size:0.7rem;"></i> ${escapeHtml(callerPhone)}</div>` : ''}
+                </td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="fas fa-map-marker-alt" style="color:var(--primary-color-1);font-size:0.8rem;"></i> ${escapeHtml(locationText)}</td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayStatus}${durationText}<div style="font-size:0.7rem;opacity:0.5;margin-top:0.15rem;">${dateStr}</div></td>
+                ${priorityCell}
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;">${adminName}</td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;"><span class="workflow-pill ${statusClass}">${displayStatus}</span></td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;text-align:right;"></td>
+            </tr>
+        `;
+    }
+
+    function renderCallTableForStatus() {
+        if (!EMERGENCY_COM_CALL_INTAKE_ENABLED) return;
         const list = document.getElementById('conversationsList');
         if (!list) return;
-        list.querySelectorAll('.emergency-call-table-row').forEach(row => row.remove());
-        const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned');
+
+        list.innerHTML = '';
+
         const openBadge = document.getElementById('openCount');
-        if (!queuedCalls.length) {
+
+        if (currentStatus === 'open') {
+            pruneStaleIncomingCalls();
+            const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned');
             if (openBadge) {
-                const existingRows = list.querySelectorAll('tr.conversation-item:not(.emergency-call-table-row)').length;
-                openBadge.textContent = String(existingRows);
+                openBadge.textContent = String(queuedCalls.length);
                 openBadge.style.display = 'inline-block';
             }
-            return;
-        }
-        const onlyEmptyMessage = list.children.length === 1 && !list.children[0].matches('tr');
-        if (onlyEmptyMessage) list.innerHTML = '';
-        const html = queuedCalls.map((queued, index) => queuedCallTableRowHtml(queued, index, queuedCalls.length)).join('');
-        list.insertAdjacentHTML('afterbegin', html);
-        bindEmergencyCallTableButtons(list);
-        if (openBadge) {
-            const existingRows = list.querySelectorAll('tr.conversation-item:not(.emergency-call-table-row)').length;
-            const total = existingRows + queuedCalls.length;
-            openBadge.textContent = String(total);
-            openBadge.style.display = 'inline-block';
+            if (!queuedCalls.length) {
+                list.innerHTML = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No open emergency calls</td></tr>';
+                return;
+            }
+            const html = queuedCalls.map((queued, index) => queuedCallTableRowHtml(queued, index, queuedCalls.length)).join('');
+            list.insertAdjacentHTML('afterbegin', html);
+            bindEmergencyCallTableButtons(list);
+        } else if (currentStatus === 'assigned') {
+            const assignedSessions = Array.isArray(lastDbCallSessions?.assigned) ? lastDbCallSessions.assigned : [];
+            if (!assignedSessions.length) {
+                list.innerHTML = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No assigned emergency calls</td></tr>';
+                return;
+            }
+            const html = assignedSessions.map(session => loggedCallTableRowHtml(session, 'assigned')).join('');
+            list.innerHTML = html;
+        } else if (currentStatus === 'unanswered') {
+            const unansweredSessions = Array.isArray(lastDbCallSessions?.all) ? lastDbCallSessions.all.filter(session => {
+                return !session.answered_at && ['ended', 'declined', 'cancelled'].includes(String(session.status).toLowerCase());
+            }) : [];
+            if (!unansweredSessions.length) {
+                list.innerHTML = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No unanswered calls found</td></tr>';
+                return;
+            }
+            const html = unansweredSessions.map(session => loggedCallTableRowHtml(session, 'unanswered')).join('');
+            list.innerHTML = html;
+        } else if (currentStatus === 'completed') {
+            const completedSessions = Array.isArray(lastDbCallSessions?.all) ? lastDbCallSessions.all.filter(session => {
+                return session.answered_at && String(session.status).toLowerCase() === 'ended';
+            }) : [];
+            if (!completedSessions.length) {
+                list.innerHTML = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No completed emergency calls</td></tr>';
+                return;
+            }
+            const html = completedSessions.map(session => loggedCallTableRowHtml(session, 'completed')).join('');
+            list.innerHTML = html;
         }
     }
 
+    function renderIncomingCallTableRows() {
+        renderCallTableForStatus();
+    }
+
     function renderIncomingEmergencyCallRow() {
-        renderIncomingCallTableRows();
+        renderCallTableForStatus();
         return;
     }
 
@@ -5602,6 +5751,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (incomingCallId && !callId) {
                 removeQueuedCall(incomingCallId);
                 if (!incomingCallQueue.size) _stopAlertSound();
+                if (typeof syncCallSession === 'function') {
+                    syncCallSession('mark', { callId: incomingCallId, status: 'ended' });
+                }
                 return;
             }
 
