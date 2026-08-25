@@ -4672,14 +4672,6 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             lastDbCallSessions = data;
             const s = ensureSocket();
             const openSessions = Array.isArray(data.open) ? data.open : [];
-            const openSessionIds = new Set(openSessions.map(session => String(session.call_id || session.callId || '')).filter(Boolean));
-            if (force) {
-                incomingCallQueue.forEach((call, id) => {
-                    if (!openSessionIds.has(String(id)) && String(id) !== String(callId || '')) {
-                        incomingCallQueue.delete(id);
-                    }
-                });
-            }
             // Only populate incoming call queue when admin has no active call.
             // If a call is already active, do not re-queue open sessions — doing so
             // triggers duplicate WebRTC offers which cause the server to emit hangup
