@@ -2615,6 +2615,7 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                 notifyErsReportTransfer(result.data || payload, result);
                 setTransferModalMessage(result.integration?.configured ? 'Transfer notification sent.' : 'Transfer payload prepared.', 'success');
                 if (currentConversationData && String(currentConversationData.id) === String(conversationId)) {
+                    currentConversationData.status = 'waiting_user';
                     currentConversationData.assignedTo = null;
                 }
                 resetConversationsAndReload();

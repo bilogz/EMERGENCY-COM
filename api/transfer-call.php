@@ -930,7 +930,7 @@ $stmt->execute([
     $payload['requestedBy']['adminUsername'] ?? $payload['requestedBy']['department'] ?? null,
 ]);
 
-if ($conversationId && $status === 'sent') {
+if ($conversationId) {
     if ($requestedTransferType === 'live_call') {
         $pdo->prepare("UPDATE conversations SET last_message = '[AUTO_TRANSFERRED_TO_ERS] Live call routed to ERS', updated_at = NOW() WHERE conversation_id = ?")
             ->execute([$conversationId]);
