@@ -3968,7 +3968,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let queueIncomingOfferFromSocket = null;
     let restoringCallSessionsFromDb = false;
     let lastCallSessionRestoreAt = 0;
-    const CALL_OPEN_MAX_AGE_MS = 10 * 60 * 1000;
+    const CALL_OPEN_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 
     function readAdminCallLock() {
         try {
@@ -5255,26 +5255,21 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             return;
         }
         const claimResult = await new Promise(resolve => {
-            const timer = setTimeout(() => resolve({ ok: false, reason: 'Call claim timed out.' }), 6000);
+            const timer = setTimeout(() => resolve({ ok: true, degraded: true, reason: 'Socket claim timed out; database claim already succeeded.' }), 2500);
             signalingSocket.emit('claim-call', {
                 callId: pendingCallId,
                 room: pendingCallRoom || getCallRoom(pendingCallId),
                 adminKey: ADMIN_CALL_OWNER_KEY
             }, result => {
                 clearTimeout(timer);
-                resolve(result || { ok: false });
+                resolve(result || { ok: true, degraded: true });
             });
         });
-        if (!claimResult?.ok) {
-            setIncomingCallModalText(claimResult?.reason || 'Call claim timed out. The call is still in Open. Try Answer again.');
-            await syncCallSession('mark', { callId: pendingCallId, status: 'open' });
-            acceptingCallId = null;
-            renderIncomingEmergencyCallRow();
-            renderIncomingCallTableRows();
-            if (wasRestoring) cleanupCall();
-            return;
+        if (claimResult && claimResult.ok === false) {
+            // The database claim is the source of truth. If the socket room lost state after a PM2 restart,
+            // continue opening the admin call modal and let the caller replay the offer into the room.
+            console.warn('[call][admin] socket claim did not acknowledge cleanly', claimResult);
         }
-
         callId = pendingCallId;
         activeCallRoom = pendingCallRoom || getCallRoom(callId);
         setAdminCallLock(callId, {
