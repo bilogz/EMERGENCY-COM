@@ -873,7 +873,9 @@ $assetBase = '../ADMIN/header/';
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
         const SOCKET_IO_PATH = '/socket.io';
-        const SIGNALING_URL = window.location.origin;
+        const SIGNALING_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))
+            ? `${window.location.protocol}//${window.location.hostname}:3000`
+            : window.location.origin;
         const ROOT_API_BASE = '../api/';
         const transferApiUrl = () => `${ROOT_API_BASE}transfer-call.php`;
         const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';

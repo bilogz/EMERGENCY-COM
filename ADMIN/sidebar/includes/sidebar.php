@@ -160,8 +160,8 @@ if (!function_exists('sidebarRouteContains')) {
                                     <i class="fas fa-phone-volume sidebar-icon" aria-hidden="true"></i>
                                     <span class="sidebar-link-label">Emergency Call</span>
                                     <span class="sidebar-realtime-badge" id="sidebarEmergencyCallBadge"
-                                        data-label-singular="new call" data-label-plural="new calls"
-                                        data-active-module="<?php echo $isEmergencyCallPage ? '1' : '0'; ?>" hidden></span>
+                                         data-label-singular="open call" data-label-plural="open calls"
+                                         data-active-module="<?php echo $isEmergencyCallPage ? '1' : '0'; ?>" hidden></span>
                                 </a>
                             </li>
                         </ul>
@@ -494,7 +494,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function setBadge(count) {
         const total = Number(count || 0);
-        if (isCallPage || total <= 0) {
+        if (total <= 0) {
             badge.hidden = true;
             badge.textContent = '';
             return;
@@ -533,7 +533,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function connectCallLobby() {
         if (!window.io) return;
-        const socket = window.io(window.location.origin, { path: '/socket.io', transports: ['websocket', 'polling'], timeout: 5000, reconnection: true });
+        const signalingUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))
+            ? `${window.location.protocol}//${window.location.hostname}:3000`
+            : window.location.origin;
+        const socket = window.io(signalingUrl, { path: '/socket.io', transports: ['websocket', 'polling'], timeout: 5000, reconnection: true });
         socket.on('connect', () => socket.emit('join', 'emergency-lobby'));
         socket.on('call-queue', payload => setBadge(Array.isArray(payload && payload.open) ? payload.open.length : 0));
         socket.on('call-created', payload => {

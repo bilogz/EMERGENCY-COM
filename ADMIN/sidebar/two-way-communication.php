@@ -3723,7 +3723,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
     const SOCKET_IO_PATH = '/socket.io';
-    const SIGNALING_URL = window.location.origin;
+    const SIGNALING_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))
+        ? `${window.location.protocol}//${window.location.hostname}:3000`
+        : window.location.origin;
     const SOCKET_HEALTH_URL = `${SIGNALING_URL}${SOCKET_IO_PATH}/?EIO=4&transport=polling`;
     console.log('[call][admin] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
     const CALL_LOBBY_ROOM = "emergency-lobby";
@@ -5769,8 +5771,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         });
 
         s.on('hangup', payload => {
-            const incomingCallId = payload && payload.callId ? String(payload.callId) : null;
-            if (incomingCallId && callId && incomingCallId !== callId) return;
+            const incomingCallId = payload && (payload.callId || payload.call_id) ? String(payload.callId || payload.call_id) : null;
+            if (callId && incomingCallId !== callId) return;
 
             if (incomingCallId && !callId) {
                 removeQueuedCall(incomingCallId);
