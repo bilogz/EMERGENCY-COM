@@ -83,7 +83,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         .twc-table tr.conversation-item {
             cursor: pointer;
-            transition: all 0.2s ease;
+        }
+        .twc-table tr.conversation-item td {
+            transition: background-color 0.2s ease;
         }
         .twc-table tr.conversation-item:hover td {
             background: rgba(76, 138, 137, 0.05);
@@ -4795,16 +4797,30 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     function bindEmergencyCallTableButtons(container) {
         if (!container) return;
         container.querySelectorAll('.emergency-call-accept-btn').forEach(btn => {
-            btn.onclick = (event) => {
+            btn.addEventListener('click', (event) => {
+                event.preventDefault();
                 event.stopPropagation();
-                if (typeof window.acceptIncomingEmergencyCall === 'function') window.acceptIncomingEmergencyCall(btn.dataset.callId);
-            };
+                console.log('[call-btn] Accept clicked for call:', btn.dataset.callId);
+                if (typeof window.acceptIncomingEmergencyCall === 'function') {
+                    window.acceptIncomingEmergencyCall(btn.dataset.callId);
+                } else {
+                    console.error('window.acceptIncomingEmergencyCall is not defined');
+                    alert('Error: acceptIncomingEmergencyCall is not defined.');
+                }
+            });
         });
         container.querySelectorAll('.emergency-call-decline-btn').forEach(btn => {
-            btn.onclick = (event) => {
+            btn.addEventListener('click', (event) => {
+                event.preventDefault();
                 event.stopPropagation();
-                if (typeof window.declineIncomingEmergencyCall === 'function') window.declineIncomingEmergencyCall(btn.dataset.callId);
-            };
+                console.log('[call-btn] Decline clicked for call:', btn.dataset.callId);
+                if (typeof window.declineIncomingEmergencyCall === 'function') {
+                    window.declineIncomingEmergencyCall(btn.dataset.callId);
+                } else {
+                    console.error('window.declineIncomingEmergencyCall is not defined');
+                    alert('Error: declineIncomingEmergencyCall is not defined.');
+                }
+            });
         });
     }
 
@@ -5478,7 +5494,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const wasRestoring = restoringAdminCall && callId === pendingCallId;
         const dbClaim = await syncCallSession('claim', callSessionPayload({ callId: pendingCallId, room: pendingCallRoom }));
         if (!dbClaim?.success) {
-            setIncomingCallModalText(dbClaim?.error || 'This call is no longer available.');
+            const claimError = dbClaim?.error || 'This call is no longer available.';
+            console.error('[call] syncCallSession claim failed:', claimError);
+            if (typeof showToast === 'function') showToast('Call Answer Failed', claimError);
+            alert('Could not answer call: ' + claimError);
+            setIncomingCallModalText(claimError);
             clearAdminCallLock();
             callId = null;
             activeCallRoom = null;
