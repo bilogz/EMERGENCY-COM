@@ -64,6 +64,7 @@ try {
                     location VARCHAR(255) NOT NULL,
                     date_of_crime DATETIME NULL,
                     details TEXT NOT NULL,
+                    image_path VARCHAR(255) NULL,
                     status VARCHAR(50) DEFAULT 'pending',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -72,13 +73,56 @@ try {
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ";
             $pdo->exec($createTable);
+        } else {
+            // Check if image_path column exists, add if not
+            $columnCheck = $pdo->query("SHOW COLUMNS FROM crime_tips LIKE 'image_path'");
+            if ($columnCheck->rowCount() == 0) {
+                $pdo->exec("ALTER TABLE crime_tips ADD COLUMN image_path VARCHAR(255) NULL AFTER details");
+            }
+        }
+
+        // Handle image upload if present
+        $image_path = null;
+        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $image = $_FILES['image'];
+            
+            // Validate image type
+            $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+            if (!in_array($image['type'], $allowedTypes)) {
+                apiResponse::error("Invalid image type. Only JPEG, PNG, and GIF are allowed.", 400);
+            }
+            
+            // Validate image size (max 5MB)
+            $maxSize = 5 * 1024 * 1024;
+            if ($image['size'] > $maxSize) {
+                apiResponse::error("Image size exceeds 5MB limit.", 400);
+            }
+            
+            // Create upload directory if it doesn't exist
+            $uploadDir = __DIR__ . '/../uploads/tip_images/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            
+            // Generate unique filename
+            $extension = pathinfo($image['name'], PATHINFO_EXTENSION);
+            $filename = uniqid('tip_', true) . '.' . $extension;
+            $filepath = $uploadDir . $filename;
+            
+            // Move uploaded file
+            if (!move_uploaded_file($image['tmp_name'], $filepath)) {
+                apiResponse::error("Failed to upload image.", 500);
+            }
+            
+            // Store relative path for database
+            $image_path = 'uploads/tip_images/' . $filename;
         }
 
         // Insert the tip
         $query = "
             INSERT INTO crime_tips
-            (crime_type, location, date_of_crime, details, status)
-            VALUES (?, ?, ?, ?, 'pending')
+            (crime_type, location, date_of_crime, details, image_path, status)
+            VALUES (?, ?, ?, ?, ?, 'pending')
         ";
 
         $stmt = $pdo->prepare($query);
@@ -86,7 +130,8 @@ try {
             $crime_type,
             $location,
             $date_of_crime,
-            $details
+            $details,
+            $image_path
         ]);
 
         $tipId = $pdo->lastInsertId();
@@ -98,6 +143,7 @@ try {
             'location' => $location,
             'date_of_crime' => $date_of_crime,
             'details' => $details,
+            'image_path' => $image_path,
             'status' => 'pending'
         ], "Crime tip submitted successfully");
 
