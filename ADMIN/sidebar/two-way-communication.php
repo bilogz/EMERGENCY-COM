@@ -4034,6 +4034,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let pendingCallId = null;
     let pendingCandidates = [];
     let acceptingCallId = null;
+    // Mutex: prevents concurrent WebRTC answer negotiations from fighting each other.
+    // When true, any new call to completeAdminCallAnswerFromOffer() returns immediately.
+    let callAnswerInFlight = false;
     const notifiedIncomingCallIds = new Set();
     const ADMIN_CALL_LOCK_KEY = `alertaraqc_active_call_${ADMIN_ID || ADMIN_USERNAME || 'admin'}`;
     const ADMIN_CALL_OWNER_KEY = String(ADMIN_ID || ADMIN_USERNAME || 'admin');
@@ -5419,17 +5422,51 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         };
     }
 
+    /**
+     * Normalize an SDP value from a socket payload into the plain object
+     * { type: string, sdp: string } that RTCPeerConnection.setRemoteDescription() accepts.
+     * Accepts an RTCSessionDescription, a plain {type,sdp} object, or returns null
+     * if the value is not a valid SDP descriptor.
+     */
+    function normalizeSdpDescriptor(value) {
+        if (!value) return null;
+        // If it's already a proper RTCSessionDescription or plain {type,sdp}
+        if (typeof value === 'object' && typeof value.type === 'string' && typeof value.sdp === 'string') {
+            return { type: value.type, sdp: value.sdp };
+        }
+        // If it's the raw socket payload that nested the SDP
+        if (typeof value === 'object' && value.sdp && typeof value.sdp === 'object') {
+            return normalizeSdpDescriptor(value.sdp);
+        }
+        return null;
+    }
+
     async function completeAdminCallAnswerFromOffer() {
         if (!callId || !activeCallRoom || !pendingOffer) return false;
-        // Guard: if the peer connection is already fully established (signalingState===stable
-        // AND connectionState===connected) there is nothing to do. A second call here causes
-        // "InvalidStateError: Failed to set local answer sdp: Called in wrong state: stable".
+        // Mutex: if an answer negotiation is already in flight, skip this invocation.
+        // Concurrent calls cause InvalidStateError because the peer connection gets
+        // closed and re-created mid-negotiation by the second caller.
+        if (callAnswerInFlight) {
+            console.warn('[call][admin] completeAdminCallAnswerFromOffer already in flight – skipping duplicate invocation.');
+            return false;
+        }
+        // Guard: if the peer connection is already fully established there is nothing to do.
         if (pc && pc.signalingState === 'stable' && pc.connectionState === 'connected') {
-            console.warn('[call][admin] completeAdminCallAnswerFromOffer called but connection already established – ignoring duplicate invocation.');
+            console.warn('[call][admin] completeAdminCallAnswerFromOffer called but connection already established – ignoring.');
             pendingOffer = null;
             pendingCandidates = [];
             return true;
         }
+        // Normalize the SDP before touching the peer connection so we fail fast
+        // with a clear message rather than an obscure 'Failed to parse SessionDescription'.
+        const sdpDescriptor = normalizeSdpDescriptor(pendingOffer);
+        if (!sdpDescriptor) {
+            console.error('[call][admin] completeAdminCallAnswerFromOffer: pendingOffer is not a valid SDP descriptor:', pendingOffer);
+            pendingOffer = null;
+            pendingCandidates = [];
+            return false;
+        }
+        callAnswerInFlight = true;
         try {
             if (!pc || pc.signalingState === 'closed') initPeer();
             if (pc.signalingState !== 'stable') {
@@ -5456,7 +5493,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 });
             }
 
-            await pc.setRemoteDescription(pendingOffer);
+            await pc.setRemoteDescription(sdpDescriptor);
 
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
@@ -5488,6 +5525,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             endCall(true);
             return false;
         } finally {
+            callAnswerInFlight = false;
             renderIncomingEmergencyCallRow();
             renderIncomingCallTableRows();
         }
@@ -5596,7 +5634,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         if (pendingOffer) {
+            // Keep acceptingCallId set until negotiation completes so concurrent answer
+            // attempts are blocked. acceptingCallId is cleared inside completeAdminCallAnswerFromOffer.
+            acceptingCallId = String(callId);
             await completeAdminCallAnswerFromOffer();
+            acceptingCallId = null;
         } else {
             setStatus('Waiting for caller connection...');
             setEndEnabled(true);
@@ -5763,7 +5805,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (callId === incomingCallId) {
                 pendingOffer = queued.sdp || null;
                 pendingCandidates = queued.pendingCandidates || [];
-                await completeAdminCallAnswerFromOffer();
+                // If an answer is already in flight, do not start a second concurrent negotiation.
+                // The in-flight negotiation will use pendingOffer as set above.
+                if (!callAnswerInFlight) {
+                    await completeAdminCallAnswerFromOffer();
+                } else {
+                    console.warn('[call][admin] New offer arrived while answer already in flight – pendingOffer updated, will be picked up by ongoing negotiation.');
+                }
             } else if (shouldAutoResume) {
                 setIncomingCallModalText('Restoring your active emergency call...');
                 setTimeout(() => acceptIncomingEmergencyCall(incomingCallId), 0);
