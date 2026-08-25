@@ -155,6 +155,13 @@ try {
     callSessionAdminRequired();
 
     if ($action === 'list') {
+        // Auto-expire open calls older than 10 minutes (600 seconds)
+        try {
+            $pdo->query("UPDATE emergency_call_sessions SET status = 'ended', ended_at = NOW() WHERE status = 'open' AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
+        } catch (PDOException $e) {
+            error_log('Call session auto-expiry error: ' . $e->getMessage());
+        }
+
         // Keep open calls persistent across Socket.IO/PM2 restarts. Calls close only by explicit end, decline, transfer, or completion.
         $stmt = $pdo->query("SELECT * FROM emergency_call_sessions WHERE status IN ('open','assigned','pending','completed','ended','declined') ORDER BY updated_at DESC LIMIT 200");
         $rows = array_map('normalizeCallSessionRow', $stmt->fetchAll(PDO::FETCH_ASSOC));

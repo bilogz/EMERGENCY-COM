@@ -4661,8 +4661,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 const source = callSessionToQueuedOffer(session);
                 if (!source || incomingCallQueue.has(source.callId)) return;
                 if (callId === source.callId || pendingCallId === source.callId) return;
-                if (typeof queueIncomingOfferFromSocket === 'function') {
-                    queueIncomingOfferFromSocket(source, source.sdp || null, false);
+                if (!s || !s.connected) {
+                    if (typeof queueIncomingOfferFromSocket === 'function') {
+                        queueIncomingOfferFromSocket(source, source.sdp || null, false);
+                    }
                 }
                 if (!source.sdp && s?.connected) {
                     s.emit('request-offer', { callId: source.callId, room: source.room, reason: 'admin-db-restore-open' }, source.room);
@@ -4699,6 +4701,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         requestAdminCallResume(s);
                     }
                 }
+            } else if (!ownedSession && !callId) {
+                localStorage.removeItem(ADMIN_CALL_LOCK_KEY);
             }
         } finally {
             restoringCallSessionsFromDb = false;
