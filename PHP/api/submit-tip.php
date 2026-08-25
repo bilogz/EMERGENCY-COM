@@ -11,12 +11,21 @@ $method = $_SERVER['REQUEST_METHOD'];
 
 try {
     if ($method === 'POST') {
-        // Submit crime tip
-        $json = file_get_contents('php://input');
-        $data = json_decode($json, true);
-
-        if (!is_array($data)) {
-            apiResponse::error("Invalid JSON input.", 400);
+        // Submit crime tip - handle both JSON and FormData
+        $data = [];
+        
+        // Check if this is a FormData upload (has files)
+        if (!empty($_FILES)) {
+            // FormData submission
+            $data = $_POST;
+        } else {
+            // JSON submission
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+            
+            if (!is_array($data)) {
+                apiResponse::error("Invalid JSON input.", 400);
+            }
         }
 
         $crime_type = trim((string)($data['crime_type'] ?? ''));
