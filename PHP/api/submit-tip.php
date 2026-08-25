@@ -141,7 +141,7 @@ try {
         }
 
         // Build query
-        $sql = "SELECT id, crime_type, location, date_of_crime, details, status, created_at, updated_at FROM crime_tips WHERE 1=1";
+        $sql = "SELECT id, crime_type, location, date_of_crime, details, image_path, status, created_at, updated_at FROM crime_tips WHERE 1=1";
         $params = [];
 
         if ($status) {
