@@ -60,14 +60,6 @@ $pageTitle = 'Automated Warnings Analytics';
                     <i class="fas fa-circle-info"></i>
                     <div id="analyticsHealthText">Analytics data source status.</div>
                 </div>
-                <div style="display:flex; gap:0.75rem; margin-top:0.75rem; flex-wrap:wrap;">
-                    <button type="button" class="btn" onclick="sendMockCriticalAlert('weather')" style="background:#f59e0b; border:1px solid #f59e0b; color:#fff; padding:0.7rem 1rem;">
-                        <i class="fas fa-cloud-showers-heavy"></i> Mock Critical Weather
-                    </button>
-                    <button type="button" class="btn" onclick="sendMockCriticalAlert('earthquake')" style="background:#dc2626; border:1px solid #dc2626; color:#fff; padding:0.7rem 1rem;">
-                        <i class="fas fa-house-crack"></i> Mock Critical Earthquake
-                    </button>
-                </div>
             </div>
 
             <div class="sub-container">
@@ -493,45 +485,6 @@ $pageTitle = 'Automated Warnings Analytics';
                 if (tbody) tbody.innerHTML = '<tr><td colspan="5">Failed to load dispatch history.</td></tr>';
                 setText('dispatchLastUpdated', 'Last updated: failed');
             }
-        }
-
-        function sendMockCriticalAlert(type) {
-            const pretty = type === 'earthquake' ? 'Earthquake' : 'Weather';
-            if (!confirm(`Send MOCK CRITICAL ${pretty.toUpperCase()} alert and queue broadcast to all active citizens?`)) {
-                return;
-            }
-            fetch('../api/automated-warnings.php?action=mock_alert', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ action: 'mock_alert', type: type })
-            })
-            .then(async response => {
-                const raw = await response.text();
-                let data = null;
-                try {
-                    data = raw ? JSON.parse(raw) : {};
-                } catch (parseErr) {
-                    throw new Error(`HTTP ${response.status}: ${raw.slice(0, 180) || 'Invalid JSON response'}`);
-                }
-                if (!response.ok || !data.success) {
-                    throw new Error(data.message || `HTTP ${response.status}`);
-                }
-                return data;
-            })
-            .then(data => {
-                let noticeMessage = data.message || 'Mock alert sent.';
-                if (data.degraded && data.degraded_reason) {
-                    noticeMessage += `\nReason: ${data.degraded_reason}`;
-                }
-                alert(noticeMessage);
-                loadAnalytics();
-                loadDispatchHistory();
-            })
-            .catch(error => {
-                console.error('Mock alert error:', error);
-                alert('Mock alert failed: ' + error.message);
-            });
         }
 
         document.addEventListener('DOMContentLoaded', function() {
