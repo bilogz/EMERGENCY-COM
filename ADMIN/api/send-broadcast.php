@@ -77,6 +77,15 @@ function resolveRecipientLanguage(PDO $pdo, int $userId): string {
 
     $queries = [
         [
+            "SELECT language_preference AS preferred_language
+             FROM users
+             WHERE id = ?
+               AND language_preference IS NOT NULL
+               AND language_preference <> ''
+             LIMIT 1",
+            [$userId]
+        ],
+        [
             "SELECT notification_language AS preferred_language
              FROM user_preferences
              WHERE user_id = ?
