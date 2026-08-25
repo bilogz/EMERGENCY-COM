@@ -2016,6 +2016,9 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
             if (PAGE_MODE === 'general_enquiries') {
                 return diff === 1 ? '1 new general enquiry' : `${diff} new general enquiries`;
             }
+            if (PAGE_MODE === 'emergency_calls') {
+                return diff === 1 ? '1 new emergency call' : `${diff} new emergency calls`;
+            }
             return diff === 1 ? '1 new message/report' : `${diff} new message/reports`;
         }
 
@@ -2223,15 +2226,17 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
             const workflowRaw = (conv.workflowStatus || '').toLowerCase();
             const workflowLabelMap = {
                 open: 'Open', active: 'Open', in_progress: 'Assigned', waiting_user: 'Pending',
-                pending: 'Pending', resolved: 'Completed', completed: 'Completed', closed: 'Closed'
+                pending: 'Pending', received: 'Received by ERS', dispatching: 'Dispatching',
+                ongoing_dispatch: 'Ongoing Dispatch', resolved: 'Completed', completed: 'Completed', closed: 'Closed'
             };
             const workflowClassMap = {
                 open: 'workflow-open', active: 'workflow-open', in_progress: 'workflow-progress',
-                waiting_user: 'workflow-waiting', pending: 'workflow-waiting',
+                waiting_user: 'workflow-waiting', pending: 'workflow-waiting', received: 'workflow-waiting',
+                dispatching: 'workflow-progress', ongoing_dispatch: 'workflow-progress',
                 resolved: 'workflow-resolved', completed: 'workflow-resolved', closed: 'workflow-closed'
             };
-            const workflowLabel = workflowLabelMap[workflowRaw] || 'In Queue';
-            const workflowClass = workflowClassMap[workflowRaw] || 'workflow-open';
+            const workflowLabel = workflowLabelMap[workflowRaw] || (workflowRaw ? escapeHtml(workflowRaw.replace(/_/g, ' ').toUpperCase()) : 'In Queue');
+            const workflowClass = workflowClassMap[workflowRaw] || 'workflow-waiting';
             const statusBadge = `<span class="workflow-pill ${workflowClass}">${workflowLabel}</span>`;
             const assignedAdmin = conv.assignedAdminName
                 ? `<span class="assigned-admin-pill"><i class="fas fa-user-shield"></i> ${escapeHtml(conv.assignedAdminName)}</span>`
@@ -2250,7 +2255,7 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                 ? `<td style="padding:0.85rem 0.75rem;vertical-align:middle;">${incidentPriorityBadgeHtml(conv)}</td>`
                 : '';
             const canTransferReport = REPORT_TABLE_MODE
-                && !['waiting_user', 'pending', 'resolved', 'completed', 'closed'].includes(workflowRaw);
+                && !['waiting_user', 'pending', 'received', 'dispatching', 'ongoing_dispatch', 'resolved', 'completed', 'closed'].includes(workflowRaw);
             const transferAction = canTransferReport
                 ? `<button class="btn btn-secondary transfer-report-btn" data-conversation-id="${conv.id}" style="padding:0.35rem 0.65rem;font-size:0.75rem;border-radius:4px;cursor:pointer;margin-right:0.35rem;">
                        <i class="fas fa-share-from-square"></i> Transfer
@@ -3779,19 +3784,8 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                     </div>
 
                     <div style="border-top:1px solid rgba(255,255,255,0.10); padding-top:12px; display:flex; flex-direction:column; gap:10px;">
-                        <label style="font-size:12px; opacity:0.8; margin:0;">Emergency Type</label>
-                        <select id="emergencyTypeSelect" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.08); color:#fff; outline:none;">
-                            <option value="" selected>Choose type...</option>
-                            <option value="fire">Fire</option>
-                            <option value="flood">Flood</option>
-                            <option value="rescue">Rescue Assistance</option>
-                            <option value="police">Police</option>
-                            <option value="medical">Medical</option>
-                            <option value="earthquake">Earthquake</option>
-                            <option value="other">Other</option>
-                        </select>
-                        <label style="font-size:12px; opacity:0.8; margin:0;">Incident Description</label>
-                        <textarea id="callIncidentDescription" rows="4" placeholder="Write the emergency context, visible hazards, injuries, people affected, or caller notes..." style="width:100%; resize:vertical; min-height:86px; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.08); color:#fff; outline:none; font-weight:600; line-height:1.35;"></textarea>
+                        <input type="hidden" id="emergencyTypeSelect" value="">
+                        <input type="hidden" id="callIncidentDescription" value="">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
                             <span style="font-size:12px; opacity:0.8;">Auto Priority</span>
                             <span id="callPriorityBadge" class="incident-priority-badge incident-priority-low">LOW 0</span>
@@ -4468,25 +4462,29 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
         }
     }
 
+    let currentPromptLang = 'en';
+
     function startLocationPromptAudio() {
         stopLocationPromptAudio();
         if (!callConnectedAt || transferInProgress) return;
-        const lang = getCallerLanguage();
-        const audioFileName = lang === 'fil' ? 'call-location-fil.mp3' : 'call-location-en.mp3';
-        const publicAudioUrl = (window.APP_BASE_PATH || '').replace(/\/$/, '') + '/assets/audio/call/' + audioFileName;
 
+        currentPromptLang = getCallerLanguage();
         locationPromptActive = true;
 
         const s = ensureSocket();
         if (s && callId) {
-            s.emit('start-location-prompt', { language: lang, audioUrl: publicAudioUrl, callId, room: activeCallRoom || getCallRoom() }, activeCallRoom || getCallRoom());
+            s.emit('start-location-prompt', { callId, room: activeCallRoom || getCallRoom() }, activeCallRoom || getCallRoom());
         }
 
         function playLoop() {
             if (!locationPromptActive || transferInProgress) return;
+            const audioFileName = currentPromptLang === 'fil' ? 'call-location-fil.mp3' : 'call-location-en.mp3';
+            const publicAudioUrl = (window.APP_BASE_PATH || '').replace(/\/$/, '') + '/assets/audio/call/' + audioFileName;
+
             locationPromptAudio = new Audio(publicAudioUrl);
             locationPromptAudio.onended = () => {
                 if (!locationPromptActive || transferInProgress) return;
+                currentPromptLang = currentPromptLang === 'fil' ? 'en' : 'fil';
                 locationPromptTimer = setTimeout(() => {
                     if (locationPromptActive && !transferInProgress) {
                         playLoop();
@@ -4495,6 +4493,7 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
             };
             locationPromptAudio.onerror = (e) => {
                 console.warn('Location prompt audio playback notice:', e);
+                currentPromptLang = currentPromptLang === 'fil' ? 'en' : 'fil';
             };
             locationPromptAudio.play().catch(e => console.warn('Location prompt play notice:', e));
         }
@@ -6079,13 +6078,19 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
             const status = payload?.call?.status || '';
             const updatedCallId = payload?.call?.callId || null;
             if (!updatedCallId) return;
-            if (status === 'accepted' && String(payload?.call?.adminKey || '') === ADMIN_CALL_OWNER_KEY) return;
+            if (status === 'accepted' && String(payload?.call?.adminKey || '') === ADMIN_CALL_OWNER_KEY) {
+                hideNewMessageNotice();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+                return;
+            }
             if (String(updatedCallId) === String(acceptingCallId || '')) return;
             const claimedByOtherAdmin = status === 'accepted' && String(payload?.call?.adminKey || '') !== ADMIN_CALL_OWNER_KEY;
             const terminalCallStatus = ['ended', 'completed', 'declined'].includes(status);
             if (claimedByOtherAdmin || terminalCallStatus) {
                 removeQueuedCall(updatedCallId);
                 if (!incomingCallQueue.size) _stopAlertSound();
+                hideNewMessageNotice();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
             } else {
                 renderIncomingCallTableRows();
             }
@@ -6129,7 +6134,11 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
         s.on('call-claimed', payload => {
             const claimedCallId = payload?.callId ? String(payload.callId) : null;
             if (!claimedCallId) return;
-            if (String(payload?.adminKey || '') === ADMIN_CALL_OWNER_KEY) return;
+            if (String(payload?.adminKey || '') === ADMIN_CALL_OWNER_KEY) {
+                hideNewMessageNotice();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+                return;
+            }
             removeQueuedCall(claimedCallId);
             if (pendingCallId === claimedCallId && !callId) {
                 pendingOffer = null;
@@ -6141,6 +6150,8 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                 setIncomingCallModalVisible(false);
                 _stopAlertSound();
             }
+            hideNewMessageNotice();
+            if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
         });
 
         s.on('answer', payload => {
@@ -6191,10 +6202,36 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                 if (typeof syncCallSession === 'function') {
                     syncCallSession('mark', { callId: incomingCallId, status: 'ended' });
                 }
+                hideNewMessageNotice();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
                 return;
             }
 
-            if (callId) endCall(false);
+            if (callId) {
+                hideNewMessageNotice();
+                endCall(false);
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+            }
+        });
+
+        s.on('call-ended', payload => {
+            const incomingCallId = payload && (payload.callId || payload.call_id) ? String(payload.callId || payload.call_id) : null;
+            if (incomingCallId) {
+                removeQueuedCall(incomingCallId);
+                if (!incomingCallQueue.size) _stopAlertSound();
+                hideNewMessageNotice();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+            }
+        });
+
+        s.on('call_ended', payload => {
+            const incomingCallId = payload && (payload.callId || payload.call_id) ? String(payload.callId || payload.call_id) : null;
+            if (incomingCallId) {
+                removeQueuedCall(incomingCallId);
+                if (!incomingCallQueue.size) _stopAlertSound();
+                hideNewMessageNotice();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+            }
         });
 
         s.on('call-message', payload => {

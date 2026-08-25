@@ -182,6 +182,8 @@ try {
                       AND cm.message_text LIKE '[CALL_%'
                 ) THEN 1 ELSE 0
             END AS has_call,
+            tca.response_status AS transfer_response_status,
+            tca.audit_status AS transfer_audit_status,
             $categorySqlExpr AS category_value,
             $prioritySqlExpr AS priority_value" .
             ($hasIncidentPriority ? ",
@@ -213,6 +215,16 @@ try {
             WHERE is_read = 0 AND sender_type <> 'admin'
             GROUP BY conversation_id
         ) uc ON c.conversation_id = uc.conversation_id
+        LEFT JOIN (
+            SELECT tca1.conversation_id, tca1.response_status, tca1.status AS audit_status
+            FROM transfer_call_audit tca1
+            INNER JOIN (
+                SELECT conversation_id, MAX(id) AS max_id
+                FROM transfer_call_audit
+                WHERE conversation_id IS NOT NULL
+                GROUP BY conversation_id
+            ) tca2 ON tca1.id = tca2.max_id
+        ) tca ON c.conversation_id = tca.conversation_id
         " . ($hasAdminUserTable ? "LEFT JOIN admin_user au ON au.id = c.assigned_to" : "") . "
         $whereSql
         ORDER BY
@@ -236,7 +248,20 @@ try {
             $deviceInfoParsed = is_array($decoded) ? $decoded : $conv['device_info'];
         }
 
-        $workflowStatus = strtolower((string)$conv['workflow_status']);
+        $rawStatus = strtolower((string)$conv['workflow_status']);
+        $transferResponseStatus = strtolower(trim((string)($conv['transfer_response_status'] ?? '')));
+        $transferAuditStatus = strtolower(trim((string)($conv['transfer_audit_status'] ?? '')));
+
+        if (!empty($transferResponseStatus) && !twc_is_closed_status($rawStatus)) {
+            $workflowStatus = $transferResponseStatus;
+        } else if (!empty($transferAuditStatus) && !twc_is_closed_status($rawStatus)) {
+            $workflowStatus = 'pending';
+        } else if ($rawStatus === 'waiting_user') {
+            $workflowStatus = 'pending';
+        } else {
+            $workflowStatus = $rawStatus;
+        }
+
         $uiStatus = twc_ui_conversation_status($workflowStatus);
         $category = twc_normalize_category($conv['category_value'] ?? $conv['user_concern'] ?? '');
         $priority = twc_normalize_priority($conv['priority_value'] ?? '', (string)($conv['last_message'] ?? ''), $category);
@@ -339,4 +364,3 @@ try {
         'error' => $e->getMessage(),
     ]);
 }
-

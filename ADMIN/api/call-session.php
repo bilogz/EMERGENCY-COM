@@ -201,6 +201,19 @@ try {
         }
         $claim = $pdo->prepare("UPDATE emergency_call_sessions SET status='assigned', assigned_admin_id=?, assigned_admin_name=?, answered_at=COALESCE(answered_at, NOW()), updated_at=NOW() WHERE call_id=?");
         $claim->execute([$adminId, $adminName, $fields['call_id']]);
+
+        try {
+            if ($row && !empty($row['conversation_id'])) {
+                $convStmt = $pdo->prepare("UPDATE conversations SET assigned_to = ?, status = 'assigned', updated_at = NOW() WHERE conversation_id = ?");
+                $convStmt->execute([$adminId, (int)$row['conversation_id']]);
+            } else if (!empty($fields['call_id'])) {
+                $convStmt = $pdo->prepare("UPDATE conversations SET assigned_to = ?, status = 'assigned', updated_at = NOW() WHERE external_call_id = ? OR last_message LIKE ?");
+                $convStmt->execute([$adminId, $fields['call_id'], '%' . $fields['call_id'] . '%']);
+            }
+        } catch (Throwable $e) {
+            error_log('Call claim conversation sync notice: ' . $e->getMessage());
+        }
+
         $pdo->commit();
         callSessionJson(['success' => true, 'call' => normalizeCallSessionRow(fetchCallSession($pdo, $fields['call_id']))]);
     }
@@ -220,6 +233,21 @@ try {
         $sql .= " WHERE call_id=?";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$status, $callId]);
+
+        try {
+            $row = fetchCallSession($pdo, $callId);
+            $convStatus = ($status === 'ended' || $status === 'declined' || $status === 'completed') ? 'closed' : $status;
+            if ($row && !empty($row['conversation_id'])) {
+                $convStmt = $pdo->prepare("UPDATE conversations SET status = ?, updated_at = NOW() WHERE conversation_id = ?");
+                $convStmt->execute([$convStatus, (int)$row['conversation_id']]);
+            } else if ($callId !== '') {
+                $convStmt = $pdo->prepare("UPDATE conversations SET status = ?, updated_at = NOW() WHERE external_call_id = ? OR last_message LIKE ?");
+                $convStmt->execute([$convStatus, $callId, '%' . $callId . '%']);
+            }
+        } catch (Throwable $e) {
+            error_log('Call mark conversation sync notice: ' . $e->getMessage());
+        }
+
         callSessionJson(['success' => true, 'call' => normalizeCallSessionRow(fetchCallSession($pdo, $callId))]);
     }
 

@@ -250,7 +250,7 @@ if (!function_exists('twc_status_filter_clause')) {
         if ($statusFilter === 'active' || $statusFilter === 'open') {
             $active = ['active', 'open', 'in_progress'];
             $params = array_merge($params, $active);
-            return " AND {$alias}.status IN (" . twc_placeholders($active) . ") AND {$alias}.status NOT IN ('waiting_user', 'pending') AND {$alias}.conversation_id NOT IN (SELECT conversation_id FROM transfer_call_audit WHERE conversation_id IS NOT NULL) ";
+            return " AND {$alias}.status IN (" . twc_placeholders($active) . ") AND {$alias}.status NOT IN ('waiting_user', 'pending') AND (COALESCE({$alias}.assigned_to, 0) = 0 OR {$alias}.assigned_to IS NULL) AND {$alias}.conversation_id NOT IN (SELECT conversation_id FROM transfer_call_audit WHERE conversation_id IS NOT NULL) ";
         }
 
         if ($statusFilter === 'closed') {
