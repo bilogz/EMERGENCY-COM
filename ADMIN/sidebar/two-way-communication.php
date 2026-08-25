@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Two-Way Communication Interface Page
  * Manage interactive communication between administrators and citizens
@@ -3811,7 +3811,19 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (EMERGENCY_COM_CALL_INTAKE_ENABLED) socket.emit('join', CALL_LOBBY_ROOM);
             if (activeCallRoom) socket.emit('join', activeCallRoom);
             if (pendingCallRoom) socket.emit('join', pendingCallRoom);
-            if (restoringAdminCall && callId) requestAdminCallResume(socket);
+            if (callId) {
+                if (restoringAdminCall) {
+                    requestAdminCallResume(socket);
+                } else {
+                    socket.emit('resume-admin-call', {
+                        callId,
+                        room: activeCallRoom || getCallRoom(callId),
+                        adminKey: ADMIN_CALL_OWNER_KEY
+                    }, result => {
+                        console.log('[socket] re-registered admin for active call on reconnect:', result);
+                    });
+                }
+            }
             if (EMERGENCY_COM_CALL_INTAKE_ENABLED && typeof restoreCallSessionsFromDatabase === 'function') restoreCallSessionsFromDatabase(true);
 
             socketRetryCount = 0; // Reset retry count on successful connection
@@ -4591,6 +4603,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             openSessions.forEach(session => {
                 const source = callSessionToQueuedOffer(session);
                 if (!source || incomingCallQueue.has(source.callId)) return;
+                if (callId === source.callId || pendingCallId === source.callId) return;
                 if (typeof queueIncomingOfferFromSocket === 'function') {
                     queueIncomingOfferFromSocket(source, source.sdp || null, false);
                 }
@@ -5527,7 +5540,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (!queued) return;
             locationData = await tryGetLocation();
             if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
-            if (shouldAutoResume) {
+            if (callId === incomingCallId) {
+                pendingOffer = queued.sdp || null;
+                pendingCandidates = queued.pendingCandidates || [];
+                await completeAdminCallAnswerFromOffer();
+            } else if (shouldAutoResume) {
                 setIncomingCallModalText('Restoring your active emergency call...');
                 setTimeout(() => acceptIncomingEmergencyCall(incomingCallId), 0);
             }

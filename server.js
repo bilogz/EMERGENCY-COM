@@ -1,5 +1,7 @@
 const express = require('express');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -18,6 +20,8 @@ const MAX_MESSAGES_PER_ROOM = 50;
 const MAX_ACTIVE_OFFERS = Number(process.env.MAX_ACTIVE_OFFERS || 500);
 const MAX_ACTIVE_CALLS = Number(process.env.MAX_ACTIVE_CALLS || 500);
 const SOCKET_DEBUG = process.env.SOCKET_DEBUG === '1';
+const CALL_STATE_FILE = path.join(__dirname, 'ADMIN', 'api', 'cache', 'live-call-state.json');
+const TERMINAL_CALL_STATUSES = new Set(['ended', 'declined', 'cancelled', 'canceled', 'completed', 'resolved']);
 
 function debugLog(message) {
   if (SOCKET_DEBUG) console.log(message);
@@ -35,13 +39,18 @@ function pruneExpiredCalls() {
   const now = Date.now();
   const cutoff = now - OFFER_TTL_MS;
   const ringingCutoff = now - RINGING_CALL_TTL_MS;
+  let stateChanged = false;
   for (const [room, offer] of activeOffersByRoom.entries()) {
-    if (!offer || offer.ts < cutoff) activeOffersByRoom.delete(room);
+    if (!offer || offer.ts < cutoff) {
+      activeOffersByRoom.delete(room);
+      stateChanged = true;
+    }
   }
   for (const [callId, call] of activeCallsById.entries()) {
     if (!call || call.updatedAt < cutoff || (call.status === 'ringing' && call.updatedAt < ringingCutoff)) {
       if (call?.room) activeOffersByRoom.delete(call.room);
       activeCallsById.delete(callId);
+      stateChanged = true;
     }
   }
   for (const [room, messages] of recentMessagesByRoom.entries()) {
@@ -55,14 +64,71 @@ function pruneExpiredCalls() {
     const oldestRoom = activeOffersByRoom.keys().next().value;
     if (!oldestRoom) break;
     activeOffersByRoom.delete(oldestRoom);
+    stateChanged = true;
   }
   while (activeCallsById.size > MAX_ACTIVE_CALLS) {
     const oldestCallId = activeCallsById.keys().next().value;
     if (!oldestCallId) break;
     activeCallsById.delete(oldestCallId);
+    stateChanged = true;
+  }
+  if (stateChanged) persistCallState();
+}
+
+function persistCallState() {
+  try {
+    fs.mkdirSync(path.dirname(CALL_STATE_FILE), { recursive: true });
+    const state = {
+      version: 1,
+      savedAt: Date.now(),
+      calls: Array.from(activeCallsById.values())
+        .filter((call) => call && !TERMINAL_CALL_STATUSES.has(String(call.status || '').toLowerCase()))
+        .map((call) => ({
+          ...call,
+          callerSocketId: null,
+          adminSocketId: null,
+        })),
+      offers: Array.from(activeOffersByRoom.entries()).map(([room, offer]) => ({
+        room,
+        payload: offer?.payload || null,
+        ts: Number(offer?.ts || Date.now()),
+      })),
+    };
+    const tmpFile = `${CALL_STATE_FILE}.tmp`;
+    fs.writeFileSync(tmpFile, JSON.stringify(state));
+    fs.renameSync(tmpFile, CALL_STATE_FILE);
+  } catch (error) {
+    console.warn(`[call-state] persist failed: ${error.message}`);
   }
 }
 
+function restoreCallState() {
+  try {
+    if (!fs.existsSync(CALL_STATE_FILE)) return;
+    const state = JSON.parse(fs.readFileSync(CALL_STATE_FILE, 'utf8'));
+    const now = Date.now();
+    for (const call of Array.isArray(state.calls) ? state.calls : []) {
+      if (!call?.callId) continue;
+      if (TERMINAL_CALL_STATUSES.has(String(call.status || '').toLowerCase())) continue;
+      const updatedAt = Number(call.updatedAt || call.createdAt || 0) || now;
+      if (now - updatedAt > OFFER_TTL_MS) continue;
+      activeCallsById.set(String(call.callId), {
+        ...call,
+        callerSocketId: null,
+        adminSocketId: null,
+        updatedAt,
+      });
+    }
+    for (const offer of Array.isArray(state.offers) ? state.offers : []) {
+      const ts = Number(offer?.ts || 0) || now;
+      if (!offer?.room || !offer?.payload || now - ts > OFFER_TTL_MS) continue;
+      activeOffersByRoom.set(String(offer.room), { payload: offer.payload, ts });
+    }
+    if (activeCallsById.size) console.log(`[call-state] restored ${activeCallsById.size} live call(s)`);
+  } catch (error) {
+    console.warn(`[call-state] restore failed: ${error.message}`);
+  }
+}
 function callSummary(call) {
   return {
     callId: call.callId,
@@ -106,6 +172,7 @@ function emitCallQueue() {
 
 function emitCallUpdate(event, call) {
   if (!call) return;
+  persistCallState();
   const payload = { event, call: callQueueSummary(call), updatedAt: Date.now() };
   io.to(CALL_LOBBY_ROOM).emit('call-updated', payload);
   if (call.room) io.to(call.room).emit('call-updated', payload);
@@ -166,9 +233,12 @@ function relayHangup(socket, payload = {}, room) {
     const endedCall = activeCallsById.get(callId);
     if (endedCall) emitCallUpdate('ended', { ...endedCall, status: 'ended', updatedAt: Date.now() });
     activeCallsById.delete(callId);
+    persistCallState();
     emitCallQueue();
   }
 }
+
+restoreCallState();
 
 const io = new Server(server, {
   allowEIO3: true,
@@ -689,10 +759,13 @@ io.on('connection', (socket) => {
         callerSocketId: socket.id,
         adminSocketId: existing?.adminSocketId || null,
         adminKey: existing?.adminKey || null,
+        createdAt: existing?.createdAt || Date.now(),
         status: existing?.status || 'ringing',
         updatedAt: Date.now(),
       });
       socket.join(room);
+      persistCallState();
+      emitCallQueue();
     }
     debugLog(`[transfer-notify] type=${transferType} transferId=${payload?.transferId || payload?.transfer_id || ''}`);
     io.to(TRANSFER_INBOX_ROOM).emit('incoming-transfer', transferNotice);
@@ -701,19 +774,22 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', (reason) => {
     let queueChanged = false;
-    for (const [callId, call] of activeCallsById.entries()) {
+    for (const call of activeCallsById.values()) {
       if (call.callerSocketId === socket.id) {
-        if (call.status === 'ringing') {
-          if (call.room) activeOffersByRoom.delete(call.room);
-          activeCallsById.delete(callId);
-          queueChanged = true;
-          continue;
-        }
         call.callerSocketId = null;
+        call.updatedAt = Date.now();
+        queueChanged = true;
       }
-      if (call.adminSocketId === socket.id) call.adminSocketId = null;
+      if (call.adminSocketId === socket.id) {
+        call.adminSocketId = null;
+        call.updatedAt = Date.now();
+        queueChanged = true;
+      }
     }
-    if (queueChanged) emitCallQueue();
+    if (queueChanged) {
+      persistCallState();
+      emitCallQueue();
+    }
     debugLog(`[socket] disconnected ${socket.id} reason=${reason}`);
   });
 });
