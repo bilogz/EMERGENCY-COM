@@ -566,6 +566,12 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                             <div><span>Location</span><span id="twcTransferLocation">-</span></div>
                             <div><span>Priority</span><span id="twcTransferPriority" class="incident-priority-badge incident-priority-low">LOW 0</span></div>
                         </div>
+                        <div class="twc-transfer-description" id="reportBarangaySelectorGroup" style="position:relative; margin-top:0.9rem;">
+                            <label for="reportBarangaySearch">Incident Barangay <span aria-hidden="true" style="color:#dc2626;">*</span></label>
+                            <input id="reportBarangaySearch" type="text" placeholder="Search Quezon City barangay..." autocomplete="off" style="width:100%; padding:8px 10px; border:1px solid var(--border-color-1, rgba(255,255,255,0.14)); border-radius:9px; background:var(--card-bg-1, rgba(255,255,255,0.07)); color:var(--text-color-1, #fff); font-weight:700; outline:none;">
+                            <div id="reportBarangaySelected" style="font-size:12px; opacity:0.8; font-weight:600; margin-top:4px;">No barangay selected</div>
+                            <div id="reportBarangayResults" style="display:none; position:absolute; left:0; right:0; top:68px; max-height:180px; overflow:auto; border:1px solid var(--border-color-1, rgba(255,255,255,0.16)); border-radius:10px; background:#111827; box-shadow:0 16px 34px rgba(0,0,0,.35); z-index:20;"></div>
+                        </div>
                         <div class="twc-transfer-description" id="twcTransferDescriptionGroup">
                             <label for="twcTransferDescription">Description <span aria-hidden="true">*</span></label>
                             <textarea id="twcTransferDescription" rows="4" maxlength="1000" placeholder="Describe the incident and important details for the response team." required></textarea>
@@ -2388,9 +2394,68 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
             setTransferModalBusy(false);
         }
 
+        let selectedReportBarangay = '';
+
+        function getSelectedReportBarangay() {
+            return String(selectedReportBarangay || '').trim();
+        }
+
+        function setReportBarangaySelection(value) {
+            selectedReportBarangay = String(value || '').trim();
+            const input = document.getElementById('reportBarangaySearch');
+            const selected = document.getElementById('reportBarangaySelected');
+            const results = document.getElementById('reportBarangayResults');
+            if (input) input.value = selectedReportBarangay;
+            if (selected) selected.textContent = selectedReportBarangay ? `Selected: ${selectedReportBarangay}` : 'No barangay selected';
+            if (results) results.style.display = 'none';
+        }
+
+        function renderReportBarangayResults(query = '') {
+            const results = document.getElementById('reportBarangayResults');
+            if (!results) return;
+            const needle = String(query || '').trim().toLowerCase();
+            const matches = QC_CALL_BARANGAYS
+                .filter(name => !needle || name.toLowerCase().includes(needle));
+            if (!matches.length) {
+                results.innerHTML = '<div style="padding:10px 12px; font-size:12px; opacity:.75;">No Quezon City barangay found.</div>';
+                results.style.display = 'block';
+                return;
+            }
+            results.innerHTML = matches.map(name => `
+                <button type="button" class="report-barangay-option" data-barangay="${String(name).replace(/"/g, '&quot;')}" style="width:100%; border:0; border-bottom:1px solid rgba(255,255,255,.08); padding:9px 12px; background:transparent; color:#fff; text-align:left; font-weight:700; cursor:pointer;">
+                    ${name}
+                </button>
+            `).join('');
+            results.style.display = 'block';
+            results.querySelectorAll('.report-barangay-option').forEach(btn => {
+                btn.addEventListener('click', () => setReportBarangaySelection(btn.dataset.barangay || ''));
+            });
+        }
+
+        function bindReportBarangaySelector() {
+            const input = document.getElementById('reportBarangaySearch');
+            if (!input || input.dataset.bound === '1') return;
+            input.dataset.bound = '1';
+            input.addEventListener('focus', () => renderReportBarangayResults(input.value));
+            input.addEventListener('input', () => {
+                selectedReportBarangay = '';
+                const selected = document.getElementById('reportBarangaySelected');
+                if (selected) selected.textContent = 'Choose a barangay from the search results.';
+                renderReportBarangayResults(input.value);
+            });
+            document.addEventListener('click', (event) => {
+                const wrapper = document.getElementById('reportBarangaySelectorGroup');
+                const results = document.getElementById('reportBarangayResults');
+                if (wrapper && results && !wrapper.contains(event.target)) results.style.display = 'none';
+            });
+        }
+
         function openTransferModal(data) {
             const modal = document.getElementById('twcTransferModal');
             if (!modal) return Promise.resolve(false);
+
+            setReportBarangaySelection('');
+            bindReportBarangaySelector();
 
             const citizenEl = document.getElementById('twcTransferCitizen');
             const typeEl = document.getElementById('twcTransferType');
@@ -2429,6 +2494,15 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                     resolve(value);
                 };
                 const onConfirm = () => {
+                    const incidentBarangay = getSelectedReportBarangay();
+                    if (!incidentBarangay) {
+                        setTransferModalMessage('Please select the incident barangay before transferring.', 'error');
+                        return;
+                    }
+                    if (!isSanAgustinBarangay(incidentBarangay)) {
+                        setTransferModalMessage('Emergency Response System integration is not yet available for this barangay.', 'error');
+                        return;
+                    }
                     const description = String(descriptionEl?.value || '').trim();
                     if (!description) {
                         descriptionEl?.setAttribute('aria-invalid', 'true');
@@ -2436,7 +2510,7 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                         descriptionEl?.focus();
                         return;
                     }
-                    cleanup({ description });
+                    cleanup({ description, incidentBarangay });
                 };
                 const onCancel = () => cleanup(false);
                 const onBackdrop = (event) => {
@@ -2498,6 +2572,8 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                 socketUrl: null,
                 socketPath: null,
                 emergencyType: data?.category || data?.department || data?.userConcern || '',
+                incidentBarangay: transferForm.incidentBarangay,
+                barangay: transferForm.incidentBarangay,
                 description: transferForm.description,
                 priority: priorityMeta.level,
                 priorityColor: priorityMeta.color,
