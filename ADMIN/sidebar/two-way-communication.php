@@ -4260,7 +4260,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     }
 
     const QC_CALL_BARANGAYS = [
-        'Alicia','Amihan','Apolonio Samson','Bagbag','Bagong Lipunan ng Crame','Bagong Pag-asa','Bagong Silangan','Bagumbayan','Bagumbuhay','Bahay Toro','Balingasa','Balong Bato','Batasan Hills','Bayanihan','Blue Ridge A','Blue Ridge B','Botocan','Bungad','Camp Aguinaldo','Capri','Central','Claro','Commonwealth','Culiat','Damayan','Damayang Lagi','Damar','Del Monte','Dioquino Zobel','Do?a Aurora','Do?a Imelda','Do?a Josefa','Duyan-Duyan','E. Rodriguez','East Kamias','Escopa I','Escopa II','Escopa III','Escopa IV','Fairview','Greater Lagro','Gulod','Holy Spirit','Horseshoe','Immaculate Concepcion','Kaligayahan','Kalusugan','Kamuning','Katipunan','Kaunlaran','Krus na Ligas','Laging Handa','Libis','Lourdes','Loyola Heights','Maharlika','Malaya','Mangga','Manresa','Mariana','Mariblo','Marilag','Masagana','Masambong','Matandang Balara','Milagrosa','Nagkaisang Nayon','Nayong Kanluran','New Era','North Fairview','Novaliches Proper','Obrero','Old Capitol Site','Paang Bundok','Pag-ibig sa Nayon','Paligsahan','Paltok','Paraiso','Pasong Putik Proper','Pasong Tamo','Payatas','Phil-Am','Pinagkaisahan','Pinyahan','Project 6','Quirino 2-A','Quirino 2-B','Quirino 2-C','Quirino 3-A','Ramon Magsaysay','Roxas','Sacred Heart','Saint Ignatius','San Agustin','San Antonio','San Bartolome','San Isidro','San Isidro Labrador','San Jose','San Martin de Porres','San Roque','Santa Cruz','Santa Lucia','Santa Monica','Santa Teresita','Santo Cristo','Santo Domingo','Santo Ni?o','Sauyo','Sienna','Sikatuna Village','Silangan','Socorro','South Triangle','Tagumpay','Talayan','Talipapa','Tandang Sora','Tatalon','Teachers Village East','Teachers Village West','Ugong Norte','Unang Sigaw','UP Campus','UP Village','Valencia','Vasra','Veterans Village','Villa Maria Clara','West Kamias','West Triangle','White Plains'
+        'Alicia','Amihan','Apolonio Samson','Baesa','Bagbag','Bagong Lipunan ng Crame','Bagong Pag-asa','Bagong Silangan','Bagumbayan','Bagumbuhay','Bahay Toro','Balingasa','Balong Bato','Batasan Hills','Bayanihan','Blue Ridge A','Blue Ridge B','Botocan','Bungad','Camp Aguinaldo','Capri','Central','Claro','Commonwealth','Culiat','Damar','Damayan','Damayang Lagi','Del Monte','Dioquino Zobel','Doña Aurora','Doña Imelda','Doña Josefa','Duyan-Duyan','E. Rodriguez','East Kamias','Escopa I','Escopa II','Escopa III','Escopa IV','Fairview','Greater Lagro','Gulod','Holy Spirit','Horseshoe','Immaculate Concepcion','Kaligayahan','Kalusugan','Kamuning','Katipunan','Kaunlaran','Krus na Ligas','Laging Handa','Libis','Lourdes','Loyola Heights','Maharlika','Malaya','Mangga','Manresa','Mariana','Mariblo','Marilag','Masagana','Masambong','Matandang Balara','Milagrosa','N.S. Amoranto','Nagkaisang Nayon','Nayong Kanluran','New Era','North Fairview','Novaliches Proper','Obrero','Old Capitol Site','Paang Bundok','Pag-ibig sa Nayon','Paligsahan','Paltok','Pansol','Paraiso','Pasong Putik Proper','Pasong Tamo','Payatas','Phil-Am','Pinagkaisahan','Pinyahan','Project 6','Quirino 2-A','Quirino 2-B','Quirino 2-C','Quirino 3-A','Ramon Magsaysay','Roxas','Sacred Heart','Saint Ignatius','Salvacion','San Agustin','San Antonio','San Bartolome','San Isidro','San Isidro Labrador','San Jose','San Martin de Porres','San Roque','Sangandaan','Santa Cruz','Santa Lucia','Santa Monica','Santa Teresita','Santo Cristo','Santo Domingo','Santo Niño','Sauyo','Siena','Sikatuna Village','Silangan','Socorro','South Triangle','Tagumpay','Talayan','Talipapa','Tandang Sora','Tatalon','Teachers Village East','Teachers Village West','U.P. Campus','U.P. Village','Ugong Norte','Unang Sigaw','Valencia','Vasra','Veterans Village','Villa Maria Clara','West Kamias','West Triangle','White Plains'
     ];
     let selectedCallBarangay = '';
 
@@ -4287,8 +4287,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         if (!results) return;
         const needle = String(query || '').trim().toLowerCase();
         const matches = QC_CALL_BARANGAYS
-            .filter(name => !needle || name.toLowerCase().includes(needle))
-            .slice(0, 12);
+            .filter(name => !needle || name.toLowerCase().includes(needle));
         if (!matches.length) {
             results.innerHTML = '<div style="padding:10px 12px; font-size:12px; opacity:.75;">No Quezon City barangay found.</div>';
             results.style.display = 'block';
@@ -5538,7 +5537,14 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
             if (Array.isArray(pendingCandidates) && pendingCandidates.length) {
                 for (const cand of pendingCandidates) {
-                    try { if (pc && cand) await pc.addIceCandidate(cand); } catch (e) {}
+                    try {
+                        if (pc && cand) {
+                            const iceCand = typeof cand === 'object' && cand.candidate ? cand : { candidate: cand };
+                            await pc.addIceCandidate(new RTCIceCandidate(iceCand));
+                        }
+                    } catch (e) {
+                        console.warn('[call][admin] Error adding pending ICE candidate:', e);
+                    }
                 }
             }
             pendingOffer = null;
@@ -5906,19 +5912,28 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (incomingCallId && callId && incomingCallId !== callId) return;
             if (transferInProgress) return;
 
-            if (!pc || !callId) {
+            if (!pc || !pc.remoteDescription || !callId) {
                 if (cand && incomingCallId) {
                     const queued = incomingCallQueue.get(incomingCallId);
                     if (queued) {
                         queued.pendingCandidates = queued.pendingCandidates || [];
                         queued.pendingCandidates.push(cand);
                     }
-                    if (pendingCallId === incomingCallId) pendingCandidates.push(cand);
+                    if (pendingCallId === incomingCallId || callId === incomingCallId) pendingCandidates.push(cand);
                 }
                 return;
             }
 
-            if (pc && cand) pc.addIceCandidate(cand);
+            if (pc && pc.remoteDescription && cand) {
+                try {
+                    const iceCand = typeof cand === 'object' && cand.candidate ? cand : { candidate: cand };
+                    pc.addIceCandidate(new RTCIceCandidate(iceCand)).catch(err => {
+                        console.warn('[call][admin] addIceCandidate failed:', err);
+                    });
+                } catch (e) {
+                    console.warn('[call][admin] Invalid ICE candidate object:', e);
+                }
+            }
         });
 
         s.on('hangup', payload => {
