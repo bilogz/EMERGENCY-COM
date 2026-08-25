@@ -90,42 +90,8 @@ try {
             }
         }
 
-        // Handle image upload if present
-        $image_path = null;
-        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-            $image = $_FILES['image'];
-            
-            // Validate image type
-            $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-            if (!in_array($image['type'], $allowedTypes)) {
-                apiResponse::error("Invalid image type. Only JPEG, PNG, and GIF are allowed.", 400);
-            }
-            
-            // Validate image size (max 5MB)
-            $maxSize = 5 * 1024 * 1024;
-            if ($image['size'] > $maxSize) {
-                apiResponse::error("Image size exceeds 5MB limit.", 400);
-            }
-            
-            // Create upload directory if it doesn't exist
-            $uploadDir = __DIR__ . '/../uploads/tip_images/';
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
-            }
-            
-            // Generate unique filename
-            $extension = pathinfo($image['name'], PATHINFO_EXTENSION);
-            $filename = uniqid('tip_', true) . '.' . $extension;
-            $filepath = $uploadDir . $filename;
-            
-            // Move uploaded file
-            if (!move_uploaded_file($image['tmp_name'], $filepath)) {
-                apiResponse::error("Failed to upload image.", 500);
-            }
-            
-            // Store relative path for database
-            $image_path = 'uploads/tip_images/' . $filename;
-        }
+        // Handle image_path from data (URL from upload_media.php)
+        $image_path = $data['image_path'] ?? null;
 
         // Insert the tip
         $query = "
