@@ -223,6 +223,7 @@ if (!function_exists('twc_not_trashed_clause')) {
         ) ";
     }
 }
+
 if (!function_exists('twc_placeholders')) {
     function twc_placeholders(array $values): string {
         return implode(',', array_fill(0, count($values), '?'));
@@ -249,7 +250,7 @@ if (!function_exists('twc_status_filter_clause')) {
         if ($statusFilter === 'active' || $statusFilter === 'open') {
             $active = ['active', 'open', 'in_progress'];
             $params = array_merge($params, $active);
-            return " AND {$alias}.status IN (" . twc_placeholders($active) . ") ";
+            return " AND {$alias}.status IN (" . twc_placeholders($active) . ") AND {$alias}.status NOT IN ('waiting_user', 'pending') AND {$alias}.conversation_id NOT IN (SELECT conversation_id FROM transfer_call_audit WHERE conversation_id IS NOT NULL) ";
         }
 
         if ($statusFilter === 'closed') {
@@ -265,8 +266,9 @@ if (!function_exists('twc_status_filter_clause')) {
         }
 
         if ($statusFilter === 'pending') {
-            $params[] = 'waiting_user';
-            return " AND {$alias}.status = ? AND COALESCE({$alias}.assigned_to, 0) = 0 ";
+            $pending = ['waiting_user', 'pending'];
+            $params = array_merge($params, $pending);
+            return " AND ({$alias}.status IN (" . twc_placeholders($pending) . ") OR {$alias}.conversation_id IN (SELECT conversation_id FROM transfer_call_audit WHERE conversation_id IS NOT NULL)) AND {$alias}.status NOT IN ('closed', 'resolved', 'completed') ";
         }
 
         $params[] = $statusFilter;
