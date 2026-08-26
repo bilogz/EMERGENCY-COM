@@ -51,73 +51,55 @@ try {
             );
         }
 
-        if ($primary_push_token !== '' && $appDeviceRegistered) {
-            apiResponse::success([
-                'device_id' => $device_id,
-                'action' => 'registered',
-                'guest' => !$user_id
-            ], $user_id ? "Notification device registered successfully" : "Guest notification device registered successfully");
+        if ($user_id) {
+            $deviceTable = resolveDeviceRegistryTable($pdo);
+            $checkQuery = "SELECT id FROM {$deviceTable} WHERE user_id = ? AND device_id = ?";
+            $checkStmt = $pdo->prepare($checkQuery);
+            $checkStmt->execute([$user_id, $device_id]);
+            $existingDevice = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($existingDevice) {
+                $updateQuery = "
+                    UPDATE {$deviceTable}
+                    SET device_type = ?,
+                        device_name = ?,
+                        fcm_token = ?,
+                        push_token = ?,
+                        is_active = 1,
+                        last_active = NOW()
+                    WHERE id = ?
+                ";
+                $updateStmt = $pdo->prepare($updateQuery);
+                $updateStmt->execute([
+                    $device_type,
+                    $device_name,
+                    $fcm_token,
+                    $primary_push_token,
+                    $existingDevice['id']
+                ]);
+            } else {
+                $insertQuery = "
+                    INSERT INTO {$deviceTable}
+                    (user_id, device_id, device_type, device_name, fcm_token, push_token, is_active, last_active)
+                    VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
+                ";
+                $insertStmt = $pdo->prepare($insertQuery);
+                $insertStmt->execute([
+                    $user_id,
+                    $device_id,
+                    $device_type,
+                    $device_name,
+                    $fcm_token,
+                    $primary_push_token
+                ]);
+            }
         }
 
-        if (!$user_id) {
-            apiResponse::success([
-                'device_id' => $device_id,
-                'action' => 'registered',
-                'guest' => true
-            ], "Guest notification device registered successfully");
-        }
-
-        $deviceTable = resolveDeviceRegistryTable($pdo);
-        $checkQuery = "SELECT id FROM {$deviceTable} WHERE user_id = ? AND device_id = ?";
-        $checkStmt = $pdo->prepare($checkQuery);
-        $checkStmt->execute([$user_id, $device_id]);
-        $existingDevice = $checkStmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($existingDevice) {
-            $updateQuery = "
-                UPDATE {$deviceTable}
-                SET device_type = ?,
-                    device_name = ?,
-                    fcm_token = ?,
-                    push_token = ?,
-                    is_active = 1,
-                    last_active = NOW()
-                WHERE id = ?
-            ";
-            $updateStmt = $pdo->prepare($updateQuery);
-            $updateStmt->execute([
-                $device_type,
-                $device_name,
-                $fcm_token,
-                $primary_push_token,
-                $existingDevice['id']
-            ]);
-
-            apiResponse::success([
-                'device_id' => $device_id,
-                'action' => 'updated'
-            ], "Device updated successfully");
-        } else {
-            $insertQuery = "
-                INSERT INTO {$deviceTable}
-                (user_id, device_id, device_type, device_name, fcm_token, push_token, is_active, last_active)
-                VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
-            ";
-            $insertStmt = $pdo->prepare($insertQuery);
-            $insertStmt->execute([
-                $user_id,
-                $device_id,
-                $device_type,
-                $device_name,
-                $fcm_token,
-                $primary_push_token
-            ]);
-
-            apiResponse::success([
-                'device_id' => $device_id,
-                'action' => 'registered'
-            ], "Device registered successfully");
-        }
+        apiResponse::success([
+            'device_id' => $device_id,
+            'action' => 'registered',
+            'guest' => !$user_id
+        ], $user_id ? "Notification device registered successfully" : "Guest notification device registered successfully");
 
     } elseif ($method === 'GET') {
         $userId = isset($_GET['user_id']) ? $_GET['user_id'] : null;

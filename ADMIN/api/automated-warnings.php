@@ -1442,7 +1442,7 @@ function autoPublishCriticalWarningToCitizens(PDO $pdo, array $warning, ?int $ad
     }
 
     $stmtAlert = $pdo->prepare("INSERT INTO {$alertsTable} (" . implode(', ', $alertCols) . ") VALUES (" . implode(', ', $placeholders) . ")");
-    $stmtAlert->execute($alertVals);
+        $stmtAlert->execute($alertVals);
     $alertId = (int)$pdo->lastInsertId();
 
     $recipientMeta = ['source' => 'users', 'error' => null];
@@ -1450,9 +1450,11 @@ function autoPublishCriticalWarningToCitizens(PDO $pdo, array $warning, ?int $ad
     try {
         // Load all active citizens from users table.
         $recipientsStmt = $pdo->query("
-            SELECT u.id, u.email, u.phone, d.fcm_token
+            SELECT u.id, u.email, u.phone, 
+                   COALESCE(NULLIF(d.fcm_token, ''), NULLIF(a.fcm_token, ''), NULLIF(a.push_token, ''), NULLIF(d.push_token, '')) AS fcm_token
             FROM users u
             LEFT JOIN user_devices d ON d.user_id = u.id AND d.is_active = 1
+            LEFT JOIN app_notification_devices a ON a.user_id = u.id AND a.is_active = 1
             WHERE u.status = 'active'
         ");
         $recipients = $recipientsStmt ? $recipientsStmt->fetchAll(PDO::FETCH_ASSOC) : [];

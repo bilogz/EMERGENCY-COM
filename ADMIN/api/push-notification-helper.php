@@ -3,7 +3,7 @@
 
 require_once dirname(__DIR__, 2) . '/PHP/api/device_registry.php';
 
-const PUSH_HELPER_EMERGENCY_CHANNEL_ID = 'alertara-emergency-default-v4';
+const PUSH_HELPER_EMERGENCY_CHANNEL_ID = 'alertara-emergency-default-v5';
 const PUSH_HELPER_SILENT_CHANNEL_ID = 'alertara-emergency-silent-v1';
 
 function pushHelperMoreInfoUrl(array $data): string {
@@ -28,7 +28,7 @@ function pushHelperWithRoutingData(array $data): array {
 function pushHelperValidNotificationChannel(?string $channel): string {
     $channel = trim((string)$channel);
     if ($channel === PUSH_HELPER_SILENT_CHANNEL_ID) return PUSH_HELPER_SILENT_CHANNEL_ID;
-    if (in_array($channel, ['emergency-alerts-v2', 'alertara_critical_alerts_v2', 'alertara-emergency-default-v3'], true)) {
+    if (in_array($channel, ['emergency-alerts-v2', 'alertara_critical_alerts_v2', 'alertara-emergency-default-v3', 'alertara-emergency-default-v4'], true)) {
         return PUSH_HELPER_EMERGENCY_CHANNEL_ID;
     }
     return preg_match('/^[A-Za-z0-9_.-]{1,120}$/', $channel) ? $channel : PUSH_HELPER_EMERGENCY_CHANNEL_ID;
@@ -141,11 +141,13 @@ function pushHelperFirebaseAccessToken(array $serviceAccount, ?string &$error = 
 }
 
 function pushHelperSendExpo(string $token, string $title, string $message, array $data, ?string &$error = null): bool {
+    $channelId = pushHelperNotificationChannelForToken($token);
+    $isSilent = $channelId === PUSH_HELPER_SILENT_CHANNEL_ID;
     $payload = [
         'to' => $token,
-        'sound' => 'default',
+        'sound' => $isSilent ? null : 'alertara_emergency.wav',
         'priority' => 'high',
-        'channelId' => pushHelperNotificationChannelForToken($token),
+        'channelId' => $channelId,
         'title' => $title,
         'body' => $message,
         'data' => $data
@@ -184,6 +186,9 @@ function pushHelperSendFcmV1(string $token, string $title, string $message, arra
     $accessToken = pushHelperFirebaseAccessToken($serviceAccount, $error);
     if (!$accessToken) return false;
 
+    $channelId = pushHelperNotificationChannelForToken($token);
+    $isSilent = $channelId === PUSH_HELPER_SILENT_CHANNEL_ID;
+
     $stringData = [];
     foreach ($data as $key => $value) {
         $stringData[(string)$key] = is_scalar($value) ? (string)$value : json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -196,18 +201,18 @@ function pushHelperSendFcmV1(string $token, string $title, string $message, arra
             'priority' => 'HIGH',
             'ttl' => '86400s',
             'notification' => [
-                'channel_id' => pushHelperNotificationChannelForToken($token),
-                'sound' => 'default',
-                'default_sound' => true,
+                'channel_id' => $channelId,
+                'sound' => $isSilent ? null : 'alertara_emergency',
+                'default_sound' => false,
                 'default_vibrate_timings' => true,
                 'visibility' => 'PUBLIC',
-                'notification_priority' => 'PRIORITY_HIGH',
+                'notification_priority' => 'PRIORITY_MAX',
                 'click_action' => 'OPEN_EMERGENCY_ALERT'
             ]
         ],
         'apns' => [
             'headers' => ['apns-priority' => '10'],
-            'payload' => ['aps' => ['sound' => 'default', 'content-available' => 1, 'interruption-level' => 'time-sensitive']]
+            'payload' => ['aps' => ['sound' => $isSilent ? null : 'default', 'content-available' => 1, 'interruption-level' => 'time-sensitive']]
         ]
     ]];
 
