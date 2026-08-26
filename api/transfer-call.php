@@ -693,12 +693,21 @@ $statusUrl = trim((string)(
 
 if ($action === 'request_status') {
     $transferId = (int)($input['transferId'] ?? $input['id'] ?? 0);
-    $stmt = $pdo->prepare("SELECT * FROM transfer_call_audit WHERE id = ? LIMIT 1");
-    $stmt->execute([$transferId]);
+    $conversationId = (int)($input['conversationId'] ?? $input['conversation_id'] ?? 0);
+    if ($transferId > 0) {
+        $stmt = $pdo->prepare("SELECT * FROM transfer_call_audit WHERE id = ? LIMIT 1");
+        $stmt->execute([$transferId]);
+    } elseif ($conversationId > 0) {
+        $stmt = $pdo->prepare("SELECT * FROM transfer_call_audit WHERE conversation_id = ? ORDER BY id DESC LIMIT 1");
+        $stmt->execute([$conversationId]);
+    } else {
+        sendJsonResponse(false, 'Missing transfer or conversation identifier', [], 400);
+    }
     $transfer = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$transfer) {
         sendJsonResponse(false, 'Transfer record not found', [], 404);
     }
+    $transferId = (int)$transfer['id'];
 
     $requestPayload = [
         'event' => 'emergency_transfer_status_request',

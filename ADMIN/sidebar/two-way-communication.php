@@ -1972,8 +1972,15 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
 
         function goToConversationPage(page) {
             const targetPage = Number(page);
-            if (isLoading || !Number.isInteger(targetPage) || targetPage < 1 || targetPage === currentPage) return;
+            if (!Number.isInteger(targetPage) || targetPage < 1 || targetPage === currentPage) return;
             currentPage = targetPage;
+            if (typeof EMERGENCY_COM_CALL_INTAKE_ENABLED !== 'undefined' && EMERGENCY_COM_CALL_INTAKE_ENABLED) {
+                lastRenderedTableStateKey = '';
+                renderCallTableForStatus();
+                document.getElementById('scrollableList')?.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+            if (isLoading) return;
             loadConversations(true, false).then(() => {
                 document.getElementById('scrollableList')?.scrollTo({ top: 0, behavior: 'smooth' });
             });
@@ -2198,6 +2205,11 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                     transferConversationReport(rowData);
                     return;
                 }
+                if (event.target.closest('.request-status-btn')) {
+                    event.stopPropagation();
+                    nudgeErsReportStatus(rowData);
+                    return;
+                }
                 if (event.target.closest('.delete-conversation-btn')) {
                     event.stopPropagation();
                     openDeleteConversationModal(rowData);
@@ -2208,6 +2220,28 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
             
             return item;
         }
+
+        async function nudgeErsReportStatus(conv) {
+            const conversationId = conv ? (conv.id || conv.conversationId) : null;
+            if (!conversationId) return;
+            try {
+                const res = await fetch(API_BASE + '../../api/transfer-report.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'request_status', conversationId: Number(conversationId) })
+                });
+                const data = await readApiResponse(res);
+                if (data.success) {
+                    showToast('ERS Status Requested', data.message || 'Nudge sent to Response Team for status update.');
+                    loadConversations(false, false, true);
+                } else {
+                    showToast('Request Failed', data.message || 'Could not send status request to ERS.');
+                }
+            } catch (e) {
+                showToast('Request Error', 'Network error sending status request.');
+            }
+        }
+        window.nudgeErsReportStatus = nudgeErsReportStatus;
         
         function getConversationHTML(conv) {
             const guestBadge = conv.isGuest
@@ -2224,19 +2258,34 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                 ? `<span class="list-chip list-chip-unread" style="background:#e74c3c;color:white;padding:2px 6px;border-radius:4px;font-size:0.7rem;font-weight:700;margin-left:0.25rem;">${conv.unreadCount}</span>`
                 : '';
             const workflowRaw = (conv.workflowStatus || '').toLowerCase();
-            const workflowLabelMap = {
-                open: 'Open', active: 'Open', in_progress: 'Assigned', waiting_user: 'Pending',
-                pending: 'Pending', received: 'Received by ERS', dispatching: 'Dispatching',
-                ongoing_dispatch: 'Ongoing Dispatch', resolved: 'Completed', completed: 'Completed', closed: 'Closed'
-            };
-            const workflowClassMap = {
-                open: 'workflow-open', active: 'workflow-open', in_progress: 'workflow-progress',
-                waiting_user: 'workflow-waiting', pending: 'workflow-waiting', received: 'workflow-waiting',
-                dispatching: 'workflow-progress', ongoing_dispatch: 'workflow-progress',
-                resolved: 'workflow-resolved', completed: 'workflow-resolved', closed: 'workflow-closed'
-            };
-            const workflowLabel = workflowLabelMap[workflowRaw] || (workflowRaw ? escapeHtml(workflowRaw.replace(/_/g, ' ').toUpperCase()) : 'In Queue');
-            const workflowClass = workflowClassMap[workflowRaw] || 'workflow-waiting';
+            const isCompleted = ['resolved', 'completed', 'closed'].includes(workflowRaw);
+            const isPending = ['waiting_user', 'pending', 'received', 'dispatching', 'ongoing_dispatch', 'requested'].includes(workflowRaw) || currentStatus === 'pending';
+            const isAssigned = (Number(conv.assignedTo || 0) > 0 || !!conv.assignedAdminName) && !isCompleted && !isPending;
+
+            let workflowLabel = 'Open';
+            let workflowClass = 'workflow-open';
+
+            if (isCompleted) {
+                workflowLabel = 'Completed';
+                workflowClass = 'workflow-resolved';
+            } else if (isPending) {
+                const pendingLabelMap = {
+                    waiting_user: 'Pending Status',
+                    pending: 'Pending Status',
+                    requested: 'Requested',
+                    received: 'Received by ERS',
+                    dispatching: 'Dispatching',
+                    ongoing_dispatch: 'Ongoing Dispatch'
+                };
+                workflowLabel = pendingLabelMap[workflowRaw] || (workflowRaw ? escapeHtml(workflowRaw.replace(/_/g, ' ').toUpperCase()) : 'Pending Status');
+                workflowClass = 'workflow-waiting';
+            } else if (isAssigned) {
+                workflowLabel = 'Assigned';
+                workflowClass = 'workflow-progress';
+            } else {
+                workflowLabel = 'Open';
+                workflowClass = 'workflow-open';
+            }
             const statusBadge = `<span class="workflow-pill ${workflowClass}">${workflowLabel}</span>`;
             const assignedAdmin = conv.assignedAdminName
                 ? `<span class="assigned-admin-pill"><i class="fas fa-user-shield"></i> ${escapeHtml(conv.assignedAdminName)}</span>`
@@ -2254,13 +2303,20 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
             const priorityCell = REPORT_TABLE_MODE
                 ? `<td style="padding:0.85rem 0.75rem;vertical-align:middle;">${incidentPriorityBadgeHtml(conv)}</td>`
                 : '';
-            const canTransferReport = REPORT_TABLE_MODE
-                && !['waiting_user', 'pending', 'received', 'dispatching', 'ongoing_dispatch', 'resolved', 'completed', 'closed'].includes(workflowRaw);
-            const transferAction = canTransferReport
-                ? `<button class="btn btn-secondary transfer-report-btn" data-conversation-id="${conv.id}" style="padding:0.35rem 0.65rem;font-size:0.75rem;border-radius:4px;cursor:pointer;margin-right:0.35rem;">
-                       <i class="fas fa-share-from-square"></i> Transfer
-                   </button>`
-                : '';
+            const isPendingTabOrStatus = isPending || currentStatus === 'pending';
+            const canTransferReport = REPORT_TABLE_MODE && !isPendingTabOrStatus && !isCompleted;
+            const canRequestStatus = REPORT_TABLE_MODE && isPendingTabOrStatus && !isCompleted;
+
+            let reportActionButton = '';
+            if (canTransferReport) {
+                reportActionButton = `<button class="btn btn-secondary transfer-report-btn" data-conversation-id="${conv.id}" style="padding:0.35rem 0.65rem;font-size:0.75rem;border-radius:4px;cursor:pointer;margin-right:0.35rem;">
+                    <i class="fas fa-share-from-square"></i> Transfer
+                </button>`;
+            } else if (canRequestStatus) {
+                reportActionButton = `<button class="btn btn-secondary request-status-btn" data-conversation-id="${conv.id}" title="Request status update from ERS" style="padding:0.35rem 0.65rem;font-size:0.75rem;border-radius:4px;cursor:pointer;margin-right:0.35rem;background:#d97706;color:#fff;border:none;">
+                    <i class="fas fa-paper-plane"></i> Request Status
+                </button>`;
+            }
 
             return `
                 <td style="padding:0.85rem 0.75rem;vertical-align:middle;">
@@ -2282,7 +2338,7 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
                 <td style="padding:0.85rem 0.75rem;vertical-align:middle;">${assignedAdmin}</td>
                 <td style="padding:0.85rem 0.75rem;vertical-align:middle;">${statusBadge}</td>
                 <td style="padding:0.85rem 0.75rem;vertical-align:middle;text-align:right;">
-                    ${transferAction}
+                    ${reportActionButton}
                     <button class="btn btn-secondary delete-conversation-btn" title="Move to Trash Bin" style="padding:0.35rem 0.55rem;font-size:0.75rem;border-radius:4px;cursor:pointer;margin-right:0.35rem;">
                         <i class="fas fa-trash-alt"></i> Delete
                     </button>
@@ -5175,57 +5231,73 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
         const openBadge = document.getElementById('openCount');
         let newHtml = '';
 
-        if (currentStatus === 'open') {
-            pruneStaleIncomingCalls();
-            const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned');
-            if (openBadge) {
-                openBadge.textContent = String(queuedCalls.length);
-                openBadge.style.display = 'inline-block';
-            }
-            if (!queuedCalls.length) {
-                newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No open emergency calls</td></tr>';
-            } else {
-                newHtml = queuedCalls.map((queued, index) => queuedCallTableRowHtml(queued, index, queuedCalls.length)).join('');
-            }
-        } else if (currentStatus === 'assigned') {
-            const assignedSessions = Array.isArray(lastDbCallSessions?.assigned) ? lastDbCallSessions.assigned : [];
-            if (!assignedSessions.length) {
-                newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No assigned emergency calls</td></tr>';
-            } else {
-                newHtml = assignedSessions.map(session => loggedCallTableRowHtml(session, 'assigned')).join('');
-            }
-        } else if (currentStatus === 'unanswered') {
-            const unansweredSessions = Array.isArray(lastDbCallSessions?.all) ? lastDbCallSessions.all.filter(session => {
-                return !session.answered_at && ['ended', 'declined', 'cancelled'].includes(String(session.status).toLowerCase());
-            }) : [];
-            if (!unansweredSessions.length) {
-                newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No unanswered calls found</td></tr>';
-            } else {
-                newHtml = unansweredSessions.map(session => loggedCallTableRowHtml(session, 'unanswered')).join('');
-            }
-        } else if (currentStatus === 'completed') {
-            const completedSessions = Array.isArray(lastDbCallSessions?.all) ? lastDbCallSessions.all.filter(session => {
-                return session.answered_at && String(session.status).toLowerCase() === 'ended';
-            }) : [];
-            if (!completedSessions.length) {
-                newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No completed emergency calls</td></tr>';
-            } else {
-                newHtml = completedSessions.map(session => loggedCallTableRowHtml(session, 'completed')).join('');
-            }
-        }
+            const CALL_TABLE_PAGE_SIZE = 8;
 
-        const currentStateKey = currentStatus + '::' + newHtml;
-        if (lastRenderedTableStateKey === currentStateKey && list.children.length > 0) {
-            return;
+            if (currentStatus === 'open') {
+                pruneStaleIncomingCalls();
+                const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned');
+                if (openBadge) {
+                    openBadge.textContent = String(queuedCalls.length);
+                    openBadge.style.display = 'inline-block';
+                }
+                if (!queuedCalls.length) {
+                    newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No open emergency calls</td></tr>';
+                } else {
+                    newHtml = queuedCalls.map((queued, index) => queuedCallTableRowHtml(queued, index, queuedCalls.length)).join('');
+                }
+                renderConversationPagination(0);
+            } else if (currentStatus === 'assigned') {
+                const assignedSessions = Array.isArray(lastDbCallSessions?.assigned) ? lastDbCallSessions.assigned : [];
+                if (!assignedSessions.length) {
+                    newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No assigned emergency calls</td></tr>';
+                } else {
+                    newHtml = assignedSessions.map(session => loggedCallTableRowHtml(session, 'assigned')).join('');
+                }
+                renderConversationPagination(0);
+            } else if (currentStatus === 'unanswered') {
+                const unansweredSessions = Array.isArray(lastDbCallSessions?.all) ? lastDbCallSessions.all.filter(session => {
+                    return !session.answered_at && ['ended', 'declined', 'cancelled'].includes(String(session.status).toLowerCase());
+                }) : [];
+                if (!unansweredSessions.length) {
+                    newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No unanswered calls found</td></tr>';
+                    renderConversationPagination(0);
+                } else {
+                    const totalPages = Math.max(1, Math.ceil(unansweredSessions.length / CALL_TABLE_PAGE_SIZE));
+                    if (currentPage > totalPages) currentPage = totalPages;
+                    const startIndex = (currentPage - 1) * CALL_TABLE_PAGE_SIZE;
+                    const pageSessions = unansweredSessions.slice(startIndex, startIndex + CALL_TABLE_PAGE_SIZE);
+                    newHtml = pageSessions.map(session => loggedCallTableRowHtml(session, 'unanswered')).join('');
+                    renderConversationPagination(totalPages);
+                }
+            } else if (currentStatus === 'completed') {
+                const completedSessions = Array.isArray(lastDbCallSessions?.all) ? lastDbCallSessions.all.filter(session => {
+                    return session.answered_at && String(session.status).toLowerCase() === 'ended';
+                }) : [];
+                if (!completedSessions.length) {
+                    newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No completed emergency calls</td></tr>';
+                    renderConversationPagination(0);
+                } else {
+                    const totalPages = Math.max(1, Math.ceil(completedSessions.length / CALL_TABLE_PAGE_SIZE));
+                    if (currentPage > totalPages) currentPage = totalPages;
+                    const startIndex = (currentPage - 1) * CALL_TABLE_PAGE_SIZE;
+                    const pageSessions = completedSessions.slice(startIndex, startIndex + CALL_TABLE_PAGE_SIZE);
+                    newHtml = pageSessions.map(session => loggedCallTableRowHtml(session, 'completed')).join('');
+                    renderConversationPagination(totalPages);
+                }
+            }
+
+            const currentStateKey = currentStatus + '::p' + currentPage + '::' + newHtml;
+            if (lastRenderedTableStateKey === currentStateKey && list.children.length > 0) {
+                return;
+            }
+            // Do not replace the DOM while the user is hovering over or clicking buttons.
+            // Destroying and re-creating nodes mid-hover resets the browser's hover state and
+            // swallows click events, causing the Answer/Decline buttons to appear to do nothing.
+            if (callTableInteractionFrozen) return;
+            lastRenderedTableStateKey = currentStateKey;
+            list.innerHTML = newHtml;
+            bindEmergencyCallTableButtons(list);
         }
-        // Do not replace the DOM while the user is hovering over or clicking buttons.
-        // Destroying and re-creating nodes mid-hover resets the browser's hover state and
-        // swallows click events, causing the Answer/Decline buttons to appear to do nothing.
-        if (callTableInteractionFrozen) return;
-        lastRenderedTableStateKey = currentStateKey;
-        list.innerHTML = newHtml;
-        bindEmergencyCallTableButtons(list);
-    }
 
     function renderIncomingCallTableRows() {
         renderCallTableForStatus();

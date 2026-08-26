@@ -134,11 +134,17 @@ sse_emit('ready', [
     'unreadConversationCount' => $lastUnreadConversationCount,
     'latestMessageId' => $lastUnreadMessageId,
     'reportUnread' => $lastReportUnread,
+    'report_unread' => $lastReportUnread,
     'generalEnquiryUnread' => $lastGeneralEnquiryUnread,
+    'general_enquiry_unread' => $lastGeneralEnquiryUnread,
     'reportNew' => (int)($unreadRow['report_new'] ?? 0),
+    'report_new' => (int)($unreadRow['report_new'] ?? 0),
     'generalEnquiryNew' => (int)($unreadRow['general_enquiry_new'] ?? 0),
+    'general_enquiry_new' => (int)($unreadRow['general_enquiry_new'] ?? 0),
     'reportLatestMessageId' => $lastReportLatestMessageId,
+    'report_latest_message_id' => $lastReportLatestMessageId,
     'generalEnquiryLatestMessageId' => $lastGeneralLatestMessageId,
+    'general_latest_message_id' => $lastGeneralLatestMessageId,
 ]);
 
 $maxLoops = 10; // ~30s @ 3s interval
@@ -205,11 +211,17 @@ for ($i = 0; $i < $maxLoops; $i++) {
             'unreadConversationCount' => $unreadConversationCount,
             'latestMessageId' => $latestUnreadMessageId,
             'reportUnread' => $reportUnread,
+            'report_unread' => $reportUnread,
             'generalEnquiryUnread' => $generalEnquiryUnread,
+            'general_enquiry_unread' => $generalEnquiryUnread,
             'reportNew' => (int)($unreadRow['report_new'] ?? 0),
+            'report_new' => (int)($unreadRow['report_new'] ?? 0),
             'generalEnquiryNew' => (int)($unreadRow['general_enquiry_new'] ?? 0),
+            'general_enquiry_new' => (int)($unreadRow['general_enquiry_new'] ?? 0),
             'reportLatestMessageId' => $reportLatestMessageId,
+            'report_latest_message_id' => $reportLatestMessageId,
             'generalEnquiryLatestMessageId' => $generalLatestMessageId,
+            'general_latest_message_id' => $generalLatestMessageId,
         ]);
     }
 
@@ -218,4 +230,3 @@ for ($i = 0; $i < $maxLoops; $i++) {
 }
 
 sse_emit('end', ['reason' => 'poll_window_complete']);
-

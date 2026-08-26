@@ -85,24 +85,9 @@ try {
     $stmt->execute([$conversationId, $lastMessageId]);
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    if (!empty($messages)) {
-        $idsToMarkRead = [];
-        foreach ($messages as $msg) {
-            if (strtolower((string)$msg['sender_type']) !== 'admin' && (int)$msg['is_read'] === 0) {
-                $idsToMarkRead[] = (int)$msg['message_id'];
-            }
-        }
-
-        if (!empty($idsToMarkRead)) {
-            $setReadSql = "UPDATE chat_messages SET is_read = 1";
-            if ($hasReadAt) {
-                $setReadSql .= ", read_at = NOW()";
-            }
-            $setReadSql .= " WHERE message_id IN (" . twc_placeholders($idsToMarkRead) . ")";
-            $markStmt = $pdo->prepare($setReadSql);
-            $markStmt->execute($idsToMarkRead);
-        }
-    }
+    $markAllReadSql = "UPDATE chat_messages SET is_read = 1" . ($hasReadAt ? ", read_at = NOW()" : "") . " WHERE conversation_id = ? AND LOWER(COALESCE(sender_type, '')) <> 'admin' AND COALESCE(is_read, 0) = 0";
+    $markAllStmt = $pdo->prepare($markAllReadSql);
+    $markAllStmt->execute([$conversationId]);
 
     $formattedMessages = array_map(function ($msg) {
         $isRead = (bool)$msg['is_read'];

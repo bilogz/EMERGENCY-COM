@@ -961,22 +961,33 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function extractCommunicationCount(payload, keys) {
+        if (!payload || typeof payload !== 'object') return null;
+        for (const key of keys) {
+            if (Object.prototype.hasOwnProperty.call(payload, key) && payload[key] !== null && payload[key] !== undefined) {
+                const val = parseInt(payload[key], 10);
+                if (Number.isFinite(val) && val >= 0) return val;
+            }
+        }
+        return null;
+    }
+
     function applySidebarCommunicationPayload(payload = {}) {
+        const reportUnreadCount = extractCommunicationCount(payload, ['reportUnread', 'report_unread']);
+        const generalUnreadCount = extractCommunicationCount(payload, ['generalEnquiryUnread', 'general_enquiry_unread']);
+        const openCallCount = extractCommunicationCount(payload, ['openCallCount', 'emergencyCallOpenCount', 'emergency_call_open_count']);
+
         const values = {
             reports: {
-                // Prefer the absolute unread count from the DB (report_unread) over the
-                // cursor-relative new count (report_new). The cursor-relative count stays
-                // high until the SSE stream reconnects with the updated cursor, causing
-                // the badge to appear even after the admin has already read the messages.
-                count: payload.reportUnread ?? payload.report_unread ?? payload.reportNew ?? payload.report_new ?? 0,
-                latest: payload.reportLatestMessageId ?? payload.report_latest_message_id ?? 0
+                count: reportUnreadCount !== null ? reportUnreadCount : extractCommunicationCount(payload, ['reportNew', 'report_new']) || 0,
+                latest: extractCommunicationCount(payload, ['reportLatestMessageId', 'report_latest_message_id']) || 0
             },
             generalEnquiries: {
-                count: payload.generalEnquiryUnread ?? payload.general_enquiry_unread ?? payload.generalEnquiryNew ?? payload.general_enquiry_new ?? 0,
-                latest: payload.generalLatestMessageId ?? payload.general_latest_message_id ?? 0
+                count: generalUnreadCount !== null ? generalUnreadCount : extractCommunicationCount(payload, ['generalEnquiryNew', 'general_enquiry_new']) || 0,
+                latest: extractCommunicationCount(payload, ['generalLatestMessageId', 'general_latest_message_id']) || 0
             },
             emergencyCalls: {
-                count: payload.openCallCount ?? payload.emergencyCallOpenCount ?? payload.emergency_call_open_count ?? 0,
+                count: openCallCount !== null ? openCallCount : 0,
                 latest: Date.now()
             }
         };
