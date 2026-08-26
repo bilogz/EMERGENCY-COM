@@ -84,7 +84,9 @@ function callSessionPayloadFields(array $data) {
         'room' => callSessionClean($data['room'] ?? '', 180),
         'offer_payload' => isset($data['offerPayload']) && is_array($data['offerPayload'])
             ? json_encode($data['offerPayload'])
-            : (isset($data['offer_payload']) && is_array($data['offer_payload']) ? json_encode($data['offer_payload']) : null),
+            : (isset($data['offer_payload']) && is_array($data['offer_payload'])
+                ? json_encode($data['offer_payload'])
+                : (isset($data['sdp']) && is_array($data['sdp']) ? json_encode($data) : null)),
         'caller_user_id' => callSessionClean($caller['user_id'] ?? $caller['id'] ?? $data['callerUserId'] ?? '', 100),
         'caller_name' => callSessionClean($caller['name'] ?? $data['callerName'] ?? 'Emergency Call User', 180),
         'caller_phone' => callSessionClean($caller['phone'] ?? $data['callerPhone'] ?? '', 80),
@@ -153,7 +155,14 @@ try {
     callSessionAdminRequired();
 
     if ($action === 'list') {
-        $pdo->exec("UPDATE emergency_call_sessions SET status='ended', ended_at=COALESCE(ended_at, NOW()), updated_at=NOW() WHERE status='open' AND updated_at < (NOW() - INTERVAL 10 MINUTE)");
+        // Auto-expire open calls older than 10 minutes (600 seconds)
+        try {
+            $pdo->query("UPDATE emergency_call_sessions SET status = 'ended', ended_at = NOW() WHERE status = 'open' AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
+        } catch (PDOException $e) {
+            error_log('Call session auto-expiry error: ' . $e->getMessage());
+        }
+
+        // Keep open calls persistent across Socket.IO/PM2 restarts. Calls close only by explicit end, decline, transfer, or completion.
         $stmt = $pdo->query("SELECT * FROM emergency_call_sessions WHERE status IN ('open','assigned','pending','completed','ended','declined') ORDER BY updated_at DESC LIMIT 200");
         $rows = array_map('normalizeCallSessionRow', $stmt->fetchAll(PDO::FETCH_ASSOC));
         callSessionJson([
@@ -192,6 +201,19 @@ try {
         }
         $claim = $pdo->prepare("UPDATE emergency_call_sessions SET status='assigned', assigned_admin_id=?, assigned_admin_name=?, answered_at=COALESCE(answered_at, NOW()), updated_at=NOW() WHERE call_id=?");
         $claim->execute([$adminId, $adminName, $fields['call_id']]);
+
+        try {
+            if ($row && !empty($row['conversation_id'])) {
+                $convStmt = $pdo->prepare("UPDATE conversations SET assigned_to = ?, status = 'assigned', updated_at = NOW() WHERE conversation_id = ?");
+                $convStmt->execute([$adminId, (int)$row['conversation_id']]);
+            } else if (!empty($fields['call_id'])) {
+                $convStmt = $pdo->prepare("UPDATE conversations SET assigned_to = ?, status = 'assigned', updated_at = NOW() WHERE external_call_id = ? OR last_message LIKE ?");
+                $convStmt->execute([$adminId, $fields['call_id'], '%' . $fields['call_id'] . '%']);
+            }
+        } catch (Throwable $e) {
+            error_log('Call claim conversation sync notice: ' . $e->getMessage());
+        }
+
         $pdo->commit();
         callSessionJson(['success' => true, 'call' => normalizeCallSessionRow(fetchCallSession($pdo, $fields['call_id']))]);
     }
@@ -211,6 +233,21 @@ try {
         $sql .= " WHERE call_id=?";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$status, $callId]);
+
+        try {
+            $row = fetchCallSession($pdo, $callId);
+            $convStatus = ($status === 'ended' || $status === 'declined' || $status === 'completed') ? 'closed' : $status;
+            if ($row && !empty($row['conversation_id'])) {
+                $convStmt = $pdo->prepare("UPDATE conversations SET status = ?, updated_at = NOW() WHERE conversation_id = ?");
+                $convStmt->execute([$convStatus, (int)$row['conversation_id']]);
+            } else if ($callId !== '') {
+                $convStmt = $pdo->prepare("UPDATE conversations SET status = ?, updated_at = NOW() WHERE external_call_id = ? OR last_message LIKE ?");
+                $convStmt->execute([$convStatus, $callId, '%' . $callId . '%']);
+            }
+        } catch (Throwable $e) {
+            error_log('Call mark conversation sync notice: ' . $e->getMessage());
+        }
+
         callSessionJson(['success' => true, 'call' => normalizeCallSessionRow(fetchCallSession($pdo, $callId))]);
     }
 

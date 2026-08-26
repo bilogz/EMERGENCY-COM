@@ -40,7 +40,7 @@ function syncTransferredReportWorkflow(PDO $pdo, array $input): void
     if (!$audit) {
         return;
     }
-    if ($action === 'transfer' && strtolower((string)($audit['status'] ?? '')) !== 'sent') {
+    if ($action === 'transfer' && !in_array(strtolower((string)($audit['status'] ?? '')), ['sent', 'pending', 'prepared'], true)) {
         return;
     }
 

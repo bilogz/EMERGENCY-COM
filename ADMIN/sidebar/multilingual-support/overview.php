@@ -1,7 +1,7 @@
 <?php
 /**
  * Multilingual Support Overview
- * Visual Guide & System Status (Read-Only)
+ * Real-Time Visual Guide & System Status (Read-Only)
  */
 
 session_start();
@@ -10,7 +10,89 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit();
 }
 
+require_once __DIR__ . '/../../api/db_connect.php';
+
 $pageTitle = 'Multilingual Support Overview';
+
+// Helper function to map nationality name or country code to flag emoji
+function getNationalityFlagEmoji($name) {
+    $name = strtolower(trim((string)$name));
+    if ($name === '' || $name === 'not specified' || $name === 'unknown') return '🌐';
+    if (str_contains($name, 'filipino') || str_contains($name, 'philippines') || str_contains($name, 'pinoy') || $name === 'ph' || $name === 'tl' || $name === 'fil') return '🇵🇭';
+    if (str_contains($name, 'american') || str_contains($name, 'united states') || str_contains($name, 'usa') || $name === 'us' || $name === 'en') return '🇺🇸';
+    if (str_contains($name, 'japanese') || str_contains($name, 'japan') || $name === 'jp' || $name === 'ja') return '🇯🇵';
+    if (str_contains($name, 'chinese') || str_contains($name, 'china') || $name === 'cn' || $name === 'zh') return '🇨🇳';
+    if (str_contains($name, 'korean') || str_contains($name, 'korea') || $name === 'kr' || $name === 'ko') return '🇰🇷';
+    if (str_contains($name, 'spanish') || str_contains($name, 'spain') || $name === 'es') return '🇪🇸';
+    if (str_contains($name, 'canadian') || str_contains($name, 'canada') || $name === 'ca') return '🇨🇦';
+    if (str_contains($name, 'australian') || str_contains($name, 'australia') || $name === 'au') return '🇦🇺';
+    if (str_contains($name, 'indian') || str_contains($name, 'india') || $name === 'in') return '🇮🇳';
+    if (str_contains($name, 'british') || str_contains($name, 'uk') || str_contains($name, 'england') || $name === 'gb') return '🇬🇧';
+    if (str_contains($name, 'german') || str_contains($name, 'germany') || $name === 'de') return '🇩🇪';
+    return '🌐';
+}
+
+// 1. Fetch real-time total users count strictly from `users` table
+$totalUsersCount = 0;
+try {
+    if (isset($pdo) && $pdo instanceof PDO) {
+        $stmt = $pdo->query("SELECT COUNT(*) FROM users");
+        $totalUsersCount = (int)$stmt->fetchColumn();
+    }
+} catch (Throwable $e) {
+    error_log("Error counting users: " . $e->getMessage());
+}
+
+// 2. Fetch real-time nationality distribution strictly from `users` table
+$nationalityStats = [];
+try {
+    if (isset($pdo) && $pdo instanceof PDO) {
+        $stmt = $pdo->query("
+            SELECT 
+                CASE 
+                    WHEN nationality IS NULL OR TRIM(nationality) = '' THEN 'Not Specified'
+                    ELSE TRIM(nationality) 
+                END AS nationality_name, 
+                COUNT(*) AS total_users
+            FROM users
+            GROUP BY nationality_name
+            ORDER BY total_users DESC
+        ");
+        $nationalityStats = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+} catch (Throwable $e) {
+    error_log("Error fetching user nationalities: " . $e->getMessage());
+}
+
+// 3. Fetch supported languages catalog
+$languagesList = [];
+try {
+    if (isset($pdo) && $pdo instanceof PDO) {
+        $langTable = 'supported_languages';
+        try {
+            $pdo->query("SELECT 1 FROM supported_languages LIMIT 1");
+        } catch (Throwable $e) {
+            $langTable = 'supported_languages_catalog';
+        }
+        $stmt = $pdo->query("
+            SELECT language_code, language_name, native_name, flag_emoji, is_active, is_ai_supported 
+            FROM {$langTable} 
+            WHERE is_active = 1
+            ORDER BY priority DESC, language_name ASC
+        ");
+        $languagesList = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+} catch (Throwable $e) {
+    error_log("Error querying supported languages: " . $e->getMessage());
+}
+
+// Fallback for supported languages catalog if table is empty
+if (empty($languagesList)) {
+    $languagesList = [
+        ['language_code' => 'en', 'language_name' => 'English', 'native_name' => 'English (US)', 'flag_emoji' => '🇺🇸', 'is_active' => 1, 'is_ai_supported' => 1],
+        ['language_code' => 'fil', 'language_name' => 'Tagalog (Filipino)', 'native_name' => 'Tagalog (FIL)', 'flag_emoji' => '🇵🇭', 'is_active' => 1, 'is_ai_supported' => 1],
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -25,7 +107,8 @@ $pageTitle = 'Multilingual Support Overview';
     <link rel="stylesheet" href="../css/admin-header.css">
     <link rel="stylesheet" href="../css/buttons.css">
     <link rel="stylesheet" href="../css/hero.css">
-        <link rel="stylesheet" href="../css/module-multilingual-overview.css?v=<?php echo filemtime(__DIR__ . '/../css/module-multilingual-overview.css'); ?>">
+    <link rel="stylesheet" href="../css/module-multilingual-overview.css?v=<?php echo filemtime(__DIR__ . '/../css/module-multilingual-overview.css'); ?>">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <?php include '../includes/sidebar.php'; ?>
@@ -91,7 +174,7 @@ $pageTitle = 'Multilingual Support Overview';
                     </div>
                     <div class="status-info">
                         <h4>Supported Languages</h4>
-                        <div class="value" id="langCount">-</div>
+                        <div class="value" id="langCount"><?php echo count($languagesList); ?></div>
                     </div>
                 </div>
 
@@ -105,9 +188,108 @@ $pageTitle = 'Multilingual Support Overview';
                         <div class="value">English (US)</div>
                     </div>
                 </div>
+
+                <!-- Total Registered Citizens (strictly from users table) -->
+                <div class="status-card">
+                    <div class="status-icon-box" style="background: rgba(241, 196, 15, 0.1); color: #f1c40f;">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="status-info">
+                        <h4>Registered Citizens</h4>
+                        <div class="value"><?php echo number_format($totalUsersCount); ?></div>
+                    </div>
+                </div>
             </div>
 
-            <!-- 3. Call to Action -->
+            <!-- 3. Languages Supported Statistics Card -->
+            <div class="graph-card">
+                <div class="section-header">
+                    <h3><i class="fas fa-language" style="color:#3498db;"></i> Languages Supported Statistics</h3>
+                    <span class="badge-pill badge-active" style="font-size:0.8rem; padding:4px 10px;">
+                        <?php echo count($languagesList); ?> Active Languages
+                    </span>
+                </div>
+                <p style="font-size:0.9rem; color:var(--text-secondary-1); margin-top:-0.5rem; margin-bottom:1.25rem;">
+                    Supported languages enabled for automated alert translations, WebRTC voice prompts, and citizen UI localization.
+                </p>
+
+                <div class="languages-grid">
+                    <?php foreach ($languagesList as $lang): ?>
+                        <div class="language-stat-card">
+                            <div class="language-flag">
+                                <?php echo !empty($lang['flag_emoji']) ? htmlspecialchars($lang['flag_emoji']) : getNationalityFlagEmoji($lang['language_code']); ?>
+                            </div>
+                            <div class="language-details">
+                                <h5><?php echo htmlspecialchars($lang['language_name']); ?></h5>
+                                <div class="native-name"><?php echo htmlspecialchars($lang['native_name'] ?? $lang['language_name']); ?> (<?php echo strtoupper(htmlspecialchars($lang['language_code'])); ?>)</div>
+                                <div class="language-badges">
+                                    <?php if (!empty($lang['is_active'])): ?>
+                                        <span class="badge-pill badge-active">Active</span>
+                                    <?php endif; ?>
+                                    <?php if (!empty($lang['is_ai_supported'])): ?>
+                                        <span class="badge-pill badge-ai">AI Supported</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <!-- 4. User Nationalities Stat Graph Section (strictly real-time from users table) -->
+            <div class="graph-card">
+                <div class="section-header">
+                    <h3><i class="fas fa-chart-pie" style="color:#e74c3c;"></i> User Nationalities Demographics</h3>
+                    <span style="font-size:0.85rem; font-weight:700; color:var(--text-secondary-1);">
+                        Total Citizens: <?php echo number_format($totalUsersCount); ?>
+                    </span>
+                </div>
+                <p style="font-size:0.9rem; color:var(--text-secondary-1); margin-top:-0.5rem; margin-bottom:1.5rem;">
+                    Real-time distribution graph of registered user nationalities in Quezon City (queried directly from `users` table).
+                </p>
+
+                <?php if (empty($nationalityStats) || $totalUsersCount === 0): ?>
+                    <div style="text-align:center; padding:3rem 1rem; color:var(--text-secondary-1);">
+                        <i class="fas fa-users-slash" style="font-size:2.5rem; margin-bottom:1rem; opacity:0.5;"></i>
+                        <p style="font-weight:600; margin:0;">No citizen nationality records found in the database yet.</p>
+                        <p style="font-size:0.85rem; opacity:0.75; margin-top:0.35rem;">As new citizens register via the mobile application, their real-time demographic distribution will appear here.</p>
+                    </div>
+                <?php else: ?>
+                    <div class="graph-layout">
+                        <!-- Chart.js Graph -->
+                        <div class="chart-wrapper">
+                            <canvas id="nationalityDonutChart"></canvas>
+                        </div>
+
+                        <!-- Progress List -->
+                        <div class="nationality-list">
+                            <?php foreach ($nationalityStats as $nat): 
+                                $count = (int)$nat['total_users'];
+                                $pct = $totalUsersCount > 0 ? round(($count / $totalUsersCount) * 100, 1) : 0;
+                                $flag = getNationalityFlagEmoji($nat['nationality_name']);
+                            ?>
+                                <div class="nationality-item">
+                                    <div class="nationality-row-info">
+                                        <div class="nationality-flag-name">
+                                            <span style="font-size:1.25rem; line-height:1;"><?php echo $flag; ?></span>
+                                            <span><?php echo htmlspecialchars($nat['nationality_name']); ?></span>
+                                        </div>
+                                        <div>
+                                            <span style="font-weight:700;"><?php echo number_format($count); ?></span>
+                                            <span style="font-size:0.8rem; opacity:0.75; margin-left:4px;">(<?php echo $pct; ?>%)</span>
+                                        </div>
+                                    </div>
+                                    <div class="nationality-bar-bg">
+                                        <div class="nationality-bar-fill" style="width: <?php echo $pct; ?>%;"></div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- 5. Call to Action -->
             <div class="cta-section">
                 <p class="cta-text">Need to add more languages or disable existing ones?</p>
                 <a href="language-management.php" class="btn btn-primary btn-large">
@@ -152,7 +334,57 @@ $pageTitle = 'Multilingual Support Overview';
                     if (data.success && data.languages) {
                         document.getElementById('langCount').textContent = data.languages.length;
                     }
+                })
+                .catch(() => {});
+
+            // Render Real-Time Nationality Demographics Chart
+            const nationalityLabels = <?php echo json_encode(array_column($nationalityStats, 'nationality_name')); ?>;
+            const nationalityData = <?php echo json_encode(array_map('intval', array_column($nationalityStats, 'total_users'))); ?>;
+
+            const ctx = document.getElementById('nationalityDonutChart');
+            if (ctx && nationalityData.length > 0) {
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: nationalityLabels,
+                        datasets: [{
+                            data: nationalityData,
+                            backgroundColor: [
+                                '#3498db', '#2ecc71', '#e74c3c', '#9b59b6', 
+                                '#f1c40f', '#1abc9c', '#e67e22', '#34495e', '#7f8c8d'
+                            ],
+                            borderWidth: 2,
+                            borderColor: 'rgba(255, 255, 255, 0.1)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    boxWidth: 12,
+                                    padding: 12,
+                                    font: { size: 11, weight: '600' },
+                                    color: '#a0aec0'
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const val = context.raw || 0;
+                                        const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                                        return `${context.label}: ${val} users (${pct}%)`;
+                                    }
+                                }
+                            }
+                        },
+                        cutout: '62%'
+                    }
                 });
+            }
         });
     </script>
 </body>

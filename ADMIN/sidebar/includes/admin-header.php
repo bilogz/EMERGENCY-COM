@@ -483,6 +483,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     modal.classList.add('show');
                     this.classList.add('active');
                     document.body.style.overflow = '';
+                    // Clear the message badge and advance the seen cursor for all
+                    // conversation scopes so the sidebar badges also clear in real-time.
+                    window.updateHeaderBadges({ messages: 0 });
+                    if (typeof writeCommunicationSeenId === 'function' && typeof sidebarCommunicationScopes !== 'undefined') {
+                        const scopes = ['reports', 'generalEnquiries'];
+                        scopes.forEach(name => {
+                            const scope = sidebarCommunicationScopes[name];
+                            if (!scope) return;
+                            const badge = document.getElementById(scope.badgeId);
+                            const latest = badge ? parseInt(badge.dataset.latestMessageId || '0', 10) : 0;
+                            if (latest > 0) writeCommunicationSeenId(scope, latest);
+                            setSidebarCommunicationBadge(scope.badgeId, 0);
+                        });
+                    }
+                    // Refresh notifications to get latest data after seen cursor advances.
+                    if (typeof loadHeaderNotifications === 'function') loadHeaderNotifications();
                 }
             }
         });
@@ -897,7 +913,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const safeCount = Math.max(0, parseInt(count || 0, 10));
         const isCurrentModule = badge.dataset.activeModule === '1';
         badge.hidden = isCurrentModule || safeCount === 0;
-        if (badge.hidden) return;
+        if (badge.hidden) {
+            badge.textContent = '';
+            return;
+        }
 
         const label = safeCount === 1
             ? badge.dataset.labelSingular
@@ -915,6 +934,10 @@ document.addEventListener('DOMContentLoaded', function() {
         generalEnquiries: {
             badgeId: 'sidebarGeneralUnreadBadge',
             storageKey: SIDEBAR_COMMUNICATION_STORAGE_PREFIX + 'generalEnquiries'
+        },
+        emergencyCalls: {
+            badgeId: 'sidebarEmergencyCallBadge',
+            storageKey: SIDEBAR_COMMUNICATION_STORAGE_PREFIX + 'emergencyCalls'
         }
     };
 
@@ -941,12 +964,20 @@ document.addEventListener('DOMContentLoaded', function() {
     function applySidebarCommunicationPayload(payload = {}) {
         const values = {
             reports: {
-                count: payload.reportNew ?? payload.report_new ?? 0,
+                // Prefer the absolute unread count from the DB (report_unread) over the
+                // cursor-relative new count (report_new). The cursor-relative count stays
+                // high until the SSE stream reconnects with the updated cursor, causing
+                // the badge to appear even after the admin has already read the messages.
+                count: payload.reportUnread ?? payload.report_unread ?? payload.reportNew ?? payload.report_new ?? 0,
                 latest: payload.reportLatestMessageId ?? payload.report_latest_message_id ?? 0
             },
             generalEnquiries: {
-                count: payload.generalEnquiryNew ?? payload.general_enquiry_new ?? 0,
-                latest: payload.generalEnquiryLatestMessageId ?? payload.general_enquiry_latest_message_id ?? 0
+                count: payload.generalEnquiryUnread ?? payload.general_enquiry_unread ?? payload.generalEnquiryNew ?? payload.general_enquiry_new ?? 0,
+                latest: payload.generalLatestMessageId ?? payload.general_latest_message_id ?? 0
+            },
+            emergencyCalls: {
+                count: payload.openCallCount ?? payload.emergencyCallOpenCount ?? payload.emergency_call_open_count ?? 0,
+                latest: Date.now()
             }
         };
 
@@ -955,23 +986,27 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!badge) return;
 
             const latest = Math.max(0, parseInt(values[name].latest || 0, 10));
-            const seen = readCommunicationSeenId(scope);
             const isCurrentModule = badge.dataset.activeModule === '1';
             badge.dataset.latestMessageId = String(latest);
 
-            // First load establishes a baseline. Visiting the module acknowledges
-            // everything currently visible without changing conversation read state.
-            if (seen === null || isCurrentModule) {
-                writeCommunicationSeenId(scope, latest);
+            if (isCurrentModule) {
+                // Admin is actively viewing this module — advance the seen cursor so
+                // the badge stays clear across SSE reconnects, then hide the badge.
+                if (latest > 0) writeCommunicationSeenId(scope, latest);
                 setSidebarCommunicationBadge(scope.badgeId, 0);
                 return;
             }
 
-            const count = latest > seen
-                ? Math.max(0, parseInt(values[name].count || 0, 10))
-                : 0;
-            setSidebarCommunicationBadge(scope.badgeId, count);
+            const unreadVal = Math.max(0, parseInt(values[name].count || 0, 10));
+            setSidebarCommunicationBadge(scope.badgeId, unreadVal);
         });
+
+        // Update the header message badge with the total unread conversation count
+        // across Reports + General Enquiries so it reflects what the sidebar shows.
+        const reportCount = Math.max(0, parseInt(values.reports.count || 0, 10));
+        const generalCount = Math.max(0, parseInt(values.generalEnquiries.count || 0, 10));
+        const totalMessageUnread = reportCount + generalCount;
+        window.updateHeaderBadges({ messages: totalMessageUnread });
     }
 
     function addCommunicationCursorParams(url, useRealtimeNames = false) {
@@ -1020,8 +1055,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     : (data.incident_unread || 0);
                 const messageUnread = parseInt(messageUnreadRaw || 0, 10);
                 window.updateHeaderBadges({
-                    notifications: Number.isFinite(notificationUnread) ? notificationUnread : 0,
-                    messages: Number.isFinite(messageUnread) ? messageUnread : 0
+                    notifications: Number.isFinite(notificationUnread) ? notificationUnread : 0
+                    // Message badge is controlled by applySidebarCommunicationPayload
+                    // which derives the count from report_unread + general_enquiry_unread.
                 });
                 applySidebarCommunicationPayload(data);
 
@@ -1068,7 +1104,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         };
 
-        source.addEventListener('ready', applyUnreadPayload);
+        source.addEventListener('ready', (event) => {
+            applyUnreadPayload(event);
+            // Also refresh the bell badge on first connection so it shows
+            // the latest count without waiting for the 15-second poll cycle.
+            loadHeaderNotifications();
+        });
         source.addEventListener('conversation:unread', (event) => {
             applyUnreadPayload(event);
             loadHeaderNotifications();

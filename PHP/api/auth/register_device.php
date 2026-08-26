@@ -185,9 +185,9 @@ try {
     }
 
 } catch (PDOException $e) {
-    error_log("User Devices DB Error: " . $e->getMessage());
-    apiResponse::error("Database error occurred.", 500);
+    error_log("User Devices DB Error: " . $e->getMessage() . " | Stack: " . $e->getTraceAsString());
+    apiResponse::error("Database error occurred: " . $e->getMessage(), 500);
 } catch (Exception $e) {
-    error_log("User Devices Error: " . $e->getMessage());
-    apiResponse::error("An unexpected error occurred.", 500);
+    error_log("User Devices Error: " . $e->getMessage() . " | Stack: " . $e->getTraceAsString());
+    apiResponse::error("An unexpected error occurred: " . $e->getMessage(), 500);
 }

@@ -238,6 +238,39 @@ function sendPushNotification($userId, $title, $message, $data = [], $alertId = 
     if ($pdo === null) return false;
 
     try {
+        // Resolve user language preference from users table
+        $userLang = 'en';
+        if ((int)$userId > 0) {
+            try {
+                $uStmt = $pdo->prepare("SELECT language_preference FROM users WHERE id = ? LIMIT 1");
+                $uStmt->execute([(int)$userId]);
+                $uRow = $uStmt->fetch(PDO::FETCH_ASSOC);
+                if (!empty($uRow['language_preference'])) {
+                    $langVal = strtolower(trim((string)$uRow['language_preference']));
+                    if ($langVal === 'fil' || $langVal === 'tl' || $langVal === 'filipino' || $langVal === 'tagalog') {
+                        $userLang = 'fil';
+                    }
+                }
+            } catch (Throwable $e) {}
+        }
+
+        // Translate title and message if recipient language preference is Filipino (fil)
+        $finalTitle = (string)$title;
+        $finalMessage = (string)$message;
+        if ($userLang !== 'en') {
+            if (file_exists(__DIR__ . '/alert-translation-helper.php')) {
+                require_once __DIR__ . '/alert-translation-helper.php';
+                if (class_exists('AlertTranslationHelper')) {
+                    $helper = new AlertTranslationHelper($pdo);
+                    $translated = $helper->getTranslatedAlert($alertId, $userLang, $finalTitle, $finalMessage);
+                    if (is_array($translated) && !empty($translated['title']) && !empty($translated['message'])) {
+                        $finalTitle = $translated['title'];
+                        $finalMessage = $translated['message'];
+                    }
+                }
+            }
+        }
+
         $devices = [];
         $deviceTable = resolveDeviceRegistryTable($pdo);
         $stmt = $pdo->prepare("SELECT device_id, fcm_token, push_token FROM {$deviceTable} WHERE user_id = ? AND is_active = 1 AND ((fcm_token IS NOT NULL AND fcm_token <> '') OR (push_token IS NOT NULL AND push_token <> ''))");
@@ -257,15 +290,20 @@ function sendPushNotification($userId, $title, $message, $data = [], $alertId = 
 
         if (!$devices) return false;
         $successCount = 0;
-        $payloadData = array_merge(['alert_id' => (string)$alertId, 'type' => 'alert', 'click_action' => 'OPEN_EMERGENCY_ALERT'], $data);
+        $payloadData = array_merge([
+            'alert_id' => (string)$alertId,
+            'type' => 'alert',
+            'language' => $userLang,
+            'click_action' => 'OPEN_EMERGENCY_ALERT'
+        ], $data);
         foreach ($devices as $token => $deviceId) {
             $error = null;
-            if (pushHelperSendFcmV1($token, (string)$title, (string)$message, $payloadData, $error)) {
+            if (pushHelperSendFcmV1($token, $finalTitle, $finalMessage, $payloadData, $error)) {
                 $successCount++;
-                logPushNotification($userId, $deviceId, $title, $message, $alertId, 'success');
+                logPushNotification($userId, $deviceId, $finalTitle, $finalMessage, $alertId, 'success');
             } else {
                 error_log("Push Notification: Failed for device {$deviceId}: " . (string)$error);
-                logPushNotification($userId, $deviceId, $title, $message, $alertId, 'failed');
+                logPushNotification($userId, $deviceId, $finalTitle, $finalMessage, $alertId, 'failed');
             }
         }
         return $successCount > 0;

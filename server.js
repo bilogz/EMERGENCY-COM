@@ -1,5 +1,7 @@
 const express = require('express');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -18,6 +20,8 @@ const MAX_MESSAGES_PER_ROOM = 50;
 const MAX_ACTIVE_OFFERS = Number(process.env.MAX_ACTIVE_OFFERS || 500);
 const MAX_ACTIVE_CALLS = Number(process.env.MAX_ACTIVE_CALLS || 500);
 const SOCKET_DEBUG = process.env.SOCKET_DEBUG === '1';
+const CALL_STATE_FILE = path.join(__dirname, 'ADMIN', 'api', 'cache', 'live-call-state.json');
+const TERMINAL_CALL_STATUSES = new Set(['ended', 'declined', 'cancelled', 'canceled', 'completed', 'resolved']);
 
 function debugLog(message) {
   if (SOCKET_DEBUG) console.log(message);
@@ -35,13 +39,18 @@ function pruneExpiredCalls() {
   const now = Date.now();
   const cutoff = now - OFFER_TTL_MS;
   const ringingCutoff = now - RINGING_CALL_TTL_MS;
+  let stateChanged = false;
   for (const [room, offer] of activeOffersByRoom.entries()) {
-    if (!offer || offer.ts < cutoff) activeOffersByRoom.delete(room);
+    if (!offer || offer.ts < cutoff) {
+      activeOffersByRoom.delete(room);
+      stateChanged = true;
+    }
   }
   for (const [callId, call] of activeCallsById.entries()) {
     if (!call || call.updatedAt < cutoff || (call.status === 'ringing' && call.updatedAt < ringingCutoff)) {
       if (call?.room) activeOffersByRoom.delete(call.room);
       activeCallsById.delete(callId);
+      stateChanged = true;
     }
   }
   for (const [room, messages] of recentMessagesByRoom.entries()) {
@@ -55,14 +64,71 @@ function pruneExpiredCalls() {
     const oldestRoom = activeOffersByRoom.keys().next().value;
     if (!oldestRoom) break;
     activeOffersByRoom.delete(oldestRoom);
+    stateChanged = true;
   }
   while (activeCallsById.size > MAX_ACTIVE_CALLS) {
     const oldestCallId = activeCallsById.keys().next().value;
     if (!oldestCallId) break;
     activeCallsById.delete(oldestCallId);
+    stateChanged = true;
+  }
+  if (stateChanged) persistCallState();
+}
+
+function persistCallState() {
+  try {
+    fs.mkdirSync(path.dirname(CALL_STATE_FILE), { recursive: true });
+    const state = {
+      version: 1,
+      savedAt: Date.now(),
+      calls: Array.from(activeCallsById.values())
+        .filter((call) => call && !TERMINAL_CALL_STATUSES.has(String(call.status || '').toLowerCase()))
+        .map((call) => ({
+          ...call,
+          callerSocketId: null,
+          adminSocketId: null,
+        })),
+      offers: Array.from(activeOffersByRoom.entries()).map(([room, offer]) => ({
+        room,
+        payload: offer?.payload || null,
+        ts: Number(offer?.ts || Date.now()),
+      })),
+    };
+    const tmpFile = `${CALL_STATE_FILE}.tmp`;
+    fs.writeFileSync(tmpFile, JSON.stringify(state));
+    fs.renameSync(tmpFile, CALL_STATE_FILE);
+  } catch (error) {
+    console.warn(`[call-state] persist failed: ${error.message}`);
   }
 }
 
+function restoreCallState() {
+  try {
+    if (!fs.existsSync(CALL_STATE_FILE)) return;
+    const state = JSON.parse(fs.readFileSync(CALL_STATE_FILE, 'utf8'));
+    const now = Date.now();
+    for (const call of Array.isArray(state.calls) ? state.calls : []) {
+      if (!call?.callId) continue;
+      if (TERMINAL_CALL_STATUSES.has(String(call.status || '').toLowerCase())) continue;
+      const updatedAt = Number(call.updatedAt || call.createdAt || 0) || now;
+      if (now - updatedAt > OFFER_TTL_MS) continue;
+      activeCallsById.set(String(call.callId), {
+        ...call,
+        callerSocketId: null,
+        adminSocketId: null,
+        updatedAt,
+      });
+    }
+    for (const offer of Array.isArray(state.offers) ? state.offers : []) {
+      const ts = Number(offer?.ts || 0) || now;
+      if (!offer?.room || !offer?.payload || now - ts > OFFER_TTL_MS) continue;
+      activeOffersByRoom.set(String(offer.room), { payload: offer.payload, ts });
+    }
+    if (activeCallsById.size) console.log(`[call-state] restored ${activeCallsById.size} live call(s)`);
+  } catch (error) {
+    console.warn(`[call-state] restore failed: ${error.message}`);
+  }
+}
 function callSummary(call) {
   return {
     callId: call.callId,
@@ -106,6 +172,7 @@ function emitCallQueue() {
 
 function emitCallUpdate(event, call) {
   if (!call) return;
+  persistCallState();
   const payload = { event, call: callQueueSummary(call), updatedAt: Date.now() };
   io.to(CALL_LOBBY_ROOM).emit('call-updated', payload);
   if (call.room) io.to(call.room).emit('call-updated', payload);
@@ -161,14 +228,18 @@ function relayHangup(socket, payload = {}, room) {
     socket.to(signalRoom).emit('hangup', notice);
     socket.to(signalRoom).emit('call-ended', notice);
     socket.to(signalRoom).emit('call_ended', notice);
+    socket.to(signalRoom).emit('stop-location-prompt', notice);
   }
   if (callId) {
     const endedCall = activeCallsById.get(callId);
     if (endedCall) emitCallUpdate('ended', { ...endedCall, status: 'ended', updatedAt: Date.now() });
     activeCallsById.delete(callId);
+    persistCallState();
     emitCallQueue();
   }
 }
+
+restoreCallState();
 
 const io = new Server(server, {
   allowEIO3: true,
@@ -195,7 +266,10 @@ io.on('connection', (socket) => {
       const cached = activeOffersByRoom.get(room);
       const cachedCallId = cleanText(cached?.payload?.callId, 128);
       const cachedCall = cachedCallId ? activeCallsById.get(cachedCallId) : null;
-      if (cached && Date.now() - cached.ts <= OFFER_TTL_MS && (!cachedCall || cachedCall.status === 'ringing')) {
+      const canReplayCachedOffer = cached
+        && Date.now() - cached.ts <= OFFER_TTL_MS
+        && (!cachedCall || cachedCall.status === 'ringing' || cachedCall.status === 'accepted');
+      if (canReplayCachedOffer) {
         socket.emit('offer', cached.payload);
         debugLog(`[socket] replayed cached offer room=${room} callId=${cached.payload?.callId || ''}`);
       }
@@ -203,23 +277,9 @@ io.on('connection', (socket) => {
         emitCallQueue();
       }
       const roomCall = Array.from(activeCallsById.values()).find((call) => call.room === room) || null;
-      if (roomCall && roomCall.callerSocketId && roomCall.callerSocketId !== socket.id) {
-        roomCall.adminSocketId = socket.id;
-        roomCall.status = 'accepted';
-        roomCall.updatedAt = Date.now();
-        const responseReady = {
-          callId: roomCall.callId,
-          call_id: roomCall.callId,
-          room,
-          role: 'response_team',
-          reason: 'response-team-room-joined',
-        };
-        // Joining the private room is the authoritative acceptance signal.
-        // This prevents a missed UI control event from leaving mobile stuck
-        // at "Waiting" even though ERS has opened the call.
-        socket.to(room).emit('dispatcher-ready', responseReady);
-        socket.to(room).emit('request-transfer-offer', responseReady);
-      }
+      // Joining a private room is presence only. A call must move from Open to
+      // Assigned only through the explicit claim-call action; otherwise the
+      // admin page can accidentally "answer" while just rendering the queue.
       const recentMessages = recentMessagesByRoom.get(room) || [];
       if (recentMessages.length) socket.emit('call-message-history', recentMessages);
       const memberCount = io.sockets.adapter.rooms.get(room)?.size || 0;
@@ -270,6 +330,7 @@ io.on('connection', (socket) => {
     const announcementRoom = cleanText(room, 180);
     const callId = cleanText(payload?.callId, 128);
     if (typeof signalRoom === 'string' && signalRoom.length > 0) {
+      socket.join(signalRoom);
       activeOffersByRoom.set(signalRoom, { payload, ts: Date.now() });
       debugLog(`[signal] offer room=${signalRoom} broadcast=${announcementRoom || signalRoom} callId=${payload?.callId || ''}`);
     }
@@ -334,6 +395,24 @@ io.on('connection', (socket) => {
     call.adminSocketId = socket.id;
     call.updatedAt = Date.now();
     socket.join(call.room);
+
+    const cached = activeOffersByRoom.get(call.room);
+    if (cached && Date.now() - cached.ts <= OFFER_TTL_MS) {
+      socket.emit('offer', {
+        ...(cached.payload || {}),
+        callId: call.callId,
+        call_id: call.callId,
+        room: call.room,
+      });
+      debugLog(`[socket] sent cached offer to claiming admin room=${call.room} callId=${call.callId}`);
+    }
+    socket.to(call.room).emit('request-offer', {
+      callId: call.callId,
+      call_id: call.callId,
+      room: call.room,
+      reason: 'admin-claimed-call',
+    });
+
     socket.to(CALL_LOBBY_ROOM).emit('call-claimed', { callId, adminKey, call: callQueueSummary(call) });
     emitCallUpdate('claimed', call);
     if (typeof acknowledge === 'function') acknowledge({ ok: true, call: callSummary(call) });
@@ -423,6 +502,29 @@ io.on('connection', (socket) => {
     acknowledge({ ok: true, call: liveCallIdentity(call) });
   });
 
+  socket.on('request-offer', (payload, room, acknowledge) => {
+    const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
+    const callId = getSignalCallId(payload);
+    const call = callId ? activeCallsById.get(callId) : null;
+    const targetRoom = call?.room || signalRoom;
+    const normalizedPayload = call
+      ? { ...(payload || {}), callId: call.callId, call_id: call.callId, room: call.room }
+      : { ...(payload || {}), room: targetRoom };
+
+    if (targetRoom) socket.join(targetRoom);
+    debugLog(`[signal] request-offer room=${targetRoom || ''} callId=${callId || ''}`);
+    if (targetRoom) socket.to(targetRoom).emit('request-offer', normalizedPayload);
+
+    const callerSocketId = call?.callerSocketId;
+    const roomMembers = targetRoom ? io.sockets.adapter.rooms.get(targetRoom) : null;
+    if (callerSocketId && callerSocketId !== socket.id && !roomMembers?.has(callerSocketId)) {
+      io.to(callerSocketId).emit('request-offer', normalizedPayload);
+    }
+
+    if (typeof acknowledge === 'function') {
+      acknowledge({ ok: true, room: targetRoom, callerOnline: !!callerSocketId });
+    }
+  });
   socket.on('answer', (payload, room) => {
     const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
     debugLog(`[signal] answer room=${signalRoom} callId=${payload?.callId || ''}`);
@@ -432,7 +534,10 @@ io.on('connection', (socket) => {
       ? { ...(payload || {}), callId: call.callId, call_id: call.callId, room: call.room }
       : payload;
     const targetRoom = call?.room || signalRoom;
-    if (targetRoom) socket.to(targetRoom).emit('answer', normalizedPayload);
+    if (targetRoom) {
+      socket.join(targetRoom);
+      socket.to(targetRoom).emit('answer', normalizedPayload);
+    }
     const peerSocketId = call
       ? (call.callerSocketId === socket.id ? call.adminSocketId : call.callerSocketId)
       : null;
@@ -450,7 +555,10 @@ io.on('connection', (socket) => {
       ? { ...(candidate || {}), callId: call.callId, call_id: call.callId, room: call.room }
       : candidate;
     const targetRoom = call?.room || signalRoom;
-    if (targetRoom) socket.to(targetRoom).emit('candidate', normalizedCandidate);
+    if (targetRoom) {
+      socket.join(targetRoom);
+      socket.to(targetRoom).emit('candidate', normalizedCandidate);
+    }
     const peerSocketId = call
       ? (call.callerSocketId === socket.id ? call.adminSocketId : call.callerSocketId)
       : null;
@@ -463,6 +571,35 @@ io.on('connection', (socket) => {
   socket.on('hangup', (payload, room) => relayHangup(socket, payload, room));
   socket.on('call-ended', (payload, room) => relayHangup(socket, payload, room));
   socket.on('call_ended', (payload, room) => relayHangup(socket, payload, room));
+
+  socket.on('location-update', (payload, room) => {
+    const signalRoom = resolveSignalRoom(payload, room);
+    if (signalRoom) {
+      socket.to(signalRoom).emit('location-update', payload);
+    }
+  });
+
+  socket.on('barangay-update', (payload, room) => {
+    const signalRoom = resolveSignalRoom(payload, room);
+    const callId = getSignalCallId(payload);
+    if (callId && activeCallsById.has(callId)) {
+      const call = activeCallsById.get(callId);
+      const bgy = payload?.barangay || payload?.currentBarangay;
+      if (bgy) call.currentBarangay = bgy;
+      if (payload?.source === 'caller') call.callerSelectedBarangay = bgy;
+      if (payload?.source === 'admin') call.adminSelectedBarangay = bgy;
+    }
+    if (signalRoom) {
+      socket.to(signalRoom).emit('barangay-update', payload);
+    }
+  });
+
+  socket.on('stop-location-prompt', (payload, room) => {
+    const signalRoom = resolveSignalRoom(payload, room);
+    if (signalRoom) {
+      socket.to(signalRoom).emit('stop-location-prompt', payload);
+    }
+  });
 
   socket.on('call-message', (payload, room, acknowledge) => {
     const signalRoom = cleanText(payload?.room, 180) || cleanText(room, 180);
@@ -652,10 +789,13 @@ io.on('connection', (socket) => {
         callerSocketId: socket.id,
         adminSocketId: existing?.adminSocketId || null,
         adminKey: existing?.adminKey || null,
+        createdAt: existing?.createdAt || Date.now(),
         status: existing?.status || 'ringing',
         updatedAt: Date.now(),
       });
       socket.join(room);
+      persistCallState();
+      emitCallQueue();
     }
     debugLog(`[transfer-notify] type=${transferType} transferId=${payload?.transferId || payload?.transfer_id || ''}`);
     io.to(TRANSFER_INBOX_ROOM).emit('incoming-transfer', transferNotice);
@@ -664,19 +804,22 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', (reason) => {
     let queueChanged = false;
-    for (const [callId, call] of activeCallsById.entries()) {
+    for (const call of activeCallsById.values()) {
       if (call.callerSocketId === socket.id) {
-        if (call.status === 'ringing') {
-          if (call.room) activeOffersByRoom.delete(call.room);
-          activeCallsById.delete(callId);
-          queueChanged = true;
-          continue;
-        }
         call.callerSocketId = null;
+        call.updatedAt = Date.now();
+        queueChanged = true;
       }
-      if (call.adminSocketId === socket.id) call.adminSocketId = null;
+      if (call.adminSocketId === socket.id) {
+        call.adminSocketId = null;
+        call.updatedAt = Date.now();
+        queueChanged = true;
+      }
     }
-    if (queueChanged) emitCallQueue();
+    if (queueChanged) {
+      persistCallState();
+      emitCallQueue();
+    }
     debugLog(`[socket] disconnected ${socket.id} reason=${reason}`);
   });
 });
@@ -688,3 +831,4 @@ const HOST = process.env.SOCKET_HOST || '0.0.0.0'; // Listen on all interfaces f
 server.listen(PORT, HOST, () => {
   console.log(`Socket.IO signaling server listening on ${HOST}:${PORT}`);
 });
+

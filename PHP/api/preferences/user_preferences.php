@@ -61,15 +61,33 @@ try {
         }
 
         // Validate required fields
+        $notification_language = normalizeNotificationPreferenceLanguage($data['notification_language'] ?? 'en');
+        $sms_notifications = $data['sms_notifications'] ?? true;
+        $email_notifications = $data['email_notifications'] ?? true;
+        $push_notifications = $data['push_notifications'] ?? true;
+        $alert_categories = $data['alert_categories'] ?? null;
+        
+        // Parse alert_categories if it's a JSON string
+        if ($alert_categories && is_string($alert_categories)) {
+            $decoded = json_decode($alert_categories, true);
+            if (is_array($decoded)) {
+                $alert_categories = json_encode($decoded);
+            }
+        }
+
+        // Validate required fields
         if (!$user_id) {
             apiResponse::error("Missing required fields: user_id", 400);
         }
 
         // Validate language
-        $validLanguages = ['en', 'tl'];
+        $validLanguages = ['en', 'tl', 'fil'];
         if (!in_array($preferred_language, $validLanguages)) {
             apiResponse::error("Invalid preferred_language. Must be one of: " . implode(', ', $validLanguages), 400);
         }
+
+        // Standardize language code to en or fil
+        $standardLang = ($preferred_language === 'fil' || $preferred_language === 'tl') ? 'fil' : 'en';
 
         // Convert boolean strings to actual booleans
         $sms_notifications = filter_var($sms_notifications, FILTER_VALIDATE_BOOLEAN);
@@ -101,9 +119,18 @@ try {
             $alert_categories
         ]);
 
+        // Also update users.language_preference table column directly
+        try {
+            $uStmt = $pdo->prepare("UPDATE users SET language_preference = ? WHERE id = ?");
+            $uStmt->execute([$standardLang, $user_id]);
+        } catch (Throwable $e) {
+            error_log("Error syncing users.language_preference: " . $e->getMessage());
+        }
+
         apiResponse::success([
             'user_id' => $user_id,
             'preferred_language' => $preferred_language,
+            'language_preference' => $standardLang,
             'notification_language' => $notification_language,
             'sms_notifications' => $sms_notifications,
             'email_notifications' => $email_notifications,

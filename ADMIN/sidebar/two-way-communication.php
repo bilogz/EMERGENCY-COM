@@ -20,6 +20,43 @@ $pageMode = $pageMode ?? 'citizen_reports';
 $isReportTableMode = in_array($pageMode, ['citizen_reports', 'emergency_calls'], true);
 $assetBaseUrl = $assetBaseUrl ?? '';
 $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
+
+$turnUrl = '';
+$turnUsername = '';
+$turnCredential = '';
+$adminConfigPath = __DIR__ . '/../api/config.local.php';
+if (is_file($adminConfigPath)) {
+    $adminConfig = @require $adminConfigPath;
+    if (is_array($adminConfig)) {
+        $turnUrl = trim((string)($adminConfig['WEBRTC_TURN_URL'] ?? ''));
+        $turnUsername = trim((string)($adminConfig['WEBRTC_TURN_USERNAME'] ?? ''));
+        $turnCredential = trim((string)($adminConfig['WEBRTC_TURN_CREDENTIAL'] ?? ''));
+    }
+}
+if (($turnUrl === '' || $turnUsername === '' || $turnCredential === '') && file_exists(__DIR__ . '/../../USERS/api/config.env.php')) {
+    require_once __DIR__ . '/../../USERS/api/config.env.php';
+    if (function_exists('getSecureConfig')) {
+        $turnUrl = $turnUrl !== '' ? $turnUrl : trim((string) getSecureConfig('WEBRTC_TURN_URL', ''));
+        $turnUsername = $turnUsername !== '' ? $turnUsername : trim((string) getSecureConfig('WEBRTC_TURN_USERNAME', ''));
+        $turnCredential = $turnCredential !== '' ? $turnCredential : trim((string) getSecureConfig('WEBRTC_TURN_CREDENTIAL', ''));
+    }
+}
+
+$turnUrls = [];
+if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredential !== '') {
+    $turnUrls = [$turnUrl];
+    if (preg_match('/^turns?:(?:\/\/)?([^:\/?]+)/i', $turnUrl, $hostMatch)) {
+        $turnHost = strtolower($hostMatch[1]);
+        if (strpos($turnHost, 'metered.ca') !== false) {
+            $turnUrls = [
+                'turn:' . $turnHost . ':80',
+                'turn:' . $turnHost . ':80?transport=tcp',
+                'turn:' . $turnHost . ':443',
+                'turns:' . $turnHost . ':443?transport=tcp',
+            ];
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -83,7 +120,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
         .twc-table tr.conversation-item {
             cursor: pointer;
-            transition: all 0.2s ease;
+        }
+        .twc-table tr.conversation-item td {
+            transition: background-color 0.2s ease;
         }
         .twc-table tr.conversation-item:hover td {
             background: rgba(76, 138, 137, 0.05);
@@ -115,6 +154,34 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
             70% { box-shadow: 0 0 0 6px rgba(46, 204, 113, 0); }
             100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+        }
+
+        /* Premium Status Pills */
+        .workflow-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            border-radius: 9999px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .workflow-pill.workflow-open {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+        .workflow-pill.workflow-completed, .workflow-pill.workflow-resolved {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+        }
+        .workflow-pill.workflow-closed {
+            background-color: rgba(107, 114, 128, 0.1);
+            color: #6b7280;
+        }
+        .workflow-pill.workflow-pending {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
         }
 
         .twc-modal-backdrop {
@@ -304,6 +371,20 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         <!-- Conversations List Container -->
                         <div class="conversations-list-container">
                             <div class="chat-tabs">
+                                <?php if ($pageMode === 'emergency_calls'): ?>
+                                <div class="chat-tab active" onclick="switchTab('open')">
+                                    <i class="fas fa-inbox"></i> Open <span id="openCount" class="badge"></span>
+                                </div>
+                                <div class="chat-tab" onclick="switchTab('assigned')">
+                                    <i class="fas fa-user-check"></i> Assigned
+                                </div>
+                                <div class="chat-tab" onclick="switchTab('unanswered')">
+                                    <i class="fas fa-phone-slash"></i> Unanswered
+                                </div>
+                                <div class="chat-tab" onclick="switchTab('completed')">
+                                    <i class="fas fa-circle-check"></i> Completed
+                                </div>
+                                <?php else: ?>
                                 <div class="chat-tab active" onclick="switchTab('open')">
                                     <i class="fas fa-inbox"></i> Open <span id="openCount" class="badge"></span>
                                 </div>
@@ -321,6 +402,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                                 <div class="chat-tab" onclick="switchTab('closed')">
                                     <i class="fas fa-circle-check"></i> Closed
                                 </div>
+                                <?php endif; ?>
                                 <?php endif; ?>
                             </div>
                             <?php if ($isReportTableMode): ?><div class="chat-filters">
@@ -483,6 +565,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                             <div><span>Emergency Type</span><span id="twcTransferType">-</span></div>
                             <div><span>Location</span><span id="twcTransferLocation">-</span></div>
                             <div><span>Priority</span><span id="twcTransferPriority" class="incident-priority-badge incident-priority-low">LOW 0</span></div>
+                        </div>
+                        <div class="twc-transfer-description" id="reportBarangaySelectorGroup" style="position:relative; margin-top:0.9rem;">
+                            <label for="reportBarangaySearch">Incident Barangay <span aria-hidden="true" style="color:#dc2626;">*</span></label>
+                            <input id="reportBarangaySearch" type="text" placeholder="Search Quezon City barangay..." autocomplete="off" style="width:100%; padding:8px 10px; border:1px solid var(--border-color-1, rgba(255,255,255,0.14)); border-radius:9px; background:var(--card-bg-1, rgba(255,255,255,0.07)); color:var(--text-color-1, #fff); font-weight:700; outline:none;">
+                            <div id="reportBarangaySelected" style="font-size:12px; opacity:0.8; font-weight:600; margin-top:4px;">No barangay selected</div>
+                            <div id="reportBarangayResults" style="display:none; position:absolute; left:0; right:0; top:68px; max-height:180px; overflow:auto; border:1px solid var(--border-color-1, rgba(255,255,255,0.16)); border-radius:10px; background:#111827; box-shadow:0 16px 34px rgba(0,0,0,.35); z-index:20;"></div>
                         </div>
                         <div class="twc-transfer-description" id="twcTransferDescriptionGroup">
                             <label for="twcTransferDescription">Description <span aria-hidden="true">*</span></label>
@@ -703,6 +791,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         const ADMIN_AVATAR = `https://ui-avatars.com/api/?name=${encodeURIComponent(ADMIN_USERNAME)}&background=4c8a89&color=fff&size=128`;
         const PAGE_MODE = <?php echo json_encode($pageMode); ?>;
         const REPORT_TABLE_MODE = <?php echo json_encode($isReportTableMode); ?>;
+        const EMERGENCY_COM_CALL_INTAKE_ENABLED = PAGE_MODE === 'emergency_calls';
+        const incomingCallQueue = new Map();
+        let lastDbCallSessions = { open: [], assigned: [], completed: [], all: [] };
         
         // State Management
         let currentStatus = 'open';
@@ -1729,6 +1820,18 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }
 
         async function loadConversations(isInitial = false, append = false, silent = false) {
+            if (typeof EMERGENCY_COM_CALL_INTAKE_ENABLED !== 'undefined' && EMERGENCY_COM_CALL_INTAKE_ENABLED) {
+                const spinner = document.getElementById('loadingSpinner');
+                const pagination = document.getElementById('paginationContainer');
+                if (spinner) spinner.style.display = 'none';
+                if (pagination) pagination.style.display = 'none';
+                if (typeof renderCallTableForStatus === 'function') {
+                    renderCallTableForStatus();
+                } else if (typeof renderIncomingCallTableRows === 'function') {
+                    renderIncomingCallTableRows();
+                }
+                return;
+            }
             const requestSequence = ++conversationLoadSequence;
             if (conversationLoadController) {
                 conversationLoadController.abort();
@@ -1912,6 +2015,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         function formatMessageReportCount(diff) {
             if (PAGE_MODE === 'general_enquiries') {
                 return diff === 1 ? '1 new general enquiry' : `${diff} new general enquiries`;
+            }
+            if (PAGE_MODE === 'emergency_calls') {
+                return diff === 1 ? '1 new emergency call' : `${diff} new emergency calls`;
             }
             return diff === 1 ? '1 new message/report' : `${diff} new message/reports`;
         }
@@ -2120,15 +2226,17 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const workflowRaw = (conv.workflowStatus || '').toLowerCase();
             const workflowLabelMap = {
                 open: 'Open', active: 'Open', in_progress: 'Assigned', waiting_user: 'Pending',
-                pending: 'Pending', resolved: 'Completed', completed: 'Completed', closed: 'Closed'
+                pending: 'Pending', received: 'Received by ERS', dispatching: 'Dispatching',
+                ongoing_dispatch: 'Ongoing Dispatch', resolved: 'Completed', completed: 'Completed', closed: 'Closed'
             };
             const workflowClassMap = {
                 open: 'workflow-open', active: 'workflow-open', in_progress: 'workflow-progress',
-                waiting_user: 'workflow-waiting', pending: 'workflow-waiting',
+                waiting_user: 'workflow-waiting', pending: 'workflow-waiting', received: 'workflow-waiting',
+                dispatching: 'workflow-progress', ongoing_dispatch: 'workflow-progress',
                 resolved: 'workflow-resolved', completed: 'workflow-resolved', closed: 'workflow-closed'
             };
-            const workflowLabel = workflowLabelMap[workflowRaw] || 'In Queue';
-            const workflowClass = workflowClassMap[workflowRaw] || 'workflow-open';
+            const workflowLabel = workflowLabelMap[workflowRaw] || (workflowRaw ? escapeHtml(workflowRaw.replace(/_/g, ' ').toUpperCase()) : 'In Queue');
+            const workflowClass = workflowClassMap[workflowRaw] || 'workflow-waiting';
             const statusBadge = `<span class="workflow-pill ${workflowClass}">${workflowLabel}</span>`;
             const assignedAdmin = conv.assignedAdminName
                 ? `<span class="assigned-admin-pill"><i class="fas fa-user-shield"></i> ${escapeHtml(conv.assignedAdminName)}</span>`
@@ -2147,7 +2255,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 ? `<td style="padding:0.85rem 0.75rem;vertical-align:middle;">${incidentPriorityBadgeHtml(conv)}</td>`
                 : '';
             const canTransferReport = REPORT_TABLE_MODE
-                && !['waiting_user', 'pending', 'resolved', 'completed', 'closed'].includes(workflowRaw);
+                && !['waiting_user', 'pending', 'received', 'dispatching', 'ongoing_dispatch', 'resolved', 'completed', 'closed'].includes(workflowRaw);
             const transferAction = canTransferReport
                 ? `<button class="btn btn-secondary transfer-report-btn" data-conversation-id="${conv.id}" style="padding:0.35rem 0.65rem;font-size:0.75rem;border-radius:4px;cursor:pointer;margin-right:0.35rem;">
                        <i class="fas fa-share-from-square"></i> Transfer
@@ -2291,9 +2399,68 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             setTransferModalBusy(false);
         }
 
+        let selectedReportBarangay = '';
+
+        function getSelectedReportBarangay() {
+            return String(selectedReportBarangay || '').trim();
+        }
+
+        function setReportBarangaySelection(value) {
+            selectedReportBarangay = String(value || '').trim();
+            const input = document.getElementById('reportBarangaySearch');
+            const selected = document.getElementById('reportBarangaySelected');
+            const results = document.getElementById('reportBarangayResults');
+            if (input) input.value = selectedReportBarangay;
+            if (selected) selected.textContent = selectedReportBarangay ? `Selected: ${selectedReportBarangay}` : 'No barangay selected';
+            if (results) results.style.display = 'none';
+        }
+
+        function renderReportBarangayResults(query = '') {
+            const results = document.getElementById('reportBarangayResults');
+            if (!results) return;
+            const needle = String(query || '').trim().toLowerCase();
+            const matches = QC_CALL_BARANGAYS
+                .filter(name => !needle || name.toLowerCase().includes(needle));
+            if (!matches.length) {
+                results.innerHTML = '<div style="padding:10px 12px; font-size:12px; opacity:.75;">No Quezon City barangay found.</div>';
+                results.style.display = 'block';
+                return;
+            }
+            results.innerHTML = matches.map(name => `
+                <button type="button" class="report-barangay-option" data-barangay="${String(name).replace(/"/g, '&quot;')}" style="width:100%; border:0; border-bottom:1px solid rgba(255,255,255,.08); padding:9px 12px; background:transparent; color:#fff; text-align:left; font-weight:700; cursor:pointer;">
+                    ${name}
+                </button>
+            `).join('');
+            results.style.display = 'block';
+            results.querySelectorAll('.report-barangay-option').forEach(btn => {
+                btn.addEventListener('click', () => setReportBarangaySelection(btn.dataset.barangay || ''));
+            });
+        }
+
+        function bindReportBarangaySelector() {
+            const input = document.getElementById('reportBarangaySearch');
+            if (!input || input.dataset.bound === '1') return;
+            input.dataset.bound = '1';
+            input.addEventListener('focus', () => renderReportBarangayResults(input.value));
+            input.addEventListener('input', () => {
+                selectedReportBarangay = '';
+                const selected = document.getElementById('reportBarangaySelected');
+                if (selected) selected.textContent = 'Choose a barangay from the search results.';
+                renderReportBarangayResults(input.value);
+            });
+            document.addEventListener('click', (event) => {
+                const wrapper = document.getElementById('reportBarangaySelectorGroup');
+                const results = document.getElementById('reportBarangayResults');
+                if (wrapper && results && !wrapper.contains(event.target)) results.style.display = 'none';
+            });
+        }
+
         function openTransferModal(data) {
             const modal = document.getElementById('twcTransferModal');
             if (!modal) return Promise.resolve(false);
+
+            setReportBarangaySelection('');
+            bindReportBarangaySelector();
 
             const citizenEl = document.getElementById('twcTransferCitizen');
             const typeEl = document.getElementById('twcTransferType');
@@ -2332,6 +2499,15 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     resolve(value);
                 };
                 const onConfirm = () => {
+                    const incidentBarangay = getSelectedReportBarangay();
+                    if (!incidentBarangay) {
+                        setTransferModalMessage('Please select the incident barangay before transferring.', 'error');
+                        return;
+                    }
+                    if (!isSanAgustinBarangay(incidentBarangay)) {
+                        setTransferModalMessage('Emergency Response System integration is not yet available for this barangay.', 'error');
+                        return;
+                    }
                     const description = String(descriptionEl?.value || '').trim();
                     if (!description) {
                         descriptionEl?.setAttribute('aria-invalid', 'true');
@@ -2339,7 +2515,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         descriptionEl?.focus();
                         return;
                     }
-                    cleanup({ description });
+                    cleanup({ description, incidentBarangay });
                 };
                 const onCancel = () => cleanup(false);
                 const onBackdrop = (event) => {
@@ -2401,6 +2577,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 socketUrl: null,
                 socketPath: null,
                 emergencyType: data?.category || data?.department || data?.userConcern || '',
+                incidentBarangay: transferForm.incidentBarangay,
+                barangay: transferForm.incidentBarangay,
                 description: transferForm.description,
                 priority: priorityMeta.level,
                 priorityColor: priorityMeta.color,
@@ -2442,6 +2620,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 notifyErsReportTransfer(result.data || payload, result);
                 setTransferModalMessage(result.integration?.configured ? 'Transfer notification sent.' : 'Transfer payload prepared.', 'success');
                 if (currentConversationData && String(currentConversationData.id) === String(conversationId)) {
+                    currentConversationData.status = 'waiting_user';
                     currentConversationData.assignedTo = null;
                 }
                 resetConversationsAndReload();
@@ -3580,6 +3759,22 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         <input id="callerNameInput" type="text" placeholder="Admin edit: caller name" autocomplete="off" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
                         <input id="callerPhoneInput" type="tel" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" placeholder="09XXXXXXXXX" autocomplete="off" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
                         <input id="callerAddressInput" type="text" placeholder="Type location or address" style="grid-column:1 / -1; min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:600;">
+                        <div id="callLocationStatusSection" style="grid-column:1 / -1; padding:10px 12px; border:1px solid rgba(56,189,248,0.28); border-radius:10px; background:rgba(56,189,248,0.06); display:flex; flex-direction:column; gap:4px; font-size:12px;">
+                            <div style="font-weight:800; color:#38bdf8; font-size:11px; letter-spacing:0.5px; text-transform:uppercase;">Current Call Location</div>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="opacity:0.75;">GPS Auto Detected:</span>
+                                <span id="adminAutoDetectedBarangay" style="font-weight:700; color:#e2e8f0;">Not detected</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="opacity:0.75;">Caller Selected:</span>
+                                <span id="adminCallerSelectedBarangay" style="font-weight:700; color:#e2e8f0;">None</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed rgba(255,255,255,0.12); padding-top:4px; margin-top:2px;">
+                                <span style="opacity:0.85; font-weight:700;">Final Barangay:</span>
+                                <span id="adminCurrentFinalBarangay" style="font-weight:800; color:#38bdf8;">None</span>
+                            </div>
+                        </div>
+
                         <div id="callBarangaySelector" style="grid-column:1 / -1; display:flex; flex-direction:column; gap:6px; position:relative;">
                             <label for="callBarangaySearch" style="font-size:12px; opacity:0.82;">Incident Barangay</label>
                             <input id="callBarangaySearch" type="text" placeholder="Search Quezon City barangay..." autocomplete="off" style="min-width:0; padding:8px 10px; border:1px solid rgba(255,255,255,0.14); border-radius:9px; background:rgba(255,255,255,0.07); color:#fff; outline:none; font-weight:700;">
@@ -3589,19 +3784,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                     </div>
 
                     <div style="border-top:1px solid rgba(255,255,255,0.10); padding-top:12px; display:flex; flex-direction:column; gap:10px;">
-                        <label style="font-size:12px; opacity:0.8; margin:0;">Emergency Type</label>
-                        <select id="emergencyTypeSelect" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.08); color:#fff; outline:none;">
-                            <option value="" selected>Choose type...</option>
-                            <option value="fire">Fire</option>
-                            <option value="flood">Flood</option>
-                            <option value="rescue">Rescue Assistance</option>
-                            <option value="police">Police</option>
-                            <option value="medical">Medical</option>
-                            <option value="earthquake">Earthquake</option>
-                            <option value="other">Other</option>
-                        </select>
-                        <label style="font-size:12px; opacity:0.8; margin:0;">Incident Description</label>
-                        <textarea id="callIncidentDescription" rows="4" placeholder="Write the emergency context, visible hazards, injuries, people affected, or caller notes..." style="width:100%; resize:vertical; min-height:86px; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.08); color:#fff; outline:none; font-weight:600; line-height:1.35;"></textarea>
+                        <input type="hidden" id="emergencyTypeSelect" value="">
+                        <input type="hidden" id="callIncidentDescription" value="">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
                             <span style="font-size:12px; opacity:0.8;">Auto Priority</span>
                             <span id="callPriorityBadge" class="incident-priority-badge incident-priority-low">LOW 0</span>
@@ -3663,11 +3847,24 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
     const SOCKET_IO_PATH = '/socket.io';
-    const SIGNALING_URL = window.location.origin;
+    const SIGNALING_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))
+        ? `${window.location.protocol}//${window.location.hostname}:3000`
+        : window.location.origin;
     const SOCKET_HEALTH_URL = `${SIGNALING_URL}${SOCKET_IO_PATH}/?EIO=4&transport=polling`;
     console.log('[call][admin] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
+
+    const WEBRTC_ICE_SERVERS = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' }
+        <?php if (!empty($turnUrls)): ?>,
+        {
+            urls: <?php echo json_encode($turnUrls, JSON_UNESCAPED_SLASHES); ?>,
+            username: <?php echo json_encode($turnUsername); ?>,
+            credential: <?php echo json_encode($turnCredential); ?>
+        }
+        <?php endif; ?>
+    ];
     const CALL_LOBBY_ROOM = "emergency-lobby";
-    const EMERGENCY_COM_CALL_INTAKE_ENABLED = <?php echo ($pageMode === 'emergency_calls') ? 'true' : 'false'; ?>;
     let activeCallRoom = null;
     let pendingCallRoom = null;
 
@@ -3811,8 +4008,23 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (EMERGENCY_COM_CALL_INTAKE_ENABLED) socket.emit('join', CALL_LOBBY_ROOM);
             if (activeCallRoom) socket.emit('join', activeCallRoom);
             if (pendingCallRoom) socket.emit('join', pendingCallRoom);
-            if (restoringAdminCall && callId) requestAdminCallResume(socket);
-            if (EMERGENCY_COM_CALL_INTAKE_ENABLED && typeof restoreCallSessionsFromDatabase === 'function') restoreCallSessionsFromDatabase(true);
+            if (callId) {
+                if (restoringAdminCall) {
+                    requestAdminCallResume(socket);
+                } else {
+                    socket.emit('resume-admin-call', {
+                        callId,
+                        room: activeCallRoom || getCallRoom(callId),
+                        adminKey: ADMIN_CALL_OWNER_KEY
+                    }, result => {
+                        console.log('[socket] re-registered admin for active call on reconnect:', result);
+                    });
+                }
+                // Don't run restoreCallSessionsFromDatabase when already in an active call —
+                // it would re-queue open sessions and send duplicate offers causing hangups.
+            } else if (EMERGENCY_COM_CALL_INTAKE_ENABLED && typeof restoreCallSessionsFromDatabase === 'function') {
+                restoreCallSessionsFromDatabase(true);
+            }
 
             socketRetryCount = 0; // Reset retry count on successful connection
         });
@@ -3958,7 +4170,13 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let pendingCallId = null;
     let pendingCandidates = [];
     let acceptingCallId = null;
-    const incomingCallQueue = new Map();
+    // Mutex: prevents concurrent WebRTC answer negotiations from fighting each other.
+    // When true, any new call to completeAdminCallAnswerFromOffer() returns immediately.
+    let callAnswerInFlight = false;
+    // Freeze table re-renders while the user is actively hovering/clicking the call buttons.
+    // Any DOM replacement during a click causes the event to be lost and the button to jitter.
+    let callTableInteractionFrozen = false;
+    let callTableInteractionTimer = null;
     const notifiedIncomingCallIds = new Set();
     const ADMIN_CALL_LOCK_KEY = `alertaraqc_active_call_${ADMIN_ID || ADMIN_USERNAME || 'admin'}`;
     const ADMIN_CALL_OWNER_KEY = String(ADMIN_ID || ADMIN_USERNAME || 'admin');
@@ -3968,7 +4186,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     let queueIncomingOfferFromSocket = null;
     let restoringCallSessionsFromDb = false;
     let lastCallSessionRestoreAt = 0;
-    const CALL_OPEN_MAX_AGE_MS = 10 * 60 * 1000;
+    const CALL_OPEN_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 
     function readAdminCallLock() {
         try {
@@ -4050,12 +4268,21 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             adminKey: ADMIN_CALL_OWNER_KEY
         }, result => {
             if (!result?.ok) {
-                setStatus(result?.reason || 'The previous call is no longer available.');
-                clearAdminCallLock(callId);
-                setTimeout(() => {
-                    setOverlayVisible(false);
-                    cleanupCall();
-                }, 900);
+                // The socket server may have lost state (e.g. PM2 restart) but the
+                // database claim is the source of truth. Log a warning but keep the
+                // overlay open so the caller can replay their offer into the room.
+                console.warn('[call][admin] resume-admin-call not acknowledged cleanly:', result?.reason);
+                setStatus('Waiting for caller to reconnect...');
+                if (adminCallResumeTimer) clearTimeout(adminCallResumeTimer);
+                adminCallResumeTimer = setTimeout(() => {
+                    if (!restoringAdminCall) return;
+                    setStatus('Caller did not reconnect. You can receive new calls now.');
+                    clearAdminCallLock(callId);
+                    setTimeout(() => {
+                        setOverlayVisible(false);
+                        cleanupCall();
+                    }, 1200);
+                }, ADMIN_CALL_RESUME_TIMEOUT_MS);
                 return;
             }
             setStatus('Reconnecting to caller...');
@@ -4169,7 +4396,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     }
 
     const QC_CALL_BARANGAYS = [
-        'Alicia','Amihan','Apolonio Samson','Bagbag','Bagong Lipunan ng Crame','Bagong Pag-asa','Bagong Silangan','Bagumbayan','Bagumbuhay','Bahay Toro','Balingasa','Balong Bato','Batasan Hills','Bayanihan','Blue Ridge A','Blue Ridge B','Botocan','Bungad','Camp Aguinaldo','Capri','Central','Claro','Commonwealth','Culiat','Damayan','Damayang Lagi','Damar','Del Monte','Dioquino Zobel','Do?a Aurora','Do?a Imelda','Do?a Josefa','Duyan-Duyan','E. Rodriguez','East Kamias','Escopa I','Escopa II','Escopa III','Escopa IV','Fairview','Greater Lagro','Gulod','Holy Spirit','Horseshoe','Immaculate Concepcion','Kaligayahan','Kalusugan','Kamuning','Katipunan','Kaunlaran','Krus na Ligas','Laging Handa','Libis','Lourdes','Loyola Heights','Maharlika','Malaya','Mangga','Manresa','Mariana','Mariblo','Marilag','Masagana','Masambong','Matandang Balara','Milagrosa','Nagkaisang Nayon','Nayong Kanluran','New Era','North Fairview','Novaliches Proper','Obrero','Old Capitol Site','Paang Bundok','Pag-ibig sa Nayon','Paligsahan','Paltok','Paraiso','Pasong Putik Proper','Pasong Tamo','Payatas','Phil-Am','Pinagkaisahan','Pinyahan','Project 6','Quirino 2-A','Quirino 2-B','Quirino 2-C','Quirino 3-A','Ramon Magsaysay','Roxas','Sacred Heart','Saint Ignatius','San Agustin','San Antonio','San Bartolome','San Isidro','San Isidro Labrador','San Jose','San Martin de Porres','San Roque','Santa Cruz','Santa Lucia','Santa Monica','Santa Teresita','Santo Cristo','Santo Domingo','Santo Ni?o','Sauyo','Sienna','Sikatuna Village','Silangan','Socorro','South Triangle','Tagumpay','Talayan','Talipapa','Tandang Sora','Tatalon','Teachers Village East','Teachers Village West','Ugong Norte','Unang Sigaw','UP Campus','UP Village','Valencia','Vasra','Veterans Village','Villa Maria Clara','West Kamias','West Triangle','White Plains'
+        'Alicia','Amihan','Apolonio Samson','Baesa','Bagbag','Bagong Lipunan ng Crame','Bagong Pag-asa','Bagong Silangan','Bagumbayan','Bagumbuhay','Bahay Toro','Balingasa','Balong Bato','Batasan Hills','Bayanihan','Blue Ridge A','Blue Ridge B','Botocan','Bungad','Camp Aguinaldo','Capri','Central','Claro','Commonwealth','Culiat','Damar','Damayan','Damayang Lagi','Del Monte','Dioquino Zobel','Doña Aurora','Doña Imelda','Doña Josefa','Duyan-Duyan','E. Rodriguez','East Kamias','Escopa I','Escopa II','Escopa III','Escopa IV','Fairview','Greater Lagro','Gulod','Holy Spirit','Horseshoe','Immaculate Concepcion','Kaligayahan','Kalusugan','Kamuning','Katipunan','Kaunlaran','Krus na Ligas','Laging Handa','Libis','Lourdes','Loyola Heights','Maharlika','Malaya','Mangga','Manresa','Mariana','Mariblo','Marilag','Masagana','Masambong','Matandang Balara','Milagrosa','N.S. Amoranto','Nagkaisang Nayon','Nayong Kanluran','New Era','North Fairview','Novaliches Proper','Obrero','Old Capitol Site','Paang Bundok','Pag-ibig sa Nayon','Paligsahan','Paltok','Pansol','Paraiso','Pasong Putik Proper','Pasong Tamo','Payatas','Phil-Am','Pinagkaisahan','Pinyahan','Project 6','Quirino 2-A','Quirino 2-B','Quirino 2-C','Quirino 3-A','Ramon Magsaysay','Roxas','Sacred Heart','Saint Ignatius','Salvacion','San Agustin','San Antonio','San Bartolome','San Isidro','San Isidro Labrador','San Jose','San Martin de Porres','San Roque','Sangandaan','Santa Cruz','Santa Lucia','Santa Monica','Santa Teresita','Santo Cristo','Santo Domingo','Santo Niño','Sauyo','Siena','Sikatuna Village','Silangan','Socorro','South Triangle','Tagumpay','Talayan','Talipapa','Tandang Sora','Tatalon','Teachers Village East','Teachers Village West','U.P. Campus','U.P. Village','Ugong Norte','Unang Sigaw','Valencia','Vasra','Veterans Village','Villa Maria Clara','West Kamias','West Triangle','White Plains'
     ];
     let selectedCallBarangay = '';
 
@@ -4181,14 +4408,117 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         return String(value || '').trim().toLowerCase() === 'san agustin';
     }
 
+    let locationPromptActive = false;
+    let locationPromptAudio = null;
+    let locationPromptTimer = null;
+    let autoDetectedBarangay = '';
+    let callerSelectedBarangay = '';
+    let adminSelectedBarangay = '';
+
+    function getEffectiveBarangay() {
+        return adminSelectedBarangay || callerSelectedBarangay || autoDetectedBarangay || selectedCallBarangay || '';
+    }
+
+    function updateAdminCallModalBarangayUI() {
+        const autoEl = document.getElementById('adminAutoDetectedBarangay');
+        const callerEl = document.getElementById('adminCallerSelectedBarangay');
+        const finalEl = document.getElementById('adminCurrentFinalBarangay');
+        const selectedTextEl = document.getElementById('callBarangaySelected');
+        const searchInput = document.getElementById('callBarangaySearch');
+
+        if (autoEl) autoEl.textContent = autoDetectedBarangay || 'Not detected';
+        if (callerEl) callerEl.textContent = callerSelectedBarangay || 'None';
+        const effective = getEffectiveBarangay();
+        if (finalEl) finalEl.textContent = effective || 'None';
+        if (selectedTextEl) selectedTextEl.textContent = effective ? `Selected: ${effective}` : 'No barangay selected';
+        if (searchInput && effective && document.activeElement !== searchInput) {
+            searchInput.value = effective;
+        }
+    }
+
+    function getCallerLanguage() {
+        const callerData = currentCallerPayload || getManualCallerInfo() || {};
+        const lang = String(callerData.language || callerData.lang || callerData.userLanguage || '').toLowerCase().trim();
+        if (lang === 'fil' || lang === 'tl' || lang === 'tagalog' || lang === 'filipino') {
+            return 'fil';
+        }
+        return 'en';
+    }
+
+    function stopLocationPromptAudio() {
+        locationPromptActive = false;
+        if (locationPromptTimer) {
+            clearTimeout(locationPromptTimer);
+            locationPromptTimer = null;
+        }
+        if (locationPromptAudio) {
+            locationPromptAudio.onended = null;
+            locationPromptAudio.onerror = null;
+            try {
+                locationPromptAudio.pause();
+                locationPromptAudio.currentTime = 0;
+            } catch (e) {}
+            locationPromptAudio = null;
+        }
+    }
+
+    let currentPromptLang = 'en';
+
+    function startLocationPromptAudio() {
+        stopLocationPromptAudio();
+        if (!callConnectedAt || transferInProgress) return;
+
+        currentPromptLang = getCallerLanguage();
+        locationPromptActive = true;
+
+        const s = ensureSocket();
+        if (s && callId) {
+            s.emit('start-location-prompt', { callId, room: activeCallRoom || getCallRoom() }, activeCallRoom || getCallRoom());
+        }
+
+        function playLoop() {
+            if (!locationPromptActive || transferInProgress) return;
+            const audioFileName = currentPromptLang === 'fil' ? 'call-location-fil.mp3' : 'call-location-en.mp3';
+            const publicAudioUrl = (window.APP_BASE_PATH || '').replace(/\/$/, '') + '/assets/audio/call/' + audioFileName;
+
+            locationPromptAudio = new Audio(publicAudioUrl);
+            locationPromptAudio.onended = () => {
+                if (!locationPromptActive || transferInProgress) return;
+                currentPromptLang = currentPromptLang === 'fil' ? 'en' : 'fil';
+                locationPromptTimer = setTimeout(() => {
+                    if (locationPromptActive && !transferInProgress) {
+                        playLoop();
+                    }
+                }, 2500);
+            };
+            locationPromptAudio.onerror = (e) => {
+                console.warn('Location prompt audio playback notice:', e);
+                currentPromptLang = currentPromptLang === 'fil' ? 'en' : 'fil';
+            };
+            locationPromptAudio.play().catch(e => console.warn('Location prompt play notice:', e));
+        }
+
+        playLoop();
+    }
+
     function setCallBarangaySelection(value) {
         selectedCallBarangay = String(value || '').trim();
+        adminSelectedBarangay = selectedCallBarangay;
+        stopLocationPromptAudio();
+
+        const s = ensureSocket();
+        if (s && callId) {
+            s.emit('stop-location-prompt', { callId, room: activeCallRoom || getCallRoom() }, activeCallRoom || getCallRoom());
+            s.emit('barangay-update', { source: 'admin', barangay: selectedCallBarangay, callId, room: activeCallRoom || getCallRoom() }, activeCallRoom || getCallRoom());
+        }
+
         const input = document.getElementById('callBarangaySearch');
         const selected = document.getElementById('callBarangaySelected');
         const results = document.getElementById('callBarangayResults');
         if (input) input.value = selectedCallBarangay;
         if (selected) selected.textContent = selectedCallBarangay ? `Selected: ${selectedCallBarangay}` : 'No barangay selected';
         if (results) results.style.display = 'none';
+        updateAdminCallModalBarangayUI();
     }
 
     function renderCallBarangayResults(query = '') {
@@ -4196,8 +4526,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         if (!results) return;
         const needle = String(query || '').trim().toLowerCase();
         const matches = QC_CALL_BARANGAYS
-            .filter(name => !needle || name.toLowerCase().includes(needle))
-            .slice(0, 12);
+            .filter(name => !needle || name.toLowerCase().includes(needle));
         if (!matches.length) {
             results.innerHTML = '<div style="padding:10px 12px; font-size:12px; opacity:.75;">No Quezon City barangay found.</div>';
             results.style.display = 'block';
@@ -4503,8 +4832,10 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         return isFreshIncomingCallTimestamp(callTimestampMs(session.updated_at || session.created_at));
     }
     function pruneStaleIncomingCalls() {
+        const closedStatuses = new Set(['assigned', 'accepted', 'pending', 'transferred', 'completed', 'ended', 'declined', 'cancelled', 'canceled']);
         incomingCallQueue.forEach((call, id) => {
-            if (!isQueuedCallFresh(call)) incomingCallQueue.delete(id);
+            const status = String(call?.status || '').toLowerCase();
+            if (closedStatuses.has(status)) incomingCallQueue.delete(id);
         });
         if (!incomingCallQueue.size) _stopAlertSound();
     }
@@ -4573,32 +4904,36 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         restoringCallSessionsFromDb = true;
         lastCallSessionRestoreAt = Date.now();
         try {
-            const response = await fetch('../api/call-session.php?action=list', { credentials: 'same-origin' });
+            const response = await fetch(`${API_BASE}call-session.php?action=list`, { credentials: 'same-origin' });
             const data = await response.json().catch(() => null);
             if (!response.ok || !data || data.success === false) return;
+            lastDbCallSessions = data;
             const s = ensureSocket();
-            const openSessions = (Array.isArray(data.open) ? data.open : []).filter(isCallSessionFresh);
-            const openSessionIds = new Set(openSessions.map(session => String(session.call_id || session.callId || '')).filter(Boolean));
-            if (force) {
-                incomingCallQueue.forEach((call, id) => {
-                    if (!openSessionIds.has(String(id)) && String(id) !== String(callId || '')) {
-                        incomingCallQueue.delete(id);
+            const openSessions = Array.isArray(data.open) ? data.open : [];
+            // Only populate incoming call queue when admin has no active call.
+            // If a call is already active, do not re-queue open sessions — doing so
+            // triggers duplicate WebRTC offers which cause the server to emit hangup
+            // events that terminate the current call after ~1 second.
+            if (!callId) {
+                openSessions.forEach(session => {
+                    const source = callSessionToQueuedOffer(session);
+                    if (!source || incomingCallQueue.has(source.callId)) return;
+                    if (pendingCallId === source.callId) return;
+                    if (!s || !s.connected) {
+                        if (typeof queueIncomingOfferFromSocket === 'function') {
+                            queueIncomingOfferFromSocket(source, source.sdp || null, false);
+                        }
+                    }
+                    if (!source.sdp && s?.connected) {
+                        s.emit('request-offer', { callId: source.callId, room: source.room, reason: 'admin-db-restore-open' }, source.room);
                     }
                 });
             }
-            openSessions.forEach(session => {
-                const source = callSessionToQueuedOffer(session);
-                if (!source || incomingCallQueue.has(source.callId)) return;
-                if (typeof queueIncomingOfferFromSocket === 'function') {
-                    queueIncomingOfferFromSocket(source, source.sdp || null, false);
-                }
-                if (!source.sdp && s?.connected) {
-                    s.emit('request-offer', { callId: source.callId, room: source.room, reason: 'admin-db-restore-open' }, source.room);
-                }
-            });
 
             const assignedSessions = Array.isArray(data.assigned) ? data.assigned : [];
-            const ownedSession = assignedSessions.find(session => String(session.assigned_admin_id || '') === String(ADMIN_ID || ''));
+            const ownedSession = (ADMIN_ID && assignedSessions.length)
+                ? assignedSessions.find(session => session.assigned_admin_id && String(session.assigned_admin_id) === String(ADMIN_ID))
+                : null;
             if (ownedSession && !callId) {
                 const source = callSessionToQueuedOffer(ownedSession);
                 if (source) {
@@ -4627,6 +4962,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                         requestAdminCallResume(s);
                     }
                 }
+            } else if (!ownedSession && !callId) {
+                localStorage.removeItem(ADMIN_CALL_LOCK_KEY);
             }
         } finally {
             restoringCallSessionsFromDb = false;
@@ -4636,8 +4973,9 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
     async function syncCallSession(action, payload = {}) {
         try {
-            const response = await fetch('../api/call-session.php', {
+            const response = await fetch(`${API_BASE}call-session.php`, {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action, ...payload })
             });
@@ -4715,53 +5053,186 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         `;
     }
 
+    let emergencyCallDelegationBound = false;
     function bindEmergencyCallTableButtons(container) {
         if (!container) return;
-        container.querySelectorAll('.emergency-call-accept-btn').forEach(btn => {
-            btn.onclick = (event) => {
-                event.stopPropagation();
-                if (typeof window.acceptIncomingEmergencyCall === 'function') window.acceptIncomingEmergencyCall(btn.dataset.callId);
-            };
-        });
-        container.querySelectorAll('.emergency-call-decline-btn').forEach(btn => {
-            btn.onclick = (event) => {
-                event.stopPropagation();
-                if (typeof window.declineIncomingEmergencyCall === 'function') window.declineIncomingEmergencyCall(btn.dataset.callId);
-            };
-        });
+        const list = document.getElementById('conversationsList');
+        if (list && !emergencyCallDelegationBound) {
+            emergencyCallDelegationBound = true;
+            list.addEventListener('mouseenter', () => {
+                // Freeze DOM re-renders while the mouse is inside the table.
+                if (callTableInteractionTimer) clearTimeout(callTableInteractionTimer);
+                callTableInteractionFrozen = true;
+            }, true);
+            list.addEventListener('mouseleave', () => {
+                // Unfreeze after a brief delay to allow click events to complete.
+                if (callTableInteractionTimer) clearTimeout(callTableInteractionTimer);
+                callTableInteractionTimer = setTimeout(() => {
+                    callTableInteractionFrozen = false;
+                    callTableInteractionTimer = null;
+                    // Flush any pending render now that interaction is done.
+                    lastRenderedTableStateKey = '';
+                    renderCallTableForStatus();
+                }, 600);
+            }, true);
+            list.addEventListener('click', (event) => {
+                const acceptBtn = event.target.closest('.emergency-call-accept-btn');
+                if (acceptBtn) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const callId = acceptBtn.getAttribute('data-call-id') || acceptBtn.dataset.callId;
+                    console.log('[call-btn-delegated] Accept clicked for call:', callId);
+                    if (typeof window.acceptIncomingEmergencyCall === 'function') {
+                        window.acceptIncomingEmergencyCall(callId);
+                    }
+                    return;
+                }
+                const declineBtn = event.target.closest('.emergency-call-decline-btn');
+                if (declineBtn) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const callId = declineBtn.getAttribute('data-call-id') || declineBtn.dataset.callId;
+                    console.log('[call-btn-delegated] Decline clicked for call:', callId);
+                    if (typeof window.declineIncomingEmergencyCall === 'function') {
+                        window.declineIncomingEmergencyCall(callId);
+                    }
+                    return;
+                }
+            });
+        }
+    }
+
+    function loggedCallTableRowHtml(session, statusGroup) {
+        const callerName = session.caller_name || session.caller?.name || 'Emergency Call User';
+        const callerPhone = session.caller_phone || session.caller?.phone || '';
+        const locationText = session.location_text || session.location?.address || session.location?.formatted || session.location?.text || 'Location pending';
+        
+        let priorityCell = '';
+        if (REPORT_TABLE_MODE) {
+            let offerPayload = {};
+            try {
+                offerPayload = typeof session.offer_payload === 'string' 
+                    ? JSON.parse(session.offer_payload) 
+                    : (session.offer_payload || {});
+            } catch (e) {}
+            const priority = offerPayload.incidentPriority || { level: 'low', label: 'LOW', score: 0 };
+            priorityCell = `<td style="padding:0.85rem 0.75rem;vertical-align:middle;"><span class="incident-priority-badge incident-priority-${priority.level || 'low'}">${priority.label || 'LOW'} ${priority.score || 0}</span></td>`;
+        }
+
+        const adminName = session.assigned_admin_name || '<span class="assigned-admin-empty">None</span>';
+        
+        let displayStatus = 'Ended';
+        let statusClass = 'workflow-closed';
+        if (statusGroup === 'unanswered') {
+            displayStatus = 'Unanswered';
+            statusClass = 'workflow-pending';
+        } else if (statusGroup === 'assigned') {
+            displayStatus = 'Active';
+            statusClass = 'workflow-open';
+        } else if (statusGroup === 'completed') {
+            displayStatus = 'Completed';
+            statusClass = 'workflow-completed';
+        }
+        
+        let durationText = '';
+        if (session.answered_at && session.ended_at) {
+            const start = Date.parse(session.answered_at.replace(' ', 'T'));
+            const end = Date.parse(session.ended_at.replace(' ', 'T'));
+            if (!isNaN(start) && !isNaN(end)) {
+                const durationSec = Math.max(0, Math.floor((end - start) / 1000));
+                durationText = ` • ${formatTime(durationSec)}`;
+            }
+        }
+
+        const dateStr = session.updated_at ? new Date(session.updated_at.replace(' ', 'T')).toLocaleString() : '';
+
+        return `
+            <tr class="conversation-item emergency-call-table-row">
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;">
+                    <div style="display:flex;align-items:center;gap:0.35rem;">
+                        <strong>${escapeHtml(callerName)}</strong>
+                        <span class="list-chip list-chip-call" style="background:#64748b;color:white;padding:2px 6px;border-radius:4px;font-size:0.7rem;font-weight:800;margin-left:0.25rem;"><i class="fas fa-phone"></i> Call Log</span>
+                    </div>
+                    ${callerPhone ? `<div style="font-size:0.75rem;opacity:0.65;margin-top:0.15rem;"><i class="fas fa-phone" style="font-size:0.7rem;"></i> ${escapeHtml(callerPhone)}</div>` : ''}
+                </td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><i class="fas fa-map-marker-alt" style="color:var(--primary-color-1);font-size:0.8rem;"></i> ${escapeHtml(locationText)}</td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayStatus}${durationText}<div style="font-size:0.7rem;opacity:0.5;margin-top:0.15rem;">${dateStr}</div></td>
+                ${priorityCell}
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;">${adminName}</td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;"><span class="workflow-pill ${statusClass}">${displayStatus}</span></td>
+                <td style="padding:0.85rem 0.75rem;vertical-align:middle;text-align:right;"></td>
+            </tr>
+        `;
+    }
+
+    let lastRenderedTableStateKey = '';
+
+    function renderCallTableForStatus() {
+        if (!EMERGENCY_COM_CALL_INTAKE_ENABLED) return;
+        const list = document.getElementById('conversationsList');
+        if (!list) return;
+
+        const openBadge = document.getElementById('openCount');
+        let newHtml = '';
+
+        if (currentStatus === 'open') {
+            pruneStaleIncomingCalls();
+            const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned');
+            if (openBadge) {
+                openBadge.textContent = String(queuedCalls.length);
+                openBadge.style.display = 'inline-block';
+            }
+            if (!queuedCalls.length) {
+                newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No open emergency calls</td></tr>';
+            } else {
+                newHtml = queuedCalls.map((queued, index) => queuedCallTableRowHtml(queued, index, queuedCalls.length)).join('');
+            }
+        } else if (currentStatus === 'assigned') {
+            const assignedSessions = Array.isArray(lastDbCallSessions?.assigned) ? lastDbCallSessions.assigned : [];
+            if (!assignedSessions.length) {
+                newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No assigned emergency calls</td></tr>';
+            } else {
+                newHtml = assignedSessions.map(session => loggedCallTableRowHtml(session, 'assigned')).join('');
+            }
+        } else if (currentStatus === 'unanswered') {
+            const unansweredSessions = Array.isArray(lastDbCallSessions?.all) ? lastDbCallSessions.all.filter(session => {
+                return !session.answered_at && ['ended', 'declined', 'cancelled'].includes(String(session.status).toLowerCase());
+            }) : [];
+            if (!unansweredSessions.length) {
+                newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No unanswered calls found</td></tr>';
+            } else {
+                newHtml = unansweredSessions.map(session => loggedCallTableRowHtml(session, 'unanswered')).join('');
+            }
+        } else if (currentStatus === 'completed') {
+            const completedSessions = Array.isArray(lastDbCallSessions?.all) ? lastDbCallSessions.all.filter(session => {
+                return session.answered_at && String(session.status).toLowerCase() === 'ended';
+            }) : [];
+            if (!completedSessions.length) {
+                newHtml = '<tr class="empty-call-row"><td colspan="7" style="text-align:center; padding:28px; color:#587071;">No completed emergency calls</td></tr>';
+            } else {
+                newHtml = completedSessions.map(session => loggedCallTableRowHtml(session, 'completed')).join('');
+            }
+        }
+
+        const currentStateKey = currentStatus + '::' + newHtml;
+        if (lastRenderedTableStateKey === currentStateKey && list.children.length > 0) {
+            return;
+        }
+        // Do not replace the DOM while the user is hovering over or clicking buttons.
+        // Destroying and re-creating nodes mid-hover resets the browser's hover state and
+        // swallows click events, causing the Answer/Decline buttons to appear to do nothing.
+        if (callTableInteractionFrozen) return;
+        lastRenderedTableStateKey = currentStateKey;
+        list.innerHTML = newHtml;
+        bindEmergencyCallTableButtons(list);
     }
 
     function renderIncomingCallTableRows() {
-        if (!EMERGENCY_COM_CALL_INTAKE_ENABLED || currentStatus !== 'open') return;
-        pruneStaleIncomingCalls();
-        const list = document.getElementById('conversationsList');
-        if (!list) return;
-        list.querySelectorAll('.emergency-call-table-row').forEach(row => row.remove());
-        const queuedCalls = Array.from(incomingCallQueue.values()).filter(item => item && item.status !== 'assigned' && isQueuedCallFresh(item));
-        const openBadge = document.getElementById('openCount');
-        if (!queuedCalls.length) {
-            if (openBadge) {
-                const existingRows = list.querySelectorAll('tr.conversation-item:not(.emergency-call-table-row)').length;
-                openBadge.textContent = String(existingRows);
-                openBadge.style.display = 'inline-block';
-            }
-            return;
-        }
-        const onlyEmptyMessage = list.children.length === 1 && !list.children[0].matches('tr');
-        if (onlyEmptyMessage) list.innerHTML = '';
-        const html = queuedCalls.map((queued, index) => queuedCallTableRowHtml(queued, index, queuedCalls.length)).join('');
-        list.insertAdjacentHTML('afterbegin', html);
-        bindEmergencyCallTableButtons(list);
-        if (openBadge) {
-            const existingRows = list.querySelectorAll('tr.conversation-item:not(.emergency-call-table-row)').length;
-            const total = existingRows + queuedCalls.length;
-            openBadge.textContent = String(total);
-            openBadge.style.display = 'inline-block';
-        }
+        renderCallTableForStatus();
     }
 
     function renderIncomingEmergencyCallRow() {
-        renderIncomingCallTableRows();
+        renderCallTableForStatus();
         return;
     }
 
@@ -5038,6 +5509,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         stopAudioActivityMonitors();
         setEndEnabled(false);
 
+        stopLocationPromptAudio();
         if (localStream) {
             localStream.getTracks().forEach(t => t.stop());
             localStream = null;
@@ -5060,6 +5532,7 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
     }
 
     async function endCall(notifyPeer = true) {
+        stopLocationPromptAudio();
         const durationSec = callConnectedAt ? Math.floor((Date.now() - callConnectedAt) / 1000) : 0;
         
         // Log call end event (non-blocking)
@@ -5154,19 +5627,23 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         }, 800);
     }
 
+    // Timer reference for ICE connection timeout (stuck in 'connecting' state).
+    let callConnectingTimer = null;
+
     function initPeer() {
         pc = new RTCPeerConnection({
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:global.stun.twilio.com:3478' }
-            ]
+            iceServers: WEBRTC_ICE_SERVERS
         });
 
         pc.ontrack = e => {
             const remote = document.getElementById('remote');
-            const remoteStream = e.streams[0];
-            if (remote) remote.srcObject = remoteStream;
-            monitorAudioActivity(remoteStream, 'userSpeakingLabel');
+            const remoteStream = (e.streams && e.streams[0])
+                || (e.track ? new MediaStream([e.track]) : null);
+            if (remote && remoteStream) {
+                remote.srcObject = remoteStream;
+                remote.play().catch(err => console.warn('[call][admin] audio play notice:', err));
+            }
+            if (remoteStream) monitorAudioActivity(remoteStream, 'userSpeakingLabel');
         };
 
         pc.onicecandidate = e => {
@@ -5181,6 +5658,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 const resumed = restoringAdminCall;
                 if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
                 peerDisconnectTimer = null;
+                if (callConnectingTimer) clearTimeout(callConnectingTimer);
+                callConnectingTimer = null;
                 if (!callConnectedAt) callConnectedAt = Date.now();
                 restoringAdminCall = false;
                 if (adminCallResumeTimer) clearTimeout(adminCallResumeTimer);
@@ -5192,8 +5671,25 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 logCall(resumed ? 'reconnected' : 'connected');
                 _stopAlertSound();
                 setIncomingCallModalVisible(false);
+                startLocationPromptAudio();
+            }
+            if (pc.connectionState === 'connecting' || pc.connectionState === 'new') {
+                // Start a timeout so the call is not permanently stuck on 'Connecting to caller audio...'.
+                // If ICE never completes within 30 seconds, close the peer and let the caller retry.
+                if (callConnectingTimer) return; // timer already running
+                callConnectingTimer = setTimeout(() => {
+                    callConnectingTimer = null;
+                    if (!pc || pc.connectionState === 'connected') return;
+                    console.warn('[call][admin] ICE connection timed out in state:', pc.connectionState, '– closing peer so caller can retry.');
+                    setStatus('Audio connection timed out. Waiting for caller to retry...');
+                    try { pc.close(); } catch (e) {}
+                    pc = null;
+                    // Do not endCall – keep the overlay open and wait for a new offer from the caller.
+                }, 30000);
             }
             if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+                stopLocationPromptAudio();
+                if (callConnectingTimer) { clearTimeout(callConnectingTimer); callConnectingTimer = null; }
                 if (transferInProgress) return;
                 if (!callId || peerDisconnectTimer) return;
                 setStatus('Connection interrupted. Waiting for caller to reconnect...');
@@ -5205,111 +5701,78 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         };
     }
 
-    async function acceptIncomingEmergencyCall(targetCallId = null) {
-        const selectedCallId = targetCallId ? String(targetCallId) : pendingCallId;
-        if (selectedCallId && incomingCallQueue.has(selectedCallId)) {
-            applyQueuedCallToPending(incomingCallQueue.get(selectedCallId));
+    /**
+     * Normalize an SDP value from a socket payload into the plain object
+     * { type: string, sdp: string } that RTCPeerConnection.setRemoteDescription() accepts.
+     * Accepts an RTCSessionDescription, a plain {type,sdp} object, or returns null
+     * if the value is not a valid SDP descriptor.
+     */
+    function normalizeSdpDescriptor(value) {
+        if (!value) return null;
+        // If it's already a proper RTCSessionDescription or plain {type,sdp}
+        if (typeof value === 'object' && typeof value.type === 'string' && typeof value.sdp === 'string') {
+            return { type: value.type, sdp: value.sdp };
         }
-        if (!pendingCallId) return;
-        if (!pendingOffer) {
-            const signalingSocket = ensureSocket();
-            const requestRoom = pendingCallRoom || getCallRoom(pendingCallId);
-            if (signalingSocket?.connected) {
-                signalingSocket.emit('join', requestRoom);
-                signalingSocket.emit('request-offer', {
-                    callId: pendingCallId,
-                    room: requestRoom,
-                    reason: 'admin-answer-needs-offer'
-                }, requestRoom);
-            }
-            setIncomingCallModalText('Waiting for caller connection. Keep this call in Open and try Answer again in a moment.');
-            renderIncomingEmergencyCallRow();
-            renderIncomingCallTableRows();
-            return;
+        // If it's the raw socket payload that nested the SDP
+        if (typeof value === 'object' && value.sdp && typeof value.sdp === 'object') {
+            return normalizeSdpDescriptor(value.sdp);
         }
-        if (callId && pendingCallId !== callId) return;
-        acceptingCallId = String(pendingCallId || '');
-        if (adminHasActiveCall(pendingCallId)) {
-            acceptingCallId = null;
-            setIncomingCallModalText('You already have an active call. Finish or transfer it before taking another call.');
-            renderIncomingEmergencyCallRow();
-            return;
-        }
+        return null;
+    }
 
-        const wasRestoring = restoringAdminCall && callId === pendingCallId;
-        const dbClaim = await syncCallSession('claim', callSessionPayload({ callId: pendingCallId, room: pendingCallRoom }));
-        if (!dbClaim?.success) {
-            setIncomingCallModalText(dbClaim?.error || 'This call is no longer available.');
-            removeQueuedCall(pendingCallId);
-            _stopAlertSound();
-            return;
+    async function completeAdminCallAnswerFromOffer() {
+        if (!callId || !activeCallRoom || !pendingOffer) return false;
+        // Mutex: if an answer negotiation is already in flight, skip this invocation.
+        // Concurrent calls cause InvalidStateError because the peer connection gets
+        // closed and re-created mid-negotiation by the second caller.
+        if (callAnswerInFlight) {
+            console.warn('[call][admin] completeAdminCallAnswerFromOffer already in flight – skipping duplicate invocation.');
+            return false;
         }
-        const signalingSocket = ensureSocket();
-        if (!signalingSocket?.connected) {
-            setIncomingCallModalText('Call service is reconnecting. The call is still in Open. Please try again.');
-            await syncCallSession('mark', { callId: pendingCallId, status: 'open' });
-            acceptingCallId = null;
-            renderIncomingEmergencyCallRow();
-            renderIncomingCallTableRows();
-            return;
+        // Guard: if the peer connection is already fully established there is nothing to do.
+        if (pc && pc.signalingState === 'stable' && pc.connectionState === 'connected') {
+            console.warn('[call][admin] completeAdminCallAnswerFromOffer called but connection already established – ignoring.');
+            pendingOffer = null;
+            pendingCandidates = [];
+            return true;
         }
-        const claimResult = await new Promise(resolve => {
-            const timer = setTimeout(() => resolve({ ok: false, reason: 'Call claim timed out.' }), 6000);
-            signalingSocket.emit('claim-call', {
-                callId: pendingCallId,
-                room: pendingCallRoom || getCallRoom(pendingCallId),
-                adminKey: ADMIN_CALL_OWNER_KEY
-            }, result => {
-                clearTimeout(timer);
-                resolve(result || { ok: false });
-            });
-        });
-        if (!claimResult?.ok) {
-            setIncomingCallModalText(claimResult?.reason || 'Call claim timed out. The call is still in Open. Try Answer again.');
-            await syncCallSession('mark', { callId: pendingCallId, status: 'open' });
-            acceptingCallId = null;
-            renderIncomingEmergencyCallRow();
-            renderIncomingCallTableRows();
-            if (wasRestoring) cleanupCall();
-            return;
+        // Normalize the SDP before touching the peer connection so we fail fast
+        // with a clear message rather than an obscure 'Failed to parse SessionDescription'.
+        const sdpDescriptor = normalizeSdpDescriptor(pendingOffer);
+        if (!sdpDescriptor) {
+            console.error('[call][admin] completeAdminCallAnswerFromOffer: pendingOffer is not a valid SDP descriptor:', pendingOffer);
+            pendingOffer = null;
+            pendingCandidates = [];
+            return false;
         }
-
-        callId = pendingCallId;
-        activeCallRoom = pendingCallRoom || getCallRoom(callId);
-        setAdminCallLock(callId, {
-            room: activeCallRoom,
-            callerInfo,
-            callerLocation,
-            conversationId: callConversationId,
-            connectedAt: callConnectedAt
-        });
+        callAnswerInFlight = true;
         try {
-            if (wasRestoring) {
-                await logCall('reconnecting', {
-                    adminUsername: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : null)
+            if (!pc || pc.signalingState === 'closed') initPeer();
+            if (pc.signalingState !== 'stable') {
+                try { pc.close(); } catch (e) {}
+                pc = null;
+                initPeer();
+            }
+
+            if (!localStream) {
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    monitorAudioActivity(localStream, 'adminSpeakingLabel', 'adminLocalMicIndicator');
+                } catch (micErr) {
+                    console.warn('[call][admin] microphone capture unavailable, continuing in listen-only mode:', micErr);
+                    if (typeof showToast === 'function') {
+                        showToast('Listen-Only Mode', 'No active microphone found or permission blocked. You can hear the caller.');
+                    }
+                }
+            }
+            if (localStream && localStream.getTracks) {
+                localStream.getTracks().forEach(track => {
+                    const alreadyAdded = pc.getSenders && pc.getSenders().some(sender => sender.track === track);
+                    if (!alreadyAdded) pc.addTrack(track, localStream);
                 });
-            } else {
-            await logCall('accepted', {
-                adminUsername: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : null)
-            });
             }
-        } catch (e) {}
-        incomingCallQueue.delete(String(pendingCallId));
-        acceptingCallId = null;
-        setIncomingEmergencyCallRowVisible(false);
-        setOverlayVisible(true);
-        setCallActiveBannerVisible(true);
-        setStatus('Connecting...');
-        setTimer(0);
-        setEndEnabled(false);
 
-        try {
-            if (!pc) initPeer();
-            await pc.setRemoteDescription(pendingOffer);
-
-            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-            monitorAudioActivity(localStream, 'adminSpeakingLabel', 'adminLocalMicIndicator');
+            await pc.setRemoteDescription(sdpDescriptor);
 
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
@@ -5318,9 +5781,20 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
             if (Array.isArray(pendingCandidates) && pendingCandidates.length) {
                 for (const cand of pendingCandidates) {
-                    try { if (pc && cand) await pc.addIceCandidate(cand); } catch (e) {}
+                    try {
+                        if (pc && cand) {
+                            const iceCand = typeof cand === 'object' && cand.candidate ? cand : { candidate: cand };
+                            await pc.addIceCandidate(new RTCIceCandidate(iceCand));
+                        }
+                    } catch (e) {
+                        console.warn('[call][admin] Error adding pending ICE candidate:', e);
+                    }
                 }
             }
+            pendingOffer = null;
+            pendingCandidates = [];
+            setStatus('Connecting to caller audio...');
+            return true;
         } catch (e) {
             console.error('[call][admin] accept call failed', e);
             acceptingCallId = null;
@@ -5335,10 +5809,134 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             setStatus(userFriendlyError);
             setEndEnabled(true);
             endCall(true);
+            return false;
         } finally {
-            pendingOffer = null;
-            pendingCandidates = [];
+            callAnswerInFlight = false;
             renderIncomingEmergencyCallRow();
+            renderIncomingCallTableRows();
+        }
+    }
+    async function acceptIncomingEmergencyCall(targetCallId = null) {
+        let selectedCallId = targetCallId ? String(targetCallId) : (pendingCallId ? String(pendingCallId) : null);
+        if (!selectedCallId && incomingCallQueue.size) {
+            selectedCallId = String(Array.from(incomingCallQueue.keys())[0]);
+        }
+        if (selectedCallId && incomingCallQueue.has(selectedCallId)) {
+            applyQueuedCallToPending(incomingCallQueue.get(selectedCallId));
+        }
+        if (!pendingCallId && selectedCallId && incomingCallQueue.has(selectedCallId)) {
+            applyQueuedCallToPending(incomingCallQueue.get(selectedCallId));
+        }
+        if (!pendingCallId) {
+            acceptingCallId = null;
+            renderIncomingCallTableRows();
+            return;
+        }
+        if (callId && pendingCallId !== callId) return;
+        acceptingCallId = String(pendingCallId || '');
+        if (adminHasActiveCall(pendingCallId)) {
+            acceptingCallId = null;
+            setIncomingCallModalText('You already have an active call. Finish or transfer it before taking another call.');
+            renderIncomingEmergencyCallRow();
+            return;
+        }
+
+        const selectedPendingCallId = String(pendingCallId);
+        callId = selectedPendingCallId;
+        activeCallRoom = pendingCallRoom || getCallRoom(callId);
+        setAdminCallLock(callId, {
+            room: activeCallRoom,
+            callerInfo,
+            callerLocation,
+            conversationId: callConversationId,
+            connectedAt: callConnectedAt
+        });
+        incomingCallQueue.delete(selectedPendingCallId);
+        setIncomingEmergencyCallRowVisible(false);
+        setIncomingCallModalVisible(false);
+        setOverlayVisible(true);
+        setCallActiveBannerVisible(true);
+        setStatus('Claiming call...');
+        setTimer(0);
+        setEndEnabled(false);
+        renderIncomingEmergencyCallRow();
+        renderIncomingCallTableRows();
+
+        const wasRestoring = restoringAdminCall && callId === pendingCallId;
+        const dbClaim = await syncCallSession('claim', callSessionPayload({ callId: pendingCallId, room: pendingCallRoom }));
+        if (!dbClaim?.success) {
+            const claimError = dbClaim?.error || 'This call is no longer available.';
+            console.error('[call] syncCallSession claim failed:', claimError);
+            if (typeof showToast === 'function') showToast('Call Answer Failed', claimError);
+            alert('Could not answer call: ' + claimError);
+            setIncomingCallModalText(claimError);
+            clearAdminCallLock();
+            callId = null;
+            activeCallRoom = null;
+            acceptingCallId = null;
+            setOverlayVisible(false);
+            setCallActiveBannerVisible(false);
+            removeQueuedCall(selectedPendingCallId);
+            _stopAlertSound();
+            return;
+        }
+        const signalingSocket = ensureSocket();
+        if (!signalingSocket?.connected) {
+            setStatus('Call service is reconnecting. Keep this call window open...');
+        }
+        const claimResult = signalingSocket?.connected ? await new Promise(resolve => {
+            const timer = setTimeout(() => resolve({ ok: true, degraded: true, reason: 'Socket claim timed out; database claim already succeeded.' }), 2500);
+            signalingSocket.emit('join', activeCallRoom);
+            signalingSocket.emit('claim-call', {
+                callId,
+                room: activeCallRoom,
+                adminKey: ADMIN_CALL_OWNER_KEY
+            }, result => {
+                clearTimeout(timer);
+                resolve(result || { ok: true, degraded: true });
+            });
+        }) : { ok: true, degraded: true, reason: 'Socket reconnecting; database claim already succeeded.' };
+        if (claimResult && claimResult.ok === false) {
+            // The database claim is the source of truth. If the socket room lost state after a PM2 restart,
+            // continue opening the admin call modal and let the caller replay the offer into the room.
+            console.warn('[call][admin] socket claim did not acknowledge cleanly', claimResult);
+        }
+        try {
+            if (wasRestoring) {
+                await logCall('reconnecting', {
+                    adminUsername: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : null)
+                });
+            } else {
+            await logCall('accepted', {
+                adminUsername: (typeof ADMIN_USERNAME !== 'undefined' ? ADMIN_USERNAME : null)
+            });
+            }
+        } catch (e) {}
+        acceptingCallId = null;
+        setStatus('Connecting...');
+        const signalingSocketForOffer = ensureSocket();
+        if (signalingSocketForOffer?.connected) {
+            signalingSocketForOffer.emit('join', activeCallRoom);
+        }
+
+        if (pendingOffer) {
+            // Keep acceptingCallId set until negotiation completes so concurrent answer
+            // attempts are blocked. acceptingCallId is cleared inside completeAdminCallAnswerFromOffer.
+            acceptingCallId = String(callId);
+            await completeAdminCallAnswerFromOffer();
+            acceptingCallId = null;
+        } else {
+            setStatus('Waiting for caller connection...');
+            setEndEnabled(true);
+            if (signalingSocketForOffer?.connected) {
+                signalingSocketForOffer.emit('request-offer', {
+                    callId,
+                    room: activeCallRoom,
+                    reason: 'admin-answer-needs-offer'
+                }, activeCallRoom);
+            }
+            renderIncomingEmergencyCallRow();
+            renderIncomingCallTableRows();
         }
     }
 
@@ -5406,43 +6004,54 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const queued = normalizeQueuedCall(payload, sdp);
             if (!queued) return null;
             const existing = incomingCallQueue.get(queued.callId) || {};
+            const isNew = !incomingCallQueue.has(queued.callId);
             const merged = {
                 ...existing,
                 ...queued,
                 sdp: queued.sdp || existing.sdp || null,
                 pendingCandidates: existing.pendingCandidates || queued.pendingCandidates || [],
-                status: existing.status || queued.status || 'open'
+                status: existing.status || queued.status || 'open',
+                lastUpsertTime: existing.lastUpsertTime || 0
             };
             incomingCallQueue.set(queued.callId, merged);
             const signalingSocket = ensureSocket();
             if (signalingSocket) signalingSocket.emit('join', merged.room || getCallRoom(merged.callId));
-            const persistedOfferPayload = {
-                ...(payload && typeof payload === 'object' ? payload : {}),
-                sdp: merged.sdp,
-                callId: merged.callId,
-                call_id: merged.callId,
-                room: merged.room || getCallRoom(merged.callId),
-                caller: merged.caller || null,
-                location: merged.location || null,
-                conversationId: merged.conversationId || null,
-                conversation_id: merged.conversationId || null
-            };
-            syncCallSession('upsert_open', callSessionPayload({
-                callId: merged.callId,
-                room: merged.room,
-                caller: merged.caller,
-                location: merged.location,
-                conversationId: merged.conversationId,
-                offerPayload: persistedOfferPayload
-            }));
+            
+            // Rate limit database session sync (upsert_open): only run if new or more than 10 seconds since last upsert
+            const now = Date.now();
+            if (isNew || (now - merged.lastUpsertTime > 10000)) {
+                merged.lastUpsertTime = now;
+                const persistedOfferPayload = {
+                    ...(payload && typeof payload === 'object' ? payload : {}),
+                    sdp: merged.sdp,
+                    callId: merged.callId,
+                    call_id: merged.callId,
+                    room: merged.room || getCallRoom(merged.callId),
+                    caller: merged.caller || null,
+                    location: merged.location || null,
+                    conversationId: merged.conversationId || null,
+                    conversation_id: merged.conversationId || null
+                };
+                syncCallSession('upsert_open', callSessionPayload({
+                    callId: merged.callId,
+                    room: merged.room,
+                    caller: merged.caller,
+                    location: merged.location,
+                    conversationId: merged.conversationId,
+                    offerPayload: persistedOfferPayload
+                }));
+            }
+
             if (notify && !adminHasActiveCall(merged.callId) && !notifiedIncomingCallIds.has(merged.callId)) {
                 notifiedIncomingCallIds.add(merged.callId);
                 // Keep the fresh emergency call visible in the Open queue without forcing a floating modal notification.
                 setIncomingCallModalVisible(false);
                 _startAlertSound(notificationSound);
             }
-            renderIncomingEmergencyCallRow();
-            renderIncomingCallTableRows();
+            if (isNew) {
+                renderIncomingEmergencyCallRow();
+                renderIncomingCallTableRows();
+            }
             return merged;
         }
         queueIncomingOfferFromSocket = queueIncomingOffer;
@@ -5469,28 +6078,55 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             const status = payload?.call?.status || '';
             const updatedCallId = payload?.call?.callId || null;
             if (!updatedCallId) return;
-            if (status === 'accepted' && String(payload?.call?.adminKey || '') === ADMIN_CALL_OWNER_KEY) return;
+            if (status === 'accepted' && String(payload?.call?.adminKey || '') === ADMIN_CALL_OWNER_KEY) {
+                hideNewMessageNotice();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+                return;
+            }
             if (String(updatedCallId) === String(acceptingCallId || '')) return;
             const claimedByOtherAdmin = status === 'accepted' && String(payload?.call?.adminKey || '') !== ADMIN_CALL_OWNER_KEY;
             const terminalCallStatus = ['ended', 'completed', 'declined'].includes(status);
             if (claimedByOtherAdmin || terminalCallStatus) {
                 removeQueuedCall(updatedCallId);
                 if (!incomingCallQueue.size) _stopAlertSound();
+                hideNewMessageNotice();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
             } else {
                 renderIncomingCallTableRows();
             }
         });
 
+        let lastOfferWarnTime = 0;
         s.on('offer', async payload => {
             if (!EMERGENCY_COM_CALL_INTAKE_ENABLED) return;
             const incomingCallId = payload && payload.callId ? String(payload.callId) : null;
             if (!incomingCallId || (payload && payload.transferred)) return;
             const shouldAutoResume = restoringAdminCall && callId === incomingCallId;
+            const isNewOffer = !incomingCallQueue.has(incomingCallId);
             const queued = queueIncomingOffer(payload, payload && payload.sdp ? payload.sdp : payload, !shouldAutoResume);
             if (!queued) return;
-            locationData = await tryGetLocation();
-            if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
-            if (shouldAutoResume) {
+            
+            // Only trigger location checks & conversation reloads on NEW call offers to avoid network flooding
+            if (isNewOffer) {
+                locationData = await tryGetLocation();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+            }
+
+            if (callId === incomingCallId) {
+                pendingOffer = queued.sdp || null;
+                pendingCandidates = queued.pendingCandidates || [];
+                // If an answer is already in flight, do not start a second concurrent negotiation.
+                // The in-flight negotiation will use pendingOffer as set above.
+                if (!callAnswerInFlight) {
+                    await completeAdminCallAnswerFromOffer();
+                } else {
+                    const now = Date.now();
+                    if (now - lastOfferWarnTime > 5000) {
+                        lastOfferWarnTime = now;
+                        console.warn('[call][admin] New offer arrived while answer already in flight – pendingOffer updated.');
+                    }
+                }
+            } else if (shouldAutoResume) {
                 setIncomingCallModalText('Restoring your active emergency call...');
                 setTimeout(() => acceptIncomingEmergencyCall(incomingCallId), 0);
             }
@@ -5498,7 +6134,11 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
         s.on('call-claimed', payload => {
             const claimedCallId = payload?.callId ? String(payload.callId) : null;
             if (!claimedCallId) return;
-            if (String(payload?.adminKey || '') === ADMIN_CALL_OWNER_KEY) return;
+            if (String(payload?.adminKey || '') === ADMIN_CALL_OWNER_KEY) {
+                hideNewMessageNotice();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+                return;
+            }
             removeQueuedCall(claimedCallId);
             if (pendingCallId === claimedCallId && !callId) {
                 pendingOffer = null;
@@ -5510,6 +6150,8 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
                 setIncomingCallModalVisible(false);
                 _stopAlertSound();
             }
+            hideNewMessageNotice();
+            if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
         });
 
         s.on('answer', payload => {
@@ -5526,32 +6168,70 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
             if (incomingCallId && callId && incomingCallId !== callId) return;
             if (transferInProgress) return;
 
-            if (!pc || !callId) {
+            if (!pc || !pc.remoteDescription || !callId) {
                 if (cand && incomingCallId) {
                     const queued = incomingCallQueue.get(incomingCallId);
                     if (queued) {
                         queued.pendingCandidates = queued.pendingCandidates || [];
                         queued.pendingCandidates.push(cand);
                     }
-                    if (pendingCallId === incomingCallId) pendingCandidates.push(cand);
+                    if (pendingCallId === incomingCallId || callId === incomingCallId) pendingCandidates.push(cand);
                 }
                 return;
             }
 
-            if (pc && cand) pc.addIceCandidate(cand);
+            if (pc && pc.remoteDescription && cand) {
+                try {
+                    const iceCand = typeof cand === 'object' && cand.candidate ? cand : { candidate: cand };
+                    pc.addIceCandidate(new RTCIceCandidate(iceCand)).catch(err => {
+                        console.warn('[call][admin] addIceCandidate failed:', err);
+                    });
+                } catch (e) {
+                    console.warn('[call][admin] Invalid ICE candidate object:', e);
+                }
+            }
         });
 
         s.on('hangup', payload => {
-            const incomingCallId = payload && payload.callId ? String(payload.callId) : null;
-            if (incomingCallId && callId && incomingCallId !== callId) return;
+            const incomingCallId = payload && (payload.callId || payload.call_id) ? String(payload.callId || payload.call_id) : null;
+            if (callId && incomingCallId !== callId) return;
 
             if (incomingCallId && !callId) {
                 removeQueuedCall(incomingCallId);
                 if (!incomingCallQueue.size) _stopAlertSound();
+                if (typeof syncCallSession === 'function') {
+                    syncCallSession('mark', { callId: incomingCallId, status: 'ended' });
+                }
+                hideNewMessageNotice();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
                 return;
             }
 
-            if (callId) endCall(false);
+            if (callId) {
+                hideNewMessageNotice();
+                endCall(false);
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+            }
+        });
+
+        s.on('call-ended', payload => {
+            const incomingCallId = payload && (payload.callId || payload.call_id) ? String(payload.callId || payload.call_id) : null;
+            if (incomingCallId) {
+                removeQueuedCall(incomingCallId);
+                if (!incomingCallQueue.size) _stopAlertSound();
+                hideNewMessageNotice();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+            }
+        });
+
+        s.on('call_ended', payload => {
+            const incomingCallId = payload && (payload.callId || payload.call_id) ? String(payload.callId || payload.call_id) : null;
+            if (incomingCallId) {
+                removeQueuedCall(incomingCallId);
+                if (!incomingCallQueue.size) _stopAlertSound();
+                hideNewMessageNotice();
+                if (typeof resetConversationsAndReload === 'function') resetConversationsAndReload();
+            }
         });
 
         s.on('call-message', payload => {
@@ -5594,6 +6274,12 @@ $adminUsername = $_SESSION['admin_username'] ?? 'Admin';
 
 </body>
 </html>
+
+
+
+
+
+
 
 
 
