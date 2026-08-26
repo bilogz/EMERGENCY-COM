@@ -259,7 +259,7 @@ function getCategoryDetailedDuration($category) {
         'Weather Forecast' => 'Weather alerts typically last 6-24 hours depending on the weather system. Typhoon warnings may last 24-48 hours or longer. Flood advisories remain in effect until water levels recede. Weather conditions are monitored continuously and alerts are updated as conditions change.',
         'Emergency' => 'Emergency alerts remain active until the situation is fully resolved and officially lifted by authorities. This can range from a few hours for minor incidents to several days for major emergencies. The alert duration depends on the nature and scale of the emergency.',
         'Safety' => 'Safety advisories may remain in effect for several days or weeks until the hazard is mitigated or the situation is resolved. Health advisories may last based on medical recommendations. Environmental alerts continue until conditions improve.',
-        'Announcement' => 'Announcements are typically one-time notifications, but follow-up announcements may be issued if there are updates or additional information. Some announcements may have specific timeframes or deadlines mentioned.',
+        'Announcement' => 'These Announcements are typically one-time notifications, but follow-up announcements may be issued if there are updates or additional information. Some announcements may have specific timeframes or deadlines mentioned.',
         'General' => 'Duration varies based on the specific nature of the notification. Some may be time-sensitive while others provide ongoing information. Monitor official channels for updates.',
     ];
     return isset($durations[$category]) ? $durations[$category] : 'Monitor official updates for duration information.';
