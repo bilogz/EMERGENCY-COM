@@ -1264,6 +1264,8 @@
                 width: 100%;
             }
         }
+        }
+
         /* Plain-language, age-friendly alert wizard */
         .mn-simple-intro {
             display: flex;
@@ -1383,7 +1385,7 @@
 
         .mn-guided-message {
             margin-bottom: 1rem;
-            padding: 0.9rem;
+            padding: 1.1rem;
             border: 2px solid color-mix(in srgb, var(--primary-color-1) 25%, var(--border-color-1));
             border-radius: 14px;
             background: color-mix(in srgb, var(--primary-color-1) 6%, var(--card-bg-1));
@@ -1405,42 +1407,72 @@
 
         .mn-guided-question {
             display: grid;
-            grid-template-columns: 34px minmax(0, 1fr);
-            gap: 0.65rem;
+            grid-template-columns: 36px minmax(0, 1fr);
+            gap: 0.85rem;
             align-items: start;
-            margin-bottom: 0.8rem;
+            margin-bottom: 1.1rem;
         }
         .mn-question-number {
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             display: grid;
             place-items: center;
             background: var(--primary-color-1);
             color: #fff;
             font-weight: 900;
-            margin-top: 1.65rem;
+            font-size: 0.95rem;
+            margin-top: 0.2rem;
+            flex-shrink: 0;
         }
-        .mn-guided-control label { margin-bottom: 0.35rem !important; font-size: 0.94rem !important; }
+        .mn-guided-control {
+            width: 100%;
+        }
+        .mn-guided-control label {
+            display: block;
+            width: 100%;
+            margin-bottom: 0.45rem !important;
+            font-size: 0.95rem !important;
+            font-weight: 700 !important;
+            color: var(--text-color-1) !important;
+        }
         .mn-guided-question.is-complete .mn-question-number { background: var(--mn-low); }
         .mn-guided-question.is-complete .mn-question-number::before { content: '\2713'; }
         .mn-guided-question.is-complete .mn-question-number { font-size: 0; }
         .mn-guided-question.is-complete .mn-question-number::before { font-size: 1rem; }
         .mn-guided-question.is-complete input { border-color: color-mix(in srgb, var(--mn-low) 55%, var(--border-color-1)); }
-        .mn-input-with-action { position: relative; }
+        .mn-input-with-action { position: relative; width: 100%; }
+        .mn-input-with-action input.form-control,
+        .mn-guided-control input.form-control,
+        .mn-template-modal input.form-control,
         #dispatchForm.mn-in-wizard .mn-input-with-action input {
-            width: 100%;
-            padding-right: 3.25rem;
-            background: var(--card-bg-1);
+            width: 100% !important;
+            min-height: 48px !important;
+            padding-right: 3.25rem !important;
+            padding-left: 1rem !important;
+            background: var(--card-bg-1) !important;
+            border-radius: 10px !important;
+            border: 1px solid var(--border-color-1) !important;
+            font-size: 0.95rem !important;
+            color: var(--text-color-1) !important;
+            line-height: 1.5 !important;
+        }
+        .mn-input-with-action input.form-control:focus,
+        .mn-guided-control input.form-control:focus,
+        .mn-template-modal input.form-control:focus,
+        #dispatchForm.mn-in-wizard .mn-input-with-action input:focus {
+            border-color: var(--primary-color-1) !important;
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color-1) 25%, transparent) !important;
+            outline: none !important;
         }
         .mn-dictate-btn {
             position: absolute;
             right: 5px;
-            top: 5px;
+            top: 4px;
             width: 40px;
             height: 40px;
             border: 0;
-            border-radius: 9px;
+            border-radius: 999px;
             display: grid;
             place-items: center;
             cursor: pointer;
@@ -1456,24 +1488,6 @@
         }
         @keyframes mnVoicePulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--mn-critical) 20%, transparent); } }
 
-        .mn-complete-message-heading {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 0.65rem;
-            margin: 0.95rem 0 0.4rem;
-        }
-        .mn-complete-message-heading > label { margin: 0 !important; font-size: 1rem !important; }
-        .mn-speak-full-btn {
-            position: static;
-            width: auto;
-            height: 40px;
-            padding: 0.4rem 0.65rem;
-            display: inline-flex;
-            gap: 0.4rem;
-            font-size: 0.82rem;
-            font-weight: 800;
-        }
         .mn-field-note {
             margin-top: 0.45rem;
             color: var(--text-secondary-1);
@@ -1487,53 +1501,6 @@
             color: var(--primary-color-1);
             font-size: 0.82rem;
             font-weight: 700;
-        }
-
-        #dispatchForm #message_title,
-        #dispatchForm #message_body,
-        #dispatchForm .mn-guided-control input {
-            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-            letter-spacing: normal;
-        }
-        #dispatchForm #message_body {
-            font-size: 1rem;
-            line-height: 1.6;
-            resize: vertical;
-            min-height: 180px;
-        }
-
-        .mn-action-chip-label {
-            margin-top: 0.55rem;
-            color: var(--text-secondary-1);
-            font-size: 0.78rem;
-            font-weight: 800;
-        }
-        .mn-action-chips {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.4rem;
-            margin-top: 0.4rem;
-        }
-        .mn-action-chips button {
-            min-height: 44px;
-            padding: 0.45rem 0.7rem;
-            border-radius: 999px;
-            border: 1px solid color-mix(in srgb, var(--primary-color-1) 35%, var(--border-color-1));
-            background: var(--card-bg-1);
-            color: var(--text-color-1);
-            font: 750 0.78rem/1.25 Inter, ui-sans-serif, system-ui, sans-serif;
-            cursor: pointer;
-            transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
-        }
-        .mn-action-chips button:hover,
-        .mn-action-chips button.is-selected {
-            background: var(--primary-color-1);
-            border-color: var(--primary-color-1);
-            color: #fff;
-        }
-        .mn-action-chips button:focus-visible {
-            outline: 3px solid color-mix(in srgb, var(--primary-color-1) 55%, white);
-            outline-offset: 2px;
         }
 
         .mn-sms-counter {

@@ -313,9 +313,11 @@ function parseNotificationMessageForEmail($rawMessage) {
 /**
  * Generate a modern, beautiful, responsive HTML email template for Mass Notifications & Alerts
  */
-function buildEmergencyAlertEmailTemplate($title, $message, $severity = 'warning', $category = 'Emergency Alert', $issuedAt = null) {
-    $safeTitle = htmlspecialchars($title ?: 'Emergency Notification', ENT_QUOTES, 'UTF-8');
-    $safeCategory = htmlspecialchars($category ?: 'Emergency Alert', ENT_QUOTES, 'UTF-8');
+function buildEmergencyAlertEmailTemplate($title, $message, $severity = 'warning', $category = 'Emergency Alert', $issuedAt = null, $lang = 'en') {
+    $isFilipino = ($lang === 'fil' || $lang === 'tl' || preg_match('/MGA PAGSUBOK|Naiulat|Apektadong|Paraan ng pag-iingat/i', $title . ' ' . $message));
+
+    $safeTitle = htmlspecialchars($title ?: ($isFilipino ? 'Abiso sa Emerhensya' : 'Emergency Notification'), ENT_QUOTES, 'UTF-8');
+    $safeCategory = htmlspecialchars($category ?: ($isFilipino ? 'Alerto sa Emerhensya' : 'Emergency Alert'), ENT_QUOTES, 'UTF-8');
     $safeTime = htmlspecialchars($issuedAt ?: date('M d, Y \a\t h:i A T'), ENT_QUOTES, 'UTF-8');
     
     // Parse message structure
@@ -324,7 +326,7 @@ function buildEmergencyAlertEmailTemplate($title, $message, $severity = 'warning
     $metrics = $parsed['metrics'];
     $precautions = $parsed['precautions'];
     $ctaUrl = $parsed['cta_url'];
-    $ctaLabel = $parsed['cta_label'] ?: 'Open Alertara Emergency Portal';
+    $ctaLabel = $parsed['cta_label'] ?: ($isFilipino ? 'Buksan ang Emergency Portal ng Alertara' : 'Open Alertara Emergency Portal');
 
     $severityLower = strtolower(trim((string)$severity));
     $categoryLower = strtolower(trim((string)$category));
@@ -342,22 +344,22 @@ function buildEmergencyAlertEmailTemplate($title, $message, $severity = 'warning
         $badgeBorder = '#fca5a5';
         $accentColor = '#dc2626';
         $headerIcon = '🚨';
-        $badgeText = 'CRITICAL EMERGENCY ALERT';
+        $badgeText = $isFilipino ? 'MATAAS NA ALERTO SA EMERHENSYA' : 'CRITICAL EMERGENCY ALERT';
         $btnBg = '#dc2626';
     } elseif ($isWeather) {
         if ($severityLower === 'warning') {
             $headerGradient = 'linear-gradient(135deg, #1e3a8a 0%, #0369a1 50%, #0284c7 100%)';
-            $badgeText = 'WEATHER WARNING • QUEZON CITY';
+            $badgeText = $isFilipino ? 'BABALA SA PANAHON • QUEZON CITY' : 'WEATHER WARNING • QUEZON CITY';
             $headerIcon = '⛈️';
             $btnBg = '#0284c7';
         } elseif ($severityLower === 'advisory') {
             $headerGradient = 'linear-gradient(135deg, #0f4c75 0%, #1b262c 50%, #1e3c72 100%)';
-            $badgeText = 'WEATHER ADVISORY • QUEZON CITY';
+            $badgeText = $isFilipino ? 'ABISO SA PANAHON • QUEZON CITY' : 'WEATHER ADVISORY • QUEZON CITY';
             $headerIcon = '🌧️';
             $btnBg = '#0284c7';
         } else {
             $headerGradient = 'linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #1e3a5f 100%)';
-            $badgeText = 'WEATHER FORECAST • QUEZON CITY';
+            $badgeText = $isFilipino ? 'TAYA NG PANAHON • QUEZON CITY' : 'WEATHER FORECAST • QUEZON CITY';
             $headerIcon = '🌦️';
             $btnBg = '#0ea5e9';
         }
@@ -370,7 +372,7 @@ function buildEmergencyAlertEmailTemplate($title, $message, $severity = 'warning
         $badgeBorder = '#fde68a';
         $accentColor = '#b45309';
         $headerIcon = '🌋';
-        $badgeText = 'EARTHQUAKE BULLETIN';
+        $badgeText = $isFilipino ? 'ULAT NG LINDOL' : 'EARTHQUAKE BULLETIN';
         $btnBg = '#b45309';
     } elseif ($isFire) {
         $headerGradient = 'linear-gradient(135deg, #7c2d12 0%, #c2410c 50%, #ea580c 100%)';
@@ -378,7 +380,7 @@ function buildEmergencyAlertEmailTemplate($title, $message, $severity = 'warning
         $badgeBorder = '#fdba74';
         $accentColor = '#ea580c';
         $headerIcon = '🔥';
-        $badgeText = 'FIRE INCIDENT ALERT';
+        $badgeText = $isFilipino ? 'ALERTO SA SUNOG' : 'FIRE INCIDENT ALERT';
         $btnBg = '#ea580c';
     } else {
         $headerGradient = 'linear-gradient(135deg, #1e3a4c 0%, #2b5756 50%, #3a7675 100%)';
@@ -386,7 +388,7 @@ function buildEmergencyAlertEmailTemplate($title, $message, $severity = 'warning
         $badgeBorder = '#99f6e4';
         $accentColor = '#3a7675';
         $headerIcon = '📢';
-        $badgeText = strtoupper($safeCategory) . ' • QUEZON CITY';
+        $badgeText = ($isFilipino ? 'ALERTO SA EMERHENSYA' : strtoupper($safeCategory)) . ' • QUEZON CITY';
         $btnBg = '#3a7675';
     }
 
@@ -420,12 +422,13 @@ HTML;
             $metricRows .= '</tr>';
         }
 
+        $metricsTitle = $isFilipino ? '📊 Mga Metric sa Panahon at Kapaligiran' : '📊 Key Forecast & Environmental Metrics';
         $metricsHtml = <<<HTML
         <!-- Key Metrics Section -->
         <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 10px; margin-bottom: 22px;">
           <tr>
             <td colspan="2" style="padding: 4px 6px 8px 6px; font-size: 12px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.8px;">
-              📊 Key Forecast & Environmental Metrics
+              {$metricsTitle}
             </td>
           </tr>
           {$metricRows}
@@ -449,25 +452,19 @@ HTML;
     if (!empty($precautions)) {
         $itemsHtml = '';
         foreach ($precautions as $p) {
-            $safeP = htmlspecialchars($p, ENT_QUOTES, 'UTF-8');
-            $itemsHtml .= <<<HTML
-            <tr style="margin-bottom: 8px;">
-              <td width="24" valign="top" style="padding: 6px 0; font-size: 15px; color: #16a34a; font-weight: bold;">✔</td>
-              <td valign="top" style="padding: 6px 0 6px 8px; font-size: 14px; color: #334155; line-height: 1.5;">{$safeP}</td>
-            </tr>
-HTML;
+            $pSafe = htmlspecialchars($p, ENT_QUOTES, 'UTF-8');
+            $itemsHtml .= "<li style=\"margin-bottom: 6px;\">{$pSafe}</li>";
         }
-
+        $precautionsTitle = $isFilipino ? '🛡️ Mga Inirerekomendang Aksyon sa Pag-iingat' : '🛡️ Recommended Safety Precautions';
         $precautionsHtml = <<<HTML
-        <!-- Precautions Section -->
-        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 12px; padding: 16px 18px; margin-bottom: 24px;">
-          <tr>
-            <td colspan="2" style="font-size: 13px; font-weight: 800; color: #92400e; text-transform: uppercase; letter-spacing: 0.6px; padding-bottom: 8px;">
-              🛡️ Recommended Precautions & Safety Measures
-            </td>
-          </tr>
-          {$itemsHtml}
-        </table>
+        <div style="background: #fff8f6; border: 1px solid #ffedd5; border-radius: 12px; padding: 16px 18px; margin-bottom: 20px;">
+          <div style="font-size: 13px; font-weight: 800; color: #c2410c; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+            {$precautionsTitle}
+          </div>
+          <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #431407; line-height: 1.6;">
+            {$itemsHtml}
+          </ul>
+        </div>
 HTML;
     }
 
@@ -489,6 +486,12 @@ HTML;
         </table>
 HTML;
     }
+
+    $issuedLabel = $isFilipino ? 'Inisyu noong' : 'Issued';
+    $hotlineLabel = $isFilipino ? 'Hotline ng Emerhensya sa Quezon City:' : 'Quezon City Emergency Hotline:';
+    $footerOffice = $isFilipino ? 'Mga Operasyon sa Emerhensya ng AlertaraQC' : 'AlertaraQC Emergency Operations';
+    $footerSystem = $isFilipino ? 'Sistemang Pang-abiso at Komunikasyon sa Emerhensya ng AlertaraQC' : 'AlertaraQC Emergency Broadcast & Mass Communication System';
+    $footerNotice = $isFilipino ? 'Ito ay isang awtomatikong abiso sa kaligtasan ng publiko. Mangyaring huwag direktang tumugon sa email na ito.' : 'This is an automated public safety advisory. Please do not reply directly to this email.';
 
     return <<<HTML
 <!DOCTYPE html>
@@ -514,7 +517,7 @@ HTML;
               {$safeTitle}
             </h1>
             <p style="margin:0; color: #e2e8f0; font-size: 13px; font-weight: 400;">
-              Quezon City DRRMO &bull; Issued {$safeTime}
+              AlertaraQC &bull; {$issuedLabel} {$safeTime}
             </p>
           </td>
         </tr>
@@ -535,8 +538,7 @@ HTML;
             <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
               <tr>
                 <td style="font-size: 12px; color: #64748b; line-height: 1.6; text-align: center;">
-                  <strong style="color: #0f172a;">📞 Quezon City Emergency Hotline:</strong> <a href="tel:122" style="color: #dc2626; font-weight: 800; text-decoration: none;">122</a> &nbsp;|&nbsp; 
-                  <strong style="color: #0f172a;">DRRMO Operations:</strong> <a href="tel:0289284396" style="color: #0284c7; font-weight: 700; text-decoration: none;">(02) 8928-4396</a>
+                  <strong style="color: #0f172a;">📞 {$hotlineLabel}</strong> <a href="https://emergency-comm.alertaraqc.com/USERS/emergency-call.php" target="_blank" rel="noopener noreferrer" style="color: #dc2626; font-weight: 800; text-decoration: underline;">https://emergency-comm.alertaraqc.com/USERS/emergency-call.php</a>
                 </td>
               </tr>
             </table>
@@ -546,9 +548,9 @@ HTML;
         <!-- Footer -->
         <tr>
           <td style="background: #ffffff; border-top: 1px solid #f1f5f9; padding: 18px 24px; text-align:center; font-size: 11px; color: #94a3b8; line-height: 1.6;">
-            <p style="margin:0 0 4px 0; font-weight: 700; color: #64748b;">Quezon City Disaster Risk Reduction & Management Office</p>
-            <p style="margin:0;">AlertaraQC Emergency Broadcast & Mass Communication System</p>
-            <p style="margin: 6px 0 0 0; color: #cbd5e1; font-size: 10px;">This is an automated public safety advisory. Please do not reply directly to this email.</p>
+            <p style="margin:0 0 4px 0; font-weight: 700; color: #64748b;">{$footerOffice}</p>
+            <p style="margin:0;">{$footerSystem}</p>
+            <p style="margin: 6px 0 0 0; color: #cbd5e1; font-size: 10px;">{$footerNotice}</p>
           </td>
         </tr>
 

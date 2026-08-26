@@ -144,19 +144,35 @@ try {
                     $success = sendSMS($job['recipient_value'], $job['message'], $error);
                     break;
                 case 'email':
+                    $recipientId = (int)($job['recipient_id'] ?? 0);
+                    $recipientLang = resolveWorkerRecipientLanguage($pdo, $recipientId, (string)$job['recipient_value']);
                     $alertMeta = getWorkerAlertMetadata($pdo, (int)($job['alert_id'] ?? 0));
-                    $success = sendEmail($job['recipient_value'], $job['title'], $job['message'], $error, $alertMeta);
+                    $jobTitle = (string)$job['title'];
+                    $jobMessage = (string)$job['message'];
+                    if ($recipientLang === 'fil' || $recipientLang === 'tl') {
+                        $jobTitle = translateTextToFilipino($jobTitle);
+                        $jobMessage = translateTextToFilipino($jobMessage);
+                    }
+                    $success = sendEmail($job['recipient_value'], $jobTitle, $jobMessage, $error, $alertMeta, $recipientLang);
                     break;
                 case 'push':
+                    $recipientId = (int)($job['recipient_id'] ?? 0);
+                    $recipientLang = resolveWorkerRecipientLanguage($pdo, $recipientId, (string)$job['recipient_value']);
                     $alertMeta = getWorkerAlertMetadata($pdo, (int)($job['alert_id'] ?? 0));
+                    $jobTitle = (string)$job['title'];
+                    $jobMessage = (string)$job['message'];
+                    if ($recipientLang === 'fil' || $recipientLang === 'tl') {
+                        $jobTitle = translateTextToFilipino($jobTitle);
+                        $jobMessage = translateTextToFilipino($jobMessage);
+                    }
                     $forcedChannel = workerAutomatedNotificationChannelForJob($pdo, $job);
                     $queuedChannel = trim((string)($job['notification_channel'] ?? ''));
                     $queuedChannel = $forcedChannel ?: ($queuedChannel !== ''
                         ? workerValidNotificationChannel($queuedChannel)
                         : workerNotificationChannelForToken($pdo, (string)$job['recipient_value']));
                     $success = sendFCM($job['recipient_value'], [
-                        'title' => $job['title'],
-                        'body' => $job['message'],
+                        'title' => $jobTitle,
+                        'body' => $jobMessage,
                         'alert_id' => (string)($job['alert_id'] ?? ''),
                         'severity' => $alertMeta['severity'],
                         'category' => $alertMeta['category'],
@@ -335,10 +351,59 @@ function sendSMS($phone, $message, &$error = null) {
     return false;
 }
 
+require_once __DIR__ . '/emergency-translation-helper.php';
+
+function resolveWorkerRecipientLanguage(PDO $pdo, int $recipientId, string $recipientValue = ''): string {
+    static $cache = [];
+    $cacheKey = $recipientId . ':' . $recipientValue;
+    if (isset($cache[$cacheKey])) return $cache[$cacheKey];
+
+    if ($recipientId > 0) {
+        try {
+            $stmt = $pdo->prepare("SELECT language_preference FROM users WHERE id = ? LIMIT 1");
+            $stmt->execute([$recipientId]);
+            $lang = strtolower(trim((string)$stmt->fetchColumn()));
+            if ($lang === 'fil' || $lang === 'tl') return $cache[$cacheKey] = 'fil';
+            if ($lang === 'en') return $cache[$cacheKey] = 'en';
+
+            $stmt2 = $pdo->prepare("SELECT notification_language FROM user_preferences WHERE user_id = ? ORDER BY id DESC LIMIT 1");
+            $stmt2->execute([$recipientId]);
+            $lang2 = strtolower(trim((string)$stmt2->fetchColumn()));
+            if ($lang2 === 'fil' || $lang2 === 'tl') return $cache[$cacheKey] = 'fil';
+        } catch (Throwable $e) {}
+    }
+
+    if (filter_var($recipientValue, FILTER_VALIDATE_EMAIL)) {
+        try {
+            $stmt = $pdo->prepare("SELECT language_preference FROM users WHERE email = ? LIMIT 1");
+            $stmt->execute([$recipientValue]);
+            $lang = strtolower(trim((string)$stmt->fetchColumn()));
+            if ($lang === 'fil' || $lang === 'tl') return $cache[$cacheKey] = 'fil';
+        } catch (Throwable $e) {}
+    }
+
+    if (!empty($recipientValue)) {
+        try {
+            $stmt = $pdo->prepare("
+                SELECT u.language_preference 
+                FROM app_notification_devices d 
+                JOIN users u ON d.user_id = u.id 
+                WHERE (d.fcm_token = ? OR d.push_token = ?) 
+                LIMIT 1
+            ");
+            $stmt->execute([$recipientValue, $recipientValue]);
+            $lang = strtolower(trim((string)$stmt->fetchColumn()));
+            if ($lang === 'fil' || $lang === 'tl') return $cache[$cacheKey] = 'fil';
+        } catch (Throwable $e) {}
+    }
+
+    return $cache[$cacheKey] = 'en';
+}
+
 /**
- * PLACEHOLDER: Email Dispatch
+ * Email Dispatch
  */
-function sendEmail($email, $subject, $body, &$error = null, $meta = []) {
+function sendEmail($email, $subject, $body, &$error = null, $meta = [], $lang = 'en') {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Invalid recipient email address.';
         return false;
@@ -353,7 +418,7 @@ function sendEmail($email, $subject, $body, &$error = null, $meta = []) {
     $severity = $meta['severity'] ?? 'warning';
     $category = $meta['category'] ?? 'Emergency Alert';
     $htmlBody = function_exists('buildEmergencyAlertEmailTemplate')
-        ? buildEmergencyAlertEmailTemplate($subject, $body, $severity, $category)
+        ? buildEmergencyAlertEmailTemplate($subject, $body, $severity, $category, null, $lang)
         : nl2br(htmlspecialchars($body));
 
     return sendSMTPMail($email, $subject, $htmlBody, true, $error);

@@ -77,11 +77,13 @@ class AlertTranslationHelper {
             }
         }
         
+require_once __DIR__ . '/emergency-translation-helper.php';
+
         // 2. If not found and original content provided, Try AI Translation
         if ($originalTitle && $originalMessage && $this->aiService->isAvailable()) {
             $result = $this->aiService->translateAlert($alertId, $originalTitle, $originalMessage, $targetLanguage);
             
-            if ($result['success']) {
+            if (!empty($result['success']) && !empty($result['title_translation']) && !empty($result['content_translation'])) {
                 return [
                     'title' => $result['title_translation'],
                     'message' => $result['content_translation'],
@@ -91,7 +93,16 @@ class AlertTranslationHelper {
             }
         }
         
-        // 3. Fallback: Return null (caller should use original)
+        // 3. Robust Offline Fallback for Filipino / Tagalog
+        if (($targetLanguage === 'fil' || $targetLanguage === 'tl') && ($originalTitle || $originalMessage)) {
+            return [
+                'title' => translateTextToFilipino($originalTitle),
+                'message' => translateTextToFilipino($originalMessage),
+                'language' => $targetLanguage,
+                'method' => 'local_rule_based'
+            ];
+        }
+
         return null;
     }
 

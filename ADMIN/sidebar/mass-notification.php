@@ -591,28 +591,40 @@ $pageTitle = 'Mass Notification System';
                 </div>
                 <div class="mn-guided-message mn-template-guided" id="mnTemplateGuidedMessage">
                     <div class="mn-guided-heading">
-                        <div><strong>2. Tell people what happened and what to do</strong><span id="mnTemplateGuidedProgress">0 of 3 answered ï¿½ The complete message will be written below.</span></div>
+                        <div>
+                            <strong><i class="fas fa-list-check"></i> 2. Tell people what happened and what to do</strong>
+                            <span id="mnTemplateGuidedProgress">0 of 3 answered &bull; The complete message will be written below.</span>
+                        </div>
                         <button type="button" class="btn ui-btn-ghost mn-clear-message-btn" onclick="mnClearTemplateBuilder()"><i class="fas fa-eraser"></i> Clear</button>
                     </div>
                     <div class="mn-guided-question">
                         <span class="mn-question-number">1</span>
                         <div class="mn-guided-control">
                             <label for="mnTemplateWhatHappened">What happened?</label>
-                            <input type="text" id="mnTemplateWhatHappened" placeholder="Example: Flood water is rising">
+                            <div class="mn-input-with-action">
+                                <input type="text" id="mnTemplateWhatHappened" class="form-control" placeholder="Example: Flood water is rising">
+                                <button type="button" class="mn-dictate-btn" title="Voice typing" onclick="mnStartDictation('mnTemplateWhatHappened', this)"><i class="fas fa-microphone"></i></button>
+                            </div>
                         </div>
                     </div>
                     <div class="mn-guided-question">
                         <span class="mn-question-number">2</span>
                         <div class="mn-guided-control">
                             <label for="mnTemplateWhere">Where is it happening?</label>
-                            <input type="text" id="mnTemplateWhere" placeholder="Example: Commonwealth Avenue">
+                            <div class="mn-input-with-action">
+                                <input type="text" id="mnTemplateWhere" class="form-control" placeholder="Example: Commonwealth Avenue">
+                                <button type="button" class="mn-dictate-btn" title="Voice typing" onclick="mnStartDictation('mnTemplateWhere', this)"><i class="fas fa-microphone"></i></button>
+                            </div>
                         </div>
                     </div>
                     <div class="mn-guided-question">
                         <span class="mn-question-number">3</span>
                         <div class="mn-guided-control">
                             <label for="mnTemplateActionToTake">What should people do?</label>
-                            <input type="text" id="mnTemplateActionToTake" placeholder="Example: Move to higher ground now">
+                            <div class="mn-input-with-action">
+                                <input type="text" id="mnTemplateActionToTake" class="form-control" placeholder="Example: Move to higher ground now">
+                                <button type="button" class="mn-dictate-btn" title="Voice typing" onclick="mnStartDictation('mnTemplateActionToTake', this)"><i class="fas fa-microphone"></i></button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2116,8 +2128,8 @@ $pageTitle = 'Mass Notification System';
                 progress.textContent = completed === 0 && hasCompleteMessage
                     ? 'A complete message is already provided. You may skip these questions.'
                     : completed === 3
-                    ? 'All 3 answered Â· Your complete message is ready below.'
-                    : `${completed} of 3 answered Â· Complete the remaining questions.`;
+                    ? 'All 3 answered • Your complete message is ready below.'
+                    : `${completed} of 3 answered • Complete the remaining questions.`;
             }
         }
 
@@ -2452,8 +2464,8 @@ $pageTitle = 'Mass Notification System';
             const progress = document.getElementById('mnTemplateGuidedProgress');
             if (progress) {
                 progress.textContent = completed === 3
-                    ? 'All 3 answered ï¿½ The reusable message is ready below.'
-                    : `${completed} of 3 answered ï¿½ Complete the remaining questions.`;
+                    ? 'All 3 answered • The reusable message is ready below.'
+                    : `${completed} of 3 answered • Complete the remaining questions.`;
             }
         }
 
