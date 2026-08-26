@@ -124,7 +124,7 @@ if (!function_exists('syncUsersToSubscriptions')) {
                 SELECT u.* 
                 FROM users u
                 LEFT JOIN `{$subTable}` s ON s.user_id = u.id
-                WHERE s.id IS NULL AND u.status != 'banned'
+                WHERE s.id IS NULL AND u.status != 'banned' AND (u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')
             ")->fetchAll(PDO::FETCH_ASSOC);
 
             if (!empty($missing)) {
@@ -381,7 +381,7 @@ if ($requestMethod === 'POST' && $action !== 'add') {
         $categoryFilter = trim((string)($_GET['category'] ?? ''));
         $channelFilter = trim((string)($_GET['channel'] ?? ''));
 
-        $whereConditions = ["1=1"];
+        $whereConditions = ["(u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')"];
         $queryParams = [];
 
         if ($statusFilter !== '' && in_array($statusFilter, ['active', 'inactive', 'suspended'])) {
@@ -654,18 +654,18 @@ if ($requestMethod === 'POST' && $action !== 'add') {
     }
 } elseif ($action === 'statistics') {
     try {
-        $total = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}`")->fetchColumn();
-        $active = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` WHERE status = 'active'")->fetchColumn();
-        $inactive = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` WHERE status = 'inactive'")->fetchColumn();
+        $total = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` s LEFT JOIN users u ON u.id = s.user_id WHERE (u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')")->fetchColumn();
+        $active = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` s LEFT JOIN users u ON u.id = s.user_id WHERE s.status = 'active' AND (u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')")->fetchColumn();
+        $inactive = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` s LEFT JOIN users u ON u.id = s.user_id WHERE s.status = 'inactive' AND (u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')")->fetchColumn();
         
-        $weather = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` WHERE (categories LIKE '%weather%' OR categories LIKE '%flood%' OR categories LIKE '%typhoon%') AND status = 'active'")->fetchColumn();
-        $earthquake = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` WHERE categories LIKE '%earthquake%' AND status = 'active'")->fetchColumn();
-        $fire = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` WHERE categories LIKE '%fire%' AND status = 'active'")->fetchColumn();
-        $medical = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` WHERE categories LIKE '%medical%' AND status = 'active'")->fetchColumn();
+        $weather = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` s LEFT JOIN users u ON u.id = s.user_id WHERE (s.categories LIKE '%weather%' OR s.categories LIKE '%flood%' OR s.categories LIKE '%typhoon%') AND s.status = 'active' AND (u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')")->fetchColumn();
+        $earthquake = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` s LEFT JOIN users u ON u.id = s.user_id WHERE s.categories LIKE '%earthquake%' AND s.status = 'active' AND (u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')")->fetchColumn();
+        $fire = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` s LEFT JOIN users u ON u.id = s.user_id WHERE s.categories LIKE '%fire%' AND s.status = 'active' AND (u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')")->fetchColumn();
+        $medical = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` s LEFT JOIN users u ON u.id = s.user_id WHERE s.categories LIKE '%medical%' AND s.status = 'active' AND (u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')")->fetchColumn();
         
-        $smsReach = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` WHERE channels LIKE '%sms%' AND status = 'active'")->fetchColumn();
-        $emailReach = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` WHERE channels LIKE '%email%' AND status = 'active'")->fetchColumn();
-        $pushReach = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` WHERE channels LIKE '%push%' AND status = 'active'")->fetchColumn();
+        $smsReach = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` s LEFT JOIN users u ON u.id = s.user_id WHERE s.channels LIKE '%sms%' AND s.status = 'active' AND (u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')")->fetchColumn();
+        $emailReach = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` s LEFT JOIN users u ON u.id = s.user_id WHERE s.channels LIKE '%email%' AND s.status = 'active' AND (u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')")->fetchColumn();
+        $pushReach = (int)$pdo->query("SELECT COUNT(*) FROM `{$subTable}` s LEFT JOIN users u ON u.id = s.user_id WHERE s.channels LIKE '%push%' AND s.status = 'active' AND (u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')")->fetchColumn();
         
         echo json_encode([
             'success' => true,
@@ -698,6 +698,7 @@ if ($requestMethod === 'POST' && $action !== 'add') {
             SELECT s.id, s.user_id, u.name, u.email, u.phone, u.barangay, s.categories, s.channels, s.preferred_language, s.status, s.created_at
             FROM `{$subTable}` s
             LEFT JOIN users u ON u.id = s.user_id
+            WHERE (u.user_type = 'citizen' OR u.user_type IS NULL OR u.user_type != 'admin')
             ORDER BY s.id DESC
         ");
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
