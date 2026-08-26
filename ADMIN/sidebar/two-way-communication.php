@@ -4041,7 +4041,7 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
         
         const socketOptions = {
             path: SOCKET_IO_PATH,
-            transports: ['websocket', 'polling'],
+            transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: MAX_SOCKET_RETRIES,
             reconnectionDelayMax: 2000,
