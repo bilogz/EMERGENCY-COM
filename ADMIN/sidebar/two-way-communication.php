@@ -3906,7 +3906,7 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
     const SIGNALING_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))
         ? `${window.location.protocol}//${window.location.hostname}:3000`
         : window.location.origin;
-    const SOCKET_HEALTH_URL = `${SIGNALING_URL}${SOCKET_IO_PATH}/?EIO=4&transport=polling`;
+    const SOCKET_HEALTH_URL = '../../api/socket-health.php';
     console.log('[call][admin] signaling endpoint v3', `${SIGNALING_URL}${SOCKET_IO_PATH}`);
 
     const WEBRTC_ICE_SERVERS = [
@@ -3979,22 +3979,22 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
             let reachable = false;
             try {
                 const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 1800);
-                const healthUrl = `${SOCKET_HEALTH_URL}&t=${Date.now()}`;
+                const timer = setTimeout(() => controller.abort(), 2500);
+                const healthUrl = `${SOCKET_HEALTH_URL}?t=${Date.now()}`;
                 const response = await fetch(healthUrl, {
                     method: 'GET',
-                    mode: 'cors',
                     cache: 'no-store',
                     signal: controller.signal
                 });
                 clearTimeout(timer);
                 if (response.ok) {
-                    reachable = true;
+                    const data = await response.json();
+                    reachable = (data && data.available === true);
                 } else {
-                    reachable = false;
+                    reachable = true;
                 }
             } catch (e) {
-                reachable = false;
+                reachable = true;
             } finally {
                 socketServerChecked = true;
                 socketServerLastCheckAt = Date.now();
@@ -4041,8 +4041,7 @@ if (preg_match('/^turns?:/i', $turnUrl) && $turnUsername !== '' && $turnCredenti
         
         const socketOptions = {
             path: SOCKET_IO_PATH,
-            // Prefer polling transport to avoid websocket upgrade failures behind strict proxies.
-            transports: ['polling'],
+            transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionAttempts: MAX_SOCKET_RETRIES,
             reconnectionDelayMax: 2000,
