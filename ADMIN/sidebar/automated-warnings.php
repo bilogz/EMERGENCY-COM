@@ -159,19 +159,6 @@ $pageTitle = 'Automated Warning Integration';
                         </div>
                     </div>
 
-                    <div class="module-card">
-                        <div class="module-card-header">
-                            <h2><i class="fas fa-vial"></i> System Testing</h2>
-                        </div>
-                        <div style="padding: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
-                            <button type="button" class="btn btn-warning" onclick="sendMockCriticalAlert('weather')" style="padding: 0.9rem 1rem; background: #f59e0b; border-color: #f59e0b; color: #fff;">
-                                <i class="fas fa-cloud-showers-heavy"></i> Mock Critical Weather
-                            </button>
-                            <button type="button" class="btn btn-danger" onclick="sendMockCriticalAlert('earthquake')" style="padding: 0.9rem 1rem; background: #dc2626; border-color: #dc2626; color: #fff;">
-                                <i class="fas fa-house-crack"></i> Mock Critical Earthquake
-                            </button>
-                        </div>
-                    </div>
 
                     <!-- PAGASA Auto-Alert Module -->
                     <div class="module-card" id="pagasaAutoAlertCard">
@@ -733,50 +720,6 @@ $pageTitle = 'Automated Warning Integration';
             .catch(error => {
                 console.error('Error publishing warning:', error);
                 alert('Error publishing warning: ' + error.message);
-            });
-        }
-
-        function sendMockCriticalAlert(type) {
-            const pretty = type === 'earthquake' ? 'Earthquake' : 'Weather';
-            if (!confirm(`Send MOCK CRITICAL ${pretty.toUpperCase()} alert and queue broadcast to all active citizens?`)) {
-                return;
-            }
-
-            fetch('../api/automated-warnings.php?action=mock_alert', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    action: 'mock_alert',
-                    type: type
-                })
-            })
-            .then(async response => {
-                const raw = await response.text();
-                let data = null;
-                try {
-                    data = raw ? JSON.parse(raw) : {};
-                } catch (parseErr) {
-                    throw new Error(`HTTP ${response.status}: ${raw.slice(0, 180) || 'Invalid JSON response'}`);
-                }
-                if (!response.ok || !data.success) {
-                    throw new Error(data.message || `HTTP ${response.status}`);
-                }
-                return data;
-            })
-            .then(data => {
-                let noticeMessage = data.message || 'Mock alert queued successfully.';
-                if (data.degraded && data.degraded_reason) {
-                    noticeMessage += `\nReason: ${data.degraded_reason}`;
-                }
-                alert(noticeMessage);
-                loadWarnings();
-            })
-            .catch(error => {
-                console.error('Mock alert error:', error);
-                alert('Mock alert failed: ' + error.message);
             });
         }
 
