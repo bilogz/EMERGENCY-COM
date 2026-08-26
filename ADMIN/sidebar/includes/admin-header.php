@@ -5,7 +5,7 @@
  * 
  * Features:
  * - Responsive menu toggle
- * - Notification and message icons with badges (outlined style)
+ * - Notification badge (outlined style)
  * - User profile with avatar and info
  * - Dark mode support
  * - Clean, modern design
@@ -69,11 +69,8 @@ $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
 ?>
 
 <link rel="stylesheet" href="<?php echo $headerBase; ?>css/notification-modal.css">
-<link rel="stylesheet" href="<?php echo $headerBase; ?>css/message-modal.css">
-<link rel="stylesheet" href="<?php echo $headerBase; ?>css/message-content-modal.css">
 <!-- Emergency Alert System -->
 <link rel="stylesheet" href="<?php echo $headerBase; ?>../header/css/emergency-alert.css">
-
 
 <!-- Admin Header Component -->
 <header class="admin-header">
@@ -107,11 +104,6 @@ $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
                     <span>Dark</span>
                 </button>
             </div>
-
-            <button class="report-export-btn" id="headerPdfExportBtn" type="button" aria-label="Download report as PDF" title="Download current report as PDF">
-                <i class="fas fa-file-pdf"></i>
-                <span>PDF</span>
-            </button>
             
             <?php if (!$hideNotifications): ?>
             <div class="notification-item">
@@ -121,13 +113,6 @@ $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
                 </button>
             </div>
             <?php endif; ?>
-            
-            <div class="notification-item">
-                <button class="notification-btn" id="headerMessageBtn" aria-label="Messages">
-                    <i class="fas fa-envelope"></i>
-                    <span class="notification-badge" id="messageBadge">0</span>
-                </button>
-            </div>
         </div>
         
         <div class="header-divider"></div>
@@ -204,107 +189,6 @@ $headerBase = ($currentDirForAssets === 'multilingual-support') ? '../' : '';
 </div>
 
 <?php endif; ?>
-
-<!-- Message Modal -->
-<div class="notification-modal" id="messageModal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Messages</h3>
-            <button class="modal-close" onclick="closeModal('messageModal')">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="modal-body">
-            <div class="message-item">
-                <div class="message-avatar">
-                    <img src="https://ui-avatars.com/api/?name=Sarah+Smith&background=4c8a89&color=fff&size=64" alt="Sarah Smith">
-                </div>
-                <div class="message-details">
-                    <div class="message-title">Sarah Smith</div>
-                    <div class="message-text">Hey, can you review the latest designs?</div>
-                    <div class="message-time">30 minutes ago</div>
-                </div>
-                <div class="message-status unread"></div>
-            </div>
-            <div class="message-item">
-                <div class="message-avatar">
-                    <img src="https://ui-avatars.com/api/?name=Mike+Johnson&background=4c8a89&color=fff&size=64" alt="Mike Johnson">
-                </div>
-                <div class="message-details">
-                    <div class="message-title">Mike Johnson</div>
-                    <div class="message-text">Meeting scheduled for tomorrow at 2 PM</div>
-                    <div class="message-time">2 hours ago</div>
-                </div>
-                <div class="message-status unread"></div>
-            </div>
-            <div class="message-item">
-                <div class="message-avatar">
-                    <img src="https://ui-avatars.com/api/?name=Emily+Brown&background=4c8a89&color=fff&size=64" alt="Emily Brown">
-                </div>
-                <div class="message-details">
-                    <div class="message-title">Emily Brown</div>
-                    <div class="message-text">Thanks for your help with the project!</div>
-                    <div class="message-time">1 day ago</div>
-                </div>
-                <div class="message-status"></div>
-            </div>
-            <div class="message-item">
-                <div class="message-avatar">
-                    <img src="https://ui-avatars.com/api/?name=David+Lee&background=4c8a89&color=fff&size=64" alt="David Lee">
-                </div>
-                <div class="message-details">
-                    <div class="message-title">David Lee</div>
-                    <div class="message-text">Can you send me the report?</div>
-                    <div class="message-time">2 days ago</div>
-                </div>
-                <div class="message-status"></div>
-            </div>
-            <div class="message-item">
-                <div class="message-avatar">
-                    <img src="https://ui-avatars.com/api/?name=Lisa+Wang&background=4c8a89&color=fff&size=64" alt="Lisa Wang">
-                </div>
-                <div class="message-details">
-                    <div class="message-title">Lisa Wang</div>
-                    <div class="message-text">Great job on the presentation!</div>
-                    <div class="message-time">3 days ago</div>
-                </div>
-                <div class="message-status"></div>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <a href="#" class="view-all-link">View All Messages</a>
-        </div>
-    </div>
-</div>
-
-<!-- Message Content Modal -->
-<div class="message-content-modal" id="messageContentModal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <div class="message-header-info">
-                <img id="messageUserAvatar" src="" alt="" class="message-user-avatar">
-                <div class="message-user-info">
-                    <h3 id="messageUserName"></h3>
-                    <span id="messageUserStatus"></span>
-                </div>
-            </div>
-            <button class="modal-close" onclick="closeModal('messageContentModal')">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="modal-body message-chat-body">
-            <div id="messageContent"></div>
-        </div>
-        <div class="modal-footer message-reply-footer">
-            <div class="message-reply-box">
-                <input type="text" id="messageReplyInput" placeholder="Type a message..." class="message-input">
-                <button class="send-message-btn">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <script>
 // Build stable API base path for all ADMIN pages (works for nested routes)
@@ -444,61 +328,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Remove active class from message button
                 if (messageBtn) messageBtn.classList.remove('active');
-                
-                // Close other modals first
-                if (messageModal) messageModal.classList.remove('show');
-                if (messageContentModal) messageContentModal.classList.remove('show');
-                
-                // Toggle notification modal and active state
-                if (modal.classList.contains('show')) {
-                    modal.classList.remove('show');
-                    this.classList.remove('active');
-                    document.body.style.overflow = '';
-                } else {
-                    modal.classList.add('show');
-                    this.classList.add('active');
-                    document.body.style.overflow = '';
-                    markHeaderNotificationsRead(true);
-                    closeIncidentReportModal();
-                }
-            } else if (ariaLabel === 'Messages') {
-                const modal = document.getElementById('messageModal');
-                const notificationModal = document.getElementById('notificationModal');
-                const messageContentModal = document.getElementById('messageContentModal');
-                const notificationBtn = document.querySelector('.notification-btn[aria-label="Notifications"]');
-                
-                // Remove active class from notification button
-                if (notificationBtn) notificationBtn.classList.remove('active');
-                
-                // Close other modals first
-                if (notificationModal) notificationModal.classList.remove('show');
-                if (messageContentModal) messageContentModal.classList.remove('show');
-                
-                // Toggle message modal and active state
-                if (modal.classList.contains('show')) {
-                    modal.classList.remove('show');
-                    this.classList.remove('active');
-                    document.body.style.overflow = '';
-                } else {
-                    modal.classList.add('show');
-                    this.classList.add('active');
-                    document.body.style.overflow = '';
-                    // Clear the message badge and advance the seen cursor for all
-                    // conversation scopes so the sidebar badges also clear in real-time.
-                    window.updateHeaderBadges({ messages: 0 });
-                    if (typeof writeCommunicationSeenId === 'function' && typeof sidebarCommunicationScopes !== 'undefined') {
-                        const scopes = ['reports', 'generalEnquiries'];
-                        scopes.forEach(name => {
-                            const scope = sidebarCommunicationScopes[name];
-                            if (!scope) return;
-                            const badge = document.getElementById(scope.badgeId);
-                            const latest = badge ? parseInt(badge.dataset.latestMessageId || '0', 10) : 0;
-                            if (latest > 0) writeCommunicationSeenId(scope, latest);
-                            setSidebarCommunicationBadge(scope.badgeId, 0);
-                        });
-                    }
-                    // Refresh notifications to get latest data after seen cursor advances.
-                    if (typeof loadHeaderNotifications === 'function') loadHeaderNotifications();
                 }
             }
         });
